@@ -1,0 +1,207 @@
+"""想定RPCI 予測モジュール（本プロダクトの中核機能・ADR-0005）。
+
+戦略インターフェース `RpciForecaster` を定義し、MVP ではルールベース実装
+`RuleBasedRpciForecaster`（model_version = "rule-v1"）を提供する。
+将来の LightGBM 実装は同一インターフェースを満たすことで差し替え可能。
+
+想定RPCI の方向性（pci.py と統一）:
+    RPCI > slow_threshold : スロー（前半が緩む → 差し・追込有利）
+    RPCI < high_threshold : ハイ（前傾ラップ → 逃げ・先行有利）
+    その間               : 平均
+
+ルール要因（rule-v1・すべて reasons に出力）:
+    1. 距離基準ペース      : 長距離ほど緩む傾向（RPCI高）
+    2. 脚質構成バランス    : 差し追込比率が高い→スロー / 逃げ先行比率が高い→ハイ
+    3. 逃げ馬頭数の競合    : 逃げ不在→スロー / 逃げ複数→先行争いでハイ
+    4. 馬場状態補正        : 道悪での補正（調整可能なプレースホルダ）
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Protocol
+
+from pci.domain.pace.running_style import RunningStyleLabel
+from pci.domain.shared.reason import Reason
+
+MODEL_VERSION = "rule-v1"
+
+
+class PaceLabel(StrEnum):
+    """展開3分類（ADR-0005）。"""
+
+    HIGH = "ハイ"
+    AVERAGE = "平均"
+    SLOW = "スロー"
+
+
+@dataclass(frozen=True)
+class RaceContext:
+    """想定RPCI 予測の入力コンテキスト。"""
+
+    distance_m: int
+    track_type: str
+    running_styles: tuple[RunningStyleLabel, ...]
+    track_condition: str | None = None
+
+
+@dataclass(frozen=True)
+class RpciForecast:
+    """想定RPCI 予測結果。"""
+
+    value: float
+    label: PaceLabel
+    confidence: float
+    model_version: str
+    reasons: tuple[Reason, ...]
+
+
+class RpciForecaster(Protocol):
+    """想定RPCI 予測の戦略インターフェース（ADR-0005）。
+
+    application / presentation 層はこの Protocol にのみ依存し、
+    具体実装（ルールベース / ML）は DI で注入する。
+    """
+
+    def forecast(self, context: RaceContext) -> RpciForecast: ...
+
+
+@dataclass(frozen=True)
+class RuleWeights:
+    """ルールベース予測の重み（設定ファイルから上書き可能）。"""
+
+    base_rpci: float = 50.0
+    distance_pivot_m: int = 1800
+    distance_slope_per_200m: float = 0.25
+    style_balance_weight: float = 8.0
+    escape_pressure_weight: float = 0.8
+    # 馬場補正（道悪は前傾化しやすい傾向の暫定値。検証で調整）
+    track_good_adjust: float = 0.0
+    track_slightly_heavy_adjust: float = -0.3
+    track_heavy_adjust: float = -0.5
+    track_bad_adjust: float = -0.8
+    # 展開3分類の閾値
+    high_threshold: float = 49.0
+    slow_threshold: float = 51.0
+    # RPCI の現実的なクランプ範囲（安全弁）
+    rpci_min: float = 35.0
+    rpci_max: float = 65.0
+
+
+DEFAULT_WEIGHTS = RuleWeights()
+
+_FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
+_CLOSER_STYLES = (RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER)
+
+
+class RuleBasedRpciForecaster:
+    """ルールベース想定RPCI 予測器（rule-v1）。
+
+    説明可能性を最優先し、各要因の寄与を reasons として出力する（ADR-0005）。
+    """
+
+    def __init__(self, weights: RuleWeights | None = None) -> None:
+        self._w = weights or DEFAULT_WEIGHTS
+
+    def forecast(self, context: RaceContext) -> RpciForecast:
+        styles = context.running_styles
+        n = len(styles)
+        if n == 0:
+            raise ValueError("出走馬の脚質情報がありません。想定RPCI を予測できません。")
+
+        w = self._w
+        reasons: list[Reason] = []
+
+        # 1. 距離基準ペース
+        base = w.base_rpci + ((context.distance_m - w.distance_pivot_m) / 200.0) * (
+            w.distance_slope_per_200m
+        )
+        reasons.append(
+            Reason(
+                code="distance_base",
+                description=f"距離{context.distance_m}m の基準ペース → RPCI基準 {base:.2f}",
+                contribution=round(base - w.base_rpci, 2),
+            )
+        )
+
+        # 2. 脚質構成バランス
+        front = sum(1 for s in styles if s in _FRONT_STYLES)
+        closer = sum(1 for s in styles if s in _CLOSER_STYLES)
+        balance = (closer / n - front / n) * w.style_balance_weight
+        reasons.append(
+            Reason(
+                code="style_balance",
+                description=(
+                    f"逃先{front}頭 / 差追{closer}頭（全{n}頭）→ "
+                    f"{'スロー' if balance > 0 else 'ハイ'}方向 {balance:+.2f}"
+                ),
+                contribution=round(balance, 2),
+            )
+        )
+
+        # 3. 逃げ馬頭数の競合（逃げ不在=緩む / 複数=先行争い）
+        escape = sum(1 for s in styles if s == RunningStyleLabel.ESCAPE)
+        escape_pressure = -(escape - 1) * w.escape_pressure_weight
+        reasons.append(
+            Reason(
+                code="escape_pressure",
+                description=(
+                    f"逃げ馬{escape}頭 → "
+                    f"{'先行争いでハイ' if escape_pressure < 0 else '緩みやすくスロー'}"
+                    f"方向 {escape_pressure:+.2f}"
+                ),
+                contribution=round(escape_pressure, 2),
+            )
+        )
+
+        # 4. 馬場補正
+        track_adjust = self._track_adjust(context.track_condition)
+        if track_adjust != 0.0:
+            reasons.append(
+                Reason(
+                    code="track_condition",
+                    description=f"馬場「{context.track_condition}」補正 {track_adjust:+.2f}",
+                    contribution=track_adjust,
+                )
+            )
+
+        raw = base + balance + escape_pressure + track_adjust
+        rpci = round(min(max(raw, w.rpci_min), w.rpci_max), 1)
+
+        label = self._classify(rpci)
+        confidence = self._confidence(balance, escape_pressure)
+        reasons.append(
+            Reason(
+                code="forecast",
+                description=f"想定RPCI={rpci} → 展開「{label}」（信頼度 {confidence:.0%}）",
+            )
+        )
+
+        return RpciForecast(
+            value=rpci,
+            label=label,
+            confidence=confidence,
+            model_version=MODEL_VERSION,
+            reasons=tuple(reasons),
+        )
+
+    def _track_adjust(self, condition: str | None) -> float:
+        w = self._w
+        return {
+            "良": w.track_good_adjust,
+            "稍重": w.track_slightly_heavy_adjust,
+            "重": w.track_heavy_adjust,
+            "不良": w.track_bad_adjust,
+        }.get(condition or "良", 0.0)
+
+    def _classify(self, rpci: float) -> PaceLabel:
+        if rpci < self._w.high_threshold:
+            return PaceLabel.HIGH
+        if rpci > self._w.slow_threshold:
+            return PaceLabel.SLOW
+        return PaceLabel.AVERAGE
+
+    def _confidence(self, balance: float, escape_pressure: float) -> float:
+        signal = abs(balance) + abs(escape_pressure)
+        return round(min(max(0.4 + signal / 20.0, 0.3), 0.9), 2)
