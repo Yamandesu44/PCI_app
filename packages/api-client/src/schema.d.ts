@@ -44,6 +44,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/races/{race_key}/pace-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Race Pace Analysis
+         * @description 確定後レースの各馬PCI・実績RPCI・PCI3（formula_version 付き）を返す。
+         */
+        get: operations["get_race_pace_analysis_api_v1_races__race_key__pace_analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -154,6 +174,55 @@ export interface components {
             reasons: components["schemas"]["ReasonSchema"][];
             /** Running Style */
             running_style: string;
+        };
+        /**
+         * HorsePaceAnalysisSchema
+         * @description 確定後の馬単位ペース分析（各馬 PCI）。
+         */
+        HorsePaceAnalysisSchema: {
+            /** Agari 3F S */
+            agari_3f_s?: number | null;
+            /** Finish Pos */
+            finish_pos?: number | null;
+            /** Horse No */
+            horse_no: number;
+            /**
+             * Is Pci3 Contributor
+             * @default false
+             */
+            is_pci3_contributor: boolean;
+            /** Pci */
+            pci?: number | null;
+            /** Running Style */
+            running_style?: string | null;
+        };
+        /**
+         * PaceAnalysisSchema
+         * @description 確定後ペース分析（各馬PCI・実績RPCI・PCI3）。PCI 系は formula_version を返す。
+         */
+        PaceAnalysisSchema: {
+            /** Field Size */
+            field_size: number;
+            /** Formula Version */
+            formula_version: string;
+            /**
+             * Horses
+             * @default []
+             */
+            horses: components["schemas"]["HorsePaceAnalysisSchema"][];
+            /** Pci3 Actual */
+            pci3_actual?: number | null;
+            /** Race Key */
+            race_key: string;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
+            /** Rpci Actual */
+            rpci_actual?: number | null;
+            /** Sample Size */
+            sample_size: number;
         };
         /**
          * RaceDetailSchema
@@ -277,6 +346,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForecastSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_race_pace_analysis_api_v1_races__race_key__pace_analysis_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 16桁のレースキー */
+                race_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaceAnalysisSchema"];
                 };
             };
             /** @description Validation Error */

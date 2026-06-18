@@ -29,10 +29,11 @@ npm run test       # vitest（純粋プレゼンテーションロジック）
 
 | ルート | 内容 |
 |---|---|
-| `/` | トップ（サンプルレースへの導線） |
+| `/` | トップ（出走前=展開予想 / 確定後=ペース分析への導線） |
 | `/races/{raceKey}/forecast` | 展開予想（想定ペース・展開を作る馬・展開が向く馬の PAI・根拠） |
+| `/races/{raceKey}/pace-analysis` | 確定後ペース分析（各馬PCI・実績RPCI・PCI3、★=PCI3寄与馬） |
 
-未登録レース・出走馬未確定は 404（`not-found.tsx`）。
+未登録レース・出走馬未確定（forecast）／未確定レース（pace-analysis）は 404（`not-found.tsx`）。
 
 ## 配備
 

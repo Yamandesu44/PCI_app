@@ -15,7 +15,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
 
 from pci.application.forecast_use_cases import ForecastRaceUseCase
-from pci.application.race_query_use_cases import GetRaceDetailUseCase
+from pci.application.race_query_use_cases import GetPaceAnalysisUseCase, GetRaceDetailUseCase
 from pci.config.settings import get_settings
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.racing.repository import RaceRepository
@@ -64,5 +64,10 @@ def get_race_detail_use_case(repo: RepositoryDep) -> GetRaceDetailUseCase:
     return GetRaceDetailUseCase(repo)
 
 
+def get_pace_analysis_use_case(repo: RepositoryDep) -> GetPaceAnalysisUseCase:
+    return GetPaceAnalysisUseCase(repo)
+
+
 ForecastUseCaseDep = Annotated[ForecastRaceUseCase, Depends(get_forecast_use_case)]
 RaceDetailUseCaseDep = Annotated[GetRaceDetailUseCase, Depends(get_race_detail_use_case)]
+PaceAnalysisUseCaseDep = Annotated[GetPaceAnalysisUseCase, Depends(get_pace_analysis_use_case)]

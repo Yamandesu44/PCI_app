@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from pci.application.errors import RaceNotConfirmedError
 from pci.presentation.routers import health, races
 
 
@@ -28,6 +29,11 @@ def create_app() -> FastAPI:
     async def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
         """use case の「見つからない」系 ValueError を 404 にマップする。"""
         return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(RaceNotConfirmedError)
+    async def _not_confirmed_handler(_request: Request, exc: RaceNotConfirmedError) -> JSONResponse:
+        """確定前レースへの確定後分析要求を 409 Conflict にマップする。"""
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
 
     app.include_router(health.router)
     app.include_router(races.router)

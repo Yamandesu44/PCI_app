@@ -57,6 +57,98 @@ h1 {
   font-size: 0.85rem;
 }
 
+.cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+@media (max-width: 540px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.card:hover {
+  border-color: #2563eb;
+}
+
+.card-tag {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.card strong {
+  font-size: 1.15rem;
+}
+
+.card span:last-child {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ----- PCI テーブル ----- */
+.pci-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.pci-table th,
+.pci-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.pci-table th {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.pci-table td.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pci-table tr.pci3 {
+  background: #f0fdf4;
+}
+
+.horse-no.sm {
+  min-width: 24px;
+  height: 24px;
+  font-size: 0.85rem;
+}
+
+.pci3-mark {
+  margin-left: 6px;
+  color: var(--matched);
+}
+
+.tone-tag {
+  font-weight: 700;
+}
+
 .breadcrumb {
   display: flex;
   justify-content: space-between;

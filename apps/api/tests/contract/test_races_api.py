@@ -39,6 +39,26 @@ RACE_DETAIL_KEYS = {
     "entries",
 }
 
+PACE_ANALYSIS_KEYS = {
+    "race_key",
+    "formula_version",
+    "field_size",
+    "sample_size",
+    "rpci_actual",
+    "pci3_actual",
+    "horses",
+    "reasons",
+}
+
+PACE_ANALYSIS_HORSE_KEYS = {
+    "horse_no",
+    "finish_pos",
+    "running_style",
+    "pci",
+    "agari_3f_s",
+    "is_pci3_contributor",
+}
+
 
 class TestForecastEndpoint:
     def test_returns_200(self, client: TestClient) -> None:
@@ -100,3 +120,41 @@ class TestRaceDetailEndpoint:
     def test_unknown_race_returns_404(self, client: TestClient) -> None:
         resp = client.get("/api/v1/races/9999999999999999")
         assert resp.status_code == 404
+
+
+class TestPaceAnalysisEndpoint:
+    def test_returns_200_for_confirmed(self, client: TestClient) -> None:
+        resp = client.get(f"/api/v1/races/{CONFIRMED_KEY}/pace-analysis")
+        assert resp.status_code == 200
+
+    def test_response_contract(self, client: TestClient) -> None:
+        body = client.get(f"/api/v1/races/{CONFIRMED_KEY}/pace-analysis").json()
+        assert set(body.keys()) == PACE_ANALYSIS_KEYS
+        assert body["race_key"] == CONFIRMED_KEY
+        assert body["formula_version"] == "pci-v1"  # PCI 系は formula_version 必須
+        assert body["sample_size"] == 3
+        assert body["rpci_actual"] is not None
+        assert body["pci3_actual"] is not None
+        assert body["reasons"], "説明可能性: reasons は必須"
+
+    def test_horses_contract(self, client: TestClient) -> None:
+        body = client.get(f"/api/v1/races/{CONFIRMED_KEY}/pace-analysis").json()
+        assert len(body["horses"]) == 3
+        assert [h["finish_pos"] for h in body["horses"]] == [1, 2, 3]
+        for h in body["horses"]:
+            assert set(h.keys()) == PACE_ANALYSIS_HORSE_KEYS
+            assert h["pci"] is not None
+            assert h["is_pci3_contributor"] is True
+
+    def test_unconfirmed_race_returns_409(self, client: TestClient) -> None:
+        resp = client.get(f"/api/v1/races/{UPCOMING_KEY}/pace-analysis")
+        assert resp.status_code == 409
+        assert "確定していません" in resp.json()["detail"]
+
+    def test_unknown_race_returns_404(self, client: TestClient) -> None:
+        resp = client.get("/api/v1/races/9999999999999999/pace-analysis")
+        assert resp.status_code == 404
+
+    def test_malformed_race_key_returns_422(self, client: TestClient) -> None:
+        resp = client.get("/api/v1/races/abc/pace-analysis")
+        assert resp.status_code == 422

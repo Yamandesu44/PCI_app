@@ -129,3 +129,32 @@ class RaceDetailOutput:
     rpci_actual: float | None = None
     pci3_actual: float | None = None
     entries: list[EntryDetailOutput] = field(default_factory=list)
+
+
+@dataclass
+class HorsePaceAnalysisOutput:
+    """確定後の馬単位ペース分析（各馬 PCI）。"""
+
+    horse_no: int
+    finish_pos: int | None = None
+    running_style: str | None = None
+    pci: float | None = None
+    agari_3f_s: float | None = None
+    is_pci3_contributor: bool = False
+
+
+@dataclass
+class PaceAnalysisOutput:
+    """GetPaceAnalysisUseCase の出力（確定後: 各馬PCI・実績RPCI・PCI3）。
+
+    PCI 系指標のため `formula_version` を必ず付す（設計書 04 §3）。
+    """
+
+    race_key: str
+    formula_version: str
+    field_size: int
+    sample_size: int
+    rpci_actual: float | None = None
+    pci3_actual: float | None = None
+    horses: list[HorsePaceAnalysisOutput] = field(default_factory=list)
+    reasons: list[ReasonOutput] = field(default_factory=list)

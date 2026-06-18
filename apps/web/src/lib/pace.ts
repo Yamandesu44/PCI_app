@@ -62,3 +62,38 @@ export function paiBarWidth(pai: number): number {
 export function sortByPai(horses: HorseFit[]): HorseFit[] {
   return [...horses].sort((a, b) => b.pai - a.pai);
 }
+
+export type PciTone = "slow" | "high" | "even" | "unknown";
+
+/**
+ * 個馬 PCI を傾向に分類（CLAUDE.md の定義）。
+ *   PCI > 50: スロー（後半型） / PCI < 50: ハイ（前傾） / = 50: イーブン
+ */
+export function pciTone(pci: number | null | undefined): PciTone {
+  if (pci === null || pci === undefined) return "unknown";
+  if (pci > 50) return "slow";
+  if (pci < 50) return "high";
+  return "even";
+}
+
+const PCI_TONE_LABEL: Record<PciTone, string> = {
+  slow: "スロー",
+  high: "ハイ",
+  even: "イーブン",
+  unknown: "—",
+};
+
+const PCI_TONE_COLOR: Record<PciTone, string> = {
+  slow: "#dc2626",
+  high: "#2563eb",
+  even: "#64748b",
+  unknown: "#94a3b8",
+};
+
+export function pciToneLabel(tone: PciTone): string {
+  return PCI_TONE_LABEL[tone];
+}
+
+export function pciToneColor(tone: PciTone): string {
+  return PCI_TONE_COLOR[tone];
+}

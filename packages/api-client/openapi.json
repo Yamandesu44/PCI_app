@@ -197,6 +197,136 @@
         "title": "HorseFitSchema",
         "type": "object"
       },
+      "HorsePaceAnalysisSchema": {
+        "description": "確定後の馬単位ペース分析（各馬 PCI）。",
+        "properties": {
+          "agari_3f_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agari 3F S"
+          },
+          "finish_pos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish Pos"
+          },
+          "horse_no": {
+            "title": "Horse No",
+            "type": "integer"
+          },
+          "is_pci3_contributor": {
+            "default": false,
+            "title": "Is Pci3 Contributor",
+            "type": "boolean"
+          },
+          "pci": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pci"
+          },
+          "running_style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Style"
+          }
+        },
+        "required": [
+          "horse_no"
+        ],
+        "title": "HorsePaceAnalysisSchema",
+        "type": "object"
+      },
+      "PaceAnalysisSchema": {
+        "description": "確定後ペース分析（各馬PCI・実績RPCI・PCI3）。PCI 系は formula_version を返す。",
+        "properties": {
+          "field_size": {
+            "title": "Field Size",
+            "type": "integer"
+          },
+          "formula_version": {
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "horses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HorsePaceAnalysisSchema"
+            },
+            "title": "Horses",
+            "type": "array"
+          },
+          "pci3_actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pci3 Actual"
+          },
+          "race_key": {
+            "title": "Race Key",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "rpci_actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rpci Actual"
+          },
+          "sample_size": {
+            "title": "Sample Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "race_key",
+          "formula_version",
+          "field_size",
+          "sample_size"
+        ],
+        "title": "PaceAnalysisSchema",
+        "type": "object"
+      },
       "RaceDetailSchema": {
         "description": "レース詳細（core 層の情報 + 確定指標）。",
         "properties": {
@@ -481,6 +611,52 @@
           }
         },
         "summary": "Get Race Forecast",
+        "tags": [
+          "races"
+        ]
+      }
+    },
+    "/api/v1/races/{race_key}/pace-analysis": {
+      "get": {
+        "description": "確定後レースの各馬PCI・実績RPCI・PCI3（formula_version 付き）を返す。",
+        "operationId": "get_race_pace_analysis_api_v1_races__race_key__pace_analysis_get",
+        "parameters": [
+          {
+            "description": "16桁のレースキー",
+            "in": "path",
+            "name": "race_key",
+            "required": true,
+            "schema": {
+              "description": "16桁のレースキー",
+              "pattern": "^\\d{16}$",
+              "title": "Race Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaceAnalysisSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Race Pace Analysis",
         "tags": [
           "races"
         ]

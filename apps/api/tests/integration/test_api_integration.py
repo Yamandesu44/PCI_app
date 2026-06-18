@@ -137,6 +137,28 @@ def test_unknown_race_returns_404_through_real_db(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
+def test_pace_analysis_through_real_db(client: TestClient, db_session: Session) -> None:
+    _seed_confirmed_race(db_session)
+
+    resp = client.get(f"/api/v1/races/{RACE_KEY}/pace-analysis")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["race_key"] == RACE_KEY
+    assert body["formula_version"] == "pci-v1"
+    assert body["sample_size"] == 1
+    assert body["rpci_actual"] == pytest.approx(53.5)
+    assert len(body["horses"]) == 1
+    assert body["horses"][0]["pci"] == pytest.approx(53.5)
+    assert body["horses"][0]["is_pci3_contributor"] is True
+
+
+def test_pace_analysis_unconfirmed_returns_409(client: TestClient, db_session: Session) -> None:
+    _seed_upcoming_race(db_session)
+
+    resp = client.get(f"/api/v1/races/{UPCOMING_RACE_KEY}/pace-analysis")
+    assert resp.status_code == 409
+
+
 def test_forecast_persists_to_mart(client: TestClient, db_session: Session) -> None:
     """展開予想 API が mart 層（predicted_pace / pace_fit）へ結果を永続化することを確認。"""
     _seed_upcoming_race(db_session)

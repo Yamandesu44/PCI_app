@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from pci.application.dto import ForecastOutput, RaceDetailOutput
+from pci.application.dto import ForecastOutput, PaceAnalysisOutput, RaceDetailOutput
 
 
 class ReasonSchema(BaseModel):
@@ -116,6 +116,53 @@ class RaceDetailSchema(BaseModel):
             rpci_actual=dto.rpci_actual,
             pci3_actual=dto.pci3_actual,
             entries=[EntryDetailSchema(**vars(e)) for e in dto.entries],
+        )
+
+
+class HorsePaceAnalysisSchema(BaseModel):
+    """確定後の馬単位ペース分析（各馬 PCI）。"""
+
+    horse_no: int
+    finish_pos: int | None = None
+    running_style: str | None = None
+    pci: float | None = None
+    agari_3f_s: float | None = None
+    is_pci3_contributor: bool = False
+
+
+class PaceAnalysisSchema(BaseModel):
+    """確定後ペース分析（各馬PCI・実績RPCI・PCI3）。PCI 系は formula_version を返す。"""
+
+    race_key: str
+    formula_version: str
+    field_size: int
+    sample_size: int
+    rpci_actual: float | None = None
+    pci3_actual: float | None = None
+    horses: list[HorsePaceAnalysisSchema] = []
+    reasons: list[ReasonSchema] = []
+
+    @classmethod
+    def from_dto(cls, dto: PaceAnalysisOutput) -> PaceAnalysisSchema:
+        return cls(
+            race_key=dto.race_key,
+            formula_version=dto.formula_version,
+            field_size=dto.field_size,
+            sample_size=dto.sample_size,
+            rpci_actual=dto.rpci_actual,
+            pci3_actual=dto.pci3_actual,
+            horses=[
+                HorsePaceAnalysisSchema(
+                    horse_no=h.horse_no,
+                    finish_pos=h.finish_pos,
+                    running_style=h.running_style,
+                    pci=h.pci,
+                    agari_3f_s=h.agari_3f_s,
+                    is_pci3_contributor=h.is_pci3_contributor,
+                )
+                for h in dto.horses
+            ],
+            reasons=[ReasonSchema(**vars(r)) for r in dto.reasons],
         )
 
 

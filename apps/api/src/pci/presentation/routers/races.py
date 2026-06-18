@@ -6,8 +6,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path
 
-from pci.presentation.dependencies import ForecastUseCaseDep, RaceDetailUseCaseDep
-from pci.presentation.schemas import ForecastSchema, RaceDetailSchema
+from pci.presentation.dependencies import (
+    ForecastUseCaseDep,
+    PaceAnalysisUseCaseDep,
+    RaceDetailUseCaseDep,
+)
+from pci.presentation.schemas import ForecastSchema, PaceAnalysisSchema, RaceDetailSchema
 
 router = APIRouter(prefix="/api/v1/races", tags=["races"])
 
@@ -19,6 +23,14 @@ RaceKeyPath = Annotated[str, Path(pattern=r"^\d{16}$", description="16桁のレ�
 def get_race_forecast(race_key: RaceKeyPath, use_case: ForecastUseCaseDep) -> ForecastSchema:
     """未確定レースの展開予想（想定RPCI・展開シナリオ・各馬 PAI）を返す。"""
     return ForecastSchema.from_dto(use_case.execute(race_key))
+
+
+@router.get("/{race_key}/pace-analysis", response_model=PaceAnalysisSchema)
+def get_race_pace_analysis(
+    race_key: RaceKeyPath, use_case: PaceAnalysisUseCaseDep
+) -> PaceAnalysisSchema:
+    """確定後レースの各馬PCI・実績RPCI・PCI3（formula_version 付き）を返す。"""
+    return PaceAnalysisSchema.from_dto(use_case.execute(race_key))
 
 
 @router.get("/{race_key}", response_model=RaceDetailSchema)

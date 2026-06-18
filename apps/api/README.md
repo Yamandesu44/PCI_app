@@ -25,9 +25,11 @@ uvicorn pci.presentation.app:app --reload
 |---|---|---|
 | GET | `/health` | ヘルスチェック |
 | GET | `/api/v1/races/{race_key}/forecast` | 展開予想（想定RPCI・展開シナリオ・各馬 PAI） |
+| GET | `/api/v1/races/{race_key}/pace-analysis` | 確定後ペース分析（各馬PCI・実績RPCI・PCI3・formula_version） |
 | GET | `/api/v1/races/{race_key}` | レース詳細（出走馬・確定指標 RPCI/PCI3） |
 
 `race_key` は16桁数字（不正値は 422、未登録レースは 404）。
+`pace-analysis` は確定後（status=result）のみ。確定前のレースは 409 を返す。
 
 ## テスト
 

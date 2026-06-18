@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fitTone, paceMeta, paiBarWidth, sortByPai } from "./pace";
+import { fitTone, paceMeta, paiBarWidth, pciTone, pciToneLabel, sortByPai } from "./pace";
 
 describe("paceMeta", () => {
   it("既知ラベルを tone に対応づける", () => {
@@ -40,5 +40,21 @@ describe("sortByPai", () => {
     const out = sortByPai(input);
     expect(out.map((h) => h.horse_no)).toEqual([2, 1]);
     expect(input[0]?.horse_no).toBe(1);
+  });
+});
+
+describe("pciTone", () => {
+  it("PCI を傾向に分類する（>50 スロー / <50 ハイ / =50 イーブン）", () => {
+    expect(pciTone(53)).toBe("slow");
+    expect(pciTone(47)).toBe("high");
+    expect(pciTone(50)).toBe("even");
+    expect(pciTone(null)).toBe("unknown");
+    expect(pciTone(undefined)).toBe("unknown");
+  });
+
+  it("傾向ラベルを返す", () => {
+    expect(pciToneLabel(pciTone(53))).toBe("スロー");
+    expect(pciToneLabel(pciTone(47))).toBe("ハイ");
+    expect(pciToneLabel(pciTone(null))).toBe("—");
   });
 });
