@@ -97,3 +97,35 @@ class ForecastOutput:
     beneficiaries: list[int] = field(default_factory=list)
     horses: list[HorseFitOutput] = field(default_factory=list)
     forecast_reasons: list[ReasonOutput] = field(default_factory=list)
+
+
+@dataclass
+class EntryDetailOutput:
+    """レース詳細の馬単位出力（確定済みなら成績を含む）。"""
+
+    horse_no: int
+    frame_no: int
+    ketto_num: str
+    running_style: str | None = None
+    pci_actual: float | None = None
+    finish_pos: int | None = None
+
+
+@dataclass
+class RaceDetailOutput:
+    """GetRaceDetailUseCase の出力（core 層のレース情報 + 確定指標）。"""
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    distance_m: int
+    track_type: str
+    status: str
+    field_size: int
+    track_condition: str | None = None
+    weather: str | None = None
+    grade: str | None = None
+    race_class: str | None = None
+    rpci_actual: float | None = None
+    pci3_actual: float | None = None
+    entries: list[EntryDetailOutput] = field(default_factory=list)

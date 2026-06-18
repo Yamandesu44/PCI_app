@@ -59,12 +59,13 @@ jobs:
       - name: Install dev dependencies
         run: pip install -e ".[dev]"
 
-      - name: pytest (unit — domain + application, fast / no DB)
+      - name: pytest (unit + contract — fast / no DB)
         run: >
-          pytest tests/unit/
+          pytest tests/unit/ tests/contract/
           -v
           --cov=src/pci/domain
           --cov=src/pci/application
+          --cov=src/pci/presentation
           --cov-report=term-missing
           --cov-fail-under=90
 
