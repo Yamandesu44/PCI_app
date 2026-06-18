@@ -45,12 +45,15 @@ target-version = "py311"
 src = ["src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "SIM", "TCH"]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 
 # ----- pytest -----
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "integration: testcontainers を使う統合テスト（--runintegration フラグで実行）",
+]
 
 # ----- coverage -----
 [tool.coverage.run]
