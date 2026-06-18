@@ -27,6 +27,17 @@ class PciResult:
     reasons: tuple[Reason, ...]
 
 
+@dataclass(frozen=True)
+class RpciResult:
+    """RPCI / PCI3 集計結果。"""
+
+    rpci: float
+    pci3: float | None
+    formula_version: str
+    sample_size: int
+    reasons: tuple[Reason, ...]
+
+
 def calculate_pci(
     race_time: RaceTime,
     furlong_3f: Furlong3Time,
@@ -88,4 +99,59 @@ def calculate_pci(
                 description=f"前後ペース比 {ratio:.4f} → {pace_trend}（PCI={pci}）",
             ),
         ),
+    )
+
+
+def aggregate_rpci(
+    pci_values: list[float],
+    finish_positions: list[int],
+) -> RpciResult:
+    """複数馬の PCI から RPCI と PCI3 を集計する。
+
+    Args:
+        pci_values:       各馬の PCI 値（finish_positions と同順）
+        finish_positions: 各馬の着順（pci_values と同順）
+
+    Returns:
+        RpciResult（rpci, pci3, formula_version, sample_size, reasons）
+
+    Raises:
+        ValueError: pci_values が空の場合
+    """
+    if not pci_values:
+        raise ValueError("PCI 値が空です。RPCI を集計できません。")
+    if len(pci_values) != len(finish_positions):
+        raise ValueError("pci_values と finish_positions の長さが一致しません。")
+
+    rpci = round(sum(pci_values) / len(pci_values), 1)
+
+    top3_pcis = [
+        pci for pci, pos in zip(pci_values, finish_positions, strict=True) if pos in (1, 2, 3)
+    ]
+    pci3: float | None = round(sum(top3_pcis) / len(top3_pcis), 1) if top3_pcis else None
+
+    reasons: list[Reason] = [
+        Reason(
+            code="rpci_sample",
+            description=f"全完走馬 {len(pci_values)} 頭の PCI 平均 → RPCI={rpci}",
+        ),
+    ]
+    if pci3 is not None:
+        reasons.append(
+            Reason(
+                code="pci3_sample",
+                description=f"上位3着馬 {len(top3_pcis)} 頭の PCI 平均 → PCI3={pci3}",
+            )
+        )
+    else:
+        reasons.append(
+            Reason(code="pci3_unavailable", description="上位3着馬データ不足のため PCI3 算出不可")
+        )
+
+    return RpciResult(
+        rpci=rpci,
+        pci3=pci3,
+        formula_version=FORMULA_VERSION,
+        sample_size=len(pci_values),
+        reasons=tuple(reasons),
     )

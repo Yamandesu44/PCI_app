@@ -1,0 +1,46 @@
+{
+  "_comment": "開発用サンプル確定成績データ。sample_race_entries.json のレースに対応。",
+  "race_key": "2026061805010101",
+  "track_condition": "良",
+  "weather": "晴",
+  "results": [
+    {
+      "horse_no": 3,
+      "finish_pos": 1,
+      "race_time_s": 94.4,
+      "agari_3f_s": 33.9,
+      "corner_1": 3,
+      "corner_2": 3,
+      "corner_3": 3,
+      "corner_4": 3
+    },
+    {
+      "horse_no": 1,
+      "finish_pos": 2,
+      "race_time_s": 94.6,
+      "agari_3f_s": 34.2,
+      "corner_1": 5,
+      "corner_2": 5,
+      "corner_3": 4,
+      "corner_4": 2
+    },
+    {
+      "horse_no": 2,
+      "finish_pos": 3,
+      "race_time_s": 94.9,
+      "agari_3f_s": 34.8,
+      "corner_1": 1,
+      "corner_2": 1,
+      "corner_3": 1,
+      "corner_4": 1
+    }
+  ],
+  "_expected": {
+    "_comment": "開発検証用。PCI計算の期待値（pci-v1）",
+    "horse_3_pci": 53.5,
+    "horse_1_pci": 52.7,
+    "horse_2_pci": 49.7,
+    "rpci_approx": 52.0,
+    "pci3_approx": 52.0
+  }
+}

@@ -1,0 +1,46 @@
+"""テスト用インメモリ RaceRepository 実装。"""
+
+from __future__ import annotations
+
+from pci.domain.racing.race import Race
+from pci.domain.racing.race_entry import RaceEntry
+from pci.domain.shared.race_key import RaceKey
+
+
+class FakeRaceRepository:
+    """テスト専用インメモリ実装。RaceRepository Protocol を満たす。"""
+
+    def __init__(self) -> None:
+        self._races: dict[str, Race] = {}
+        self._entries: dict[tuple[str, int], RaceEntry] = {}
+
+    def find_by_key(self, key: RaceKey) -> Race | None:
+        return self._races.get(str(key))
+
+    def find_entries(self, key: RaceKey) -> list[RaceEntry]:
+        return sorted(
+            (e for (rk, _), e in self._entries.items() if rk == str(key)),
+            key=lambda e: e.horse_no,
+        )
+
+    def find_horse_recent_entries(self, ketto_num: str, limit: int = 5) -> list[RaceEntry]:
+        from pci.domain.racing.race import RaceStatus
+
+        result = [
+            e
+            for e in self._entries.values()
+            if e.ketto_num == ketto_num
+            and self._races.get(str(e.race_key), None) is not None
+            and self._races[str(e.race_key)].status == RaceStatus.RESULT
+        ]
+        result.sort(
+            key=lambda e: self._races[str(e.race_key)].race_date,
+            reverse=True,
+        )
+        return result[:limit]
+
+    def save_race(self, race: Race) -> None:
+        self._races[str(race.race_key)] = race
+
+    def save_entry(self, entry: RaceEntry) -> None:
+        self._entries[(str(entry.race_key), entry.horse_no)] = entry

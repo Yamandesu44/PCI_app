@@ -1,0 +1,58 @@
+{
+  "_comment": "開発用サンプルデータ。JV-Link 生データを模した構造。生産環境の実データは含まない。",
+  "race_info": {
+    "race_key": "2026061805010101",
+    "race_date": "2026-06-18",
+    "jyo_cd": "05",
+    "jyo_name": "東京",
+    "race_no": 1,
+    "distance_m": 1600,
+    "track_type": "芝",
+    "field_size": 10,
+    "track_condition": "良",
+    "weather": "晴",
+    "grade": null,
+    "race_class": "3歳未勝利"
+  },
+  "entries": [
+    {
+      "horse_no": 1,
+      "frame_no": 1,
+      "ketto_num": "2023100001",
+      "horse_name": "サンプルホース1",
+      "sex": "牡",
+      "age": 3,
+      "weight": 472.0,
+      "jockey_code": "01001",
+      "jockey_name": "サンプル騎手1",
+      "trainer_code": "01001",
+      "trainer_name": "サンプル調教師1"
+    },
+    {
+      "horse_no": 2,
+      "frame_no": 1,
+      "ketto_num": "2023100002",
+      "horse_name": "サンプルホース2",
+      "sex": "牝",
+      "age": 3,
+      "weight": 456.0,
+      "jockey_code": "01002",
+      "jockey_name": "サンプル騎手2",
+      "trainer_code": "01002",
+      "trainer_name": "サンプル調教師2"
+    },
+    {
+      "horse_no": 3,
+      "frame_no": 2,
+      "ketto_num": "2023100003",
+      "horse_name": "サンプルホース3",
+      "sex": "牡",
+      "age": 3,
+      "weight": 484.0,
+      "jockey_code": "01003",
+      "jockey_name": "サンプル騎手3",
+      "trainer_code": "01001",
+      "trainer_name": "サンプル調教師1"
+    }
+  ]
+}
