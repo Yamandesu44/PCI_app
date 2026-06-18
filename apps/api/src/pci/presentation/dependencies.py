@@ -17,8 +17,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_query_use_cases import GetRaceDetailUseCase
 from pci.config.settings import get_settings
+from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.racing.repository import RaceRepository
 from pci.infrastructure.database.session import build_engine, build_session_maker
+from pci.infrastructure.repositories.mart_repository import SqlAlchemyMartRepository
 from pci.infrastructure.repositories.race_repository import SqlAlchemyRaceRepository
 
 
@@ -47,8 +49,15 @@ def get_race_repository(session: SessionDep) -> RaceRepository:
 RepositoryDep = Annotated[RaceRepository, Depends(get_race_repository)]
 
 
-def get_forecast_use_case(repo: RepositoryDep) -> ForecastRaceUseCase:
-    return ForecastRaceUseCase(repo)
+def get_mart_repository(session: SessionDep) -> MartRepository:
+    return SqlAlchemyMartRepository(session)
+
+
+MartRepositoryDep = Annotated[MartRepository, Depends(get_mart_repository)]
+
+
+def get_forecast_use_case(repo: RepositoryDep, mart_repo: MartRepositoryDep) -> ForecastRaceUseCase:
+    return ForecastRaceUseCase(repo, mart_repo=mart_repo)
 
 
 def get_race_detail_use_case(repo: RepositoryDep) -> GetRaceDetailUseCase:

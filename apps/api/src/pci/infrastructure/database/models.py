@@ -98,7 +98,7 @@ class PredictedPaceModel(Base):
     predicted_rpci: Mapped[float] = mapped_column(Float, nullable=False)
     pace_label: Mapped[str] = mapped_column(String(10), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
-    factors: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    factors: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
 
 
 class PaceFitModel(Base):
@@ -113,4 +113,4 @@ class PaceFitModel(Base):
     model_version: Mapped[str] = mapped_column(String(20), primary_key=True)
     pai: Mapped[float] = mapped_column(Float, nullable=False)
     fit_label: Mapped[str] = mapped_column(String(10), nullable=False)
-    reasons: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    reasons: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)

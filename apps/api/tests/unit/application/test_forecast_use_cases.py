@@ -12,6 +12,7 @@ from pci.application.race_use_cases import RegisterRaceEntriesUseCase
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
+from tests.unit.application.fake_mart_repository import FakeMartRepository
 from tests.unit.application.fake_repository import FakeRaceRepository
 
 UPCOMING = "2026062005010101"
@@ -141,3 +142,22 @@ class TestForecastRaceUseCase:
         _register_upcoming(repo, n=5)
         output = ForecastRaceUseCase(repo).execute(UPCOMING)
         assert all(h.running_style == "自在" for h in output.horses)
+
+    def test_mart_saved_when_repo_injected(self) -> None:
+        """mart_repo が注入された場合、predicted_pace と pace_fit が保存される。"""
+        repo = FakeRaceRepository()
+        mart_repo = FakeMartRepository()
+        _register_upcoming(repo, n=4)
+
+        ForecastRaceUseCase(repo, mart_repo=mart_repo).execute(UPCOMING)
+
+        assert (UPCOMING, "rule-v1") in mart_repo.predicted_pace
+        assert len(mart_repo.pace_fit) == 4
+        assert all(key[2] == "pai-v1" for key in mart_repo.pace_fit)
+
+    def test_mart_not_called_when_no_repo(self) -> None:
+        """mart_repo が None の場合、永続化なしで算出結果を返す。"""
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=3)
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+        assert len(output.horses) == 3

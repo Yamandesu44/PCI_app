@@ -16,7 +16,8 @@ from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 from pci.presentation.app import create_app
-from pci.presentation.dependencies import get_race_repository
+from pci.presentation.dependencies import get_mart_repository, get_race_repository
+from tests.unit.application.fake_mart_repository import FakeMartRepository
 from tests.unit.application.fake_repository import FakeRaceRepository
 
 UPCOMING_KEY = "2026062005010101"
@@ -126,4 +127,5 @@ def repo() -> FakeRaceRepository:
 def client(repo: FakeRaceRepository) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_race_repository] = lambda: repo
+    app.dependency_overrides[get_mart_repository] = lambda: FakeMartRepository()
     return TestClient(app)

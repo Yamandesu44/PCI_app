@@ -2,6 +2,7 @@
 
 ADR-0005 に従い、予測ロジックは戦略インターフェース `RpciForecaster` 経由で注入する。
 MVP は RuleBasedRpciForecaster（rule-v1）を既定値とし、ML 実装へ無変更で差し替え可能。
+mart 層への永続化は MartRepository を注入して本ユースケース内で実行する（ADR-0006）。
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from pci.application.dto import (
     ReasonOutput,
 )
 from pci.domain.pace.adaptability import HorsePaceProfile, PaceAdaptabilityScorer, PaiResult
+from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import (
     RaceContext,
     RpciForecaster,
@@ -25,10 +27,10 @@ from pci.domain.shared.reason import Reason
 
 
 class ForecastRaceUseCase:
-    """未確定レースの展開予想を生成するユースケース。
+    """未確定レースの展開予想を生成し、mart 層へ永続化するユースケース。
 
     出走各馬の脚質を直近5走から判定し、想定RPCI・展開シナリオ・各馬 PAI を返す。
-    mart 層への永続化は presentation/API 層の責務とし、本ユースケースは算出に専念する。
+    mart_repo が注入された場合、算出結果を predicted_pace / pace_fit に保存する。
     """
 
     def __init__(
@@ -36,10 +38,12 @@ class ForecastRaceUseCase:
         repo: RaceRepository,
         forecaster: RpciForecaster | None = None,
         scorer: PaceAdaptabilityScorer | None = None,
+        mart_repo: MartRepository | None = None,
     ) -> None:
         self._repo = repo
         self._forecaster = forecaster or RuleBasedRpciForecaster()
         self._scorer = scorer or PaceAdaptabilityScorer()
+        self._mart_repo = mart_repo
 
     def execute(self, race_key_str: str) -> ForecastOutput:
         key = RaceKey(race_key_str)
@@ -70,6 +74,12 @@ class ForecastRaceUseCase:
         fit_results: list[PaiResult] = [
             self._scorer.score(p, forecast, race.distance_m, race.track_condition) for p in profiles
         ]
+
+        if self._mart_repo is not None:
+            self._mart_repo.save_predicted_pace(race_key_str, forecast)
+            for profile, fit_result in zip(profiles, fit_results, strict=True):
+                self._mart_repo.save_pace_fit(race_key_str, profile.horse_no, fit_result)
+
         scenario = build_pace_scenario(forecast, fit_results, profiles)
 
         fit_by_no = {r.horse_no: r for r in fit_results}
