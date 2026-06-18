@@ -1,0 +1,52 @@
+name: Web CI
+
+on:
+  push:
+    paths:
+      - "apps/web/**"
+      - "packages/api-client/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/ci-web.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/api-client/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/ci-web.yml"
+
+jobs:
+  build:
+    name: Type / Test / Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install (workspaces)
+        run: npm ci
+
+      - name: api-client — 型生成のドリフト検知
+        working-directory: packages/api-client
+        run: |
+          npm run generate
+          git diff --exit-code src/schema.d.ts \
+            || (echo "::error::schema.d.ts が古いです。openapi.json と npm run generate を確認してください" && exit 1)
+
+      - name: api-client — typecheck
+        working-directory: packages/api-client
+        run: npm run typecheck
+
+      - name: web — unit tests (vitest)
+        working-directory: apps/web
+        run: npm run test
+
+      - name: web — build（型チェック込み）
+        working-directory: apps/web
+        run: npm run build

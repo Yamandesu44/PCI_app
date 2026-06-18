@@ -1,0 +1,61 @@
+/**
+ * PCI App API クライアント。
+ *
+ * 型は openapi.json から `npm run generate` で生成した schema.d.ts に由来し、
+ * FastAPI のレスポンス契約とフロントエンドの型を一致させる（設計書 04 §4）。
+ */
+import type { components } from "./schema";
+
+// ----- 生成スキーマ由来の公開型エイリアス -----
+
+export type Reason = components["schemas"]["ReasonSchema"];
+export type HorseFit = components["schemas"]["HorseFitSchema"];
+export type Forecast = components["schemas"]["ForecastSchema"];
+export type RaceDetail = components["schemas"]["RaceDetailSchema"];
+export type EntryDetail = components["schemas"]["EntryDetailSchema"];
+
+export type { components, paths } from "./schema";
+
+// ----- クライアント -----
+
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export interface ApiClientOptions {
+  /** FastAPI のベース URL（例: http://127.0.0.1:8000）。末尾スラッシュは任意。 */
+  baseUrl: string;
+  /** テストや SSR でのフェッチ差し替え用。省略時はグローバル fetch。 */
+  fetch?: typeof fetch;
+}
+
+export interface ApiClient {
+  getForecast(raceKey: string): Promise<Forecast>;
+  getRaceDetail(raceKey: string): Promise<RaceDetail>;
+}
+
+export function createClient(options: ApiClientOptions): ApiClient {
+  const doFetch = options.fetch ?? globalThis.fetch;
+  const base = options.baseUrl.replace(/\/+$/, "");
+
+  async function getJson<T>(path: string): Promise<T> {
+    const res = await doFetch(`${base}${path}`);
+    if (!res.ok) {
+      throw new ApiError(res.status, `GET ${path} failed with ${res.status}`);
+    }
+    return (await res.json()) as T;
+  }
+
+  return {
+    getForecast: (raceKey) =>
+      getJson<Forecast>(`/api/v1/races/${encodeURIComponent(raceKey)}/forecast`),
+    getRaceDetail: (raceKey) =>
+      getJson<RaceDetail>(`/api/v1/races/${encodeURIComponent(raceKey)}`),
+  };
+}

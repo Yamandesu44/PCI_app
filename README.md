@@ -12,7 +12,19 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 
 ## 現在のステータス
 
-**設計フェーズ完了。** 本リポジトリには現在、設計ドキュメント一式のみが含まれる（実装は未着手）。
+**MVP 実装中（fixtures ベースで価値検証）。**
+
+| 領域 | 状態 |
+|---|---|
+| ドメイン核（PCI / 脚質 / 想定RPCI / PAI / 展開シナリオ） | ✅ 実装済み・テスト済み |
+| アプリケーション層（ユースケース） | ✅ 実装済み |
+| DB（core / mart）+ Alembic + Repository | ✅ 実装済み（mart 永続化込み） |
+| FastAPI（`/forecast`・レース詳細） | ✅ 実装済み |
+| 型共有（`packages/api-client`） | ✅ OpenAPI → TypeScript 生成 |
+| フロントエンド（`apps/web` / Next.js） | ✅ 展開予想ページ（Vercel 配備想定） |
+| ingestion-worker（JV-Link 実データ） | ⏳ fixtures のみ（Windows 実装は後続） |
+
+ローカル起動: API は [`apps/api/README.md`](./apps/api/README.md)、Web は [`apps/web/README.md`](./apps/web/README.md) を参照。
 
 ---
 
@@ -41,6 +53,7 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 - 0004: PCI / RPCI / PCI3 計算式の隔離方針
 - 0005: 想定RPCI 予測戦略（MVPルールベース + ML疎結合IF）
 - 0006: DB 3層化（raw / core / mart）
+- 0007: フロントエンド構成（Next.js App Router + OpenAPI 型共有）
 
 ---
 

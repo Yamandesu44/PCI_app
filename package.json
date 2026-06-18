@@ -1,0 +1,10 @@
+{
+  "name": "pci-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PCI App — 競馬展開予想 SaaS（モノレポ: api-client / web）",
+  "workspaces": [
+    "packages/*",
+    "apps/web"
+  ]
+}
