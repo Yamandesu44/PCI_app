@@ -1,0 +1,42 @@
+# --- Secrets / 認証情報（絶対にコミットしない: JV-Link SID, DB接続文字列等） ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- JV-Link / 取り込みデータ（生データ再配布禁止: C2） ---
+# 開発用の最小サンプルは apps/ingestion-worker/fixtures/ に限定して明示的に追跡する
+data/
+*.jvd
+raw_dump/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
