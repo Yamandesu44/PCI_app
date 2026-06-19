@@ -2,15 +2,5 @@
 # 生データではなく開発用に手作成したサンプルです。実データは含まれません。
 # フィールド定義: apps/ingestion-worker/src/ingestion/parser/ra_parser.py 参照
 #
-# レイアウト（0-indexed）:
-#   [0:2]   "RA"
-#   [2:3]   DataKubun (1=新規)
-#   [3:11]  MakeDate (YYYYMMDD)
-#   [11:13] JyoCd  [13:15] Kaiji  [15:17] Nichiji  [17:19] RaceNo
-#   [19:20] YoubiCd  [20:24] Nen  [24:28] MonthDay
-#   [28:32] Kyori  [32:33] ToraCd  [33:34] CoursCd  [34:35] TenkoCd
-#   [35:36] SibaBabaJotai  [36:37] DirtBabaJotai  [37:39] GradeCd
-#   [39:89] RaceName  [89:91] Tosu  [91:141] RaceClass
-#
 # 2026-06-18 東京1回1日目1R 1600m芝 良・晴 10頭 3歳未勝利
-RA1202606180501010112026061816001 11  3歳未勝利                                          103歳未勝利
+RA12026061805010101120260618160011111  3歳未勝利                                             103歳未勝利                                             

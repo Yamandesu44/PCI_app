@@ -20,8 +20,6 @@ import datetime
 import logging
 import os
 import sys
-from pathlib import Path
-from typing import Iterator
 
 from dotenv import load_dotenv
 
@@ -29,12 +27,10 @@ from ingestion.client.base import JvLinkClient
 from ingestion.client.fixture_client import FixtureJvLinkClient
 from ingestion.ingest_api import IngestApiClient
 from ingestion.models import (
-    EntryRecord,
     HorseRecord,
     JockeyRecord,
     RaceEntriesRecord,
     RaceResultRecord,
-    ResultRecord,
     TrainerRecord,
 )
 from ingestion.parser.master_parsers import parse_ch, parse_ks, parse_um

@@ -11,7 +11,13 @@ import datetime
 
 import pytest
 
-from ingestion.parser.common import build_race_key, decode_baba, decode_sex, decode_tenko, decode_track
+from ingestion.parser.common import (
+    build_race_key,
+    decode_baba,
+    decode_sex,
+    decode_tenko,
+    decode_track,
+)
 from ingestion.parser.master_parsers import parse_ch, parse_ks, parse_um
 from ingestion.parser.ra_parser import parse_ra
 from ingestion.parser.se_parser import (
@@ -20,7 +26,6 @@ from ingestion.parser.se_parser import (
     parse_se_entry,
     parse_se_result,
 )
-
 
 # ---------------------------------------------------------------------------
 # ヘルパー: テスト用固定長レコード生成

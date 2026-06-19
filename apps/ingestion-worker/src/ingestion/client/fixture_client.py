@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 _log = logging.getLogger(__name__)
 
-_DEFAULT_FIXTURES = Path(__file__).resolve().parents[4] / "fixtures"
+_DEFAULT_FIXTURES = Path(__file__).resolve().parents[3] / "fixtures"
 
 
 class FixtureJvLinkClient:
@@ -146,7 +146,8 @@ def _json_to_ra(info: dict[str, object]) -> str:
     tora_cd = {"芝": "1", "ダート": "2", "障害": "3"}.get(track_type, "1")
 
     weather = str(info.get("weather", "晴"))
-    tenko_cd = {"晴": "1", "曇": "2", "小雨": "3", "雨": "4", "小雪": "5", "雪": "6"}.get(weather, "1")
+    _tenko_map = {"晴": "1", "曇": "2", "小雨": "3", "雨": "4", "小雪": "5", "雪": "6"}
+    tenko_cd = _tenko_map.get(weather, "1")
 
     cond = str(info.get("track_condition", "良"))
     baba_cd = {"良": "1", "稍重": "2", "重": "3", "不良": "4"}.get(cond, "1")
@@ -292,7 +293,8 @@ def _json_result_to_se(data: dict[str, object], result: dict[str, object]) -> st
         + " " * 3          # zogen
     )
     # [2:167] = 165 bytes、残り 580-167=413 bytes を空白埋め後、確定フィールドを追加
-    se = header.ljust(580) + finish_pos + soha_m + soha_s + soha_k + agari_bu + agari_ko + c1 + c2 + c3 + c4
+    result_fields = finish_pos + soha_m + soha_s + soha_k + agari_bu + agari_ko + c1 + c2 + c3 + c4
+    se = header.ljust(580) + result_fields
     return se.ljust(620)
 
 
