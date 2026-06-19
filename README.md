@@ -21,7 +21,7 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 | DB（core / mart）+ Alembic + Repository | ✅ 実装済み（mart 永続化込み） |
 | FastAPI（`/forecast`・レース詳細） | ✅ 実装済み |
 | 型共有（`packages/api-client`） | ✅ OpenAPI → TypeScript 生成 |
-| フロントエンド（`apps/web` / Next.js） | ✅ 展開予想ページ（Vercel 配備想定） |
+| フロントエンド（`apps/web` / Next.js） | ✅ 展開予想ページ（`vercel.json` 配備設定済み） |
 | ingestion-worker（JV-Link 実データ） | ⏳ fixtures のみ（Windows 実装は後続） |
 
 ローカル起動: API は [`apps/api/README.md`](./apps/api/README.md)、Web は [`apps/web/README.md`](./apps/web/README.md) を参照。
@@ -45,6 +45,7 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 5. [開発ロードマップ](./docs/design/05-roadmap.md)
 6. [テスト戦略](./docs/design/06-test-strategy.md)
 7. [技術的リスクと残課題](./docs/design/07-risks-and-open-questions.md)
+8. [デプロイ構成](./docs/design/08-deployment.md)
 
 ### ADR（docs/adr/）
 - 0001: アーキテクチャスタイル（モジュラーモノリス + レイヤードDDD）

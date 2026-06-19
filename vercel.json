@@ -1,0 +1,10 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build -w @pci/web",
+  "outputDirectory": "apps/web/.next",
+  "devCommand": "npm run dev -w @pci/web",
+  "env": {
+    "API_BASE_URL": "@api_base_url"
+  }
+}

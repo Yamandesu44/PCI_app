@@ -7,6 +7,7 @@ on:
       - "packages/api-client/**"
       - "package.json"
       - "package-lock.json"
+      - "vercel.json"
       - ".github/workflows/ci-web.yml"
   pull_request:
     paths:
@@ -14,6 +15,7 @@ on:
       - "packages/api-client/**"
       - "package.json"
       - "package-lock.json"
+      - "vercel.json"
       - ".github/workflows/ci-web.yml"
 
 jobs:

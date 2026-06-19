@@ -37,5 +37,16 @@ npm run test       # vitest（純粋プレゼンテーションロジック）
 
 ## 配備
 
-Vercel を想定（`apps/web` をルートに指定）。`API_BASE_URL` は Vercel の
-環境変数で設定し、生データ・認証情報はコードに含めない。
+Vercel を使用。モノレポルートの `vercel.json` にビルド設定済み:
+
+- **installCommand**: `npm ci`（モノレポルートで全 workspace をインストール）
+- **buildCommand**: `npm run build -w @pci/web`
+- **outputDirectory**: `apps/web/.next`
+
+Vercel プロジェクト設定で必要な環境変数:
+
+| キー | 説明 |
+|---|---|
+| `API_BASE_URL` | FastAPI バックエンドの URL（例: `https://pci-api.railway.app`）|
+
+詳細: [`docs/design/08-deployment.md`](../../docs/design/08-deployment.md)
