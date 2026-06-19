@@ -15,7 +15,8 @@ JV-Link API リファレンス:
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Iterator
+from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass  # 型チェック時のみ参照（実行時は import しない）
