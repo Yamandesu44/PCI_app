@@ -238,6 +238,27 @@ h1 {
   margin-bottom: 20px;
 }
 
+/* ----- 展開コメント（やさしい解説） ----- */
+.comment-card {
+  border-left: 6px solid #2563eb;
+  background: #f8fbff;
+}
+
+.comment-lead {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.comment-para {
+  margin: 0 0 8px;
+  color: #1e293b;
+}
+
+.comment-para:last-of-type {
+  margin-bottom: 0;
+}
+
 .panel h3 {
   margin: 0 0 12px;
   font-size: 1.05rem;

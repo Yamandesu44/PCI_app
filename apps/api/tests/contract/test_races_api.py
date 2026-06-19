@@ -18,9 +18,12 @@ FORECAST_KEYS = {
     "beneficiaries",
     "horses",
     "forecast_reasons",
+    "comment",
 }
 
 HORSE_KEYS = {"horse_no", "running_style", "pai", "fit_label", "reasons"}
+
+COMMENT_KEYS = {"headline", "body", "model_version", "reasons"}
 
 RACE_DETAIL_KEYS = {
     "race_key",
@@ -48,6 +51,7 @@ PACE_ANALYSIS_KEYS = {
     "pci3_actual",
     "horses",
     "reasons",
+    "comment",
 }
 
 PACE_ANALYSIS_HORSE_KEYS = {
@@ -86,6 +90,14 @@ class TestForecastEndpoint:
         body = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast").json()
         assert body["scenario_headline"]
         assert body["scenario_detail"]
+
+    def test_comment_contract(self, client: TestClient) -> None:
+        comment = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast").json()["comment"]
+        assert set(comment.keys()) == COMMENT_KEYS
+        assert comment["headline"]
+        assert comment["body"], "自然文の段落本文は必須"
+        assert comment["model_version"] == "comment-v1"
+        assert comment["reasons"], "説明可能性: コメントの根拠は必須"
 
     def test_unknown_race_returns_404(self, client: TestClient) -> None:
         resp = client.get("/api/v1/races/9999999999999999/forecast")
@@ -145,6 +157,14 @@ class TestPaceAnalysisEndpoint:
             assert set(h.keys()) == PACE_ANALYSIS_HORSE_KEYS
             assert h["pci"] is not None
             assert h["is_pci3_contributor"] is True
+
+    def test_comment_contract(self, client: TestClient) -> None:
+        comment = client.get(f"/api/v1/races/{CONFIRMED_KEY}/pace-analysis").json()["comment"]
+        assert set(comment.keys()) == COMMENT_KEYS
+        assert comment["headline"]
+        assert comment["body"]
+        assert comment["model_version"] == "comment-v1"
+        assert comment["reasons"]
 
     def test_unconfirmed_race_returns_409(self, client: TestClient) -> None:
         resp = client.get(f"/api/v1/races/{UPCOMING_KEY}/pace-analysis")

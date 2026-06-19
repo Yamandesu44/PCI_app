@@ -8,11 +8,19 @@ mart 層への永続化は MartRepository を注入して本ユースケース�
 from __future__ import annotations
 
 from pci.application.dto import (
+    CommentOutput,
     ForecastOutput,
     HorseFitOutput,
     ReasonOutput,
 )
 from pci.domain.pace.adaptability import HorsePaceProfile, PaceAdaptabilityScorer, PaiResult
+from pci.domain.pace.commentary import (
+    BeneficiaryRef,
+    Commentary,
+    CommentGenerator,
+    ForecastCommentInput,
+    RuleBasedCommentGenerator,
+)
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import (
     RaceContext,
@@ -39,11 +47,13 @@ class ForecastRaceUseCase:
         forecaster: RpciForecaster | None = None,
         scorer: PaceAdaptabilityScorer | None = None,
         mart_repo: MartRepository | None = None,
+        comment_generator: CommentGenerator | None = None,
     ) -> None:
         self._repo = repo
         self._forecaster = forecaster or RuleBasedRpciForecaster()
         self._scorer = scorer or PaceAdaptabilityScorer()
         self._mart_repo = mart_repo
+        self._commenter = comment_generator or RuleBasedCommentGenerator()
 
     def execute(self, race_key_str: str) -> ForecastOutput:
         key = RaceKey(race_key_str)
@@ -94,6 +104,20 @@ class ForecastRaceUseCase:
             for p in profiles
         ]
 
+        comment_input = ForecastCommentInput(
+            distance_m=race.distance_m,
+            track_type=race.track_type,
+            field_size=len(profiles),
+            pace_label=forecast.label,
+            predicted_rpci=forecast.value,
+            confidence=forecast.confidence,
+            front_runners=scenario.front_runners,
+            beneficiaries=tuple(
+                BeneficiaryRef(horse_no=no, pai=fit_by_no[no].pai) for no in scenario.beneficiaries
+            ),
+        )
+        comment = _to_comment_output(self._commenter.forecast_comment(comment_input))
+
         return ForecastOutput(
             race_key=race_key_str,
             predicted_rpci=forecast.value,
@@ -106,6 +130,7 @@ class ForecastRaceUseCase:
             beneficiaries=list(scenario.beneficiaries),
             horses=horses,
             forecast_reasons=_to_reason_outputs(forecast.reasons),
+            comment=comment,
         )
 
     def _resolve_style(self, ketto_num: str) -> RunningStyleLabel:
@@ -122,3 +147,12 @@ def _to_reason_outputs(reasons: tuple[Reason, ...]) -> list[ReasonOutput]:
         ReasonOutput(code=r.code, description=r.description, contribution=r.contribution)
         for r in reasons
     ]
+
+
+def _to_comment_output(commentary: Commentary) -> CommentOutput:
+    return CommentOutput(
+        headline=commentary.headline,
+        body=list(commentary.body),
+        model_version=commentary.model_version,
+        reasons=_to_reason_outputs(commentary.reasons),
+    )

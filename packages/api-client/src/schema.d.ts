@@ -86,6 +86,26 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * CommentSchema
+         * @description 展開コメント（自然文の解説）。生成器の model_version を付す。
+         */
+        CommentSchema: {
+            /**
+             * Body
+             * @default []
+             */
+            body: string[];
+            /** Headline */
+            headline: string;
+            /** Model Version */
+            model_version: string;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
+        };
+        /**
          * EntryDetailSchema
          * @description 出走馬の詳細（確定済みなら成績を含む）。
          */
@@ -113,6 +133,7 @@ export interface components {
              * @default []
              */
             beneficiaries: number[];
+            comment?: components["schemas"]["CommentSchema"] | null;
             /** Confidence */
             confidence: number;
             /**
@@ -201,6 +222,7 @@ export interface components {
          * @description 確定後ペース分析（各馬PCI・実績RPCI・PCI3）。PCI 系は formula_version を返す。
          */
         PaceAnalysisSchema: {
+            comment?: components["schemas"]["CommentSchema"] | null;
             /** Field Size */
             field_size: number;
             /** Formula Version */

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CommentCard } from "@/components/CommentCard";
 import { HorseFitTable } from "@/components/HorseFitTable";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { api } from "@/lib/api";
@@ -45,6 +46,8 @@ export default async function ForecastPage({ params }: PageProps) {
         modelVersion={forecast.model_version}
         reasons={forecast.forecast_reasons ?? []}
       />
+
+      {forecast.comment ? <CommentCard comment={forecast.comment} /> : null}
 
       {frontRunners.length > 0 ? (
         <section className="panel">

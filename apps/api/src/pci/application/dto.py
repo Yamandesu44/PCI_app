@@ -72,6 +72,16 @@ class ReasonOutput:
 
 
 @dataclass
+class CommentOutput:
+    """展開コメント（自然文の解説）の DTO。生成器の model_version を必ず付す。"""
+
+    headline: str
+    body: list[str] = field(default_factory=list)
+    model_version: str = ""
+    reasons: list[ReasonOutput] = field(default_factory=list)
+
+
+@dataclass
 class HorseFitOutput:
     """ForecastRaceUseCase の馬単位出力。"""
 
@@ -97,6 +107,7 @@ class ForecastOutput:
     beneficiaries: list[int] = field(default_factory=list)
     horses: list[HorseFitOutput] = field(default_factory=list)
     forecast_reasons: list[ReasonOutput] = field(default_factory=list)
+    comment: CommentOutput | None = None
 
 
 @dataclass
@@ -158,3 +169,4 @@ class PaceAnalysisOutput:
     pci3_actual: float | None = None
     horses: list[HorsePaceAnalysisOutput] = field(default_factory=list)
     reasons: list[ReasonOutput] = field(default_factory=list)
+    comment: CommentOutput | None = None

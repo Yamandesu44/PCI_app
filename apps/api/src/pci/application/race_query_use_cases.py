@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pci.application.dto import (
+    CommentOutput,
     EntryDetailOutput,
     HorsePaceAnalysisOutput,
     PaceAnalysisOutput,
@@ -10,6 +11,12 @@ from pci.application.dto import (
     ReasonOutput,
 )
 from pci.application.errors import RaceNotConfirmedError
+from pci.domain.pace.commentary import (
+    CommentGenerator,
+    ReviewCommentInput,
+    ReviewHorseRef,
+    RuleBasedCommentGenerator,
+)
 from pci.domain.pace.pci import FORMULA_VERSION, aggregate_rpci
 from pci.domain.racing.race import RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -66,10 +73,14 @@ class GetPaceAnalysisUseCase:
 
     RPCI/PCI3 は唯一の真実の場所 `aggregate_rpci`（ADR-0004）で再集計し、
     formula_version と説明可能性 reasons を付して返す。
+    自然文の回顧コメントは CommentGenerator（既定 comment-v1）で生成する。
     """
 
-    def __init__(self, repo: RaceRepository) -> None:
+    def __init__(
+        self, repo: RaceRepository, comment_generator: CommentGenerator | None = None
+    ) -> None:
         self._repo = repo
+        self._commenter = comment_generator or RuleBasedCommentGenerator()
 
     def execute(self, race_key_str: str) -> PaceAnalysisOutput:
         key = RaceKey(race_key_str)
@@ -82,6 +93,44 @@ class GetPaceAnalysisUseCase:
         entries = self._repo.find_entries(key)
         rpci, pci3, sample_size, reasons = self._aggregate(entries)
 
+        horses = [
+            HorsePaceAnalysisOutput(
+                horse_no=e.horse_no,
+                finish_pos=e.finish_pos,
+                running_style=e.running_style,
+                pci=e.pci_actual,
+                agari_3f_s=e.agari_3f_s,
+                is_pci3_contributor=e.finish_pos in _PCI3_POSITIONS,
+            )
+            for e in sorted(entries, key=_result_order)
+        ]
+
+        review_input = ReviewCommentInput(
+            rpci_actual=rpci,
+            pci3_actual=pci3,
+            formula_version=FORMULA_VERSION,
+            field_size=race.field_size,
+            sample_size=sample_size,
+            horses=tuple(
+                ReviewHorseRef(
+                    horse_no=h.horse_no,
+                    finish_pos=h.finish_pos,
+                    running_style=h.running_style,
+                    pci=h.pci,
+                )
+                for h in horses
+            ),
+        )
+        commentary = self._commenter.review_comment(review_input)
+        comment = CommentOutput(
+            headline=commentary.headline,
+            body=list(commentary.body),
+            model_version=commentary.model_version,
+            reasons=[
+                ReasonOutput(r.code, r.description, r.contribution) for r in commentary.reasons
+            ],
+        )
+
         return PaceAnalysisOutput(
             race_key=str(race.race_key),
             formula_version=FORMULA_VERSION,
@@ -89,18 +138,9 @@ class GetPaceAnalysisUseCase:
             sample_size=sample_size,
             rpci_actual=rpci,
             pci3_actual=pci3,
-            horses=[
-                HorsePaceAnalysisOutput(
-                    horse_no=e.horse_no,
-                    finish_pos=e.finish_pos,
-                    running_style=e.running_style,
-                    pci=e.pci_actual,
-                    agari_3f_s=e.agari_3f_s,
-                    is_pci3_contributor=e.finish_pos in _PCI3_POSITIONS,
-                )
-                for e in sorted(entries, key=_result_order)
-            ],
+            horses=horses,
             reasons=[ReasonOutput(r.code, r.description, r.contribution) for r in reasons],
+            comment=comment,
         )
 
     def _aggregate(

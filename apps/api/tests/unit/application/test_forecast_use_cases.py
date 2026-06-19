@@ -161,3 +161,15 @@ class TestForecastRaceUseCase:
         _register_upcoming(repo, n=3)
         output = ForecastRaceUseCase(repo).execute(UPCOMING)
         assert len(output.horses) == 3
+
+    def test_forecast_includes_natural_language_comment(self) -> None:
+        """展開予想に自然文コメント（comment-v1）が付与される。"""
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=6)
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        assert output.comment is not None
+        assert output.comment.headline
+        assert output.comment.body  # 段落本文あり
+        assert output.comment.model_version == "comment-v1"
+        assert output.comment.reasons  # 説明可能性

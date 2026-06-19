@@ -1,6 +1,41 @@
 {
   "components": {
     "schemas": {
+      "CommentSchema": {
+        "description": "展開コメント（自然文の解説）。生成器の model_version を付す。",
+        "properties": {
+          "body": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Body",
+            "type": "array"
+          },
+          "headline": {
+            "title": "Headline",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "headline",
+          "model_version"
+        ],
+        "title": "CommentSchema",
+        "type": "object"
+      },
       "EntryDetailSchema": {
         "description": "出走馬の詳細（確定済みなら成績を含む）。",
         "properties": {
@@ -68,6 +103,16 @@
             },
             "title": "Beneficiaries",
             "type": "array"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommentSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "confidence": {
             "title": "Confidence",
@@ -263,6 +308,16 @@
       "PaceAnalysisSchema": {
         "description": "確定後ペース分析（各馬PCI・実績RPCI・PCI3）。PCI 系は formula_version を返す。",
         "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommentSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "field_size": {
             "title": "Field Size",
             "type": "integer"

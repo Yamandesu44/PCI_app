@@ -1,0 +1,268 @@
+"""展開コメント生成モジュール（AIコメントのMVP・ADR-0005の戦略IFに準拠）。
+
+想定RPCI・PAI・PCI といった専門指標を、PCI を知らない競馬ファンでも読み解ける
+自然文の「解説」へ翻訳する。本プロダクトのコアバリュー
+「PCI を理解していない競馬ファンでも展開予想を活用できる」を担う最終出力のひとつ。
+
+MVP は決定論的なルールベース実装 `RuleBasedCommentGenerator`（comment-v1）を既定とし、
+将来の LLM 実装は同一の `CommentGenerator` インターフェースを満たすことで、
+application 層を無変更のまま差し替えられる（ADR-0005 の RPCI 予測と同じ疎結合方針）。
+
+外部依存ゼロ（標準ライブラリのみ）。生成根拠は必ず reasons に出力する（説明可能性）。
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Protocol
+
+from pci.domain.pace.rpci_forecast import PaceLabel
+from pci.domain.shared.reason import Reason
+
+COMMENTARY_VERSION = "comment-v1"
+
+
+@dataclass(frozen=True)
+class Commentary:
+    """自然文の展開解説（UI 表示用）。headline が要点、body が段落本文。"""
+
+    headline: str
+    body: tuple[str, ...]
+    model_version: str
+    reasons: tuple[Reason, ...]
+
+
+@dataclass(frozen=True)
+class BeneficiaryRef:
+    """展開が向く馬の参照（馬番と PAI）。"""
+
+    horse_no: int
+    pai: float
+
+
+@dataclass(frozen=True)
+class ForecastCommentInput:
+    """展開予想コメントの入力（出走前）。"""
+
+    distance_m: int
+    track_type: str
+    field_size: int
+    pace_label: PaceLabel
+    predicted_rpci: float
+    confidence: float
+    front_runners: tuple[int, ...]
+    beneficiaries: tuple[BeneficiaryRef, ...]
+
+
+@dataclass(frozen=True)
+class ReviewHorseRef:
+    """確定後コメント用の馬参照（着順・脚質・PCI）。"""
+
+    horse_no: int
+    finish_pos: int | None
+    running_style: str | None
+    pci: float | None
+
+
+@dataclass(frozen=True)
+class ReviewCommentInput:
+    """確定後ペース回顧コメントの入力。"""
+
+    rpci_actual: float | None
+    pci3_actual: float | None
+    formula_version: str
+    field_size: int
+    sample_size: int
+    horses: tuple[ReviewHorseRef, ...]
+
+
+class CommentGenerator(Protocol):
+    """展開コメント生成の戦略インターフェース（ADR-0005）。
+
+    application / presentation 層はこの Protocol にのみ依存し、
+    具体実装（ルールベース / LLM）は DI で注入する。
+    """
+
+    def forecast_comment(self, data: ForecastCommentInput) -> Commentary: ...
+
+    def review_comment(self, data: ReviewCommentInput) -> Commentary: ...
+
+
+# ----- ルールベース実装（comment-v1） -----
+
+# 展開ラベルごとの「結論」見出し。
+_FORECAST_HEADLINE: dict[PaceLabel, str] = {
+    PaceLabel.HIGH: "速い流れになり、差し・追い込みが届きやすい展開とみています。",
+    PaceLabel.AVERAGE: "極端な流れにはならず、実力どおりに決まりやすい展開とみています。",
+    PaceLabel.SLOW: "前半が緩み、逃げ・先行がそのまま粘りやすい展開とみています。",
+}
+
+# 展開ラベルごとの「なぜそうなると何が起きるか」を平易に説明する一文。
+_FORECAST_CONSEQUENCE: dict[PaceLabel, str] = {
+    PaceLabel.HIGH: (
+        "前半から速いペースになると先行勢は最後に脚が上がりやすく、"
+        "後方で脚をためた差し・追い込みにチャンスが生まれます。"
+    ),
+    PaceLabel.AVERAGE: (
+        "平均的な流れでは展開の紛れが小さく、脚質の有利・不利より"
+        "純粋な地力が結果を左右しやすくなります。"
+    ),
+    PaceLabel.SLOW: (
+        "前半が緩いと後方からの差し・追い込みは届きにくく、"
+        "前で楽に運べた馬がそのまま粘り込みやすくなります。"
+    ),
+}
+
+# 想定ラベルを非専門家向けの言葉に。
+_PACE_WORD: dict[PaceLabel, str] = {
+    PaceLabel.HIGH: "ハイ（速い流れ）",
+    PaceLabel.AVERAGE: "平均",
+    PaceLabel.SLOW: "スロー（緩い流れ）",
+}
+
+
+class RuleBasedCommentGenerator:
+    """ルールベース展開コメント生成器（comment-v1・テンプレート NLG）。
+
+    指標を決定論的に自然文へ写像する。LLM を使わないため再現性が高く、
+    生成根拠（どの指標から何を述べたか）を reasons に明示できる。
+    """
+
+    def forecast_comment(self, data: ForecastCommentInput) -> Commentary:
+        headline = _FORECAST_HEADLINE[data.pace_label]
+        body: list[str] = []
+
+        front_clause = _front_clause(len(data.front_runners))
+        pace_word = _PACE_WORD[data.pace_label]
+        body.append(
+            f"{data.field_size}頭立てで{front_clause}、"
+            f"想定ペース指標（想定RPCI）は{data.predicted_rpci}、{pace_word}寄りとみています。"
+        )
+        body.append(_FORECAST_CONSEQUENCE[data.pace_label])
+        body.append(_beneficiary_sentence(data.beneficiaries))
+
+        if data.confidence < 0.5:
+            body.append(
+                "ただし展開の確信度は高くなく、逆の流れになる可能性も頭に入れておきたいところです。"
+            )
+
+        reasons = (
+            Reason(
+                code="comment_basis",
+                description=(
+                    f"想定RPCI {data.predicted_rpci}（{data.pace_label}）・"
+                    f"展開合致 {len(data.beneficiaries)}頭・確信度 {data.confidence:.0%} を要約"
+                ),
+            ),
+            Reason(
+                code="comment_model",
+                description=f"ルールベース生成（{COMMENTARY_VERSION}・テンプレートNLG）",
+            ),
+        )
+        return Commentary(
+            headline=headline,
+            body=tuple(body),
+            model_version=COMMENTARY_VERSION,
+            reasons=reasons,
+        )
+
+    def review_comment(self, data: ReviewCommentInput) -> Commentary:
+        if data.rpci_actual is None:
+            return Commentary(
+                headline="完走データが不足し、ペースの確定評価はできませんでした。",
+                body=("PCI を算出できる完走馬が足りないため、今回はペースの振り返りを省きます。",),
+                model_version=COMMENTARY_VERSION,
+                reasons=_review_reasons(data),
+            )
+
+        pace_word, pace_clause = _actual_pace(data.rpci_actual)
+        body: list[str] = []
+        lead = (
+            f"完走{data.sample_size}頭の PCI から求めた実績RPCIは{data.rpci_actual}、"
+            f"{pace_clause}。"
+        )
+        if data.pci3_actual is not None:
+            lead += f"上位3頭の平均ペース（PCI3）は{data.pci3_actual}です。"
+        body.append(lead)
+
+        winner = _winner(data.horses)
+        if winner is not None and winner.pci is not None:
+            style = f"（{winner.running_style}）" if winner.running_style else ""
+            body.append(
+                f"勝ったのは{winner.horse_no}番{style}。自身の PCI は{winner.pci}で、"
+                f"{_horse_pace_phrase(winner.pci, data.rpci_actual)}。"
+            )
+
+        if data.sample_size < 3:
+            body.append("完走データが少ないため、ペース評価は参考値として見てください。")
+
+        return Commentary(
+            headline=f"実際は{pace_word}でした。",
+            body=tuple(body),
+            model_version=COMMENTARY_VERSION,
+            reasons=_review_reasons(data),
+        )
+
+
+def _front_clause(n_front: int) -> str:
+    """先行志向の頭数を平易な句に変換する（末尾の読点は呼び出し側で付ける）。"""
+    if n_front == 0:
+        return "前に行きたい馬が見当たらず"
+    if n_front == 1:
+        return "前に行きたい馬は1頭だけで"
+    return f"前に行きたい馬が{n_front}頭そろい"
+
+
+def _beneficiary_sentence(beneficiaries: tuple[BeneficiaryRef, ...]) -> str:
+    if not beneficiaries:
+        return "突出して展開が向く馬は少なく、力関係どおりに決まりそうです。"
+    top = beneficiaries[0]
+    if len(beneficiaries) == 1:
+        return f"この流れで恩恵を受けやすいのは{top.horse_no}番（PAI {top.pai}）の1頭です。"
+    return (
+        f"この流れで特に恩恵を受けやすいのが{top.horse_no}番（展開向き度PAI {top.pai}）。"
+        f"展開が向くとみるのは全{len(beneficiaries)}頭です。"
+    )
+
+
+def _actual_pace(rpci: float) -> tuple[str, str]:
+    """実績RPCI を非専門家向けの「ペース語」と説明句に変換する（49/51 帯で3分類）。"""
+    if rpci > 51.0:
+        return "スロー（前残りの流れ）", "前半が緩く前が止まりにくい流れでした"
+    if rpci < 49.0:
+        return "ハイ（差し有利の流れ）", "前半から速く差しが届きやすい流れでした"
+    return "平均的な流れ", "大きな偏りのない平均的な流れでした"
+
+
+def _winner(horses: tuple[ReviewHorseRef, ...]) -> ReviewHorseRef | None:
+    confirmed = [h for h in horses if h.finish_pos is not None]
+    if not confirmed:
+        return None
+    return min(confirmed, key=lambda h: h.finish_pos if h.finish_pos is not None else 9999)
+
+
+def _horse_pace_phrase(horse_pci: float, rpci: float) -> str:
+    """勝ち馬の PCI と実績RPCI の差から、脚の使い方を一言で表す。"""
+    if horse_pci >= rpci + 2.0:
+        return "後半に脚を伸ばす形で抜け出しました"
+    if horse_pci <= rpci - 2.0:
+        return "前々で流れに乗って押し切りました"
+    return "レースの流れにうまく対応しました"
+
+
+def _review_reasons(data: ReviewCommentInput) -> tuple[Reason, ...]:
+    rpci = data.rpci_actual if data.rpci_actual is not None else "—"
+    pci3 = data.pci3_actual if data.pci3_actual is not None else "—"
+    return (
+        Reason(
+            code="comment_basis",
+            description=(
+                f"実績RPCI {rpci}・PCI3 {pci3}・対象{data.sample_size}頭"
+                f"（{data.formula_version}）を要約"
+            ),
+        ),
+        Reason(
+            code="comment_model",
+            description=f"ルールベース生成（{COMMENTARY_VERSION}）",
+        ),
+    )

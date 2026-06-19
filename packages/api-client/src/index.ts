@@ -9,6 +9,7 @@ import type { components } from "./schema";
 // ----- 生成スキーマ由来の公開型エイリアス -----
 
 export type Reason = components["schemas"]["ReasonSchema"];
+export type Comment = components["schemas"]["CommentSchema"];
 export type HorseFit = components["schemas"]["HorseFitSchema"];
 export type Forecast = components["schemas"]["ForecastSchema"];
 export type RaceDetail = components["schemas"]["RaceDetailSchema"];

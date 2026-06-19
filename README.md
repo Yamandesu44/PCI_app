@@ -54,6 +54,7 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 - 0005: 想定RPCI 予測戦略（MVPルールベース + ML疎結合IF）
 - 0006: DB 3層化（raw / core / mart）
 - 0007: フロントエンド構成（Next.js App Router + OpenAPI 型共有）
+- 0008: 展開コメント生成方式（ルールベースNLG + LLM疎結合IF）
 
 ---
 

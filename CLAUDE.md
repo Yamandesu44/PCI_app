@@ -53,7 +53,8 @@ pci_app/
 │   │   │   │       ├── pci.py           # PCI計算（唯一の真実の場所）
 │   │   │   │       ├── running_style.py # 脚質判定
 │   │   │   │       ├── rpci_forecast.py # 想定RPCI予測（戦略IF）
-│   │   │   │       └── adaptability.py  # PAI・展開合致
+│   │   │   │       ├── adaptability.py  # PAI・展開合致
+│   │   │   │       └── commentary.py    # 展開コメント生成（戦略IF・comment-v1）
 │   │   │   ├── application/       # ユースケース（アプリサービス）
 │   │   │   ├── infrastructure/    # SQLAlchemy, Repository 実装, DI
 │   │   │   ├── presentation/      # FastAPI routers, Pydantic schemas
@@ -93,6 +94,7 @@ pci_app/
 | **PAI** (Pace Adaptability Index) | 想定 RPCI への馬の適性指数。0〜100、高いほど展開合致 |
 | **想定 RPCI** | 出走馬の脚質構成・距離・コース・馬場から予測した RPCI。本プロダクトの中核 |
 | **展開合致馬** | PAI が高く、想定ペースで恩恵を受けると判定された馬 |
+| **展開コメント** | 指標（想定RPCI・PAI・PCI）を非専門家向けの自然文へ翻訳した解説。出走前=予想／確定後=回顧。AIコメントの実体 |
 | **上がり3F** | ゴール前3ハロン(600m)の走破タイム（秒） |
 | **通過順位** | 各コーナー通過時点での順位（1〜4角） |
 | **RaceKey** | レース識別子 16桁: 年(4)+月日(4)+競馬場コード(2)+回(2)+日目(2)+R(2) |
@@ -100,7 +102,7 @@ pci_app/
 | **core層** | 正規化済みドメインデータ（races, race_entries 等） |
 | **mart層** | 分析結果（predicted_pace, pace_fit 等）。model_version 付き・再計算可能 |
 | **formula_version** | PCI 計算式のバージョン（例: "pci-v1"） |
-| **model_version** | 予測モデルのバージョン（例: "rule-v1", "lgbm-v2"） |
+| **model_version** | 予測モデル／生成器のバージョン（例: "rule-v1", "pai-v1", "comment-v1", "lgbm-v2"） |
 
 詳細定義: `docs/domain/ubiquitous-language.md`
 
@@ -206,6 +208,7 @@ cd packages/api-client && npm run generate
 - 0005: RPCI 予測戦略（MVPルールベース + ML疎結合IF）
 - 0006: DB 3層化（raw/core/mart）
 - 0007: フロントエンド構成（Next.js App Router + OpenAPI 型共有）
+- 0008: 展開コメント生成方式（ルールベースNLG + LLM疎結合IF）
 
 ---
 

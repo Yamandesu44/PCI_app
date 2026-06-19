@@ -102,3 +102,15 @@ class TestGetPaceAnalysisUseCase:
         pcis = [h.pci for h in out.horses if h.pci is not None]
         expected = round(sum(pcis) / len(pcis), 1)
         assert out.rpci_actual == pytest.approx(expected)
+
+    def test_includes_review_comment(self) -> None:
+        """確定後ペース分析に自然文の回顧コメント（comment-v1）が付く。"""
+        repo = FakeRaceRepository()
+        _seed_confirmed(repo)
+        out = GetPaceAnalysisUseCase(repo).execute(CONFIRMED)
+
+        assert out.comment is not None
+        assert out.comment.headline
+        assert out.comment.body
+        assert out.comment.model_version == "comment-v1"
+        assert out.comment.reasons

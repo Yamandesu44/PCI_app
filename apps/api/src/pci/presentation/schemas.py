@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from pci.application.dto import ForecastOutput, PaceAnalysisOutput, RaceDetailOutput
+from pci.application.dto import (
+    CommentOutput,
+    ForecastOutput,
+    PaceAnalysisOutput,
+    RaceDetailOutput,
+)
 
 
 class ReasonSchema(BaseModel):
@@ -17,6 +22,24 @@ class ReasonSchema(BaseModel):
     code: str
     description: str
     contribution: float | None = None
+
+
+class CommentSchema(BaseModel):
+    """展開コメント（自然文の解説）。生成器の model_version を付す。"""
+
+    headline: str
+    body: list[str] = []
+    model_version: str
+    reasons: list[ReasonSchema] = []
+
+    @classmethod
+    def from_dto(cls, dto: CommentOutput) -> CommentSchema:
+        return cls(
+            headline=dto.headline,
+            body=dto.body,
+            model_version=dto.model_version,
+            reasons=[ReasonSchema(**vars(r)) for r in dto.reasons],
+        )
 
 
 class HorseFitSchema(BaseModel):
@@ -43,6 +66,7 @@ class ForecastSchema(BaseModel):
     beneficiaries: list[int] = []
     horses: list[HorseFitSchema] = []
     forecast_reasons: list[ReasonSchema] = []
+    comment: CommentSchema | None = None
 
     @classmethod
     def from_dto(cls, dto: ForecastOutput) -> ForecastSchema:
@@ -67,6 +91,7 @@ class ForecastSchema(BaseModel):
                 for h in dto.horses
             ],
             forecast_reasons=[ReasonSchema(**vars(r)) for r in dto.forecast_reasons],
+            comment=CommentSchema.from_dto(dto.comment) if dto.comment else None,
         )
 
 
@@ -141,6 +166,7 @@ class PaceAnalysisSchema(BaseModel):
     pci3_actual: float | None = None
     horses: list[HorsePaceAnalysisSchema] = []
     reasons: list[ReasonSchema] = []
+    comment: CommentSchema | None = None
 
     @classmethod
     def from_dto(cls, dto: PaceAnalysisOutput) -> PaceAnalysisSchema:
@@ -163,6 +189,7 @@ class PaceAnalysisSchema(BaseModel):
                 for h in dto.horses
             ],
             reasons=[ReasonSchema(**vars(r)) for r in dto.reasons],
+            comment=CommentSchema.from_dto(dto.comment) if dto.comment else None,
         )
 
 

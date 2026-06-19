@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CommentCard } from "@/components/CommentCard";
 import { PaceAnalysisTable } from "@/components/PaceAnalysisTable";
 import { ReasonList } from "@/components/ReasonList";
 import { api } from "@/lib/api";
@@ -68,6 +69,8 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
           <ReasonList reasons={analysis.reasons ?? []} />
         </details>
       </section>
+
+      {analysis.comment ? <CommentCard comment={analysis.comment} /> : null}
 
       <section className="panel">
         <h3>各馬 PCI（着順・★=PCI3 寄与）</h3>
