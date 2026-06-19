@@ -21,7 +21,7 @@ from pci.application.ingest_use_cases import (
 )
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
 from pci.config.settings import get_settings
-from pci.presentation.dependencies import SessionDep, get_race_repository
+from pci.presentation.dependencies import RepositoryDep, SessionDep
 
 router = APIRouter(prefix="/internal/ingest", tags=["ingest"])
 
@@ -122,11 +122,11 @@ class ResultResponse(BaseModel):
 @router.post("/horses", response_model=IngestResponse, status_code=status.HTTP_200_OK)
 def ingest_horses(
     body: list[HorseBody],
+    repo: RepositoryDep,
     session: SessionDep,
     _auth: AuthDep,
 ) -> IngestResponse:
     """馬マスタ一括 Upsert。"""
-    repo = get_race_repository(session)
     uc = SaveMasterDataUseCase(repo)
     n = uc.save_horses([HorseInput(**h.model_dump()) for h in body])
     session.commit()
@@ -136,11 +136,11 @@ def ingest_horses(
 @router.post("/jockeys", response_model=IngestResponse, status_code=status.HTTP_200_OK)
 def ingest_jockeys(
     body: list[JockeyBody],
+    repo: RepositoryDep,
     session: SessionDep,
     _auth: AuthDep,
 ) -> IngestResponse:
     """騎手マスタ一括 Upsert。"""
-    repo = get_race_repository(session)
     uc = SaveMasterDataUseCase(repo)
     n = uc.save_jockeys([JockeyInput(**j.model_dump()) for j in body])
     session.commit()
@@ -150,11 +150,11 @@ def ingest_jockeys(
 @router.post("/trainers", response_model=IngestResponse, status_code=status.HTTP_200_OK)
 def ingest_trainers(
     body: list[TrainerBody],
+    repo: RepositoryDep,
     session: SessionDep,
     _auth: AuthDep,
 ) -> IngestResponse:
     """調教師マスタ一括 Upsert。"""
-    repo = get_race_repository(session)
     uc = SaveMasterDataUseCase(repo)
     n = uc.save_trainers([TrainerInput(**t.model_dump()) for t in body])
     session.commit()
@@ -164,11 +164,11 @@ def ingest_trainers(
 @router.post("/entries", response_model=IngestResponse, status_code=status.HTTP_200_OK)
 def ingest_entries(
     body: EntriesBody,
+    repo: RepositoryDep,
     session: SessionDep,
     _auth: AuthDep,
 ) -> IngestResponse:
     """出走表登録（RegisterRaceEntriesUseCase を呼び出す）。"""
-    repo = get_race_repository(session)
     uc = RegisterRaceEntriesUseCase(repo)
     race_info = RaceInfo(
         race_key=body.race_key,
@@ -201,11 +201,11 @@ def ingest_entries(
 @router.post("/results", response_model=ResultResponse, status_code=status.HTTP_200_OK)
 def ingest_results(
     body: ResultBody,
+    repo: RepositoryDep,
     session: SessionDep,
     _auth: AuthDep,
 ) -> ResultResponse:
     """確定成績登録（RecordRaceResultUseCase を呼び出す）。"""
-    repo = get_race_repository(session)
     uc = RecordRaceResultUseCase(repo)
     results = [
         ResultInput(
