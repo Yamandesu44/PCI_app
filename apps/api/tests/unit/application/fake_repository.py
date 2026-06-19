@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
@@ -13,6 +14,9 @@ class FakeRaceRepository:
     def __init__(self) -> None:
         self._races: dict[str, Race] = {}
         self._entries: dict[tuple[str, int], RaceEntry] = {}
+        self._horses: dict[str, Horse] = {}
+        self._jockeys: dict[str, Jockey] = {}
+        self._trainers: dict[str, Trainer] = {}
 
     def find_by_key(self, key: RaceKey) -> Race | None:
         return self._races.get(str(key))
@@ -44,3 +48,12 @@ class FakeRaceRepository:
 
     def save_entry(self, entry: RaceEntry) -> None:
         self._entries[(str(entry.race_key), entry.horse_no)] = entry
+
+    def save_horse(self, horse: Horse) -> None:
+        self._horses[horse.ketto_num] = horse
+
+    def save_jockey(self, jockey: Jockey) -> None:
+        self._jockeys[jockey.code] = jockey
+
+    def save_trainer(self, trainer: Trainer) -> None:
+        self._trainers[trainer.code] = trainer

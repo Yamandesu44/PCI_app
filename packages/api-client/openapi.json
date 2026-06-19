@@ -36,6 +36,102 @@
         "title": "CommentSchema",
         "type": "object"
       },
+      "EntriesBody": {
+        "properties": {
+          "distance_m": {
+            "exclusiveMinimum": 0.0,
+            "title": "Distance M",
+            "type": "integer"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/EntryItem"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "field_size": {
+            "exclusiveMinimum": 0.0,
+            "title": "Field Size",
+            "type": "integer"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "jyo_cd": {
+            "maxLength": 2,
+            "minLength": 2,
+            "title": "Jyo Cd",
+            "type": "string"
+          },
+          "race_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Race Class"
+          },
+          "race_date": {
+            "format": "date",
+            "title": "Race Date",
+            "type": "string"
+          },
+          "race_key": {
+            "pattern": "^\\d{16}$",
+            "title": "Race Key",
+            "type": "string"
+          },
+          "track_condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Condition"
+          },
+          "track_type": {
+            "title": "Track Type",
+            "type": "string"
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather"
+          }
+        },
+        "required": [
+          "race_key",
+          "race_date",
+          "jyo_cd",
+          "distance_m",
+          "track_type",
+          "field_size",
+          "entries"
+        ],
+        "title": "EntriesBody",
+        "type": "object"
+      },
       "EntryDetailSchema": {
         "description": "出走馬の詳細（確定済みなら成績を含む）。",
         "properties": {
@@ -91,6 +187,46 @@
           "ketto_num"
         ],
         "title": "EntryDetailSchema",
+        "type": "object"
+      },
+      "EntryItem": {
+        "properties": {
+          "frame_no": {
+            "title": "Frame No",
+            "type": "integer"
+          },
+          "horse_no": {
+            "title": "Horse No",
+            "type": "integer"
+          },
+          "jockey_code": {
+            "title": "Jockey Code",
+            "type": "string"
+          },
+          "ketto_num": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Ketto Num",
+            "type": "string"
+          },
+          "trainer_code": {
+            "title": "Trainer Code",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "horse_no",
+          "frame_no",
+          "ketto_num",
+          "weight",
+          "jockey_code",
+          "trainer_code"
+        ],
+        "title": "EntryItem",
         "type": "object"
       },
       "ForecastSchema": {
@@ -203,6 +339,48 @@
         "title": "HealthSchema",
         "type": "object"
       },
+      "HorseBody": {
+        "properties": {
+          "birth_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birth Year"
+          },
+          "ketto_num": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Ketto Num",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sex"
+          }
+        },
+        "required": [
+          "ketto_num",
+          "name"
+        ],
+        "title": "HorseBody",
+        "type": "object"
+      },
       "HorseFitSchema": {
         "description": "馬単位の展開適性（PAI）。",
         "properties": {
@@ -303,6 +481,42 @@
           "horse_no"
         ],
         "title": "HorsePaceAnalysisSchema",
+        "type": "object"
+      },
+      "IngestResponse": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "message": {
+            "default": "ok",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "title": "IngestResponse",
+        "type": "object"
+      },
+      "JockeyBody": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "JockeyBody",
         "type": "object"
       },
       "PaceAnalysisSchema": {
@@ -530,6 +744,193 @@
         "title": "ReasonSchema",
         "type": "object"
       },
+      "ResultBody": {
+        "properties": {
+          "race_key": {
+            "pattern": "^\\d{16}$",
+            "title": "Race Key",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ResultItem"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "track_condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Condition"
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather"
+          }
+        },
+        "required": [
+          "race_key",
+          "results"
+        ],
+        "title": "ResultBody",
+        "type": "object"
+      },
+      "ResultItem": {
+        "properties": {
+          "agari_3f_s": {
+            "exclusiveMinimum": 0.0,
+            "title": "Agari 3F S",
+            "type": "number"
+          },
+          "corner_1": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corner 1"
+          },
+          "corner_2": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corner 2"
+          },
+          "corner_3": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corner 3"
+          },
+          "corner_4": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corner 4"
+          },
+          "finish_pos": {
+            "minimum": 1.0,
+            "title": "Finish Pos",
+            "type": "integer"
+          },
+          "horse_no": {
+            "title": "Horse No",
+            "type": "integer"
+          },
+          "race_time_s": {
+            "exclusiveMinimum": 0.0,
+            "title": "Race Time S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "horse_no",
+          "finish_pos",
+          "race_time_s",
+          "agari_3f_s"
+        ],
+        "title": "ResultItem",
+        "type": "object"
+      },
+      "ResultResponse": {
+        "properties": {
+          "entry_pcis": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Entry Pcis",
+            "type": "object"
+          },
+          "formula_version": {
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "pci3": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pci3"
+          },
+          "race_key": {
+            "title": "Race Key",
+            "type": "string"
+          },
+          "rpci": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rpci"
+          }
+        },
+        "required": [
+          "race_key",
+          "rpci",
+          "pci3",
+          "formula_version"
+        ],
+        "title": "ResultResponse",
+        "type": "object"
+      },
+      "TrainerBody": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "TrainerBody",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -735,6 +1136,318 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/internal/ingest/entries": {
+      "post": {
+        "description": "出走表登録（RegisterRaceEntriesUseCase を呼び出す）。",
+        "operationId": "ingest_entries_internal_ingest_entries_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntriesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Entries",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/horses": {
+      "post": {
+        "description": "馬マスタ一括 Upsert。",
+        "operationId": "ingest_horses_internal_ingest_horses_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/HorseBody"
+                },
+                "title": "Body",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Horses",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/jockeys": {
+      "post": {
+        "description": "騎手マスタ一括 Upsert。",
+        "operationId": "ingest_jockeys_internal_ingest_jockeys_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/JockeyBody"
+                },
+                "title": "Body",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Jockeys",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/results": {
+      "post": {
+        "description": "確定成績登録（RecordRaceResultUseCase を呼び出す）。",
+        "operationId": "ingest_results_internal_ingest_results_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResultBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Results",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/trainers": {
+      "post": {
+        "description": "調教師マスタ一括 Upsert。",
+        "operationId": "ingest_trainers_internal_ingest_trainers_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/TrainerBody"
+                },
+                "title": "Body",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Trainers",
+        "tags": [
+          "ingest"
         ]
       }
     }

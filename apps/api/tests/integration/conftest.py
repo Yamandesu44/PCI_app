@@ -7,7 +7,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from testcontainers.postgres import PostgresContainer
+from testcontainers.postgres import PostgresContainer  # type: ignore[import-not-found]
 
 
 @pytest.fixture(scope="session")
