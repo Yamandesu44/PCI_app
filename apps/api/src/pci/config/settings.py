@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://pci:pci_dev@localhost:5432/pci_dev"
     gemini_api_key: str | None = None
+    ingest_token: str | None = None  # Bearer token for /internal/ingest/* endpoints
 
 
 @lru_cache

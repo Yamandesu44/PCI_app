@@ -5,10 +5,17 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
-from pci.infrastructure.database.models import RaceEntryModel, RaceModel
+from pci.infrastructure.database.models import (
+    HorseModel,
+    JockeyModel,
+    RaceEntryModel,
+    RaceModel,
+    TrainerModel,
+)
 
 
 class SqlAlchemyRaceRepository:
@@ -108,6 +115,20 @@ class SqlAlchemyRaceRepository:
             pci_actual=m.pci_actual,
             running_style=m.running_style,
         )
+
+    def save_horse(self, horse: Horse) -> None:
+        self._s.merge(HorseModel(
+            ketto_num=horse.ketto_num,
+            name=horse.name,
+            sex=horse.sex,
+            birth_year=horse.birth_year,
+        ))
+
+    def save_jockey(self, jockey: Jockey) -> None:
+        self._s.merge(JockeyModel(code=jockey.code, name=jockey.name))
+
+    def save_trainer(self, trainer: Trainer) -> None:
+        self._s.merge(TrainerModel(code=trainer.code, name=trainer.name))
 
     def _from_entry(self, e: RaceEntry) -> RaceEntryModel:
         return RaceEntryModel(

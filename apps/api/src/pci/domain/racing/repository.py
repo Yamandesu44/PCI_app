@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
@@ -22,3 +23,9 @@ class RaceRepository(Protocol):
     def save_entry(self, entry: RaceEntry) -> None: ...
 
     def find_horse_recent_entries(self, ketto_num: str, limit: int = 5) -> list[RaceEntry]: ...
+
+    def save_horse(self, horse: Horse) -> None: ...
+
+    def save_jockey(self, jockey: Jockey) -> None: ...
+
+    def save_trainer(self, trainer: Trainer) -> None: ...
