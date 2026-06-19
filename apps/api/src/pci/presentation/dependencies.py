@@ -17,11 +17,30 @@ from sqlalchemy.orm import Session, sessionmaker
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_query_use_cases import GetPaceAnalysisUseCase, GetRaceDetailUseCase
 from pci.config.settings import get_settings
+from pci.domain.pace.commentary import CommentGenerator, RuleBasedCommentGenerator
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.racing.repository import RaceRepository
 from pci.infrastructure.database.session import build_engine, build_session_maker
 from pci.infrastructure.repositories.mart_repository import SqlAlchemyMartRepository
 from pci.infrastructure.repositories.race_repository import SqlAlchemyRaceRepository
+
+
+@lru_cache
+def _get_comment_generator() -> CommentGenerator:
+    """GEMINI_API_KEY が設定されていれば Gemini 、なければルールベースを返す。"""
+    settings = get_settings()
+    if settings.gemini_api_key:
+        try:
+            from pci.infrastructure.llm_comment_generator import GeminiCommentGenerator
+
+            return GeminiCommentGenerator(api_key=settings.gemini_api_key)
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "GeminiCommentGenerator 初期化失敗 → rule-based にフォールバック: %s", exc
+            )
+    return RuleBasedCommentGenerator()
 
 
 @lru_cache
@@ -57,7 +76,9 @@ MartRepositoryDep = Annotated[MartRepository, Depends(get_mart_repository)]
 
 
 def get_forecast_use_case(repo: RepositoryDep, mart_repo: MartRepositoryDep) -> ForecastRaceUseCase:
-    return ForecastRaceUseCase(repo, mart_repo=mart_repo)
+    return ForecastRaceUseCase(
+        repo, mart_repo=mart_repo, comment_generator=_get_comment_generator()
+    )
 
 
 def get_race_detail_use_case(repo: RepositoryDep) -> GetRaceDetailUseCase:
@@ -65,7 +86,7 @@ def get_race_detail_use_case(repo: RepositoryDep) -> GetRaceDetailUseCase:
 
 
 def get_pace_analysis_use_case(repo: RepositoryDep) -> GetPaceAnalysisUseCase:
-    return GetPaceAnalysisUseCase(repo)
+    return GetPaceAnalysisUseCase(repo, comment_generator=_get_comment_generator())
 
 
 ForecastUseCaseDep = Annotated[ForecastRaceUseCase, Depends(get_forecast_use_case)]
