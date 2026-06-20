@@ -72,7 +72,7 @@ class WindowsJvLinkClient:
         self._dispatch = jv._oleobj_  # type: ignore[attr-defined]
 
         # JVInit(SoftwareCode As String) As Long
-        dispid = self._dispatch.GetIDsOfNames(["JVInit"])[0]
+        dispid = self._dispatch.GetIDsOfNames("JVInit")
         result: int = self._dispatch.InvokeTypes(
             dispid, _LCID, _DISPATCH_METHOD,
             (_VT_I4, 0),
@@ -113,7 +113,7 @@ class WindowsJvLinkClient:
         option = 4 if data_spec == "MAST" else 1  # 1=差分, 4=全量
 
         # JVOpen(DataSpec, FromDate, Option, ByRef nCount, ByRef dlFileList) As Long
-        dispid_open = self._dispatch.GetIDsOfNames(["JVOpen"])[0]
+        dispid_open = self._dispatch.GetIDsOfNames("JVOpen")
         ret_open: Any = self._dispatch.InvokeTypes(
             dispid_open, _LCID, _DISPATCH_METHOD,
             (_VT_I4, 0),
@@ -130,8 +130,8 @@ class WindowsJvLinkClient:
         if open_code < 0:
             raise RuntimeError(f"JVOpen 失敗: エラーコード {open_code}")
 
-        dispid_read = self._dispatch.GetIDsOfNames(["JVRead"])[0]
-        dispid_close = self._dispatch.GetIDsOfNames(["JVClose"])[0]
+        dispid_read = self._dispatch.GetIDsOfNames("JVRead")
+        dispid_close = self._dispatch.GetIDsOfNames("JVClose")
 
         try:
             while True:
