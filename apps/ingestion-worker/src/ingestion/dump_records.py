@@ -18,10 +18,15 @@ from ingestion.client.windows_client import WindowsJvLinkClient
 
 def _dump(label: str, record: str) -> None:
     print(f"\n===== {label} (len={len(record)}) =====")
-    print("repr:", repr(record[:200]))
+    print("repr:", repr(record[:250]))
     print("--- 10文字ごとの位置ルーラー ---")
-    for pos in range(0, min(len(record), 130), 10):
+    for pos in range(0, min(len(record), 200), 10):
         print(f"  [{pos:3d}:{pos + 10:3d}] {record[pos:pos + 10]!r}")
+    # sex フィールド付近を明示
+    if len(record) > 155:
+        print(f"\n--- sex 候補範囲 ---")
+        print(f"  [155:165] {record[155:165]!r}")
+        print(f"  [160:161] {record[160:161]!r}  ← sex_cd")
 
 
 def main() -> None:
