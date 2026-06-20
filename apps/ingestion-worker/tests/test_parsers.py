@@ -184,30 +184,63 @@ def _se_result(
 
 
 def _um(ketto: str = "2023100001", name: str = "テストホース", sex: str = "1", birth_year: int = 2023) -> str:
+    """Ver.4.9 UM レコードのテスト用フィクスチャ。
+    実測オフセット: ketto[12:22], birth[38:46], name[46:64], sex[160:161]
+    """
     def p(v: str, w: int) -> str:
         return v.ljust(w)[:w]
 
     um = (
-        "UM"
-        + "1"
-        + "20260101"
-        + " "
-        + p(ketto, 10)
-        + p(name, 36)
-        + p(name, 36)
-        + sex
-        + str(birth_year)
-        + " "
+        "UM"                         # [0:2]
+        + "1"                        # [2:3]  DataKubun
+        + "20260101"                 # [3:11] MakeDate
+        + " "                        # [11:12] UmaKigo
+        + p(ketto, 10)              # [12:22] KettoNum
+        + "00000000"                 # [22:30] 追加日付1
+        + "00000000"                 # [30:38] 追加日付2
+        + f"{birth_year}0101"        # [38:46] 生年月日 (YYYY0101)
+        + p(name, 18)               # [46:64] UmaName
+        + p(name, 36)               # [64:100] UmaNameKana (ダミー)
+        + " " * 60                  # [100:160] UmaNameEng (ダミー)
+        + sex                        # [160:161] SexCD
     )
     return um.ljust(200)
 
 
 def _ks(code: str = "0001", name: str = "テスト騎手") -> str:
-    return ("KS" + "1" + "20260101" + code.ljust(4)[:4] + name.ljust(36)[:36]).ljust(100)
+    """Ver.4.9 KS レコードのテスト用フィクスチャ。
+    実測オフセット: code[11:16], name[41:58]
+    """
+    ks = (
+        "KS"                         # [0:2]
+        + "1"                        # [2:3]  DataKubun
+        + "20260101"                 # [3:11] MakeDate
+        + code.ljust(5)[:5]         # [11:16] KisyuCode (5桁)
+        + " "                        # [16:17] フラグ
+        + "00000000"                 # [17:25] 追加日付1
+        + "00000000"                 # [25:33] 追加日付2
+        + "00000000"                 # [33:41] 生年月日
+        + name.ljust(17)[:17]       # [41:58] 騎手氏名
+    )
+    return ks.ljust(100)
 
 
 def _ch(code: str = "0001", name: str = "テスト調教師") -> str:
-    return ("CH" + "1" + "20260101" + code.ljust(4)[:4] + name.ljust(36)[:36]).ljust(100)
+    """Ver.4.9 CH レコードのテスト用フィクスチャ。
+    実測オフセット: code[11:16], name[41:58]
+    """
+    ch = (
+        "CH"                         # [0:2]
+        + "1"                        # [2:3]  DataKubun
+        + "20260101"                 # [3:11] MakeDate
+        + code.ljust(5)[:5]         # [11:16] ChokyosiCode (5桁)
+        + " "                        # [16:17] フラグ
+        + "00000000"                 # [17:25] 追加日付1
+        + "00000000"                 # [25:33] 追加日付2
+        + "00000000"                 # [33:41] 生年月日
+        + name.ljust(17)[:17]       # [41:58] 調教師氏名
+    )
+    return ch.ljust(100)
 
 
 # ---------------------------------------------------------------------------

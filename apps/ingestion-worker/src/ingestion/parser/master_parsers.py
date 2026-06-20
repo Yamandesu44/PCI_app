@@ -1,6 +1,9 @@
 """UM / KS / CH マスタレコードパーサ。
 
-JV-Data仕様書 Ver.3.0.0 に基づく。
+JV-Data仕様書 Ver.4.9 実データより逆算したバイト位置定義。
+Ver.3.0.0 から Ver.4.9 での変更点:
+  - UM: ketto_num 後に 24 バイトの日付フィールド群が追加 → 名前は [46:64]
+  - KS/CH: code 拡張 + 24 バイトの日付フィールド群追加 → 名前は [41:58]
 
 UM: 競走馬マスタ
 KS: 騎手マスタ
@@ -13,24 +16,27 @@ from ingestion.models import HorseRecord, JockeyRecord, TrainerRecord
 from ingestion.parser.common import _i, _s, decode_sex
 
 # ---------------------------------------------------------------------------
-# UM レコード（競走馬マスタ）
+# UM レコード（競走馬マスタ）  ― Ver.4.9 実測オフセット
 # ---------------------------------------------------------------------------
 # [0:2]   RecordSpec = "UM"
-# [2:3]   DataKubun
+# [2:3]   DataKubun（0=削除/無効）
 # [3:11]  MakeDate (YYYYMMDD)
-# [11:12] UmaKigo（馬記号）
+# [11:12] UmaKigo（馬記号 1桁）
 # [12:22] KettoNum（血統登録番号 10桁）
-# [22:58] UmaName（馬名 36 bytes）
-# [58:94] UmaNameKana（馬名カナ 36 bytes）
-# [94:100] SeibetsuNengetsu（性齢年月: 性別(1)+年月(5), "12604"=牡2026年4月生）
-# ↑ [94:95] = 性別コード, [95:99] = 生年 (YYYY), [99:100] = 未使用
+# [22:30] 追加日付フィールド1（Ver.4.9 追加）
+# [30:38] 追加日付フィールド2（Ver.4.9 追加）
+# [38:46] 生年月日 YYYYMMDD（Ver.4.9 追加） ← [38:42] = 生年
+# [46:64] UmaName（馬名 18 Unicode chars = 36 bytes ShiftJIS）
+# [64:100] UmaNameKana（カタカナ馬名 36 half-width chars）
+# [100:160] UmaNameEng（英字馬名 60 chars）
+# [160:161] SexCD（性別コード: 1=牡 2=牝 3=騸）
 # ---------------------------------------------------------------------------
 
 
 def parse_um(record: str) -> HorseRecord | None:
     """UM 固定長レコードを HorseRecord に変換する。"""
-    if len(record) < 22:
-        raise ValueError(f"UM レコードが短すぎます: {len(record)} bytes（最低22必要）")
+    if len(record) < 64:
+        raise ValueError(f"UM レコードが短すぎます: {len(record)} chars（最低64必要）")
 
     rec_spec = _s(record, 0, 2)
     if rec_spec != "UM":
@@ -41,10 +47,10 @@ def parse_um(record: str) -> HorseRecord | None:
         return None
 
     ketto_num = _s(record, 12, 22)
-    name = _s(record, 22, 58)
-    sex_cd = _s(record, 94, 95) if len(record) > 94 else ""
+    birth_year = _i(record, 38, 42)  # 生年月日 YYYYMMDD の YYYY 部分
+    name = _s(record, 46, 64)
+    sex_cd = _s(record, 160, 161) if len(record) > 160 else ""
     sex = decode_sex(sex_cd)
-    birth_year = _i(record, 95, 99) if len(record) > 99 else None
 
     return HorseRecord(
         ketto_num=ketto_num,
@@ -55,20 +61,24 @@ def parse_um(record: str) -> HorseRecord | None:
 
 
 # ---------------------------------------------------------------------------
-# KS レコード（騎手マスタ）
+# KS レコード（騎手マスタ）  ― Ver.4.9 実測オフセット
 # ---------------------------------------------------------------------------
 # [0:2]   RecordSpec = "KS"
 # [2:3]   DataKubun
-# [3:11]  MakeDate
-# [11:15] KisoCode（騎手コード 4桁）
-# [15:51] KisoName（騎手名 36 bytes）
+# [3:11]  MakeDate (YYYYMMDD)
+# [11:16] KisyuCode（騎手コード 5桁）
+# [16:17] フラグ/記号（1桁）
+# [17:25] 追加日付フィールド1（免許取得日等）
+# [25:33] 追加日付フィールド2（免許失効日等）
+# [33:41] 生年月日 YYYYMMDD
+# [41:58] KisoName（騎手氏名 17 Unicode chars = 34 bytes ShiftJIS）
 # ---------------------------------------------------------------------------
 
 
 def parse_ks(record: str) -> JockeyRecord | None:
     """KS 固定長レコードを JockeyRecord に変換する。"""
-    if len(record) < 15:
-        raise ValueError(f"KS レコードが短すぎます: {len(record)} bytes（最低15必要）")
+    if len(record) < 58:
+        raise ValueError(f"KS レコードが短すぎます: {len(record)} chars（最低58必要）")
 
     rec_spec = _s(record, 0, 2)
     if rec_spec != "KS":
@@ -78,27 +88,31 @@ def parse_ks(record: str) -> JockeyRecord | None:
     if data_kubun == "0":
         return None
 
-    code = _s(record, 11, 15)
-    name = _s(record, 15, 51)
+    code = _s(record, 11, 16)
+    name = _s(record, 41, 58)
 
     return JockeyRecord(code=code, name=name)
 
 
 # ---------------------------------------------------------------------------
-# CH レコード（調教師マスタ）
+# CH レコード（調教師マスタ）  ― Ver.4.9 実測オフセット
 # ---------------------------------------------------------------------------
 # [0:2]   RecordSpec = "CH"
 # [2:3]   DataKubun
-# [3:11]  MakeDate
-# [11:15] ChokyosiCode（調教師コード 4桁）
-# [15:51] ChokyosiName（調教師名 36 bytes）
+# [3:11]  MakeDate (YYYYMMDD)
+# [11:16] ChokyosiCode（調教師コード 5桁）
+# [16:17] フラグ/記号（1桁）
+# [17:25] 追加日付フィールド1（免許取得日等）
+# [25:33] 追加日付フィールド2（免許失効日等）
+# [33:41] 生年月日 YYYYMMDD
+# [41:58] ChokyosiName（調教師氏名 17 Unicode chars = 34 bytes ShiftJIS）
 # ---------------------------------------------------------------------------
 
 
 def parse_ch(record: str) -> TrainerRecord | None:
-    """CH レコードを TrainerRecord に変換する。"""
-    if len(record) < 15:
-        raise ValueError(f"CH レコードが短すぎます: {len(record)} bytes（最低15必要）")
+    """CH 固定長レコードを TrainerRecord に変換する。"""
+    if len(record) < 58:
+        raise ValueError(f"CH レコードが短すぎます: {len(record)} chars（最低58必要）")
 
     rec_spec = _s(record, 0, 2)
     if rec_spec != "CH":
@@ -108,7 +122,7 @@ def parse_ch(record: str) -> TrainerRecord | None:
     if data_kubun == "0":
         return None
 
-    code = _s(record, 11, 15)
-    name = _s(record, 15, 51)
+    code = _s(record, 11, 16)
+    name = _s(record, 41, 58)
 
     return TrainerRecord(code=code, name=name)
