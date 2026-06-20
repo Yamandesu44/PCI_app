@@ -50,7 +50,9 @@ class IngestApiClient:
     def _post(self, path: str, payload: Any) -> dict[str, Any]:
         url = f"{self._base_url}{path}"
         resp = self._http.post(url, json=payload, headers=self._headers())
-        resp.raise_for_status()
+        if resp.is_error:
+            # エラー時はレスポンスボディ(detail)を含めて原因を明示する
+            raise RuntimeError(f"Ingest API エラー {resp.status_code} {path}: {resp.text[:1000]}")
         result: dict[str, Any] = resp.json()
         return result
 
