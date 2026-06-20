@@ -116,9 +116,9 @@ class FixtureJvLinkClient:
 
 def _read_lines(path: Path) -> Iterator[str]:
     for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            yield line
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            yield line.ljust(200)  # 固定長フィールドの位置を保つため200文字にパディング
 
 
 def _pad(value: str, width: int, fill: str = " ", right_justify: bool = False) -> str:
@@ -299,42 +299,55 @@ def _json_result_to_se(data: dict[str, object], result: dict[str, object]) -> st
 
 
 def _json_entry_to_um(entry: dict[str, object]) -> str:
-    """entry データから UM 固定長レコードを生成する。"""
+    """entry データから UM 固定長レコードを生成する（Ver.4.9 オフセット）。"""
     ketto = _pad(str(entry.get("ketto_num", "")), 10)
-    name = _pad(str(entry.get("horse_name", "")), 36)
+    name = _pad(str(entry.get("horse_name", "")), 18)       # [46:64] 18 chars
+    name_kana = _pad(str(entry.get("horse_name", "")), 36)  # [64:100] 36 chars
     sex_cd = {"牡": "1", "牝": "2", "騸": "3"}.get(str(entry.get("sex", "牡")), "1")
     age = int(entry.get("age", 3) or 3)
     birth_year = 2026 - age
     um = (
         "UM"
         + "1"
-        + "20260101"    # MakeDate
-        + " "           # UmaKigo [11:12]
-        + ketto         # [12:22]
-        + name          # [22:58]
-        + name          # [58:94] UmaNameKana（馬名で代替）
-        + sex_cd        # [94:95]
-        + str(birth_year)  # [95:99]
-        + " "           # [99:100]
+        + "20260101"           # MakeDate [3:11]
+        + " "                  # UmaKigo [11:12]
+        + ketto                # [12:22]
+        + "00000000"           # [22:30] 追加日付1
+        + "00000000"           # [30:38] 追加日付2
+        + f"{birth_year}0101"  # [38:46] 生年月日
+        + name                 # [46:64] UmaName (18 chars)
+        + name_kana            # [64:100] UmaNameKana (36 chars)
+        + " " * 60             # [100:160] UmaNameEng
+        + sex_cd               # [160:161] SexCD
     )
     return um.ljust(200)
 
 
 def _make_ks(code: str, name: str) -> str:
+    """KS 固定長レコードを生成する（Ver.4.9 オフセット）。"""
     return (
         "KS"
         + "1"
-        + "20260101"
-        + _pad(code, 4)
-        + _pad(name, 36)
+        + "20260101"        # MakeDate [3:11]
+        + _pad(code, 5)     # [11:16] KisyuCode (5桁)
+        + "0"               # [16:17] フラグ
+        + "00000000"        # [17:25] Date1
+        + "00000000"        # [25:33] Date2
+        + "00000000"        # [33:41] BirthDate
+        + _pad(name, 17)    # [41:58] 騎手氏名 (17 chars)
     ).ljust(100)
 
 
 def _make_ch(code: str, name: str) -> str:
+    """CH 固定長レコードを生成する（Ver.4.9 オフセット）。"""
     return (
         "CH"
         + "1"
-        + "20260101"
-        + _pad(code, 4)
-        + _pad(name, 36)
+        + "20260101"        # MakeDate [3:11]
+        + _pad(code, 5)     # [11:16] ChokyosiCode (5桁)
+        + "0"               # [16:17] フラグ
+        + "00000000"        # [17:25] Date1
+        + "00000000"        # [25:33] Date2
+        + "00000000"        # [33:41] BirthDate
+        + _pad(name, 17)    # [41:58] 調教師氏名 (17 chars)
     ).ljust(100)
