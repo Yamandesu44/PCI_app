@@ -111,20 +111,25 @@ class WindowsJvLinkClient:
     ) -> Iterator[str]:
         """JV-Link の JVOpen → JVRead → JVClose を実行してレコードを返す。"""
         option = 4 if data_spec == "MAST" else 1  # 1=差分, 4=全量
+        # fromtime は 14 桁(YYYYMMDDHHMMSS)。日付未指定(マスタ)は基準日で全件取得
+        fromtime = (date_from + "000000") if date_from else "20000101000000"
+        buf_size = 110000  # JV-Data 1 レコード最大長に余裕を持たせる
 
-        # JVOpen(DataSpec, FromDate, Option, ByRef nCount, ByRef dlFileList) As Long
+        # JVOpen(DataSpec, FromTime, Option,
+        #        ByRef ReadCount, ByRef DownloadCount, ByRef LastFileTimestamp) As Long
         dispid_open = self._dispatch.GetIDsOfNames("JVOpen")
         ret_open: Any = self._dispatch.InvokeTypes(
             dispid_open, _LCID, _DISPATCH_METHOD,
             (_VT_I4, 0),
             (
-                (_VT_BSTR, _PARAMFLAG_FIN, None),                    # DataSpec
-                (_VT_BSTR, _PARAMFLAG_FIN, None),                    # FromDate
-                (_VT_I4, _PARAMFLAG_FIN, None),                      # Option
-                (_VT_BYREF | _VT_I4, _PARAMFLAG_FOUT, None),        # nCount (ByRef OUT)
-                (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FOUT, None),      # dlFileList (ByRef OUT)
+                (_VT_BSTR, _PARAMFLAG_FIN, None),                   # DataSpec
+                (_VT_BSTR, _PARAMFLAG_FIN, None),                   # FromTime
+                (_VT_I4, _PARAMFLAG_FIN, None),                     # Option
+                (_VT_BYREF | _VT_I4, _PARAMFLAG_FOUT, None),       # ReadCount (out)
+                (_VT_BYREF | _VT_I4, _PARAMFLAG_FOUT, None),       # DownloadCount (out)
+                (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FOUT, None),     # LastFileTimestamp (out)
             ),
-            data_spec, date_from + "000000", option, 0, "",
+            data_spec, fromtime, option, 0, 0, "",
         )
         open_code: int = ret_open[0] if isinstance(ret_open, tuple) else ret_open
         if open_code < 0:
@@ -135,16 +140,17 @@ class WindowsJvLinkClient:
 
         try:
             while True:
-                # JVRead(ByRef lpszBuf, ByRef nRead, ByRef lpszFileName) As Long
+                # JVRead(ByRef Buff, ByRef Size, ByRef FileName) As Long
+                # Size は入力バッファサイズ。戻り値タプル=(retcode, buff, filename)
                 ret_read: Any = self._dispatch.InvokeTypes(
                     dispid_read, _LCID, _DISPATCH_METHOD,
                     (_VT_I4, 0),
                     (
-                        (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FIN | _PARAMFLAG_FOUT, None),  # lpszBuf
-                        (_VT_BYREF | _VT_I4, _PARAMFLAG_FOUT, None),                      # nRead
-                        (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FOUT, None),                    # lpszFileName
+                        (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FIN | _PARAMFLAG_FOUT, None),  # Buff
+                        (_VT_BYREF | _VT_I4, _PARAMFLAG_FIN, None),                       # Size (in)
+                        (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FOUT, None),                    # FileName (out)
                     ),
-                    " " * 20000, 0, "",
+                    " " * buf_size, buf_size, "",
                 )
                 if isinstance(ret_read, tuple):
                     read_code: int = ret_read[0]
@@ -152,6 +158,8 @@ class WindowsJvLinkClient:
                 else:
                     read_code = ret_read
                     buf = ""
+                if read_code == -1:
+                    continue  # ファイル切り替わり。次のレコードへ
                 if read_code == 0:
                     break  # 全レコード取得完了
                 if read_code < 0:
