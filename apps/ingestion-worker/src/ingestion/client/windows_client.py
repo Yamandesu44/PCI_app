@@ -91,16 +91,16 @@ class WindowsJvLinkClient:
         yield from self._iter_records("RACE", date_from, date_to, record_types={"SE"})
 
     def iter_um_records(self) -> Iterator[str]:
-        """競走馬マスタ UM レコードを取得する。"""
-        yield from self._iter_records("MAST", record_types={"UM"})
+        """競走馬マスタ UM レコードを取得する（DIFF データ種別）。"""
+        yield from self._iter_records("DIFF", record_types={"UM"})
 
     def iter_ks_records(self) -> Iterator[str]:
-        """騎手マスタ KS レコードを取得する。"""
-        yield from self._iter_records("MAST", record_types={"KS"})
+        """騎手マスタ KS レコードを取得する（DIFF データ種別）。"""
+        yield from self._iter_records("DIFF", record_types={"KS"})
 
     def iter_ch_records(self) -> Iterator[str]:
-        """調教師マスタ CH レコードを取得する。"""
-        yield from self._iter_records("MAST", record_types={"CH"})
+        """調教師マスタ CH レコードを取得する（DIFF データ種別）。"""
+        yield from self._iter_records("DIFF", record_types={"CH"})
 
     def _iter_records(
         self,
@@ -110,7 +110,7 @@ class WindowsJvLinkClient:
         record_types: set[str] | None = None,
     ) -> Iterator[str]:
         """JV-Link の JVOpen → JVRead → JVClose を実行してレコードを返す。"""
-        option = 4 if data_spec == "MAST" else 1  # 1=差分, 4=全量
+        option = 4 if data_spec == "DIFF" else 1  # DIFF(マスタ)=4:セットアップ全量
         # fromtime は 14 桁(YYYYMMDDHHMMSS)。日付未指定(マスタ)は基準日で全件取得
         fromtime = (date_from + "000000") if date_from else "20000101000000"
         buf_size = 110000  # JV-Data 1 レコード最大長に余裕を持たせる
