@@ -318,7 +318,10 @@ def _json_entry_to_um(entry: dict[str, object]) -> str:
         + name                 # [46:64] UmaName (18 chars)
         + name_kana            # [64:100] UmaNameKana (36 chars)
         + " " * 60             # [100:160] UmaNameEng
-        + sex_cd               # [160:161] SexCD
+        + "0"                  # [160:161] ZaikyuFlag
+        + " " * 19             # [161:180] Reserved
+        + "00"                 # [180:182] UmaKigoCD
+        + sex_cd               # [182:183] SexCD
     )
     return um.ljust(200)
 

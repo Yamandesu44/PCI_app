@@ -185,7 +185,7 @@ def _se_result(
 
 def _um(ketto: str = "2023100001", name: str = "テストホース", sex: str = "1", birth_year: int = 2023) -> str:
     """Ver.4.9 UM レコードのテスト用フィクスチャ。
-    実測オフセット: ketto[12:22], birth[38:46], name[46:64], sex[160:161]
+    実測オフセット: ketto[12:22], birth[38:46], name[46:64], sex[182:183]
     """
     def p(v: str, w: int) -> str:
         return v.ljust(w)[:w]
@@ -202,7 +202,10 @@ def _um(ketto: str = "2023100001", name: str = "テストホース", sex: str = 
         + p(name, 18)               # [46:64] UmaName
         + p(name, 36)               # [64:100] UmaNameKana (ダミー)
         + " " * 60                  # [100:160] UmaNameEng (ダミー)
-        + sex                        # [160:161] SexCD
+        + "0"                        # [160:161] ZaikyuFlag
+        + " " * 19                  # [161:180] Reserved
+        + "00"                       # [180:182] UmaKigoCD
+        + sex                        # [182:183] SexCD
     )
     return um.ljust(200)
 

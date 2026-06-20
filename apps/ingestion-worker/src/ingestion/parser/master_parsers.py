@@ -29,7 +29,15 @@ from ingestion.parser.common import _i, _s, decode_sex
 # [46:64] UmaName（馬名 18 Unicode chars = 36 bytes ShiftJIS）
 # [64:100] UmaNameKana（カタカナ馬名 36 half-width chars）
 # [100:160] UmaNameEng（英字馬名 60 chars）
-# [160:161] SexCD（性別コード: 1=牡 2=牝 3=騸）
+# [160:161] ZaikyuFlag（在きゅうフラグ） ※sex ではない
+# [161:180] Reserved（予備 19 chars 空白）
+# [180:182] UmaKigoCD（馬記号コード 2桁）
+# [182:183] SexCD（性別コード: 1=牡 2=牝 3=騸）
+# [183:184] HinsyuCD（品種コード）
+# [184:186] KeiroCD（毛色コード 2桁）
+#
+# NOTE: 馬名フィールド以降のバイト位置は、馬名(36バイト=18全角文字)の
+#       Unicode 圧縮を前提に算出している。JRA 馬名は常に全角のため安定。
 # ---------------------------------------------------------------------------
 
 
@@ -49,7 +57,7 @@ def parse_um(record: str) -> HorseRecord | None:
     ketto_num = _s(record, 12, 22)
     birth_year = _i(record, 38, 42)  # 生年月日 YYYYMMDD の YYYY 部分
     name = _s(record, 46, 64)
-    sex_cd = _s(record, 160, 161) if len(record) > 160 else ""
+    sex_cd = _s(record, 182, 183) if len(record) > 182 else ""
     sex = decode_sex(sex_cd)
 
     return HorseRecord(
