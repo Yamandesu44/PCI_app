@@ -55,10 +55,7 @@ class WindowsJvLinkClient:
             ) from exc
 
         jv = win32com.client.Dispatch("JVDTLab.JVLink.1")
-        # 利用キー（サービスキー）を設定してから初期化する
-        sk_result = jv.JVSetServiceKey(self._sid)
-        if sk_result != 0:
-            raise RuntimeError(f"JVSetServiceKey 失敗: エラーコード {sk_result}")
+        # JV-Link設定ツールで利用キーを登録済みの場合、JVInit のみで初期化できる
         result = jv.JVInit(self._software_id)
         if result != 0:
             raise RuntimeError(f"JVInit 失敗: エラーコード {result}")
