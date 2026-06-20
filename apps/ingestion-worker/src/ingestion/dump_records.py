@@ -36,10 +36,39 @@ def _dump(label: str, record: str, highlight: dict[tuple[int, int], str] | None 
             print(f"  [{s}:{e}] {val!r}  ← {label_str}")
 
 
+def _dump_nonblank_regions(label: str, record: str) -> None:
+    """レコード全体を走査し、空白でない領域（データが入っている箇所）を列挙する。
+
+    距離・レース名・馬場などのフィールドが想定外の位置にある場合に発見するため。
+    全角空白(\\u3000) と半角空白を「空白」とみなす。
+    """
+    print(f"\n--- {label}: 非空白領域マップ (len={len(record)}) ---")
+    blanks = {" ", "　", "\x00"}
+    i = 0
+    n = len(record)
+    found = False
+    while i < n:
+        if record[i] not in blanks:
+            j = i
+            while j < n and record[j] not in blanks:
+                j += 1
+            print(f"  [{i:4d}:{j:4d}] {record[i:j]!r}")
+            found = True
+            i = j
+        else:
+            i += 1
+    if not found:
+        print("  (非空白領域なし — レコードがほぼ空)")
+
+
 def main() -> None:
     load_dotenv()
     sid = os.environ.get("JV_LINK_SID", "")
-    today = datetime.date.today().strftime("%Y%m%d")
+    # 第1引数で取得日付を指定可能（未指定は今日）。過去の確定レースは
+    #   py -3.12-32 src\ingestion\dump_records.py 20260614
+    # のように開催日を渡すと距離・成績入りのレコードが確認できる。
+    target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.date.today().strftime("%Y%m%d")
+    print(f"取得対象日付: {target_date}")
     client = WindowsJvLinkClient(sid=sid)
 
     # UM
@@ -76,7 +105,7 @@ def main() -> None:
     ra_count = 0
     se_count = 0
     scanned = 0
-    for rec in client.iter_race_records_raw(today, today):
+    for rec in client.iter_race_records_raw(target_date, target_date):
         scanned += 1
         spec = rec[:2]
         if spec == "RA" and ra_count < 3:
@@ -88,24 +117,29 @@ def main() -> None:
                 (23, 25): "Nichiji?",
                 (25, 27): "RaceNo?",
                 (27, 28): "YoubiCd?",
-                (28, 32): "??? (0000/0074)",
+                (28, 32): "Kyori(距離)?",
                 (32, 82): "RaceName? (50chars)",
                 (82, 84): "Tosu?",
             })
+            # 距離・レース名がどこにあるか不明なので全体の非空白領域を出す
+            _dump_nonblank_regions(f"RA #{ra_count + 1}", rec)
             ra_count += 1
         elif spec == "SE" and se_count < 3:
-            _dump(f"SE #{se_count + 1}", rec, {
-                (3, 11):  "MakeDate(作成日)?",
-                (11, 19): "KaisaiNengappi(開催日)?",
-                (19, 21): "JyoCd?",
-                (21, 23): "Kaiji?",
-                (23, 25): "Nichiji?",
-                (25, 27): "RaceNo?",
-                (27, 29): "Umaban?",
-                (29, 31): "Wakuban?",
-                (31, 41): "KettoNum?",
-                (41, 59): "UmaName?(18chars)",
+            data_kubun = rec[2:3]
+            _dump(f"SE #{se_count + 1} (DataKubun={data_kubun})", rec, {
+                (11, 19): "KaisaiNengappi(開催日)",
+                (19, 27): "Jyo/Kaiji/Nichi/RaceNo",
+                (27, 28): "Wakuban(枠)",
+                (28, 30): "Umaban(馬番)",
+                (30, 40): "KettoNum",
+                (40, 58): "Bamei(18chars)",
+                (60, 61): "SexCD",
+                (67, 72): "KisyuCode",
+                (77, 82): "ChokyosiCode",
             })
+            # 確定後(DataKubun=4)の着順・タイム・通過順位の位置特定のため全走査
+            if data_kubun == "4":
+                _dump_nonblank_regions(f"SE #{se_count + 1} (確定)", rec)
             se_count += 1
         if ra_count >= 3 and se_count >= 3:
             break
