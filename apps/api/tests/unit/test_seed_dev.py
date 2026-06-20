@@ -7,7 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from seed_dev import (
+# seed_dev は scripts/ を sys.path 挿入後に import するため通常のソート順を適用しない
+from seed_dev import (  # type: ignore[import-not-found]  # noqa: I001
     CONFIRMED_RACE_KEY,
     UPCOMING_RACE_KEY,
     _CONFIRMED_DISTANCE_M,
@@ -49,7 +50,10 @@ class TestSeedRaceKeys:
 
 class TestConfirmedPci:
     def _pci_list(self) -> list[float]:
-        return [_pci(rt, a3f, _CONFIRMED_DISTANCE_M) for _, _, _, _, rt, a3f, *_ in _CONFIRMED_RESULTS]
+        return [
+            _pci(rt, a3f, _CONFIRMED_DISTANCE_M)
+            for _, _, _, _, rt, a3f, *_ in _CONFIRMED_RESULTS
+        ]
 
     def test_all_pci_values_are_positive(self) -> None:
         for pci in self._pci_list():

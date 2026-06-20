@@ -162,7 +162,7 @@ class TestRecordRaceResultUseCase:
         race = repo.find_by_key(RaceKey(RACE_KEY))
         assert race is not None
         assert race.rpci_actual == pytest.approx(output.rpci)
-        assert race.pci3_actual == pytest.approx(output.pci3)  # type: ignore[arg-type]
+        assert race.pci3_actual == pytest.approx(output.pci3)
 
     def test_track_condition_and_weather_updated(self) -> None:
         repo = self._setup_repo()

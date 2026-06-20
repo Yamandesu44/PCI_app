@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -217,3 +217,40 @@ class TestIngestResults:
         bad = {**RESULTS_PAYLOAD, "race_key": "9999999999999999"}
         resp = client.post("/internal/ingest/results", json=bad)
         assert resp.status_code in (400, 404, 422, 500)
+
+
+class TestIngestAuth:
+    """INGEST_TOKEN 設定時の認証動作を検証する。"""
+
+    _TARGET = "pci.presentation.routers.ingest.get_settings"
+
+    def _mock_settings(self, token: str) -> MagicMock:
+        s = MagicMock()
+        s.ingest_token = token
+        return s
+
+    def test_missing_token_returns_401(self, client: TestClient) -> None:
+        """INGEST_TOKEN 設定時、トークンなしリクエストは 401。"""
+        with patch(self._TARGET, return_value=self._mock_settings("secret")):
+            resp = client.post("/internal/ingest/horses", json=HORSE_PAYLOAD)
+        assert resp.status_code == 401
+
+    def test_wrong_token_returns_401(self, client: TestClient) -> None:
+        """誤ったトークンは 401。"""
+        with patch(self._TARGET, return_value=self._mock_settings("secret")):
+            resp = client.post(
+                "/internal/ingest/horses",
+                json=HORSE_PAYLOAD,
+                headers={"X-Ingest-Token": "wrong"},
+            )
+        assert resp.status_code == 401
+
+    def test_correct_token_returns_200(self, client: TestClient) -> None:
+        """正しいトークンは 200。"""
+        with patch(self._TARGET, return_value=self._mock_settings("secret")):
+            resp = client.post(
+                "/internal/ingest/horses",
+                json=HORSE_PAYLOAD,
+                headers={"X-Ingest-Token": "secret"},
+            )
+        assert resp.status_code == 200

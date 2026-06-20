@@ -23,7 +23,11 @@ CLOSER = RunningStyleLabel.CLOSER
 FLEXIBLE = RunningStyleLabel.FLEXIBLE
 
 
-def _ctx(styles: tuple[RunningStyleLabel, ...], distance_m: int = 1600, cond: str | None = None):
+def _ctx(
+    styles: tuple[RunningStyleLabel, ...],
+    distance_m: int = 1600,
+    cond: str | None = None,
+) -> RaceContext:
     return RaceContext(
         distance_m=distance_m,
         track_type="芝",
