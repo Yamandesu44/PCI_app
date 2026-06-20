@@ -71,31 +71,46 @@ def main() -> None:
     print(f"取得対象日付: {target_date}")
     client = WindowsJvLinkClient(sid=sid)
 
-    # UM
-    for rec in client.iter_um_records():
-        _dump("UM (競走馬マスタ)", rec, {
+    # DIFF マスタ（UM/KS/CH を1回の JVOpen で取得 — 複数回 JVOpen すると -303）
+    um_rec: str | None = None
+    ks_rec: str | None = None
+    ch_rec: str | None = None
+    for rec in client.iter_diff_records_raw():
+        spec = rec[:2]
+        if spec == "UM" and um_rec is None:
+            um_rec = rec
+        elif spec == "KS" and ks_rec is None:
+            ks_rec = rec
+        elif spec == "CH" and ch_rec is None:
+            ch_rec = rec
+        if um_rec is not None and ks_rec is not None and ch_rec is not None:
+            break
+
+    if um_rec is not None:
+        _dump("UM (競走馬マスタ)", um_rec, {
             (12, 22): "KettoNum",
             (38, 46): "BirthDate",
             (46, 64): "UmaName",
             (182, 183): "SexCD",
         })
-        break
+    else:
+        print("\n(UM レコードなし)")
 
-    # KS
-    for rec in client.iter_ks_records():
-        _dump("KS (騎手マスタ)", rec, {
+    if ks_rec is not None:
+        _dump("KS (騎手マスタ)", ks_rec, {
             (11, 16): "KisyuCode",
             (41, 58): "KisoName",
         })
-        break
+    else:
+        print("\n(KS レコードなし)")
 
-    # CH
-    for rec in client.iter_ch_records():
-        _dump("CH (調教師マスタ)", rec, {
+    if ch_rec is not None:
+        _dump("CH (調教師マスタ)", ch_rec, {
             (11, 16): "ChokyosiCode",
             (41, 58): "ChokyosiName",
         })
-        break
+    else:
+        print("\n(CH レコードなし)")
 
     # RACE データスペックを1回の JVOpen で取得し、RA と SE を分離してダンプする。
     # （別々に JVOpen すると option=1 の再取得で2回目が空になる可能性があるため）

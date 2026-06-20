@@ -111,6 +111,14 @@ class WindowsJvLinkClient:
         """調教師マスタ CH レコードを取得する（DIFF データ種別）。"""
         yield from self._iter_records("DIFF", record_types={"CH"})
 
+    def iter_diff_records_raw(self) -> Iterator[str]:
+        """DIFF データスペックの全レコード（UM/KS/CH 混在）を1回の JVOpen で返す。
+
+        UM/KS/CH を別々に JVOpen すると3回目以降が -303 になる（JV-Link が
+        配信済みマークを付けるため）。デバッグ用途では本メソッドで一括取得する。
+        """
+        yield from self._iter_records("DIFF", record_types=None)
+
     def _iter_records(
         self,
         data_spec: str,
