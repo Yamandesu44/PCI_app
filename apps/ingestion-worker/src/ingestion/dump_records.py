@@ -72,12 +72,13 @@ def main() -> None:
     print(f"取得対象日付: {target_date}")
     client = WindowsJvLinkClient(sid=sid)
 
-    # DIFF マスタ（UM/KS/CH を1回の JVOpen で取得 — 複数回 JVOpen すると -303）
-    # マスタは既に取り込み済みなので、-303（配信済み）等で失敗しても RACE ダンプへ進む。
+    # DIFF マスタ（UM/KS/CH を1回の JVOpen でまとめて取得）。
+    # マスタは既に取り込み済みなので、-303（サービスキー認証エラー）等で
+    # 失敗しても握りつぶし、RACE ダンプへ進む。
     um_rec: str | None = None
     ks_rec: str | None = None
     ch_rec: str | None = None
-    # closing() で break 時も即座に JVClose し、セッションを放置しない（-303 予防）。
+    # closing() で break 時も即座に JVClose し、JV-Link セッションを放置しない。
     try:
         with contextlib.closing(client.iter_diff_records_raw()) as diff_gen:
             for rec in diff_gen:
@@ -127,7 +128,7 @@ def main() -> None:
     ra_count = 0
     se_count = 0
     scanned = 0
-    # closing() で break 時も即座に JVClose し、セッションを放置しない（-303 予防）。
+    # closing() で break 時も即座に JVClose し、JV-Link セッションを放置しない。
     try:
         with contextlib.closing(
             client.iter_race_records_raw(target_date, target_date)
