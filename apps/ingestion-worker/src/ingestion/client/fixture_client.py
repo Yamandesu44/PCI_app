@@ -128,7 +128,7 @@ def _pad(value: str, width: int, fill: str = " ", right_justify: bool = False) -
 
 
 def _json_to_ra(info: dict[str, object]) -> str:
-    """sample_race_entries.json の race_info → RA 固定長レコード。"""
+    """sample_race_entries.json の race_info → RA 固定長レコード（Ver.4.9 オフセット）。"""
     race_key = str(info.get("race_key", ""))
     if len(race_key) != 16:
         return ""
@@ -138,21 +138,8 @@ def _json_to_ra(info: dict[str, object]) -> str:
     kaiji = race_key[10:12]
     nichiji = race_key[12:14]
     race_no = race_key[14:16]
-    date_str = str(info.get("race_date", "")).replace("-", "")
-    if not date_str:
-        date_str = f"{nen}{month_day}"
+    hold_date = f"{nen}{month_day}"  # 開催年月日 YYYYMMDD
 
-    track_type = str(info.get("track_type", "芝"))
-    tora_cd = {"芝": "1", "ダート": "2", "障害": "3"}.get(track_type, "1")
-
-    weather = str(info.get("weather", "晴"))
-    _tenko_map = {"晴": "1", "曇": "2", "小雨": "3", "雨": "4", "小雪": "5", "雪": "6"}
-    tenko_cd = _tenko_map.get(weather, "1")
-
-    cond = str(info.get("track_condition", "良"))
-    baba_cd = {"良": "1", "稍重": "2", "重": "3", "不良": "4"}.get(cond, "1")
-
-    grade = _pad(str(info.get("grade", "") or ""), 2)
     race_name = _pad(str(info.get("race_class", "") or ""), 50)
     tosu = _pad(str(info.get("field_size", 8)), 2, right_justify=True)
     race_class = _pad(str(info.get("race_class", "") or ""), 50)
@@ -161,24 +148,17 @@ def _json_to_ra(info: dict[str, object]) -> str:
     ra = (
         "RA"               # [0:2]   RecordSpec
         + "1"              # [2:3]   DataKubun
-        + date_str.ljust(8)[:8]  # [3:11] MakeDate
-        + jyo_cd           # [11:13]
-        + kaiji            # [13:15]
-        + nichiji          # [15:17]
-        + race_no          # [17:19]
-        + "1"              # [19:20] YoubiCd
-        + nen              # [20:24]
-        + month_day        # [24:28]
-        + kyori            # [28:32]
-        + tora_cd          # [32:33]
-        + "1"              # [33:34] CoursCd
-        + tenko_cd         # [34:35]
-        + baba_cd          # [35:36] 芝馬場状態
-        + baba_cd          # [36:37] ダート馬場状態
-        + grade            # [37:39]
-        + race_name        # [39:89]
-        + tosu             # [89:91]
-        + race_class       # [91:141]
+        + "20260618"       # [3:11]  MakeDate (作成日、固定)
+        + hold_date        # [11:19] KaisaiNengappi (開催年月日)
+        + jyo_cd           # [19:21]
+        + kaiji            # [21:23]
+        + nichiji          # [23:25]
+        + race_no          # [25:27]
+        + "1"              # [27:28] YoubiCd
+        + kyori            # [28:32] Kyori (仮置き)
+        + race_name        # [32:82] RaceName
+        + tosu             # [82:84] Tosu
+        + race_class       # [84:134] RaceClass
     )
     return ra
 

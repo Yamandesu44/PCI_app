@@ -1,9 +1,12 @@
 """RA レコード（レース詳細）パーサ。
 
-JV-Data仕様書 Ver.3.0.0 — RA レコード（レース詳細）のフィールド定義。
-
-NOTE: バイト位置は JV-Data 仕様書の公式ドキュメントに基づく。
-      実際の JV-Link 出力との照合を推奨する（特に result 部分）。
+JV-Data Ver.4.9 実データより逆算したフィールド定義。
+Ver.3.0.0 からの変更点:
+  - [11:19] KaisaiNengappi（開催年月日 YYYYMMDD）が追加された
+  - 旧 Nen[20:24] / MonthDay[24:28] は KaisaiNengappi に統合
+  - JyoCd 以降が +8 にシフト
+  - RaceName は [32:82] から始まる（40文字ログで実測確認済み）
+  - ToraCd / TenkoCd / BabaCd / GradeCd の新オフセット未確定（dump_records で調査中）
 
 RA レコード総バイト数: 856 bytes（改行を含む場合は 857 or 858）
 エンコード: Shift-JIS（ただし JV-Link は Unicode 変換済み文字列を返すため str として処理）
@@ -16,35 +19,26 @@ from ingestion.parser.common import (
     _i,
     _s,
     build_race_key,
-    decode_baba,
-    decode_tenko,
-    decode_track,
     parse_race_date,
 )
 
 # ---------------------------------------------------------------------------
-# RA レコード フィールド定義（バイト位置、0-indexed・end-exclusive）
+# RA レコード フィールド定義（Ver.4.9 実測オフセット）
 # ---------------------------------------------------------------------------
 # [0:2]   RecordSpec = "RA"
 # [2:3]   DataKubun (1=新規, 2=更新, 0=削除)
-# [3:11]  MakeDate (YYYYMMDD)
-# [11:13] JyoCd
-# [13:15] Kaiji（開催回）
-# [15:17] Nichiji（開催日）
-# [17:19] RaceNo
-# [19:20] YoubiCd
-# [20:24] Nen (YYYY)
-# [24:28] MonthDay (MMDD)
-# [28:32] Kyori（距離 m）
-# [32:33] ToraCd (1=芝, 2=ダート, 3=障害)
-# [33:34] CoursCd
-# [34:35] TenkoCd (1=晴, 2=曇, 3=小雨, 4=雨, 5=小雪, 6=雪)
-# [35:36] SibaBabaJotaiCd (1=良, 2=稍重, 3=重, 4=不良)
-# [36:37] DirtBabaJotaiCd
-# [37:39] GradeCd ("  "=一般, "A1"=G1, "A2"=G2, "A3"=G3, "L "=Listed)
-# [39:89] RaceName（50 bytes）
-# [89:91] Tosu（出走頭数）
-# [91:141] RaceClass（レースクラス名、50 bytes）
+# [3:11]  MakeDate (作成日 YYYYMMDD)
+# [11:19] KaisaiNengappi（開催年月日 YYYYMMDD）← Ver.4.9 追加
+# [19:21] JyoCd
+# [21:23] Kaiji（開催回）
+# [23:25] Nichiji（開催日）
+# [25:27] RaceNo
+# [27:28] YoubiCd
+# [28:32] ??? (実データ確認中: 非グレードは "0000"、G2は "0074" — 距離でも等級でもない可能性)
+# [32:82] RaceName（50 Unicode chars / 40文字ログで開始位置を実測確認済み）
+# [82:84] Tosu（出走頭数）
+# [84:134] RaceClass（レースクラス名）
+# ToraCd / TenkoCd / BabaCd / GradeCd: dump_records.py で全体確認後に追記予定
 # ---------------------------------------------------------------------------
 
 
@@ -53,7 +47,7 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
 
     DataKubun "0"（削除）の場合は None を返す。
     """
-    if len(record) < 91:
+    if len(record) < 84:
         raise ValueError(f"RA レコードが短すぎます: {len(record)} bytes")
 
     rec_spec = _s(record, 0, 2)
@@ -64,36 +58,31 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
     if data_kubun == "0":
         return None  # 削除レコード
 
-    jyo_cd = _s(record, 11, 13)
-    kaiji = _s(record, 13, 15)
-    nichiji = _s(record, 15, 17)
-    race_no = _s(record, 17, 19)
-    nen = _s(record, 20, 24)
-    month_day = _s(record, 24, 28)
+    # 開催年月日は KaisaiNengappi [11:19] から取り出す
+    nen = _s(record, 11, 15)
+    month_day = _s(record, 15, 19)
+
+    jyo_cd = _s(record, 19, 21)
+    kaiji = _s(record, 21, 23)
+    nichiji = _s(record, 23, 25)
+    race_no = _s(record, 25, 27)
 
     race_key = build_race_key(jyo_cd, kaiji, nichiji, race_no, nen, month_day)
     race_date = parse_race_date(nen, month_day)
 
-    kyori = _i(record, 28, 32)
-    tora_cd = _s(record, 32, 33)
-    track_type = decode_track(tora_cd)
+    # [28:32] の正体は dump_records で確認中。100-4000m の範囲のみ距離として採用する。
+    kyori_raw = _i(record, 28, 32)
+    kyori = kyori_raw if 100 <= kyori_raw <= 4000 else 0
 
-    tenko_cd = _s(record, 34, 35)
-    weather = decode_tenko(tenko_cd)
+    # ToraCd / TenkoCd / BabaCd / GradeCd はオフセット未確定 → dump_records 確認後に追記
+    track_type = "芝"
+    weather = None
+    track_condition = None
+    grade = None
 
-    # 芝/ダートどちらの馬場状態を使うかはトラック種別で判断
-    if tora_cd == "2":
-        baba_cd = _s(record, 36, 37)
-    else:
-        baba_cd = _s(record, 35, 36)
-    track_condition = decode_baba(baba_cd)
-
-    grade_raw = _s(record, 37, 39)
-    grade = grade_raw if grade_raw not in ("", "  ") else None
-
-    race_name = _s(record, 39, 89)
-    tosu = _i(record, 89, 91)
-    race_class = _s(record, 91, 141) if len(record) >= 141 else race_name
+    race_name = _s(record, 32, 82) if len(record) >= 82 else _s(record, 32, len(record))
+    tosu = _i(record, 82, 84) if len(record) >= 84 else 0
+    race_class = _s(record, 84, 134) if len(record) >= 134 else race_name
 
     return RaceEntriesRecord(
         race_key=race_key,

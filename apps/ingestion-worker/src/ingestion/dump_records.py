@@ -70,15 +70,37 @@ def main() -> None:
     for rec in client.iter_ra_records(today, today):
         _dump(f"RA #{count + 1}", rec, {
             (3, 11):  "MakeDate",
-            (11, 19): "HoldDate?",
+            (11, 19): "KaisaiNengappi(race date)?",
             (19, 21): "JyoCd?",
             (21, 23): "Kaiji?",
             (23, 25): "Nichiji?",
             (25, 27): "RaceNo?",
             (27, 28): "YoubiCd?",
-            (28, 32): "Kyori or ???",
+            (28, 32): "??? (0000/0074 pattern)",
+            (32, 57): "RaceName? (25chars=25全角)",
             (32, 82): "RaceName? (50chars)",
             (82, 84): "Tosu?",
+            (84, 88): "Kyori? or next field?",
+        })
+        count += 1
+        if count >= 3:
+            break
+
+    # SE (馬毎レース情報) — 最初の3件を表示して race_key 構成を確認する
+    print("\n" + "=" * 60)
+    print("SE レコード (最初の3件) — MakeDate[3:11] が開催日か作成日かを確認")
+    print("=" * 60)
+    count = 0
+    for rec in client.iter_se_records(today, today):
+        _dump(f"SE #{count + 1}", rec, {
+            (3, 11):  "MakeDate or KaisaiDate?",
+            (11, 13): "JyoCd?",
+            (13, 15): "Kaiji?",
+            (15, 17): "Nichiji?",
+            (17, 19): "RaceNo?",
+            (19, 21): "Umaban?",
+            (23, 33): "KettoNum?",
+            (33, 69): "UmaName?",
         })
         count += 1
         if count >= 3:

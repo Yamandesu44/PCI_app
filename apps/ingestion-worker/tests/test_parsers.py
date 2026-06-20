@@ -39,15 +39,15 @@ def _ra(
     nen: str = "2026",
     month_day: str = "0618",
     kyori: int = 1600,
-    tora_cd: str = "1",
-    tenko_cd: str = "1",
-    baba_cd: str = "1",
-    grade: str = "  ",
     race_name: str = "3歳未勝利",
     tosu: int = 10,
     race_class: str = "3歳未勝利",
 ) -> str:
-    def p(v: str, w: int, fill: str = " ") -> str:
+    """Ver.4.9 RA レコードのテスト用フィクスチャ。
+    実測オフセット: KaisaiNengappi[11:19], JyoCd[19:21], RaceName[32:82], Tosu[82:84]
+    NOTE: ToraCd / TenkoCd / BabaCd / GradeCd は dump_records で確認後に追加予定
+    """
+    def p(v: str, w: int) -> str:
         return v.ljust(w)[:w]
 
     def pr(v: str, w: int) -> str:
@@ -55,20 +55,18 @@ def _ra(
 
     ra = (
         "RA"
-        + "1"
-        + f"{nen}{month_day}"
-        + jyo_cd + kaiji + nichiji + race_no
-        + "1"
-        + nen + month_day
-        + pr(str(kyori), 4)
-        + tora_cd
-        + "1"
-        + tenko_cd
-        + baba_cd + baba_cd
-        + p(grade, 2)
-        + p(race_name, 50)
-        + pr(str(tosu), 2)
-        + p(race_class, 50)
+        + "1"                          # [2:3]  DataKubun
+        + "20260618"                    # [3:11] MakeDate (作成日、固定)
+        + f"{nen}{month_day}"           # [11:19] KaisaiNengappi (開催年月日)
+        + jyo_cd                        # [19:21]
+        + kaiji                         # [21:23]
+        + nichiji                       # [23:25]
+        + race_no                       # [25:27]
+        + "1"                           # [27:28] YoubiCd
+        + pr(str(kyori), 4)             # [28:32] Kyori (仮置き)
+        + p(race_name, 50)              # [32:82] RaceName
+        + pr(str(tosu), 2)              # [82:84] Tosu
+        + p(race_class, 50)             # [84:134] RaceClass
     )
     return ra.ljust(200)
 
@@ -302,25 +300,35 @@ class TestRaParser:
         assert result is not None
         assert result.distance_m == 1800
 
-    def test_track_type_turf(self) -> None:
-        result = parse_ra(_ra(tora_cd="1"))
+    def test_distance_invalid_clamped_to_zero(self) -> None:
+        # 100m未満は不正値（例: 実データのグレードコード "0074"）→ 0 に丸める
+        result = parse_ra(_ra(kyori=74))
+        assert result is not None
+        assert result.distance_m == 0
+
+    def test_track_type_default_turf(self) -> None:
+        # ToraCd オフセット未確定のため暫定 "芝" を返す
+        result = parse_ra(_ra())
         assert result is not None
         assert result.track_type == "芝"
 
-    def test_track_type_dirt(self) -> None:
-        result = parse_ra(_ra(tora_cd="2"))
+    def test_weather_unknown(self) -> None:
+        # TenkoCd オフセット未確定のため None を返す
+        result = parse_ra(_ra())
         assert result is not None
-        assert result.track_type == "ダート"
+        assert result.weather is None
 
-    def test_weather(self) -> None:
-        result = parse_ra(_ra(tenko_cd="1"))
+    def test_track_condition_unknown(self) -> None:
+        # BabaCd オフセット未確定のため None を返す
+        result = parse_ra(_ra())
         assert result is not None
-        assert result.weather == "晴"
+        assert result.track_condition is None
 
-    def test_track_condition(self) -> None:
-        result = parse_ra(_ra(baba_cd="1"))
+    def test_grade_unknown(self) -> None:
+        # GradeCd オフセット未確定のため None を返す
+        result = parse_ra(_ra())
         assert result is not None
-        assert result.track_condition == "良"
+        assert result.grade is None
 
     def test_field_size(self) -> None:
         result = parse_ra(_ra(tosu=8))
@@ -341,16 +349,6 @@ class TestRaParser:
         rec = "XX" + _ra()[2:]
         with pytest.raises(ValueError, match="RecordSpec"):
             parse_ra(rec)
-
-    def test_grade_none_for_blank(self) -> None:
-        result = parse_ra(_ra(grade="  "))
-        assert result is not None
-        assert result.grade is None
-
-    def test_grade_g1(self) -> None:
-        result = parse_ra(_ra(grade="A1"))
-        assert result is not None
-        assert result.grade == "A1"
 
 
 # ---------------------------------------------------------------------------
