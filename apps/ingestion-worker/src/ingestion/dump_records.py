@@ -65,13 +65,20 @@ def _dump_nonblank_regions(label: str, record: str) -> None:
 def main() -> None:
     load_dotenv()
     sid = os.environ.get("JV_LINK_SID", "")
-    # 第1引数で取得日付（未指定は今日）、第2引数で RACE の JVOpen option を指定可能。
-    #   py -3.12-32 src\ingestion\dump_records.py 20260621      # option=1（既定/通常）
-    #   py -3.12-32 src\ingestion\dump_records.py 20260621 4    # option=4（セットアップ）
-    # 通常(1)が -1（該当データなし）なら 2（今週）や 4（セットアップ）を試す。
-    target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.date.today().strftime("%Y%m%d")
+    # 第1引数で RACE の fromtime(YYYYMMDD)、第2引数で JVOpen option を指定可能。
+    #   py -3.12-32 src\ingestion\dump_records.py                 # 既定: 7日前/option=1
+    #   py -3.12-32 src\ingestion\dump_records.py 20260613        # fromtime=20260613
+    #   py -3.12-32 src\ingestion\dump_records.py 20260613 4      # option=4（セットアップ）
+    #
+    # レースカード/成績は開催の数日前から配信される。fromtime を開催当日にすると
+    # 前日配信のカードを取りこぼし -1（該当データなし）になるため、既定では
+    # 「今日の7日前」から取得する（直近の確定済みレースも同時に拾える）。
+    if len(sys.argv) > 1:
+        race_from = sys.argv[1]
+    else:
+        race_from = (datetime.date.today() - datetime.timedelta(days=7)).strftime("%Y%m%d")
     race_option = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    print(f"取得対象日付: {target_date} / RACE option: {race_option}")
+    print(f"RACE fromtime: {race_from} / option: {race_option}")
     client = WindowsJvLinkClient(sid=sid)
 
     # DIFF マスタ（UM/KS/CH を1回の JVOpen でまとめて取得）。
@@ -133,7 +140,7 @@ def main() -> None:
     # closing() で break 時も即座に JVClose し、JV-Link セッションを放置しない。
     try:
         with contextlib.closing(
-            client.iter_race_records_raw(target_date, target_date, option=race_option)
+            client.iter_race_records_raw(race_from, race_from, option=race_option)
         ) as race_gen:
             for rec in race_gen:
                 scanned += 1
