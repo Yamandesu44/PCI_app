@@ -35,7 +35,7 @@ class WindowsJvLinkClient:
             ...
     """
 
-    def __init__(self, sid: str, software_id: str = "pci-worker") -> None:
+    def __init__(self, sid: str, software_id: str = "") -> None:
         if sys.platform != "win32":
             raise RuntimeError(
                 "WindowsJvLinkClient は Windows 環境でのみ動作します。"
@@ -55,6 +55,10 @@ class WindowsJvLinkClient:
             ) from exc
 
         jv = win32com.client.Dispatch("JVDTLab.JVLink.1")
+        # 利用キー（サービスキー）を設定してから初期化する
+        sk_result = jv.JVSetServiceKey(self._sid)
+        if sk_result != 0:
+            raise RuntimeError(f"JVSetServiceKey 失敗: エラーコード {sk_result}")
         result = jv.JVInit(self._software_id)
         if result != 0:
             raise RuntimeError(f"JVInit 失敗: エラーコード {result}")
