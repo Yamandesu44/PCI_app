@@ -72,19 +72,23 @@ def main() -> None:
     client = WindowsJvLinkClient(sid=sid)
 
     # DIFF マスタ（UM/KS/CH を1回の JVOpen で取得 — 複数回 JVOpen すると -303）
+    # マスタは既に取り込み済みなので、-303（配信済み）等で失敗しても RACE ダンプへ進む。
     um_rec: str | None = None
     ks_rec: str | None = None
     ch_rec: str | None = None
-    for rec in client.iter_diff_records_raw():
-        spec = rec[:2]
-        if spec == "UM" and um_rec is None:
-            um_rec = rec
-        elif spec == "KS" and ks_rec is None:
-            ks_rec = rec
-        elif spec == "CH" and ch_rec is None:
-            ch_rec = rec
-        if um_rec is not None and ks_rec is not None and ch_rec is not None:
-            break
+    try:
+        for rec in client.iter_diff_records_raw():
+            spec = rec[:2]
+            if spec == "UM" and um_rec is None:
+                um_rec = rec
+            elif spec == "KS" and ks_rec is None:
+                ks_rec = rec
+            elif spec == "CH" and ch_rec is None:
+                ch_rec = rec
+            if um_rec is not None and ks_rec is not None and ch_rec is not None:
+                break
+    except RuntimeError as exc:
+        print(f"\n(DIFF マスタ取得をスキップ: {exc} — RACE ダンプへ進みます)")
 
     if um_rec is not None:
         _dump("UM (競走馬マスタ)", um_rec, {
@@ -152,9 +156,11 @@ def main() -> None:
                 (67, 72): "KisyuCode",
                 (77, 82): "ChokyosiCode",
             })
-            # 確定後(DataKubun=4)の着順・タイム・通過順位の位置特定のため全走査
-            if data_kubun == "4":
-                _dump_nonblank_regions(f"SE #{se_count + 1} (確定)", rec)
+            # 最初の SE と確定後(DataKubun=4)は全走査して非空白領域を表示する。
+            #   - 1件目: 騎手コード/調教師コードの位置を実データで検証するため
+            #   - DataKubun=4: 着順・タイム・通過順位の位置特定のため
+            if se_count == 0 or data_kubun == "4":
+                _dump_nonblank_regions(f"SE #{se_count + 1} (DataKubun={data_kubun})", rec)
             se_count += 1
         if ra_count >= 3 and se_count >= 3:
             break

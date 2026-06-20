@@ -91,13 +91,20 @@ class WindowsJvLinkClient:
         """指定期間の SE レコードを JV-Link から取得する。"""
         yield from self._iter_records("RACE", date_from, date_to, record_types={"SE"})
 
-    def iter_race_records_raw(self, date_from: str, date_to: str) -> Iterator[str]:
+    def iter_race_records_raw(
+        self, date_from: str, date_to: str, option: int = 2
+    ) -> Iterator[str]:
         """RACE データスペックの全レコード（RA/SE 混在）を1回の JVOpen で返す。
 
         デバッグ用。RA と SE を別々に JVOpen すると option=1 の再取得挙動に
         左右されるため、フィールド位置調査時は本メソッドで一括取得する。
+
+        option はデフォルト 2（今週データ）。option=1（通常/差分）は前回読込済みの
+        週を再取得できず空になるため、フィールド位置調査では 2 を使う。
         """
-        yield from self._iter_records("RACE", date_from, date_to, record_types=None)
+        yield from self._iter_records(
+            "RACE", date_from, date_to, record_types=None, option=option
+        )
 
     def iter_um_records(self) -> Iterator[str]:
         """競走馬マスタ UM レコードを取得する（DIFF データ種別）。"""
@@ -125,9 +132,11 @@ class WindowsJvLinkClient:
         date_from: str = "",
         date_to: str = "",
         record_types: set[str] | None = None,
+        option: int | None = None,
     ) -> Iterator[str]:
         """JV-Link の JVOpen → JVRead → JVClose を実行してレコードを返す。"""
-        option = 4 if data_spec == "DIFF" else 1  # DIFF(マスタ)=4:セットアップ全量
+        if option is None:
+            option = 4 if data_spec == "DIFF" else 1  # DIFF(マスタ)=4:セットアップ全量
         # fromtime は 14 桁(YYYYMMDDHHMMSS)。日付未指定(マスタ)は基準日で全件取得
         fromtime = (date_from + "000000") if date_from else "20000101000000"
         buf_size = 110000  # JV-Data 1 レコード最大長に余裕を持たせる
