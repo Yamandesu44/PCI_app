@@ -15,6 +15,7 @@ JV-Link API リファレンス:
 from __future__ import annotations
 
 import sys
+import time
 from collections.abc import Iterator
 from typing import Any, TYPE_CHECKING
 
@@ -138,6 +139,10 @@ class WindowsJvLinkClient:
         dispid_read = self._dispatch.GetIDsOfNames("JVRead")
         dispid_close = self._dispatch.GetIDsOfNames("JVClose")
 
+        # -3(ダウンロード中)の連続再試行上限。0.5s × 1200 = 最大 10 分待機
+        max_download_wait = 1200
+        download_wait = 0
+
         try:
             while True:
                 # JVRead(ByRef Buff, ByRef Size, ByRef FileName) As Long
@@ -158,12 +163,20 @@ class WindowsJvLinkClient:
                 else:
                     read_code = ret_read
                     buf = ""
-                if read_code == -1:
-                    continue  # ファイル切り替わり。次のレコードへ
                 if read_code == 0:
                     break  # 全レコード取得完了
+                if read_code == -1:
+                    continue  # ファイル切り替わり。次のレコードへ
+                if read_code == -3:
+                    # 該当ファイルがまだダウンロード中。少し待って再試行する
+                    download_wait += 1
+                    if download_wait > max_download_wait:
+                        raise RuntimeError("JVRead: ダウンロード待機がタイムアウトしました(-3)")
+                    time.sleep(0.5)
+                    continue
                 if read_code < 0:
                     raise RuntimeError(f"JVRead エラー: {read_code}")
+                download_wait = 0  # 正常読込でリセット
                 record = buf[:read_code].rstrip("\r\n")
                 rec_spec = record[:2]
                 if record_types is None or rec_spec in record_types:
