@@ -27,6 +27,14 @@ class FakeRaceRepository:
             key=lambda e: e.horse_no,
         )
 
+    def list_recent_races(self, limit: int = 50) -> list[Race]:
+        races = sorted(
+            self._races.values(),
+            key=lambda r: (r.race_date, str(r.race_key)),
+            reverse=True,
+        )
+        return races[:limit]
+
     def find_horse_recent_entries(self, ketto_num: str, limit: int = 5) -> list[RaceEntry]:
         from pci.domain.racing.race import RaceStatus
 

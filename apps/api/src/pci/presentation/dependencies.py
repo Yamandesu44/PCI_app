@@ -15,7 +15,11 @@ from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
 
 from pci.application.forecast_use_cases import ForecastRaceUseCase
-from pci.application.race_query_use_cases import GetPaceAnalysisUseCase, GetRaceDetailUseCase
+from pci.application.race_query_use_cases import (
+    GetPaceAnalysisUseCase,
+    GetRaceDetailUseCase,
+    ListRacesUseCase,
+)
 from pci.config.settings import get_settings
 from pci.domain.pace.commentary import CommentGenerator, RuleBasedCommentGenerator
 from pci.domain.pace.mart_repository import MartRepository
@@ -81,6 +85,10 @@ def get_forecast_use_case(repo: RepositoryDep, mart_repo: MartRepositoryDep) -> 
     )
 
 
+def get_list_races_use_case(repo: RepositoryDep) -> ListRacesUseCase:
+    return ListRacesUseCase(repo)
+
+
 def get_race_detail_use_case(repo: RepositoryDep) -> GetRaceDetailUseCase:
     return GetRaceDetailUseCase(repo)
 
@@ -92,3 +100,4 @@ def get_pace_analysis_use_case(repo: RepositoryDep) -> GetPaceAnalysisUseCase:
 ForecastUseCaseDep = Annotated[ForecastRaceUseCase, Depends(get_forecast_use_case)]
 RaceDetailUseCaseDep = Annotated[GetRaceDetailUseCase, Depends(get_race_detail_use_case)]
 PaceAnalysisUseCaseDep = Annotated[GetPaceAnalysisUseCase, Depends(get_pace_analysis_use_case)]
+ListRacesUseCaseDep = Annotated[ListRacesUseCase, Depends(get_list_races_use_case)]

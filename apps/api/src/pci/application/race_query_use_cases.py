@@ -8,6 +8,7 @@ from pci.application.dto import (
     HorsePaceAnalysisOutput,
     PaceAnalysisOutput,
     RaceDetailOutput,
+    RaceSummaryOutput,
     ReasonOutput,
 )
 from pci.application.errors import RaceNotConfirmedError
@@ -25,6 +26,34 @@ from pci.domain.shared.race_key import RaceKey
 from pci.domain.shared.reason import Reason
 
 _PCI3_POSITIONS = (1, 2, 3)
+
+
+class ListRacesUseCase:
+    """新しい順にレース一覧を取得する（トップ画面のレース選択用）。"""
+
+    _MAX_LIMIT = 100
+
+    def __init__(self, repo: RaceRepository) -> None:
+        self._repo = repo
+
+    def execute(self, limit: int = 50) -> list[RaceSummaryOutput]:
+        # 上限を超える要求はクランプし、過大なクエリを防ぐ。
+        capped = max(1, min(limit, self._MAX_LIMIT))
+        races = self._repo.list_recent_races(capped)
+        return [
+            RaceSummaryOutput(
+                race_key=str(r.race_key),
+                race_date=r.race_date.isoformat(),
+                jyo_cd=r.jyo_cd,
+                distance_m=r.distance_m,
+                track_type=r.track_type,
+                status=str(r.status),
+                field_size=r.field_size,
+                grade=r.grade,
+                race_class=r.race_class,
+            )
+            for r in races
+        ]
 
 
 class GetRaceDetailUseCase:

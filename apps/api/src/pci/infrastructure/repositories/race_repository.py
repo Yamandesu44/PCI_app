@@ -38,6 +38,15 @@ class SqlAlchemyRaceRepository:
         )
         return [self._to_entry(m) for m in self._s.scalars(stmt).all()]
 
+    def list_recent_races(self, limit: int = 50) -> list[Race]:
+        """新しい順にレース一覧を返す（トップ画面のレース選択用）。"""
+        stmt = (
+            select(RaceModel)
+            .order_by(RaceModel.race_date.desc(), RaceModel.race_key.desc())
+            .limit(limit)
+        )
+        return [self._to_race(m) for m in self._s.scalars(stmt).all()]
+
     def find_horse_recent_entries(self, ketto_num: str, limit: int = 5) -> list[RaceEntry]:
         """馬の直近レース成績を確定レースから取得する（脚質判定・PAI算出の入力）。"""
         stmt = (

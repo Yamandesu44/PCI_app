@@ -714,6 +714,72 @@
         "title": "RaceDetailSchema",
         "type": "object"
       },
+      "RaceSummarySchema": {
+        "description": "レース一覧の1件分（トップ画面のレース選択用）。\n\nstatus で遷移先（entries=展開予想／result=ペース分析）を判別する。",
+        "properties": {
+          "distance_m": {
+            "title": "Distance M",
+            "type": "integer"
+          },
+          "field_size": {
+            "title": "Field Size",
+            "type": "integer"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "jyo_cd": {
+            "title": "Jyo Cd",
+            "type": "string"
+          },
+          "race_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Race Class"
+          },
+          "race_date": {
+            "title": "Race Date",
+            "type": "string"
+          },
+          "race_key": {
+            "title": "Race Key",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "track_type": {
+            "title": "Track Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "race_key",
+          "race_date",
+          "jyo_cd",
+          "distance_m",
+          "track_type",
+          "status",
+          "field_size"
+        ],
+        "title": "RaceSummarySchema",
+        "type": "object"
+      },
       "ReasonSchema": {
         "description": "説明可能性の根拠（要因コード・説明・寄与度）。",
         "properties": {
@@ -980,6 +1046,58 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/races": {
+      "get": {
+        "description": "新しい順にレース一覧を返す（トップ画面のレース選択用）。",
+        "operationId": "list_races_api_v1_races_get",
+        "parameters": [
+          {
+            "description": "取得件数の上限",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "取得件数の上限",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RaceSummarySchema"
+                  },
+                  "title": "Response List Races Api V1 Races Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Races",
+        "tags": [
+          "races"
+        ]
+      }
+    },
     "/api/v1/races/{race_key}": {
       "get": {
         "description": "レースの基本情報・出走馬・確定指標を返す。",

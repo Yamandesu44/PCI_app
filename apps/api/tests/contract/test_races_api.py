@@ -64,6 +64,63 @@ PACE_ANALYSIS_HORSE_KEYS = {
 }
 
 
+RACE_SUMMARY_KEYS = {
+    "race_key",
+    "race_date",
+    "jyo_cd",
+    "distance_m",
+    "track_type",
+    "status",
+    "field_size",
+    "grade",
+    "race_class",
+}
+
+
+class TestListRacesEndpoint:
+    def test_returns_200(self, client: TestClient) -> None:
+        resp = client.get("/api/v1/races")
+        assert resp.status_code == 200
+
+    def test_returns_list(self, client: TestClient) -> None:
+        body = client.get("/api/v1/races").json()
+        assert isinstance(body, list)
+        assert len(body) >= 2  # 出走前 + 確定後（+ 過去走）
+
+    def test_summary_contract(self, client: TestClient) -> None:
+        body = client.get("/api/v1/races").json()
+        for item in body:
+            assert set(item.keys()) == RACE_SUMMARY_KEYS
+
+    def test_includes_upcoming_and_confirmed(self, client: TestClient) -> None:
+        body = client.get("/api/v1/races").json()
+        keys = {item["race_key"] for item in body}
+        assert UPCOMING_KEY in keys
+        assert CONFIRMED_KEY in keys
+
+    def test_ordered_newest_first(self, client: TestClient) -> None:
+        body = client.get("/api/v1/races").json()
+        dates = [item["race_date"] for item in body]
+        assert dates == sorted(dates, reverse=True)
+
+    def test_status_values_valid(self, client: TestClient) -> None:
+        body = client.get("/api/v1/races").json()
+        for item in body:
+            assert item["status"] in ("entries", "result")
+
+    def test_limit_query_respected(self, client: TestClient) -> None:
+        body = client.get("/api/v1/races?limit=1").json()
+        assert len(body) == 1
+
+    def test_limit_zero_returns_422(self, client: TestClient) -> None:
+        resp = client.get("/api/v1/races?limit=0")
+        assert resp.status_code == 422
+
+    def test_limit_over_max_returns_422(self, client: TestClient) -> None:
+        resp = client.get("/api/v1/races?limit=101")
+        assert resp.status_code == 422
+
+
 class TestForecastEndpoint:
     def test_returns_200(self, client: TestClient) -> None:
         resp = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast")

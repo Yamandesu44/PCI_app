@@ -13,6 +13,7 @@ export type Comment = components["schemas"]["CommentSchema"];
 export type HorseFit = components["schemas"]["HorseFitSchema"];
 export type Forecast = components["schemas"]["ForecastSchema"];
 export type RaceDetail = components["schemas"]["RaceDetailSchema"];
+export type RaceSummary = components["schemas"]["RaceSummarySchema"];
 export type EntryDetail = components["schemas"]["EntryDetailSchema"];
 export type PaceAnalysis = components["schemas"]["PaceAnalysisSchema"];
 export type HorsePaceAnalysis = components["schemas"]["HorsePaceAnalysisSchema"];
@@ -39,6 +40,7 @@ export interface ApiClientOptions {
 }
 
 export interface ApiClient {
+  listRaces(limit?: number): Promise<RaceSummary[]>;
   getForecast(raceKey: string): Promise<Forecast>;
   getRaceDetail(raceKey: string): Promise<RaceDetail>;
   getPaceAnalysis(raceKey: string): Promise<PaceAnalysis>;
@@ -57,6 +59,10 @@ export function createClient(options: ApiClientOptions): ApiClient {
   }
 
   return {
+    listRaces: (limit) =>
+      getJson<RaceSummary[]>(
+        `/api/v1/races${limit != null ? `?limit=${encodeURIComponent(limit)}` : ""}`,
+      ),
     getForecast: (raceKey) =>
       getJson<Forecast>(`/api/v1/races/${encodeURIComponent(raceKey)}/forecast`),
     getRaceDetail: (raceKey) =>

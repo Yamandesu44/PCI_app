@@ -1,0 +1,66 @@
+/**
+ * レース一覧表示のための純粋プレゼンテーションロジック。
+ *
+ * 競馬場コード→名称の変換や、レース状態に応じた遷移先（展開予想／ペース分析）の
+ * 決定など、副作用のない決定的な変換のみを担う。vitest で単体テストする。
+ */
+import type { RaceSummary } from "@pci/api-client";
+
+// JRA 中央競馬場コード（2桁）→ 競馬場名。取り込みスコープは中央のみ（CLAUDE.md）。
+const JYO_NAMES: Record<string, string> = {
+  "01": "札幌",
+  "02": "函館",
+  "03": "福島",
+  "04": "新潟",
+  "05": "東京",
+  "06": "中山",
+  "07": "中京",
+  "08": "京都",
+  "09": "阪神",
+  "10": "小倉",
+};
+
+/** 競馬場コードを名称へ。未知コードはコードをそのまま返す。 */
+export function jyoName(jyoCd: string): string {
+  return JYO_NAMES[jyoCd] ?? jyoCd;
+}
+
+export type RaceStatusTone = "upcoming" | "confirmed";
+
+/** レース状態（entries/result）を表示用トーンへ。 */
+export function statusTone(status: string): RaceStatusTone {
+  return status === "result" ? "confirmed" : "upcoming";
+}
+
+/** 状態に応じた日本語ラベル。 */
+export function statusLabel(status: string): string {
+  return statusTone(status) === "confirmed" ? "確定後" : "出走前";
+}
+
+/**
+ * レースの遷移先を状態から決定する。
+ *   出走前（entries） → 展開予想（forecast）
+ *   確定後（result）  → ペース分析（pace-analysis）
+ */
+export function raceHref(race: Pick<RaceSummary, "race_key" | "status">): string {
+  const sub = statusTone(race.status) === "confirmed" ? "pace-analysis" : "forecast";
+  return `/races/${race.race_key}/${sub}`;
+}
+
+/** RaceKey 16桁から「R」付きレース番号を取り出す（末尾2桁）。不正長はそのまま。 */
+export function raceNumber(raceKey: string): string {
+  if (raceKey.length !== 16) return raceKey;
+  return `${Number(raceKey.slice(14, 16))}R`;
+}
+
+/** ISO 日付文字列（YYYY-MM-DD）を「M月D日」へ。不正値はそのまま返す。 */
+export function formatRaceDate(isoDate: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!m) return isoDate;
+  return `${Number(m[2])}月${Number(m[3])}日`;
+}
+
+/** 一覧の見出しに使う1行サマリ（例: 「東京 11R ・ 芝1600m」）。 */
+export function raceTitle(race: RaceSummary): string {
+  return `${jyoName(race.jyo_cd)} ${raceNumber(race.race_key)} ・ ${race.track_type}${race.distance_m}m`;
+}

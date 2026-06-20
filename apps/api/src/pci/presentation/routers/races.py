@@ -4,19 +4,32 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Path, Query
 
 from pci.presentation.dependencies import (
     ForecastUseCaseDep,
+    ListRacesUseCaseDep,
     PaceAnalysisUseCaseDep,
     RaceDetailUseCaseDep,
 )
-from pci.presentation.schemas import ForecastSchema, PaceAnalysisSchema, RaceDetailSchema
+from pci.presentation.schemas import (
+    ForecastSchema,
+    PaceAnalysisSchema,
+    RaceDetailSchema,
+    RaceSummarySchema,
+)
 
 router = APIRouter(prefix="/api/v1/races", tags=["races"])
 
 # レースキーは16桁数字。境界で検証し、不正値は 422 を返す（use case へ到達させない）。
 RaceKeyPath = Annotated[str, Path(pattern=r"^\d{16}$", description="16桁のレースキー")]
+LimitQuery = Annotated[int, Query(ge=1, le=100, description="取得件数の上限")]
+
+
+@router.get("", response_model=list[RaceSummarySchema])
+def list_races(use_case: ListRacesUseCaseDep, limit: LimitQuery = 50) -> list[RaceSummarySchema]:
+    """新しい順にレース一覧を返す（トップ画面のレース選択用）。"""
+    return [RaceSummarySchema.from_dto(r) for r in use_case.execute(limit)]
 
 
 @router.get("/{race_key}/forecast", response_model=ForecastSchema)

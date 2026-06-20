@@ -395,3 +395,44 @@ h1 {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ----- レース一覧（トップ画面） ----- */
+.race-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 540px) {
+  .race-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.race-card {
+  height: 100%;
+}
+
+.card-tag.confirmed {
+  color: #dc2626;
+  border-color: #dc2626;
+}
+
+.card-tag.upcoming {
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+.empty {
+  margin: 12px 0 0;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}

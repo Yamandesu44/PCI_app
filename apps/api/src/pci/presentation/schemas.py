@@ -13,6 +13,7 @@ from pci.application.dto import (
     ForecastOutput,
     PaceAnalysisOutput,
     RaceDetailOutput,
+    RaceSummaryOutput,
 )
 
 
@@ -92,6 +93,37 @@ class ForecastSchema(BaseModel):
             ],
             forecast_reasons=[ReasonSchema(**vars(r)) for r in dto.forecast_reasons],
             comment=CommentSchema.from_dto(dto.comment) if dto.comment else None,
+        )
+
+
+class RaceSummarySchema(BaseModel):
+    """レース一覧の1件分（トップ画面のレース選択用）。
+
+    status で遷移先（entries=展開予想／result=ペース分析）を判別する。
+    """
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    distance_m: int
+    track_type: str
+    status: str
+    field_size: int
+    grade: str | None = None
+    race_class: str | None = None
+
+    @classmethod
+    def from_dto(cls, dto: RaceSummaryOutput) -> RaceSummarySchema:
+        return cls(
+            race_key=dto.race_key,
+            race_date=dto.race_date,
+            jyo_cd=dto.jyo_cd,
+            distance_m=dto.distance_m,
+            track_type=dto.track_type,
+            status=dto.status,
+            field_size=dto.field_size,
+            grade=dto.grade,
+            race_class=dto.race_class,
         )
 
 

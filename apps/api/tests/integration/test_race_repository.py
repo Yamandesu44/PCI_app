@@ -139,6 +139,48 @@ class TestSaveAndFindEntries:
 
 
 @pytest.mark.integration
+class TestListRecentRaces:
+    def _save_race(self, repo: SqlAlchemyRaceRepository, key_str: str, day: int) -> None:
+        repo.save_race(
+            Race(
+                race_key=RaceKey(key_str),
+                race_date=datetime.date(2026, 6, day),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=12,
+                status=RaceStatus.RESULT,
+            )
+        )
+
+    def test_empty_db_returns_empty_list(self, db_session: Session) -> None:
+        repo = SqlAlchemyRaceRepository(db_session)
+        assert repo.list_recent_races() == []
+
+    def test_ordered_newest_first(self, db_session: Session) -> None:
+        repo = SqlAlchemyRaceRepository(db_session)
+        self._save_race(repo, "2026061705010101", day=17)
+        self._save_race(repo, "2026062005010101", day=20)
+        self._save_race(repo, "2026061805010101", day=18)
+        db_session.flush()
+
+        dates = [r.race_date for r in repo.list_recent_races()]
+        assert dates == [
+            datetime.date(2026, 6, 20),
+            datetime.date(2026, 6, 18),
+            datetime.date(2026, 6, 17),
+        ]
+
+    def test_respects_limit(self, db_session: Session) -> None:
+        repo = SqlAlchemyRaceRepository(db_session)
+        for day in range(1, 8):
+            self._save_race(repo, f"202606{day:02d}05010101", day=day)
+        db_session.flush()
+
+        assert len(repo.list_recent_races(limit=3)) == 3
+
+
+@pytest.mark.integration
 class TestFindHorseRecentEntries:
     def test_returns_only_result_races(self, db_session: Session) -> None:
         _seed_master(db_session)

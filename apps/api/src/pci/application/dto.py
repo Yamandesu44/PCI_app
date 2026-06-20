@@ -143,6 +143,24 @@ class RaceDetailOutput:
 
 
 @dataclass
+class RaceSummaryOutput:
+    """レース一覧の1件分（トップ画面のレース選択用）。
+
+    status により遷移先（出走前=展開予想／確定後=ペース分析）を判別できる。
+    """
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    distance_m: int
+    track_type: str
+    status: str
+    field_size: int
+    grade: str | None = None
+    race_class: str | None = None
+
+
+@dataclass
 class HorsePaceAnalysisOutput:
     """確定後の馬単位ペース分析（各馬 PCI）。"""
 

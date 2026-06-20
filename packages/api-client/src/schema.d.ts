@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/races": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Races
+         * @description 新しい順にレース一覧を返す（トップ画面のレース選択用）。
+         */
+        get: operations["list_races_api_v1_races_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/races/{race_key}": {
         parameters: {
             query?: never;
@@ -81,6 +101,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/ingest/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Entries
+         * @description 出走表登録（RegisterRaceEntriesUseCase を呼び出す）。
+         */
+        post: operations["ingest_entries_internal_ingest_entries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/ingest/horses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Horses
+         * @description 馬マスタ一括 Upsert。
+         */
+        post: operations["ingest_horses_internal_ingest_horses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/ingest/jockeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Jockeys
+         * @description 騎手マスタ一括 Upsert。
+         */
+        post: operations["ingest_jockeys_internal_ingest_jockeys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/ingest/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Results
+         * @description 確定成績登録（RecordRaceResultUseCase を呼び出す）。
+         */
+        post: operations["ingest_results_internal_ingest_results_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/ingest/trainers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Trainers
+         * @description 調教師マスタ一括 Upsert。
+         */
+        post: operations["ingest_trainers_internal_ingest_trainers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -105,6 +225,34 @@ export interface components {
              */
             reasons: components["schemas"]["ReasonSchema"][];
         };
+        /** EntriesBody */
+        EntriesBody: {
+            /** Distance M */
+            distance_m: number;
+            /** Entries */
+            entries: components["schemas"]["EntryItem"][];
+            /** Field Size */
+            field_size: number;
+            /** Grade */
+            grade?: string | null;
+            /** Jyo Cd */
+            jyo_cd: string;
+            /** Race Class */
+            race_class?: string | null;
+            /**
+             * Race Date
+             * Format: date
+             */
+            race_date: string;
+            /** Race Key */
+            race_key: string;
+            /** Track Condition */
+            track_condition?: string | null;
+            /** Track Type */
+            track_type: string;
+            /** Weather */
+            weather?: string | null;
+        };
         /**
          * EntryDetailSchema
          * @description 出走馬の詳細（確定済みなら成績を含む）。
@@ -122,6 +270,21 @@ export interface components {
             pci_actual?: number | null;
             /** Running Style */
             running_style?: string | null;
+        };
+        /** EntryItem */
+        EntryItem: {
+            /** Frame No */
+            frame_no: number;
+            /** Horse No */
+            horse_no: number;
+            /** Jockey Code */
+            jockey_code: string;
+            /** Ketto Num */
+            ketto_num: string;
+            /** Trainer Code */
+            trainer_code: string;
+            /** Weight */
+            weight: number;
         };
         /**
          * ForecastSchema
@@ -177,6 +340,17 @@ export interface components {
              */
             status: string;
         };
+        /** HorseBody */
+        HorseBody: {
+            /** Birth Year */
+            birth_year?: number | null;
+            /** Ketto Num */
+            ketto_num: string;
+            /** Name */
+            name: string;
+            /** Sex */
+            sex?: string | null;
+        };
         /**
          * HorseFitSchema
          * @description 馬単位の展開適性（PAI）。
@@ -216,6 +390,23 @@ export interface components {
             pci?: number | null;
             /** Running Style */
             running_style?: string | null;
+        };
+        /** IngestResponse */
+        IngestResponse: {
+            /** Accepted */
+            accepted: number;
+            /**
+             * Message
+             * @default ok
+             */
+            message: string;
+        };
+        /** JockeyBody */
+        JockeyBody: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
         };
         /**
          * PaceAnalysisSchema
@@ -284,6 +475,32 @@ export interface components {
             weather?: string | null;
         };
         /**
+         * RaceSummarySchema
+         * @description レース一覧の1件分（トップ画面のレース選択用）。
+         *
+         *     status で遷移先（entries=展開予想／result=ペース分析）を判別する。
+         */
+        RaceSummarySchema: {
+            /** Distance M */
+            distance_m: number;
+            /** Field Size */
+            field_size: number;
+            /** Grade */
+            grade?: string | null;
+            /** Jyo Cd */
+            jyo_cd: string;
+            /** Race Class */
+            race_class?: string | null;
+            /** Race Date */
+            race_date: string;
+            /** Race Key */
+            race_key: string;
+            /** Status */
+            status: string;
+            /** Track Type */
+            track_type: string;
+        };
+        /**
          * ReasonSchema
          * @description 説明可能性の根拠（要因コード・説明・寄与度）。
          */
@@ -294,6 +511,61 @@ export interface components {
             contribution?: number | null;
             /** Description */
             description: string;
+        };
+        /** ResultBody */
+        ResultBody: {
+            /** Race Key */
+            race_key: string;
+            /** Results */
+            results: components["schemas"]["ResultItem"][];
+            /** Track Condition */
+            track_condition?: string | null;
+            /** Weather */
+            weather?: string | null;
+        };
+        /** ResultItem */
+        ResultItem: {
+            /** Agari 3F S */
+            agari_3f_s: number;
+            /** Corner 1 */
+            corner_1?: number | null;
+            /** Corner 2 */
+            corner_2?: number | null;
+            /** Corner 3 */
+            corner_3?: number | null;
+            /** Corner 4 */
+            corner_4?: number | null;
+            /** Finish Pos */
+            finish_pos: number;
+            /** Horse No */
+            horse_no: number;
+            /** Race Time S */
+            race_time_s: number;
+        };
+        /** ResultResponse */
+        ResultResponse: {
+            /**
+             * Entry Pcis
+             * @default {}
+             */
+            entry_pcis: {
+                [key: string]: number;
+            };
+            /** Formula Version */
+            formula_version: string;
+            /** Pci3 */
+            pci3: number | null;
+            /** Race Key */
+            race_key: string;
+            /** Rpci */
+            rpci: number | null;
+        };
+        /** TrainerBody */
+        TrainerBody: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -317,6 +589,38 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_races_api_v1_races_get: {
+        parameters: {
+            query?: {
+                /** @description 取得件数の上限 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RaceSummarySchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_race_detail_api_v1_races__race_key__get: {
         parameters: {
             query?: never;
@@ -429,6 +733,181 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthSchema"];
+                };
+            };
+        };
+    };
+    ingest_entries_internal_ingest_entries_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntriesBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_horses_internal_ingest_horses_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HorseBody"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_jockeys_internal_ingest_jockeys_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JockeyBody"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_results_internal_ingest_results_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResultBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_trainers_internal_ingest_trainers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainerBody"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+
+import type { RaceSummary } from "@pci/api-client";
+
+import {
+  formatRaceDate,
+  jyoName,
+  raceHref,
+  raceNumber,
+  raceTitle,
+  statusLabel,
+  statusTone,
+} from "./races";
+
+function makeRace(overrides: Partial<RaceSummary> = {}): RaceSummary {
+  return {
+    race_key: "2026062005010111",
+    race_date: "2026-06-20",
+    jyo_cd: "05",
+    distance_m: 1600,
+    track_type: "芝",
+    status: "entries",
+    field_size: 16,
+    grade: null,
+    race_class: null,
+    ...overrides,
+  };
+}
+
+describe("jyoName", () => {
+  it("既知の競馬場コードを名称へ変換する", () => {
+    expect(jyoName("05")).toBe("東京");
+    expect(jyoName("06")).toBe("中山");
+    expect(jyoName("09")).toBe("阪神");
+  });
+
+  it("未知コードはそのまま返す", () => {
+    expect(jyoName("99")).toBe("99");
+  });
+});
+
+describe("statusTone / statusLabel", () => {
+  it("result は確定後に対応づける", () => {
+    expect(statusTone("result")).toBe("confirmed");
+    expect(statusLabel("result")).toBe("確定後");
+  });
+
+  it("entries は出走前に対応づける", () => {
+    expect(statusTone("entries")).toBe("upcoming");
+    expect(statusLabel("entries")).toBe("出走前");
+  });
+
+  it("未知状態は出走前にフォールバックする", () => {
+    expect(statusTone("???")).toBe("upcoming");
+    expect(statusLabel("???")).toBe("出走前");
+  });
+});
+
+describe("raceHref", () => {
+  it("出走前は forecast へ遷移する", () => {
+    const race = makeRace({ status: "entries" });
+    expect(raceHref(race)).toBe("/races/2026062005010111/forecast");
+  });
+
+  it("確定後は pace-analysis へ遷移する", () => {
+    const race = makeRace({ status: "result" });
+    expect(raceHref(race)).toBe("/races/2026062005010111/pace-analysis");
+  });
+});
+
+describe("raceNumber", () => {
+  it("末尾2桁から R 付きレース番号を取り出す", () => {
+    expect(raceNumber("2026062005010111")).toBe("11R");
+    expect(raceNumber("2026062005010101")).toBe("1R");
+  });
+
+  it("16桁でない場合はそのまま返す", () => {
+    expect(raceNumber("SHORT")).toBe("SHORT");
+  });
+});
+
+describe("formatRaceDate", () => {
+  it("ISO 日付を M月D日 へ整形する", () => {
+    expect(formatRaceDate("2026-06-20")).toBe("6月20日");
+    expect(formatRaceDate("2026-12-01")).toBe("12月1日");
+  });
+
+  it("不正な日付はそのまま返す", () => {
+    expect(formatRaceDate("not-a-date")).toBe("not-a-date");
+  });
+});
+
+describe("raceTitle", () => {
+  it("競馬場・レース番号・トラック・距離を1行に整形する", () => {
+    const race = makeRace({ jyo_cd: "05", track_type: "芝", distance_m: 1600 });
+    expect(raceTitle(race)).toBe("東京 11R ・ 芝1600m");
+  });
+});
