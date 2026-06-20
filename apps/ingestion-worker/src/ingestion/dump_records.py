@@ -65,11 +65,13 @@ def _dump_nonblank_regions(label: str, record: str) -> None:
 def main() -> None:
     load_dotenv()
     sid = os.environ.get("JV_LINK_SID", "")
-    # 第1引数で取得日付を指定可能（未指定は今日）。過去の確定レースは
-    #   py -3.12-32 src\ingestion\dump_records.py 20260614
-    # のように開催日を渡すと距離・成績入りのレコードが確認できる。
+    # 第1引数で取得日付（未指定は今日）、第2引数で RACE の JVOpen option を指定可能。
+    #   py -3.12-32 src\ingestion\dump_records.py 20260621      # option=1（既定/通常）
+    #   py -3.12-32 src\ingestion\dump_records.py 20260621 4    # option=4（セットアップ）
+    # 通常(1)が -1（該当データなし）なら 2（今週）や 4（セットアップ）を試す。
     target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.date.today().strftime("%Y%m%d")
-    print(f"取得対象日付: {target_date}")
+    race_option = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    print(f"取得対象日付: {target_date} / RACE option: {race_option}")
     client = WindowsJvLinkClient(sid=sid)
 
     # DIFF マスタ（UM/KS/CH を1回の JVOpen でまとめて取得）。
@@ -131,7 +133,7 @@ def main() -> None:
     # closing() で break 時も即座に JVClose し、JV-Link セッションを放置しない。
     try:
         with contextlib.closing(
-            client.iter_race_records_raw(target_date, target_date)
+            client.iter_race_records_raw(target_date, target_date, option=race_option)
         ) as race_gen:
             for rec in race_gen:
                 scanned += 1

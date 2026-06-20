@@ -128,15 +128,15 @@ class WindowsJvLinkClient:
         yield from self._iter_records("RACE", date_from, date_to, record_types={"SE"})
 
     def iter_race_records_raw(
-        self, date_from: str, date_to: str, option: int = 2
+        self, date_from: str, date_to: str, option: int = 1
     ) -> Iterator[str]:
         """RACE データスペックの全レコード（RA/SE 混在）を1回の JVOpen で返す。
 
-        デバッグ用。RA と SE を別々に JVOpen すると option=1 の再取得挙動に
-        左右されるため、フィールド位置調査時は本メソッドで一括取得する。
+        デバッグ用。RA と SE を別々に JVOpen せず一括取得する。
 
-        option はデフォルト 2（今週データ）。option=1（通常/差分）は前回読込済みの
-        週を再取得できず空になるため、フィールド位置調査では 2 を使う。
+        option はデフォルト 1（通常データ）。fromtime 指定の通常データは
+        当該日のレースカードを再取得できる。今週データ(2)・セットアップ(3/4)を
+        試す場合は呼び出し側で指定する。
         """
         yield from self._iter_records(
             "RACE", date_from, date_to, record_types=None, option=option
