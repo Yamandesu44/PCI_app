@@ -35,7 +35,7 @@ class WindowsJvLinkClient:
             ...
     """
 
-    def __init__(self, sid: str, software_id: str = "") -> None:
+    def __init__(self, sid: str, software_id: str = "UNKNOWN") -> None:
         if sys.platform != "win32":
             raise RuntimeError(
                 "WindowsJvLinkClient は Windows 環境でのみ動作します。"
