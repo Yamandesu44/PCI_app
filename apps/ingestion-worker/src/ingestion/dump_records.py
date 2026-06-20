@@ -9,6 +9,7 @@ JV-Data 仕様の実バイト配置を確認し、パーサのオフセットを
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import os
 import sys
@@ -76,17 +77,19 @@ def main() -> None:
     um_rec: str | None = None
     ks_rec: str | None = None
     ch_rec: str | None = None
+    # closing() で break 時も即座に JVClose し、セッションを放置しない（-303 予防）。
     try:
-        for rec in client.iter_diff_records_raw():
-            spec = rec[:2]
-            if spec == "UM" and um_rec is None:
-                um_rec = rec
-            elif spec == "KS" and ks_rec is None:
-                ks_rec = rec
-            elif spec == "CH" and ch_rec is None:
-                ch_rec = rec
-            if um_rec is not None and ks_rec is not None and ch_rec is not None:
-                break
+        with contextlib.closing(client.iter_diff_records_raw()) as diff_gen:
+            for rec in diff_gen:
+                spec = rec[:2]
+                if spec == "UM" and um_rec is None:
+                    um_rec = rec
+                elif spec == "KS" and ks_rec is None:
+                    ks_rec = rec
+                elif spec == "CH" and ch_rec is None:
+                    ch_rec = rec
+                if um_rec is not None and ks_rec is not None and ch_rec is not None:
+                    break
     except RuntimeError as exc:
         print(f"\n(DIFF マスタ取得をスキップ: {exc} — RACE ダンプへ進みます)")
 
@@ -124,49 +127,58 @@ def main() -> None:
     ra_count = 0
     se_count = 0
     scanned = 0
-    for rec in client.iter_race_records_raw(target_date, target_date):
-        scanned += 1
-        spec = rec[:2]
-        if spec == "RA" and ra_count < 3:
-            _dump(f"RA #{ra_count + 1}", rec, {
-                (3, 11):  "MakeDate",
-                (11, 19): "KaisaiNengappi(開催日)?",
-                (19, 21): "JyoCd?",
-                (21, 23): "Kaiji?",
-                (23, 25): "Nichiji?",
-                (25, 27): "RaceNo?",
-                (27, 28): "YoubiCd?",
-                (28, 32): "Kyori(距離)?",
-                (32, 82): "RaceName? (50chars)",
-                (82, 84): "Tosu?",
-            })
-            # 距離・レース名がどこにあるか不明なので全体の非空白領域を出す
-            _dump_nonblank_regions(f"RA #{ra_count + 1}", rec)
-            ra_count += 1
-        elif spec == "SE" and se_count < 3:
-            data_kubun = rec[2:3]
-            _dump(f"SE #{se_count + 1} (DataKubun={data_kubun})", rec, {
-                (11, 19): "KaisaiNengappi(開催日)",
-                (19, 27): "Jyo/Kaiji/Nichi/RaceNo",
-                (27, 28): "Wakuban(枠)",
-                (28, 30): "Umaban(馬番)",
-                (30, 40): "KettoNum",
-                (40, 58): "Bamei(18chars)",
-                (60, 61): "SexCD",
-                (67, 72): "KisyuCode",
-                (77, 82): "ChokyosiCode",
-            })
-            # 最初の SE と確定後(DataKubun=4)は全走査して非空白領域を表示する。
-            #   - 1件目: 騎手コード/調教師コードの位置を実データで検証するため
-            #   - DataKubun=4: 着順・タイム・通過順位の位置特定のため
-            if se_count == 0 or data_kubun == "4":
-                _dump_nonblank_regions(f"SE #{se_count + 1} (DataKubun={data_kubun})", rec)
-            se_count += 1
-        if ra_count >= 3 and se_count >= 3:
-            break
-        if scanned > 2000:  # 安全装置: 2000 レコード走査しても揃わなければ打ち切り
-            print(f"\n(警告: {scanned} レコード走査、RA={ra_count} SE={se_count} で打ち切り)")
-            break
+    # closing() で break 時も即座に JVClose し、セッションを放置しない（-303 予防）。
+    try:
+        with contextlib.closing(
+            client.iter_race_records_raw(target_date, target_date)
+        ) as race_gen:
+            for rec in race_gen:
+                scanned += 1
+                spec = rec[:2]
+                if spec == "RA" and ra_count < 3:
+                    _dump(f"RA #{ra_count + 1}", rec, {
+                        (3, 11):  "MakeDate",
+                        (11, 19): "KaisaiNengappi(開催日)?",
+                        (19, 21): "JyoCd?",
+                        (21, 23): "Kaiji?",
+                        (23, 25): "Nichiji?",
+                        (25, 27): "RaceNo?",
+                        (27, 28): "YoubiCd?",
+                        (28, 32): "Kyori(距離)?",
+                        (32, 82): "RaceName? (50chars)",
+                        (82, 84): "Tosu?",
+                    })
+                    # 距離・レース名がどこにあるか不明なので全体の非空白領域を出す
+                    _dump_nonblank_regions(f"RA #{ra_count + 1}", rec)
+                    ra_count += 1
+                elif spec == "SE" and se_count < 3:
+                    data_kubun = rec[2:3]
+                    _dump(f"SE #{se_count + 1} (DataKubun={data_kubun})", rec, {
+                        (11, 19): "KaisaiNengappi(開催日)",
+                        (19, 27): "Jyo/Kaiji/Nichi/RaceNo",
+                        (27, 28): "Wakuban(枠)",
+                        (28, 30): "Umaban(馬番)",
+                        (30, 40): "KettoNum",
+                        (40, 58): "Bamei(18chars)",
+                        (60, 61): "SexCD",
+                        (67, 72): "KisyuCode",
+                        (77, 82): "ChokyosiCode",
+                    })
+                    # 最初の SE と確定後(DataKubun=4)は全走査して非空白領域を表示する。
+                    #   - 1件目: 騎手コード/調教師コードの位置を実データで検証するため
+                    #   - DataKubun=4: 着順・タイム・通過順位の位置特定のため
+                    if se_count == 0 or data_kubun == "4":
+                        _dump_nonblank_regions(
+                            f"SE #{se_count + 1} (DataKubun={data_kubun})", rec
+                        )
+                    se_count += 1
+                if ra_count >= 3 and se_count >= 3:
+                    break
+                if scanned > 2000:  # 安全装置: 2000件走査しても揃わなければ打ち切り
+                    print(f"\n(警告: {scanned} 件走査、RA={ra_count} SE={se_count} で打ち切り)")
+                    break
+    except RuntimeError as exc:
+        print(f"\n(RACE データ取得失敗: {exc})")
 
 
 if __name__ == "__main__":

@@ -22,6 +22,40 @@ from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
     pass  # 型チェック時のみ参照（実行時は import しない）
 
+# JVOpen / JVRead の負値エラーコードと意味（診断メッセージ用）。
+# 出典: JRA-VAN DataLab JV-Link SDK リファレンス。
+_JVOPEN_ERRORS: dict[int, str] = {
+    -1: "該当データなし",
+    -2: "前回の JVOpen が JVClose されていません（二重オープン）",
+    -111: "dataspec パラメータ不正",
+    -112: "fromtime パラメータ不正",
+    -114: "option パラメータ不正",
+    -115: "option パラメータ不正",
+    -116: "パラメータ不正",
+    -118: "パラメータの組み合わせが不正",
+    -201: "JVInit が実行されていません",
+    -202: "前回の JVOpen/JVMVOpen が終了していません（JVClose 未実行）",
+    -211: "JVInit エラー（DLL ロード等）",
+    -301: "認証エラー：利用キーが未設定または不正です",
+    -302: "認証エラー：利用キーの有効期限切れ、または該当サービス未契約です",
+    -303: (
+        "認証/セッションエラー：利用キー区分が該当データに非対応、または"
+        "前回のセッションがサーバー側で未解放です。"
+        "他の JV-Link 利用アプリ（TARGET 等）を閉じ、数分待って再実行してください"
+    ),
+    -411: "サーバーエラー",
+    -421: "サーバーメンテナンス中",
+    -422: "サーバーメンテナンス中",
+    -501: "セットアップ対象データがありません",
+    -503: "データをダウンロード中です",
+}
+
+
+def _jvopen_error_message(code: int) -> str:
+    """JVOpen のエラーコードを人間可読なメッセージに変換する。"""
+    meaning = _JVOPEN_ERRORS.get(code, "不明なエラー")
+    return f"JVOpen 失敗: エラーコード {code}（{meaning}）"
+
 # COM 定数（pythoncom.VT_* / PARAMFLAG_* に対応）
 _VT_I4: int = 3
 _VT_BSTR: int = 8
@@ -121,8 +155,10 @@ class WindowsJvLinkClient:
     def iter_diff_records_raw(self) -> Iterator[str]:
         """DIFF データスペックの全レコード（UM/KS/CH 混在）を1回の JVOpen で返す。
 
-        UM/KS/CH を別々に JVOpen すると3回目以降が -303 になる（JV-Link が
-        配信済みマークを付けるため）。デバッグ用途では本メソッドで一括取得する。
+        UM/KS/CH を別々のジェネレータで取得して途中 break すると、各 JV-Link
+        セッションが JVClose されないまま同時に複数開き、サーバ側のセッション上限
+        超過で -303 になる。本メソッドなら1セッションで済むため安全。
+        呼び出し側は contextlib.closing で囲み、確実に JVClose すること。
         """
         yield from self._iter_records("DIFF", record_types=None)
 
@@ -159,7 +195,7 @@ class WindowsJvLinkClient:
         )
         open_code: int = ret_open[0] if isinstance(ret_open, tuple) else ret_open
         if open_code < 0:
-            raise RuntimeError(f"JVOpen 失敗: エラーコード {open_code}")
+            raise RuntimeError(_jvopen_error_message(open_code))
 
         dispid_read = self._dispatch.GetIDsOfNames("JVRead")
         dispid_close = self._dispatch.GetIDsOfNames("JVClose")
