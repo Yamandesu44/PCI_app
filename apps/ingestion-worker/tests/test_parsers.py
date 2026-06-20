@@ -83,10 +83,15 @@ def _se_entry(
     ketto_num: str = "2023100001",
     uma_name: str = "テストホース",
     sex_cd: str = "1",
-    trainer_code: str = "0001",
-    jockey_code: str = "0001",
+    trainer_code: str = "00001",
+    jockey_code: str = "00001",
     weight: int = 460,
 ) -> str:
+    """Ver.4.9 SE 出走前レコードのテスト用フィクスチャ。
+    実測オフセット: KaisaiNengappi[11:19], JyoCd[19:21], Wakuban[27:28],
+    Umaban[28:30], KettoNum[30:40], Bamei[40:58], SexCD[60:61],
+    KisyuCode[67:72], ChokyosiCode[77:82]
+    """
     def p(v: str, w: int) -> str:
         return v.ljust(w)[:w]
 
@@ -94,25 +99,28 @@ def _se_entry(
         return v.rjust(w, "0")[:w]
 
     se = (
-        "SE"
-        + "1"
-        + f"{nen}{month_day}"
-        + jyo_cd + kaiji + nichiji + race_no
-        + pr(str(horse_no), 2)
-        + pr(str(frame_no), 2)
-        + p(ketto_num, 10)
-        + p(uma_name, 36)
-        + " "  # UmaKigo
-        + sex_cd
-        + "01"
-        + p(trainer_code, 4)
-        + p("調教師テスト", 36)
-        + "    "
-        + p(jockey_code, 4)
-        + p("騎手テスト", 36)
-        + "55"
-        + pr(str(weight), 4)
-        + "00 "
+        "SE"                            # [0:2]
+        + "1"                           # [2:3]   DataKubun
+        + "20260617"                    # [3:11]  MakeDate（作成日）
+        + f"{nen}{month_day}"           # [11:19] KaisaiNengappi（開催日）
+        + jyo_cd                        # [19:21]
+        + kaiji                         # [21:23]
+        + nichiji                       # [23:25]
+        + race_no                       # [25:27]
+        + pr(str(frame_no), 1)          # [27:28] Wakuban（1桁）
+        + pr(str(horse_no), 2)          # [28:30] Umaban（2桁）
+        + p(ketto_num, 10)              # [30:40] KettoNum
+        + p(uma_name, 18)               # [40:58] Bamei
+        + "00"                          # [58:60] UmaKigoCD
+        + sex_cd                        # [60:61] SexCD
+        + "1"                           # [61:62] HinsyuCD
+        + "03"                          # [62:64] KeiroCD
+        + "000"                         # [64:67] 予備
+        + p(jockey_code, 5)             # [67:72] KisyuCode
+        + p("騎手略", 4)                # [72:76] 騎手略称（4全角）
+        + "0"                           # [76:77] 見習区分等
+        + p(trainer_code, 5)            # [77:82] ChokyosiCode
+        + p("調教師テスト", 36)         # [82:...] 調教師名
     )
     return se.ljust(600)
 
@@ -133,6 +141,10 @@ def _se_result(
     c3: int = 3,
     c4: int = 3,
 ) -> str:
+    """Ver.4.9 SE 確定後レコードのテスト用フィクスチャ。
+    ヘッダは Ver.4.9（KaisaiNengappi[11:19], Umaban[28:30]）。
+    成績フィールドは暫定 [580:600]（確定後 SE 実データで要再校正）。
+    """
     def p(v: str, w: int) -> str:
         return v.ljust(w)[:w]
 
@@ -146,24 +158,16 @@ def _se_result(
     agari_ko = round((agari_3f_s - agari_bu) * 10)
 
     header = (
-        "SE"
-        + "4"
-        + f"{nen}{month_day}"
-        + jyo_cd + kaiji + nichiji + race_no
-        + pr(str(horse_no), 2)
-        + "  "
-        + " " * 10
-        + " " * 36
-        + " " * 2
-        + " " * 2
-        + " " * 4
-        + " " * 36
-        + " " * 4
-        + " " * 4
-        + " " * 36
-        + " " * 2
-        + " " * 4
-        + "   "
+        "SE"                            # [0:2]
+        + "4"                           # [2:3]   DataKubun=4（確定）
+        + "20260618"                    # [3:11]  MakeDate
+        + f"{nen}{month_day}"           # [11:19] KaisaiNengappi
+        + jyo_cd                        # [19:21]
+        + kaiji                         # [21:23]
+        + nichiji                       # [23:25]
+        + race_no                       # [25:27]
+        + "0"                           # [27:28] Wakuban
+        + pr(str(horse_no), 2)          # [28:30] Umaban
     )
     result_fields = (
         pr(str(finish_pos), 2)
@@ -375,22 +379,23 @@ class TestSeEntryParser:
         assert result.ketto_num == "2023999001"
 
     def test_jockey_code(self) -> None:
-        rec = _se_entry(jockey_code="0099")
+        rec = _se_entry(jockey_code="01184")
         result = parse_se_entry(rec)
         assert result is not None
-        assert result.jockey_code == "0099"
+        assert result.jockey_code == "01184"
 
     def test_trainer_code(self) -> None:
-        rec = _se_entry(trainer_code="0042")
+        rec = _se_entry(trainer_code="00420")
         result = parse_se_entry(rec)
         assert result is not None
-        assert result.trainer_code == "0042"
+        assert result.trainer_code == "00420"
 
-    def test_weight(self) -> None:
-        rec = _se_entry(weight=480)
+    def test_weight_default(self) -> None:
+        # 馬体重は出馬表段階では未発表のため暫定デフォルト 460
+        rec = _se_entry()
         result = parse_se_entry(rec)
         assert result is not None
-        assert result.weight == 480.0
+        assert result.weight == 460.0
 
     def test_result_record_returns_none(self) -> None:
         rec = _se_result()
