@@ -1,8 +1,8 @@
 """デバッグ用: JV-Link から各マスタ・レースレコードを1件ずつ取得して配置を表示する。
 
-使い方 (Windows):
-    set PYTHONPATH=...\apps\ingestion-worker\src
-    py -3.12-32 -m ingestion.dump_records
+使い方 (Windows) — どちらでも可:
+    py -3.12-32 src\\ingestion\\dump_records.py        # 直接実行（PYTHONPATH 不要）
+    set PYTHONPATH=%CD%\\src & py -3.12-32 -m ingestion.dump_records
 
 JV-Data 仕様の実バイト配置を確認し、パーサのオフセットを校正するための一時ツール。
 """
@@ -11,10 +11,16 @@ from __future__ import annotations
 
 import datetime
 import os
+import sys
+from pathlib import Path
 
-from dotenv import load_dotenv
+# `-m` でなく直接スクリプト実行された場合でも `import ingestion.*` が解決できるよう
+# src ディレクトリ（このファイルの2階層上）を sys.path に追加する。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ingestion.client.windows_client import WindowsJvLinkClient
+from dotenv import load_dotenv  # noqa: E402
+
+from ingestion.client.windows_client import WindowsJvLinkClient  # noqa: E402
 
 
 def _dump(label: str, record: str, highlight: dict[tuple[int, int], str] | None = None) -> None:
@@ -62,48 +68,49 @@ def main() -> None:
         })
         break
 
-    # RA (レース詳細) — 最初の3件を表示してフォーマットを確認する
+    # RACE データスペックを1回の JVOpen で取得し、RA と SE を分離してダンプする。
+    # （別々に JVOpen すると option=1 の再取得で2回目が空になる可能性があるため）
     print("\n" + "=" * 60)
-    print("RA レコード (最初の3件)")
+    print("RACE データ (RA/SE を1回の JVOpen で取得)")
     print("=" * 60)
-    count = 0
-    for rec in client.iter_ra_records(today, today):
-        _dump(f"RA #{count + 1}", rec, {
-            (3, 11):  "MakeDate",
-            (11, 19): "KaisaiNengappi(race date)?",
-            (19, 21): "JyoCd?",
-            (21, 23): "Kaiji?",
-            (23, 25): "Nichiji?",
-            (25, 27): "RaceNo?",
-            (27, 28): "YoubiCd?",
-            (28, 32): "??? (0000/0074 pattern)",
-            (32, 57): "RaceName? (25chars=25全角)",
-            (32, 82): "RaceName? (50chars)",
-            (82, 84): "Tosu?",
-            (84, 88): "Kyori? or next field?",
-        })
-        count += 1
-        if count >= 3:
+    ra_count = 0
+    se_count = 0
+    scanned = 0
+    for rec in client.iter_race_records_raw(today, today):
+        scanned += 1
+        spec = rec[:2]
+        if spec == "RA" and ra_count < 3:
+            _dump(f"RA #{ra_count + 1}", rec, {
+                (3, 11):  "MakeDate",
+                (11, 19): "KaisaiNengappi(開催日)?",
+                (19, 21): "JyoCd?",
+                (21, 23): "Kaiji?",
+                (23, 25): "Nichiji?",
+                (25, 27): "RaceNo?",
+                (27, 28): "YoubiCd?",
+                (28, 32): "??? (0000/0074)",
+                (32, 82): "RaceName? (50chars)",
+                (82, 84): "Tosu?",
+            })
+            ra_count += 1
+        elif spec == "SE" and se_count < 3:
+            _dump(f"SE #{se_count + 1}", rec, {
+                (3, 11):  "MakeDate(作成日)?",
+                (11, 19): "KaisaiNengappi(開催日)?",
+                (19, 21): "JyoCd?",
+                (21, 23): "Kaiji?",
+                (23, 25): "Nichiji?",
+                (25, 27): "RaceNo?",
+                (27, 29): "Umaban?",
+                (29, 31): "Wakuban?",
+                (31, 41): "KettoNum?",
+                (41, 59): "UmaName?(18chars)",
+            })
+            se_count += 1
+        if ra_count >= 3 and se_count >= 3:
             break
-
-    # SE (馬毎レース情報) — 最初の3件を表示して race_key 構成を確認する
-    print("\n" + "=" * 60)
-    print("SE レコード (最初の3件) — MakeDate[3:11] が開催日か作成日かを確認")
-    print("=" * 60)
-    count = 0
-    for rec in client.iter_se_records(today, today):
-        _dump(f"SE #{count + 1}", rec, {
-            (3, 11):  "MakeDate or KaisaiDate?",
-            (11, 13): "JyoCd?",
-            (13, 15): "Kaiji?",
-            (15, 17): "Nichiji?",
-            (17, 19): "RaceNo?",
-            (19, 21): "Umaban?",
-            (23, 33): "KettoNum?",
-            (33, 69): "UmaName?",
-        })
-        count += 1
-        if count >= 3:
+        if scanned > 2000:  # 安全装置: 2000 レコード走査しても揃わなければ打ち切り
+            print(f"\n(警告: {scanned} レコード走査、RA={ra_count} SE={se_count} で打ち切り)")
             break
 
 

@@ -91,6 +91,14 @@ class WindowsJvLinkClient:
         """指定期間の SE レコードを JV-Link から取得する。"""
         yield from self._iter_records("RACE", date_from, date_to, record_types={"SE"})
 
+    def iter_race_records_raw(self, date_from: str, date_to: str) -> Iterator[str]:
+        """RACE データスペックの全レコード（RA/SE 混在）を1回の JVOpen で返す。
+
+        デバッグ用。RA と SE を別々に JVOpen すると option=1 の再取得挙動に
+        左右されるため、フィールド位置調査時は本メソッドで一括取得する。
+        """
+        yield from self._iter_records("RACE", date_from, date_to, record_types=None)
+
     def iter_um_records(self) -> Iterator[str]:
         """競走馬マスタ UM レコードを取得する（DIFF データ種別）。"""
         yield from self._iter_records("DIFF", record_types={"UM"})
