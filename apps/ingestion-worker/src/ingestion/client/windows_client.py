@@ -89,30 +89,30 @@ class WindowsJvLinkClient:
         record_types: set[str] | None = None,
     ) -> Iterator[str]:
         """JV-Link の JVOpen → JVRead → JVClose を実行してレコードを返す。"""
-        # JVOpen
         option = 4 if data_spec == "MAST" else 1  # 1=差分, 4=全量
-        result = self._jv.JVOpen(
-            data_spec,
-            date_from + "000000",
-            option,
-            0,
-            "",
-            "",
-        )
-        if result < 0:
-            raise RuntimeError(f"JVOpen 失敗: エラーコード {result}")
+        # JVOpen(DataSpec, FromDate, Option, ByRef nCount, ByRef dlFileList) As Long
+        # win32com late binding では ByRef OUT パラメータがタプルで返る
+        ret_open = self._jv.JVOpen(data_spec, date_from + "000000", option, 0, "")
+        open_code: int = ret_open[0] if isinstance(ret_open, tuple) else ret_open
+        if open_code < 0:
+            raise RuntimeError(f"JVOpen 失敗: エラーコード {open_code}")
 
         try:
             while True:
-                buf = " " * 20000
-                nread = 0
-                filename = ""
-                ret = self._jv.JVRead(buf, nread, filename)
-                if ret == 0:
+                # JVRead(ByRef lpszBuf, ByRef nRead, ByRef lpszFileName) As Long
+                # win32com は (retcode, buf, nread, filename) のタプルを返す
+                ret_read = self._jv.JVRead(" " * 20000, 0, "")
+                if isinstance(ret_read, tuple):
+                    read_code: int = ret_read[0]
+                    buf: str = ret_read[1] if len(ret_read) > 1 else ""
+                else:
+                    read_code = ret_read
+                    buf = ""
+                if read_code == 0:
                     break  # 全レコード取得完了
-                if ret < 0:
-                    raise RuntimeError(f"JVRead エラー: {ret}")
-                record = buf[:ret].rstrip("\r\n")
+                if read_code < 0:
+                    raise RuntimeError(f"JVRead エラー: {read_code}")
+                record = buf[:read_code].rstrip("\r\n")
                 rec_spec = record[:2]
                 if record_types is None or rec_spec in record_types:
                     yield record
