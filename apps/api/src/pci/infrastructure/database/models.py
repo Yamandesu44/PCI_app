@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pci.infrastructure.database.base import Base
 
@@ -56,6 +56,10 @@ class RaceModel(Base):
     rpci_actual: Mapped[float | None] = mapped_column(Float)
     pci3_actual: Mapped[float | None] = mapped_column(Float)
 
+    # 親子関係を明示し、flush 時に races → race_entries の INSERT 順序を保証する
+    # （未設定だと UoW が FK 依存を解決できず FK 違反になる）。
+    entries: Mapped[list[RaceEntryModel]] = relationship(back_populates="race")
+
 
 class RaceEntryModel(Base):
     __tablename__ = "race_entries"
@@ -64,6 +68,7 @@ class RaceEntryModel(Base):
     race_key: Mapped[str] = mapped_column(
         String(16), ForeignKey("races.race_key"), primary_key=True
     )
+    race: Mapped[RaceModel] = relationship(back_populates="entries")
     horse_no: Mapped[int] = mapped_column(Integer, primary_key=True)
     frame_no: Mapped[int] = mapped_column(Integer, nullable=False)
     ketto_num: Mapped[str] = mapped_column(

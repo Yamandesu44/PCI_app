@@ -164,6 +164,9 @@ def ingest_entries(
         if not race.entries:
             _log.info("出走馬なし、スキップ: %s", race_key)
             continue
+        # 出走頭数は出走前 SE エントリ数（取消/除外を除いた実出走馬）で確定する。
+        # RA の SyussoTosu の byte 位置が未特定でも正確で、entries と必ず整合する。
+        race.field_size = len(race.entries)
         try:
             api.register_entries(race)
         except Exception as exc:
