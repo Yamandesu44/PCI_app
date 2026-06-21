@@ -75,19 +75,19 @@ class TestFixtureClientFromJson:
         assert any(h is not None for h in horses)
 
 
-class TestFixtureClientFromTxt:
-    """TXT フィクスチャファイルから読み込むケース（RA/KS/CH サンプルが存在する場合）。"""
+class TestFixtureClientMasters:
+    """マスタ（KS/CH）が JSON から生成され、char ベースのマスタパーサで解析可能なこと。"""
 
     def _client(self) -> FixtureJvLinkClient:
         return FixtureJvLinkClient(fixtures_dir=_FIXTURES)
 
-    def test_ks_txt_file_parseable(self) -> None:
+    def test_ks_records_parseable(self) -> None:
         from ingestion.parser.master_parsers import parse_ks
         records = list(self._client().iter_ks_records())
         jockeys = [parse_ks(r) for r in records]
         assert any(j is not None for j in jockeys)
 
-    def test_ch_txt_file_parseable(self) -> None:
+    def test_ch_records_parseable(self) -> None:
         from ingestion.parser.master_parsers import parse_ch
         records = list(self._client().iter_ch_records())
         trainers = [parse_ch(r) for r in records]

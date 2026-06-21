@@ -1,9 +1,14 @@
 """開発用フィクスチャクライアント。
 
-fixtures/ ディレクトリの JSON ファイルを読み込み、RA / SE / UM / KS / CH
-固定長レコード風の文字列を生成して返す。
+fixtures/ の JSON（sample_race_entries.json / sample_race_result.json）から、
+JV-Data 実レイアウトと同じ **byte オフセット** に値を配置した固定長レコードを生成する。
+これにより JV-Link（Windows 専用 COM）なしで、本番と同一のパーサパスを検証できる（ADR-0002）。
 
-JV-Link が必要な Windows 環境なしで開発・テストが可能（ADR-0002）。
+重要: レコードは bytearray を CP932 バイト列として組み立て、jv_spec のオフセット位置へ
+書き込む。馬名など全角フィールドを跨いでも実データと同じ byte 配置になる。
+（旧実装は char 連結で組んでいたため全角以降がズレ、byte 単位パーサで解析不能だった）
+
+生データ・認証情報は一切コミットしない（法務: C2、セキュリティ: CLAUDE.md）。
 """
 
 from __future__ import annotations
@@ -12,53 +17,49 @@ import json
 import logging
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
+
+from ingestion.parser.jv_spec import RA_RECORD_BYTES, SE_RECORD_BYTES
 
 _log = logging.getLogger(__name__)
 
 _DEFAULT_FIXTURES = Path(__file__).resolve().parents[3] / "fixtures"
 
+_UM_RECORD_BYTES = 200   # マスタは固定長の先頭側のみ使用（char パーサが許容）
+_MASTER_RECORD_BYTES = 100
+
 
 class FixtureJvLinkClient:
-    """fixtures/ の JSON をもとに擬似レコードを生成する開発用クライアント。
-
-    JSON → 固定長文字列に変換することで、本番と同一のパーサパスを通す。
-    fixtures/RA_sample.txt, SE_sample_entry.txt 等が存在すれば直接読む。
-    存在しなければ JSON ファイルから生成する。
-    """
+    """fixtures/ の JSON をもとに byte 正確な擬似レコードを生成する開発用クライアント。"""
 
     def __init__(self, fixtures_dir: Path | None = None) -> None:
         self._dir = fixtures_dir or _DEFAULT_FIXTURES
 
-    # ----- ra records -----
+    def _entries_json(self) -> Iterator[dict[str, Any]]:
+        for path in sorted(self._dir.glob("sample_race_entries*.json")):
+            yield json.loads(path.read_text(encoding="utf-8"))
+
+    def _results_json(self) -> Iterator[dict[str, Any]]:
+        for path in sorted(self._dir.glob("sample_race_result*.json")):
+            yield json.loads(path.read_text(encoding="utf-8"))
+
+    # ----- race records -----
 
     def iter_ra_records(self, date_from: str, date_to: str) -> Iterator[str]:
-        txt = self._dir / "RA_sample.txt"
-        if txt.exists():
-            yield from _read_lines(txt)
-            return
-        # JSON から生成
-        for path in sorted(self._dir.glob("sample_race_entries*.json")):
-            data = json.loads(path.read_text(encoding="utf-8"))
+        for data in self._entries_json():
             rec = _json_to_ra(data["race_info"])
             if rec:
                 yield rec
 
-    # ----- se records -----
-
     def iter_se_records(self, date_from: str, date_to: str) -> Iterator[str]:
-        for txt in sorted(self._dir.glob("SE_sample*.txt")):
-            yield from _read_lines(txt)
-            return
-        # JSON から生成（エントリ）
-        for path in sorted(self._dir.glob("sample_race_entries*.json")):
-            data = json.loads(path.read_text(encoding="utf-8"))
+        # 出走前（エントリ）
+        for data in self._entries_json():
             for entry in data["entries"]:
                 rec = _json_entry_to_se(data["race_info"], entry)
                 if rec:
                     yield rec
-        # JSON から生成（成績）
-        for path in sorted(self._dir.glob("sample_race_result*.json")):
-            data = json.loads(path.read_text(encoding="utf-8"))
+        # 確定後（成績）
+        for data in self._results_json():
             for result in data["results"]:
                 rec = _json_result_to_se(data, result)
                 if rec:
@@ -67,270 +68,163 @@ class FixtureJvLinkClient:
     # ----- master records -----
 
     def iter_um_records(self) -> Iterator[str]:
-        txt = self._dir / "UM_sample.txt"
-        if txt.exists():
-            yield from _read_lines(txt)
-            return
-        # JSON エントリから馬マスタを生成
         seen: set[str] = set()
-        for path in sorted(self._dir.glob("sample_race_entries*.json")):
-            data = json.loads(path.read_text(encoding="utf-8"))
+        for data in self._entries_json():
             for e in data["entries"]:
-                k = e["ketto_num"]
+                k = str(e["ketto_num"])
                 if k not in seen:
                     seen.add(k)
                     yield _json_entry_to_um(e)
 
     def iter_ks_records(self) -> Iterator[str]:
-        txt = self._dir / "KS_sample.txt"
-        if txt.exists():
-            yield from _read_lines(txt)
-            return
         seen: set[str] = set()
-        for path in sorted(self._dir.glob("sample_race_entries*.json")):
-            data = json.loads(path.read_text(encoding="utf-8"))
+        for data in self._entries_json():
             for e in data["entries"]:
-                code = e.get("jockey_code", "")
+                code = str(e.get("jockey_code", ""))
                 if code and code not in seen:
                     seen.add(code)
-                    yield _make_ks(code, e.get("jockey_name", f"騎手{code}"))
+                    yield _make_ks(code, str(e.get("jockey_name", f"騎手{code}")))
 
     def iter_ch_records(self) -> Iterator[str]:
-        txt = self._dir / "CH_sample.txt"
-        if txt.exists():
-            yield from _read_lines(txt)
-            return
         seen: set[str] = set()
-        for path in sorted(self._dir.glob("sample_race_entries*.json")):
-            data = json.loads(path.read_text(encoding="utf-8"))
+        for data in self._entries_json():
             for e in data["entries"]:
-                code = e.get("trainer_code", "")
+                code = str(e.get("trainer_code", ""))
                 if code and code not in seen:
                     seen.add(code)
-                    yield _make_ch(code, e.get("trainer_name", f"調教師{code}"))
+                    yield _make_ch(code, str(e.get("trainer_name", f"調教師{code}")))
 
 
 # ---------------------------------------------------------------------------
-# JSON → 固定長レコード文字列 生成ヘルパー
+# JSON → byte 正確な固定長レコード生成ヘルパー
 # ---------------------------------------------------------------------------
 
-def _read_lines(path: Path) -> Iterator[str]:
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            yield line.ljust(200)  # 固定長フィールドの位置を保つため200文字にパディング
+
+def _put(buf: bytearray, off: int, s: str) -> None:
+    """CP932 バイト列としてフィールドを byte オフセットへ書き込む（全角=2byte）。"""
+    b = s.encode("cp932", errors="replace")
+    buf[off : off + len(b)] = b
 
 
-def _pad(value: str, width: int, fill: str = " ", right_justify: bool = False) -> str:
-    if right_justify:
-        return value.zfill(width)[:width]
-    return value.ljust(width)[:width]
+def _track_cd(track_type: str) -> str:
+    """track_type を TrackCD（10番台=芝/20番台=ダ/30番台=障害）へ。"""
+    return {"芝": "17", "ダート": "23", "障害": "33"}.get(track_type, "17")
 
 
-def _json_to_ra(info: dict[str, object]) -> str:
-    """sample_race_entries.json の race_info → RA 固定長レコード（Ver.4.9 オフセット）。"""
+def _sex_cd(sex: str) -> str:
+    return {"牡": "1", "牝": "2", "騸": "3"}.get(sex, "1")
+
+
+def _json_to_ra(info: dict[str, Any]) -> str:
+    """race_info → RA 固定長レコード（byte 正確）。"""
     race_key = str(info.get("race_key", ""))
     if len(race_key) != 16:
         return ""
-    nen = race_key[0:4]
-    month_day = race_key[4:8]
-    jyo_cd = race_key[8:10]
-    kaiji = race_key[10:12]
-    nichiji = race_key[12:14]
-    race_no = race_key[14:16]
-    hold_date = f"{nen}{month_day}"  # 開催年月日 YYYYMMDD
-
-    race_name = _pad(str(info.get("race_class", "") or ""), 50)
-    tosu = _pad(str(info.get("field_size", 8)), 2, right_justify=True)
-    race_class = _pad(str(info.get("race_class", "") or ""), 50)
-    kyori = _pad(str(int(info.get("distance_m", 0) or 0)), 4, right_justify=True)
-
-    ra = (
-        "RA"               # [0:2]   RecordSpec
-        + "1"              # [2:3]   DataKubun
-        + "20260618"       # [3:11]  MakeDate (作成日、固定)
-        + hold_date        # [11:19] KaisaiNengappi (開催年月日)
-        + jyo_cd           # [19:21]
-        + kaiji            # [21:23]
-        + nichiji          # [23:25]
-        + race_no          # [25:27]
-        + "1"              # [27:28] YoubiCd
-        + kyori            # [28:32] Kyori (仮置き)
-        + race_name        # [32:82] RaceName
-        + tosu             # [82:84] Tosu
-        + race_class       # [84:134] RaceClass
-    )
-    return ra
+    buf = bytearray(b" " * RA_RECORD_BYTES)
+    _put(buf, 0, "RA")
+    _put(buf, 2, "1")                       # DataKubun=1（新規）
+    _put(buf, 3, "20260618")                # MakeDate
+    _put(buf, 11, race_key[0:8])            # KaisaiNengappi (YYYYMMDD)
+    _put(buf, 19, race_key[8:10])           # JyoCD
+    _put(buf, 21, race_key[10:12])          # Kaiji
+    _put(buf, 23, race_key[12:14])          # Nichiji
+    _put(buf, 25, race_key[14:16])          # RaceNum
+    _put(buf, 27, "10")                     # YoubiCD
+    _put(buf, 29, "0000")                   # TokuNum（一般）
+    _put(buf, 33, str(info.get("race_class", "") or ""))   # Hondai（競走名）
+    _put(buf, 697, f"{int(info.get('distance_m', 0) or 0):04d}")  # Kyori
+    _put(buf, 705, _track_cd(str(info.get("track_type", "芝"))))   # TrackCD
+    return buf.decode("cp932")
 
 
-def _json_entry_to_se(info: dict[str, object], entry: dict[str, object]) -> str:
-    """sample_race_entries.json の entry → SE 固定長レコード（出走前）。"""
+def _json_entry_to_se(info: dict[str, Any], entry: dict[str, Any]) -> str:
+    """entry → SE 固定長レコード（出走前 / byte 正確）。"""
     race_key = str(info.get("race_key", ""))
     if len(race_key) != 16:
         return ""
-    nen = race_key[0:4]
-    month_day = race_key[4:8]
-    jyo_cd = race_key[8:10]
-    kaiji = race_key[10:12]
-    nichiji = race_key[12:14]
-    race_no = race_key[14:16]
-
-    umaban = _pad(str(entry.get("horse_no", 0)), 2, right_justify=True)
-    wakuban = _pad(str(entry.get("frame_no", 0)), 2, right_justify=True)
-    ketto = _pad(str(entry.get("ketto_num", "")), 10)
-    uma_name = _pad(str(entry.get("horse_name", "")), 36)
-    sex_cd = {"牡": "1", "牝": "2", "騸": "3"}.get(str(entry.get("sex", "牡")), "1")
-    trainer_code = _pad(str(entry.get("trainer_code", "")), 4)
-    trainer_name = _pad(str(entry.get("trainer_name", "")), 36)
-    jockey_code = _pad(str(entry.get("jockey_code", "")), 4)
-    jockey_name = _pad(str(entry.get("jockey_name", "")), 36)
-    futan = _pad("55", 2, right_justify=True)
-    weight = int(entry.get("weight", 460) or 460)
-    bataijyu = _pad(str(weight), 4, right_justify=True)
-
-    se = (
-        "SE"                        # [0:2]
-        + "1"                       # [2:3] DataKubun
-        + f"{nen}{month_day}".ljust(8)[:8]  # [3:11] MakeDate
-        + jyo_cd                    # [11:13]
-        + kaiji                     # [13:15]
-        + nichiji                   # [15:17]
-        + race_no                   # [17:19]
-        + umaban                    # [19:21]
-        + wakuban                   # [21:23]
-        + ketto                     # [23:33]
-        + uma_name                  # [33:69]
-        + " "                       # [69:70] UmaKigo
-        + sex_cd                    # [70:71]
-        + "01"                      # [71:73] TozaiSo
-        + trainer_code              # [73:77]
-        + trainer_name              # [77:113]
-        + "    "                    # [113:117] 予備フィールド
-        + jockey_code               # [117:121]
-        + jockey_name               # [121:157]
-        + futan                     # [157:159]
-        + bataijyu                  # [159:163]
-        + "00"                      # [163:165] ZogenSa
-        + " "                       # [165:166] ZogenFugo
-    )
-    # 600 バイトまで空白パディング（確定フィールドを未使用のまま確保）
-    return se.ljust(600)
+    buf = bytearray(b" " * SE_RECORD_BYTES)
+    _put(buf, 0, "SE")
+    _put(buf, 2, "1")                       # DataKubun=1（出走前）
+    _put(buf, 3, "20260617")                # MakeDate
+    _put(buf, 11, race_key[0:8])            # KaisaiNengappi
+    _put(buf, 19, race_key[8:10])
+    _put(buf, 21, race_key[10:12])
+    _put(buf, 23, race_key[12:14])
+    _put(buf, 25, race_key[14:16])
+    _put(buf, 27, str(int(entry.get("frame_no", 0)))[:1])   # Wakuban
+    _put(buf, 28, f"{int(entry.get('horse_no', 0)):02d}")   # Umaban
+    _put(buf, 30, str(entry.get("ketto_num", ""))[:10])     # KettoNum
+    _put(buf, 40, str(entry.get("horse_name", "")))         # Bamei（全角）
+    _put(buf, 78, _sex_cd(str(entry.get("sex", "牡"))))     # SexCD
+    _put(buf, 85, str(entry.get("trainer_code", ""))[:5])   # ChokyosiCode
+    _put(buf, 90, str(entry.get("trainer_name", "")))       # 調教師名略称
+    _put(buf, 296, str(entry.get("jockey_code", ""))[:5])   # KisyuCode
+    _put(buf, 306, str(entry.get("jockey_name", "")))       # 騎手名略称
+    return buf.decode("cp932")
 
 
-def _json_result_to_se(data: dict[str, object], result: dict[str, object]) -> str:
-    """sample_race_result.json の result → SE 固定長レコード（確定後）。"""
+def _json_result_to_se(data: dict[str, Any], result: dict[str, Any]) -> str:
+    """result → SE 固定長レコード（確定後 / byte 正確）。"""
     race_key = str(data.get("race_key", ""))
     if len(race_key) != 16:
         return ""
-    nen = race_key[0:4]
-    month_day = race_key[4:8]
-    jyo_cd = race_key[8:10]
-    kaiji = race_key[10:12]
-    nichiji = race_key[12:14]
-    race_no = race_key[14:16]
+    buf = bytearray(b" " * SE_RECORD_BYTES)
+    _put(buf, 0, "SE")
+    _put(buf, 2, "7")                       # DataKubun=7（確定・実測区分）
+    _put(buf, 3, "20260618")                # MakeDate
+    _put(buf, 11, race_key[0:8])            # KaisaiNengappi
+    _put(buf, 19, race_key[8:10])
+    _put(buf, 21, race_key[10:12])
+    _put(buf, 23, race_key[12:14])
+    _put(buf, 25, race_key[14:16])
+    _put(buf, 28, f"{int(result.get('horse_no', 0)):02d}")  # Umaban
+    _put(buf, 334, f"{int(result.get('finish_pos', 0)):02d}")  # KakuteiJyuni
 
-    umaban = _pad(str(result.get("horse_no", 0)), 2, right_justify=True)
+    # 走破タイム MSSf: 分1 + 秒2 + 1/10秒1
+    rt = float(result.get("race_time_s", 0) or 0)
+    minutes = int(rt // 60)
+    seconds = int(rt % 60)
+    tenths = round((rt - int(rt)) * 10)
+    _put(buf, 338, f"{minutes}{seconds:02d}{tenths}")
 
-    # 走破タイム
-    race_time_s: float = float(result.get("race_time_s", 0) or 0)
-    time_m = int(race_time_s // 60)
-    time_s = int(race_time_s % 60)
-    time_k = round((race_time_s - int(race_time_s)) * 10)
-    soha_m = _pad(str(time_m), 2, right_justify=True)
-    soha_s = _pad(str(time_s), 2, right_justify=True)
-    soha_k = _pad(str(time_k), 2, right_justify=True)
-
-    # 上がり3F
-    agari: float = float(result.get("agari_3f_s", 0) or 0)
-    agari_bu = _pad(str(int(agari)), 2, right_justify=True)
-    agari_ko = _pad(str(round((agari - int(agari)) * 10)), 2, right_justify=True)
-
-    finish_pos = _pad(str(result.get("finish_pos", 0)), 2, right_justify=True)
-    c1 = _pad(str(result.get("corner_1", 0) or 0), 2, right_justify=True)
-    c2 = _pad(str(result.get("corner_2", 0) or 0), 2, right_justify=True)
-    c3 = _pad(str(result.get("corner_3", 0) or 0), 2, right_justify=True)
-    c4 = _pad(str(result.get("corner_4", 0) or 0), 2, right_justify=True)
-
-    # 580バイトまで空白埋めして確定フィールドを配置
-    header = (
-        "SE"
-        + "4"              # DataKubun=4（確定）
-        + f"{nen}{month_day}".ljust(8)[:8]
-        + jyo_cd + kaiji + nichiji + race_no
-        + umaban
-        + "  "             # wakuban（空白）
-        + " " * 10         # ketto_num（空白）
-        + " " * 36         # uma_name（空白）
-        + " " * 2          # UmaKigo + sex
-        + " " * 2          # TozaiSo
-        + " " * 4          # trainer_code
-        + " " * 36         # trainer_name
-        + " " * 4          # 予備
-        + " " * 4          # jockey_code
-        + " " * 36         # jockey_name
-        + " " * 2          # futan
-        + " " * 4          # bataijyu
-        + " " * 3          # zogen
-    )
-    # [2:167] = 165 bytes、残り 580-167=413 bytes を空白埋め後、確定フィールドを追加
-    result_fields = finish_pos + soha_m + soha_s + soha_k + agari_bu + agari_ko + c1 + c2 + c3 + c4
-    se = header.ljust(580) + result_fields
-    return se.ljust(620)
+    # 上り3F: 3桁 1/10秒
+    agari = float(result.get("agari_3f_s", 0) or 0)
+    _put(buf, 390, f"{round(agari * 10):03d}")
+    return buf.decode("cp932")
 
 
-def _json_entry_to_um(entry: dict[str, object]) -> str:
-    """entry データから UM 固定長レコードを生成する（Ver.4.9 オフセット）。"""
-    ketto = _pad(str(entry.get("ketto_num", "")), 10)
-    name = _pad(str(entry.get("horse_name", "")), 18)       # [46:64] 18 chars
-    name_kana = _pad(str(entry.get("horse_name", "")), 36)  # [64:100] 36 chars
-    sex_cd = {"牡": "1", "牝": "2", "騸": "3"}.get(str(entry.get("sex", "牡")), "1")
+def _json_entry_to_um(entry: dict[str, Any]) -> str:
+    """entry → UM 固定長レコード（byte 正確）。SexCD は全角名の後 byte[182:183]。"""
+    buf = bytearray(b" " * _UM_RECORD_BYTES)
+    _put(buf, 0, "UM")
+    _put(buf, 2, "1")
+    _put(buf, 3, "20260101")                # MakeDate
+    _put(buf, 12, str(entry.get("ketto_num", ""))[:10])    # KettoNum
     age = int(entry.get("age", 3) or 3)
-    birth_year = 2026 - age
-    um = (
-        "UM"
-        + "1"
-        + "20260101"           # MakeDate [3:11]
-        + " "                  # UmaKigo [11:12]
-        + ketto                # [12:22]
-        + "00000000"           # [22:30] 追加日付1
-        + "00000000"           # [30:38] 追加日付2
-        + f"{birth_year}0101"  # [38:46] 生年月日
-        + name                 # [46:64] UmaName (18 chars)
-        + name_kana            # [64:100] UmaNameKana (36 chars)
-        + " " * 60             # [100:160] UmaNameEng
-        + "0"                  # [160:161] ZaikyuFlag
-        + " " * 19             # [161:180] Reserved
-        + "00"                 # [180:182] UmaKigoCD
-        + sex_cd               # [182:183] SexCD
-    )
-    return um.ljust(200)
+    _put(buf, 38, f"{2026 - age}0101")      # 生年月日 YYYYMMDD
+    _put(buf, 46, str(entry.get("horse_name", "")))        # UmaName（全角）
+    _put(buf, 180, "00")                    # UmaKigoCD
+    _put(buf, 182, _sex_cd(str(entry.get("sex", "牡"))))   # SexCD
+    return buf.decode("cp932")
 
 
 def _make_ks(code: str, name: str) -> str:
-    """KS 固定長レコードを生成する（Ver.4.9 オフセット）。"""
-    return (
-        "KS"
-        + "1"
-        + "20260101"        # MakeDate [3:11]
-        + _pad(code, 5)     # [11:16] KisyuCode (5桁)
-        + "0"               # [16:17] フラグ
-        + "00000000"        # [17:25] Date1
-        + "00000000"        # [25:33] Date2
-        + "00000000"        # [33:41] BirthDate
-        + _pad(name, 17)    # [41:58] 騎手氏名 (17 chars)
-    ).ljust(100)
+    """KS 固定長レコード（byte 正確）。code[11:16], 騎手名[41:]。"""
+    buf = bytearray(b" " * _MASTER_RECORD_BYTES)
+    _put(buf, 0, "KS")
+    _put(buf, 2, "1")
+    _put(buf, 3, "20260101")
+    _put(buf, 11, code[:5])                 # KisyuCode
+    _put(buf, 41, name)                     # 騎手氏名（全角）
+    return buf.decode("cp932")
 
 
 def _make_ch(code: str, name: str) -> str:
-    """CH 固定長レコードを生成する（Ver.4.9 オフセット）。"""
-    return (
-        "CH"
-        + "1"
-        + "20260101"        # MakeDate [3:11]
-        + _pad(code, 5)     # [11:16] ChokyosiCode (5桁)
-        + "0"               # [16:17] フラグ
-        + "00000000"        # [17:25] Date1
-        + "00000000"        # [25:33] Date2
-        + "00000000"        # [33:41] BirthDate
-        + _pad(name, 17)    # [41:58] 調教師氏名 (17 chars)
-    ).ljust(100)
+    """CH 固定長レコード（byte 正確）。code[11:16], 調教師名[41:]。"""
+    buf = bytearray(b" " * _MASTER_RECORD_BYTES)
+    _put(buf, 0, "CH")
+    _put(buf, 2, "1")
+    _put(buf, 3, "20260101")
+    _put(buf, 11, code[:5])                 # ChokyosiCode
+    _put(buf, 41, name)                     # 調教師氏名（全角）
+    return buf.decode("cp932")

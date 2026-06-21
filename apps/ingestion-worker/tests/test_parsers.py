@@ -32,7 +32,7 @@ from ingestion.parser.se_parser import (
 # ヘルパー: テスト用固定長レコード生成
 # ---------------------------------------------------------------------------
 
-def _ra_put(buf: bytearray, off: int, s: str) -> None:
+def _put_field(buf: bytearray, off: int, s: str) -> None:
     """CP932 バイト列としてフィールドを byte オフセットへ書き込む（全角=2byte）。"""
     b = s.encode("cp932")
     buf[off:off + len(b)] = b
@@ -54,26 +54,20 @@ def _ra(
     field_size/weather/track_condition の byte 位置は未確定のため省略（0/None を返す）。
     """
     buf = bytearray(b" " * RA_RECORD_BYTES)
-    _ra_put(buf, 0, "RA")
-    _ra_put(buf, 2, "1")                       # DataKubun=1（新規）
-    _ra_put(buf, 3, "20260618")                # MakeDate
-    _ra_put(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
-    _ra_put(buf, 19, jyo_cd)
-    _ra_put(buf, 21, kaiji)
-    _ra_put(buf, 23, nichiji)
-    _ra_put(buf, 25, race_no)
-    _ra_put(buf, 27, "10")                     # YoubiCD (2byte)
-    _ra_put(buf, 29, "0000")                   # TokuNum (一般)
-    _ra_put(buf, 33, race_name)                # Hondai（全角30字まで）
-    _ra_put(buf, 697, f"{kyori:04d}")          # Kyori CONFIRMED
-    _ra_put(buf, 705, "17")                    # TrackCD='17'(芝内回り) CONFIRMED
+    _put_field(buf, 0, "RA")
+    _put_field(buf, 2, "1")                       # DataKubun=1（新規）
+    _put_field(buf, 3, "20260618")                # MakeDate
+    _put_field(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
+    _put_field(buf, 19, jyo_cd)
+    _put_field(buf, 21, kaiji)
+    _put_field(buf, 23, nichiji)
+    _put_field(buf, 25, race_no)
+    _put_field(buf, 27, "10")                     # YoubiCD (2byte)
+    _put_field(buf, 29, "0000")                   # TokuNum (一般)
+    _put_field(buf, 33, race_name)                # Hondai（全角30字まで）
+    _put_field(buf, 697, f"{kyori:04d}")          # Kyori CONFIRMED
+    _put_field(buf, 705, "17")                    # TrackCD='17'(芝内回り) CONFIRMED
     return buf.decode("cp932")
-
-
-def _se_put(buf: bytearray, off: int, s: str) -> None:
-    """CP932 バイト列としてフィールドを byte オフセットへ書き込む（全角=2byte）。"""
-    b = s.encode("cp932")
-    buf[off:off + len(b)] = b
 
 
 def _se_entry(
@@ -97,23 +91,23 @@ def _se_entry(
                KisyuCode[296:301]（名略称[306:314]直前）。
     """
     buf = bytearray(b" " * SE_RECORD_BYTES)
-    _se_put(buf, 0, "SE")
-    _se_put(buf, 2, "1")                       # DataKubun=1（新規・出走前）
-    _se_put(buf, 3, "20260617")                # MakeDate
-    _se_put(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
-    _se_put(buf, 19, jyo_cd)
-    _se_put(buf, 21, kaiji)
-    _se_put(buf, 23, nichiji)
-    _se_put(buf, 25, race_no)
-    _se_put(buf, 27, str(frame_no)[:1])        # Wakuban
-    _se_put(buf, 28, f"{horse_no:02d}")        # Umaban
-    _se_put(buf, 30, ketto_num[:10])           # KettoNum
-    _se_put(buf, 40, uma_name)                 # Bamei（全角）
-    _se_put(buf, 78, sex_cd)                   # SexCD
-    _se_put(buf, 85, trainer_code[:5])         # ChokyosiCode
-    _se_put(buf, 90, "調教師名")               # 調教師名略称（錨）
-    _se_put(buf, 296, jockey_code[:5])         # KisyuCode
-    _se_put(buf, 306, "騎手名")                # 騎手名略称（錨）
+    _put_field(buf, 0, "SE")
+    _put_field(buf, 2, "1")                       # DataKubun=1（新規・出走前）
+    _put_field(buf, 3, "20260617")                # MakeDate
+    _put_field(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
+    _put_field(buf, 19, jyo_cd)
+    _put_field(buf, 21, kaiji)
+    _put_field(buf, 23, nichiji)
+    _put_field(buf, 25, race_no)
+    _put_field(buf, 27, str(frame_no)[:1])        # Wakuban
+    _put_field(buf, 28, f"{horse_no:02d}")        # Umaban
+    _put_field(buf, 30, ketto_num[:10])           # KettoNum
+    _put_field(buf, 40, uma_name)                 # Bamei（全角）
+    _put_field(buf, 78, sex_cd)                   # SexCD
+    _put_field(buf, 85, trainer_code[:5])         # ChokyosiCode
+    _put_field(buf, 90, "調教師名")               # 調教師名略称（錨）
+    _put_field(buf, 296, jockey_code[:5])         # KisyuCode
+    _put_field(buf, 306, "騎手名")                # 騎手名略称（錨）
     return buf.decode("cp932")
 
 
@@ -135,15 +129,15 @@ def _se_result(
     走破タイムは 分1+秒2+1/10秒1 の MSSf 形式（例 94.4s → '1344'）。
     """
     buf = bytearray(b" " * SE_RECORD_BYTES)
-    _se_put(buf, 0, "SE")
-    _se_put(buf, 2, "7")                       # DataKubun=7（確定・実測区分）
-    _se_put(buf, 3, "20260618")                # MakeDate
-    _se_put(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
-    _se_put(buf, 19, jyo_cd)
-    _se_put(buf, 21, kaiji)
-    _se_put(buf, 23, nichiji)
-    _se_put(buf, 25, race_no)
-    _se_put(buf, 28, f"{horse_no:02d}")        # Umaban
+    _put_field(buf, 0, "SE")
+    _put_field(buf, 2, "7")                       # DataKubun=7（確定・実測区分）
+    _put_field(buf, 3, "20260618")                # MakeDate
+    _put_field(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
+    _put_field(buf, 19, jyo_cd)
+    _put_field(buf, 21, kaiji)
+    _put_field(buf, 23, nichiji)
+    _put_field(buf, 25, race_no)
+    _put_field(buf, 28, f"{horse_no:02d}")        # Umaban
 
     # 走破タイム MSSf: 分1 + 秒2 + 1/10秒1
     minutes = int(race_time_s // 60)
@@ -154,39 +148,30 @@ def _se_result(
     # 上り3F: 3桁 1/10秒（33.9s → '339'）
     agari_tenths = round(agari_3f_s * 10)
 
-    _se_put(buf, 334, f"{finish_pos:02d}")     # KakuteiJyuni
-    _se_put(buf, 338, time_mssf)               # Time
-    _se_put(buf, 390, f"{agari_tenths:03d}")   # HaronTimeL3
+    _put_field(buf, 334, f"{finish_pos:02d}")     # KakuteiJyuni
+    _put_field(buf, 338, time_mssf)               # Time
+    _put_field(buf, 390, f"{agari_tenths:03d}")   # HaronTimeL3
     return buf.decode("cp932")
 
 
 def _um(
     ketto: str = "2023100001", name: str = "テストホース", sex: str = "1", birth_year: int = 2023
 ) -> str:
-    """Ver.4.9 UM レコードのテスト用フィクスチャ。
-    実測オフセット: ketto[12:22], birth[38:46], name[46:64], sex[182:183]
-    """
-    def p(v: str, w: int) -> str:
-        return v.ljust(w)[:w]
+    """UM レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
 
-    um = (
-        "UM"                         # [0:2]
-        + "1"                        # [2:3]  DataKubun
-        + "20260101"                 # [3:11] MakeDate
-        + " "                        # [11:12] UmaKigo
-        + p(ketto, 10)              # [12:22] KettoNum
-        + "00000000"                 # [22:30] 追加日付1
-        + "00000000"                 # [30:38] 追加日付2
-        + f"{birth_year}0101"        # [38:46] 生年月日 (YYYY0101)
-        + p(name, 18)               # [46:64] UmaName
-        + p(name, 36)               # [64:100] UmaNameKana (ダミー)
-        + " " * 60                  # [100:160] UmaNameEng (ダミー)
-        + "0"                        # [160:161] ZaikyuFlag
-        + " " * 19                  # [161:180] Reserved
-        + "00"                       # [180:182] UmaKigoCD
-        + sex                        # [182:183] SexCD
-    )
-    return um.ljust(200)
+    実測 byte: ketto[12:22], birth[38:42], name[46:82]（全角18字）, sex[182:183]。
+    SexCD は全角名・カナ名・英字名の後 byte[182:183]。
+    """
+    buf = bytearray(b" " * 200)
+    _put_field(buf, 0, "UM")
+    _put_field(buf, 2, "1")                    # DataKubun
+    _put_field(buf, 3, "20260101")             # MakeDate
+    _put_field(buf, 12, ketto[:10])            # KettoNum
+    _put_field(buf, 38, f"{birth_year}0101")   # 生年月日 YYYYMMDD
+    _put_field(buf, 46, name)                  # UmaName（全角）
+    _put_field(buf, 180, "00")                 # UmaKigoCD
+    _put_field(buf, 182, sex)                  # SexCD
+    return buf.decode("cp932")
 
 
 def _ks(code: str = "0001", name: str = "テスト騎手") -> str:

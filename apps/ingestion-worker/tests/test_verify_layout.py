@@ -70,8 +70,11 @@ def _build_se(total: int = SE_RECORD_BYTES) -> str:
     _place(buf, 30, "2023100001")       # KettoNum
     _place(buf, 40, "サンプルホース")      # Bamei（全角7字=14byte, 36byte 枠内）
     _place(buf, 78, "2")                # SexCD=牝
-    _place(buf, 274, "01")              # KakuteiJyuni
-    _place(buf, 330, "339")             # HaronTimeL3
+    _place(buf, 296, "01205")           # KisyuCode（名略称[306:]直前）
+    _place(buf, 306, "騎手名")           # KisyuRyakusyo（錨）
+    _place(buf, 334, "01")              # KakuteiJyuni（実測 byte）
+    _place(buf, 338, "1344")            # Time MSSf（1:34.4）
+    _place(buf, 390, "339")             # HaronTimeL3（上り33.9s）
     return buf.decode("cp932")
 
 
@@ -147,8 +150,9 @@ class TestVerifySe:
     def test_bamei_and_downstream_sliced_in_byte_space(self) -> None:
         report = verify(_build_se())
         assert _field(report, "Bamei").value == "サンプルホース"
-        # 確定着順は byte 274（旧 char parser の 580 ではない）。
+        # 確定着順は実測 byte 334（旧 char parser の 580 / 暫定 274 ではない）。
         assert _field(report, "KakuteiJyuni").value == "01"
+        assert _field(report, "Time").value == "1344"
         assert _field(report, "HaronTimeL3").value == "339"
 
     def test_sex_interpretation(self) -> None:

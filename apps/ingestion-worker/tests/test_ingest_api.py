@@ -30,6 +30,10 @@ def _make_http_client(response_body: dict[str, Any], status_code: int = 200) -> 
     resp.json.return_value = response_body
     resp.raise_for_status.return_value = None
     resp.status_code = status_code
+    # httpx.Response.is_error は status_code >= 400 で True。Mock spec では自動生成されず
+    # 既定で truthy な Mock になり _post のエラー分岐へ誤って入るため明示的に設定する。
+    resp.is_error = status_code >= 400
+    resp.text = ""
     client = Mock(spec=httpx.Client)
     client.post.return_value = resp
     return client
@@ -81,8 +85,14 @@ class TestRegisterEntries:
             track_condition="良",
             weather="晴",
             entries=[
-                EntryRecord(horse_no=1, frame_no=1, ketto_num="2023100001", weight=460.0, jockey_code="0001", trainer_code="0001"),
-                EntryRecord(horse_no=2, frame_no=1, ketto_num="2023100002", weight=456.0, jockey_code="0002", trainer_code="0001"),
+                EntryRecord(
+                    horse_no=1, frame_no=1, ketto_num="2023100001",
+                    weight=460.0, jockey_code="0001", trainer_code="0001",
+                ),
+                EntryRecord(
+                    horse_no=2, frame_no=1, ketto_num="2023100002",
+                    weight=456.0, jockey_code="0002", trainer_code="0001",
+                ),
             ],
         )
 
@@ -120,20 +130,29 @@ class TestRecordResults:
             race_key="2026061805010101",
             track_condition="良",
             results=[
-                ResultRecord(horse_no=3, finish_pos=1, race_time_s=94.4, agari_3f_s=33.9, corner_1=3, corner_2=3, corner_3=3, corner_4=3),
-                ResultRecord(horse_no=1, finish_pos=2, race_time_s=94.6, agari_3f_s=34.2, corner_4=2),
+                ResultRecord(
+                    horse_no=3, finish_pos=1, race_time_s=94.4, agari_3f_s=33.9,
+                    corner_1=3, corner_2=3, corner_3=3, corner_4=3,
+                ),
+                ResultRecord(
+                    horse_no=1, finish_pos=2, race_time_s=94.6, agari_3f_s=34.2, corner_4=2,
+                ),
             ],
         )
 
     def test_sends_to_results_endpoint(self) -> None:
-        http = _make_http_client({"race_key": "2026061805010101", "rpci": 52.0, "pci3": 52.0, "formula_version": "pci-v1"})
+        http = _make_http_client(
+            {"race_key": "2026061805010101", "rpci": 52.0, "pci3": 52.0, "formula_version": "v1"}
+        )
         api = IngestApiClient("http://api", http_client=http)
         api.record_results(self._make_record())
         url = http.post.call_args.args[0]
         assert "/internal/ingest/results" in url
 
     def test_payload_includes_results(self) -> None:
-        http = _make_http_client({"race_key": "x", "rpci": 52.0, "pci3": 52.0, "formula_version": "pci-v1"})
+        http = _make_http_client(
+            {"race_key": "x", "rpci": 52.0, "pci3": 52.0, "formula_version": "pci-v1"}
+        )
         api = IngestApiClient("http://api", http_client=http)
         api.record_results(self._make_record())
         payload = http.post.call_args.kwargs["json"]
@@ -141,7 +160,9 @@ class TestRecordResults:
         assert payload["results"][0]["finish_pos"] == 1
 
     def test_returns_rpci(self) -> None:
-        http = _make_http_client({"race_key": "x", "rpci": 53.5, "pci3": 52.0, "formula_version": "pci-v1"})
+        http = _make_http_client(
+            {"race_key": "x", "rpci": 53.5, "pci3": 52.0, "formula_version": "pci-v1"}
+        )
         api = IngestApiClient("http://api", http_client=http)
         result = api.record_results(self._make_record())
         assert result["rpci"] == 53.5

@@ -13,7 +13,7 @@ CH: 調教師マスタ
 from __future__ import annotations
 
 from ingestion.models import HorseRecord, JockeyRecord, TrainerRecord
-from ingestion.parser.common import _i, _s, decode_sex
+from ingestion.parser.common import _bi, _bs, _s, decode_sex, to_cp932
 
 # ---------------------------------------------------------------------------
 # UM レコード（競走馬マスタ）  ― Ver.4.9 実測オフセット
@@ -42,22 +42,27 @@ from ingestion.parser.common import _i, _s, decode_sex
 
 
 def parse_um(record: str) -> HorseRecord | None:
-    """UM 固定長レコードを HorseRecord に変換する。"""
-    if len(record) < 64:
-        raise ValueError(f"UM レコードが短すぎます: {len(record)} chars（最低64必要）")
+    """UM 固定長レコードを HorseRecord に変換する。
 
-    rec_spec = _s(record, 0, 2)
+    SexCD は馬名(全角)・カナ名・英字名の後 byte[182:183] にあり、char スライスでは
+    ドリフトするため CP932 バイト列上で読む。
+    """
+    raw = to_cp932(record)
+    if len(raw) < 64:
+        raise ValueError(f"UM レコードが短すぎます: {len(raw)} bytes（最低64必要）")
+
+    rec_spec = _bs(raw, 0, 2)
     if rec_spec != "UM":
         raise ValueError(f"RecordSpec が UM ではありません: {rec_spec!r}")
 
-    data_kubun = _s(record, 2, 3)
+    data_kubun = _bs(raw, 2, 3)
     if data_kubun == "0":
         return None
 
-    ketto_num = _s(record, 12, 22)
-    birth_year = _i(record, 38, 42)  # 生年月日 YYYYMMDD の YYYY 部分
-    name = _s(record, 46, 64)
-    sex_cd = _s(record, 182, 183) if len(record) > 182 else ""
+    ketto_num = _bs(raw, 12, 22)
+    birth_year = _bi(raw, 38, 42)  # 生年月日 YYYYMMDD の YYYY 部分
+    name = _bs(raw, 46, 82)        # 馬名 全角18字=36byte
+    sex_cd = _bs(raw, 182, 183) if len(raw) > 182 else ""
     sex = decode_sex(sex_cd)
 
     return HorseRecord(
