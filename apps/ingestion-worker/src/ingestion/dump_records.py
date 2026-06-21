@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dotenv import load_dotenv  # noqa: E402
 
 from ingestion.client.windows_client import WindowsJvLinkClient  # noqa: E402
+from ingestion.parser.verify_layout import format_report, verify  # noqa: E402
 
 
 def _dump(label: str, record: str, highlight: dict[tuple[int, int], str] | None = None) -> None:
@@ -71,15 +72,6 @@ def _to_cp932(record: str) -> bytes:
     CP932 で可逆なので結果セクションの解析には影響しない。
     """
     return record.encode("cp932", errors="replace")
-
-
-def _dump_bytes(label: str, record: str, offsets: dict[tuple[int, int], str]) -> None:
-    """CP932 バイト列の指定オフセットを表示する（仕様書バイト位置の検証用）。"""
-    raw = _to_cp932(record)
-    print(f"\n--- {label}: CP932フィールド (bytelen={len(raw)}) ---")
-    for (s, e), name in sorted(offsets.items()):
-        txt = "(範囲外)" if len(raw) < e else raw[s:e].decode("cp932", errors="replace")
-        print(f"  [{s}:{e}] {txt!r}  ← {name}")
 
 
 def _dump_byte_ruler(label: str, record: str, start: int, end: int) -> None:
@@ -187,18 +179,10 @@ def main() -> None:
                         (32, 82): "RaceName? (50chars)",
                         (82, 84): "Tosu?",
                     })
-                    # CP932 バイト位置で仕様書フィールドを検証する（距離=byte697 等）。
-                    _dump_bytes(f"RA #{ra_count + 1}", rec, {
-                        (614, 615): "GradeCD?",
-                        (617, 619): "SyubetuCD?(競走種別)",
-                        (697, 701): "Kyori?(距離)",
-                        (705, 707): "TrackCD?(芝ダ)",
-                        (819, 821): "SyussoTosu?(出走頭数)",
-                        (823, 824): "TenkoCD?(天候)",
-                        (824, 825): "SibaBabaCD?(芝馬場)",
-                        (825, 826): "DirtBabaCD?(ダ馬場)",
-                    })
-                    _dump_byte_ruler(f"RA #{ra_count + 1}", rec, 690, 840)
+                    # 仕様マップ(jv_spec)で全フィールドを byte 単位に検証する。
+                    print(format_report(verify(rec)))
+                    # 未マップ領域（条件ブロック〜距離）は byte ルーラーで調査する。
+                    _dump_byte_ruler(f"RA #{ra_count + 1}", rec, 619, 707)
                     ra_count += 1
                 elif spec == "SE" and se_count < 3:
                     data_kubun = rec[2:3]
@@ -213,19 +197,9 @@ def main() -> None:
                         (67, 72): "KisyuCode",
                         (77, 82): "ChokyosiCode",
                     })
-                    # CP932 バイト位置で調教師/騎手コード・成績フィールドを検証する。
-                    # ChokyosiCode=byte85 は実データで確定済み。他は仕様書からの推定値で、
-                    # バイトルーラーと突き合わせて確定する。
-                    _dump_bytes(f"SE #{se_count + 1}", rec, {
-                        (85, 90): "ChokyosiCode(調教師)",
-                        (236, 241): "KisyuCode?(騎手)",
-                        (264, 267): "BaTaijyu?(馬体重)",
-                        (274, 276): "KakuteiJyuni?(確定着順)",
-                        (278, 282): "Time?(走破ﾀｲﾑ)",
-                        (291, 299): "Jyuni1-4c?(通過順)",
-                        (330, 333): "HaronTimeL3?(上り3F)",
-                    })
-                    # 結果セクション全体をバイト単位で見て位置を確定する。
+                    # 仕様マップ(jv_spec)で全フィールドを byte 単位に検証する。
+                    print(format_report(verify(rec)))
+                    # 成績セクションの未マップ位置は byte ルーラーで確定する。
                     _dump_byte_ruler(f"SE #{se_count + 1}", rec, 80, 345)
                     se_count += 1
                 if ra_count >= 3 and se_count >= 3:
