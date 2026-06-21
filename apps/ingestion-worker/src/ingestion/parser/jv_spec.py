@@ -63,7 +63,7 @@ _T = Confidence.TENTATIVE
 # 競走名 本題(Hondai)[33:] から全角が始まり、ここから char スライスは破綻する。
 RA_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("RecordSpec", 0, 2, "code", _C, "レコード種別ID = 'RA'"),
-    FieldSpec("DataKubun", 2, 1, "code", _C, "1=新規 2=更新 0=削除 など"),
+    FieldSpec("DataKubun", 2, 1, "code", _C, "1=新規 2=更新 7=確定 0=削除 など（RA確定は7）"),
     FieldSpec("MakeDate", 3, 8, "date", _C, "データ作成年月日 YYYYMMDD"),
     FieldSpec("Year", 11, 4, "num", _C, "開催年 YYYY（race_key はここから）"),
     FieldSpec("MonthDay", 15, 4, "num", _C, "開催月日 MMDD"),
@@ -97,13 +97,16 @@ RA_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("KigoCD", 619, 3, "code", _T, "競走記号コード"),
     FieldSpec("JyuryoCD", 622, 1, "code", _T, "重量種別コード"),
     # 623〜696 は JyokenCD 配列 + 競走条件名称(60byte) 等。未マップ（byte ルーラーで調査）。
-    FieldSpec("Kyori", 697, 4, "num", _T, "距離(m)。100〜4000 の範囲なら妥当値"),
-    FieldSpec("TrackCD", 705, 2, "code", _T, "トラックコード（10番台=芝/20番台=ダ/50番台=障害）"),
-    # 707〜818 はコース区分・本賞金・着順賞金 等。未マップ。
-    FieldSpec("SyussoTosu", 819, 2, "num", _T, "出走頭数"),
-    FieldSpec("TenkoCD", 823, 1, "code", _T, "天候コード"),
-    FieldSpec("SibaBabaCD", 824, 1, "code", _T, "芝馬場状態コード"),
-    FieldSpec("DirtBabaCD", 825, 1, "code", _T, "ダート馬場状態コード"),
+    # 実測確定: 2026-06-13 函館1R(JyoCD=02 Kyori=1200 TrackCD=17)
+    FieldSpec("Kyori", 697, 4, "num", _C, "距離(m)。実測確定"),
+    FieldSpec("TrackCD", 705, 2, "code", _C, "トラックコード(10番台=芝/20番台=ダ)。実測 '17'=芝"),
+    # 707〜??? は賞金・条件 等。未マップ。
+    # 下記は DataKubun='7'(確定後)RA で全て '0'/'00' → オフセット誤りの疑い。要再調査。
+    # _dump_nonblank_regions で非空白領域を探して正しい位置を特定すること。
+    FieldSpec("SyussoTosu", 819, 2, "num", _T, "出走頭数【要再調査: 確定後で '00'】"),
+    FieldSpec("TenkoCD", 823, 1, "code", _T, "天候コード【要再調査: 確定後で '0'】"),
+    FieldSpec("SibaBabaCD", 824, 1, "code", _T, "芝馬場状態コード【要再調査】"),
+    FieldSpec("DirtBabaCD", 825, 1, "code", _T, "ダート馬場状態コード【要再調査】"),
 )
 
 

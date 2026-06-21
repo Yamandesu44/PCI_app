@@ -45,6 +45,8 @@ from ingestion.parser.common import (
 def parse_ra(record: str) -> RaceEntriesRecord | None:
     """RA 固定長レコード文字列を RaceEntriesRecord に変換する。
 
+    DataKubun の意味（実データで確認済み）:
+      "1": 新規  "2": 更新  "7": 確定（レース後）  "0": 削除
     DataKubun "0"（削除）の場合は None を返す。
     """
     if len(record) < 84:
