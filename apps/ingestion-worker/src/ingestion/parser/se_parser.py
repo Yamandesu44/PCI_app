@@ -53,9 +53,9 @@ from ingestion.parser.common import (
 # [580:600] 着順/走破タイム/上がり3F/通過順位（Ver.3 暫定位置）
 # ---------------------------------------------------------------------------
 
-_KUBUN_ENTRY = frozenset({"1", "2"})  # 出走前・出馬表
-_KUBUN_RESULT = frozenset({"4"})      # 確定後
-_KUBUN_CANCEL = frozenset({"3"})      # 取消/除外
+_KUBUN_ENTRY = frozenset({"1", "2"})     # 出走前・出馬表
+_KUBUN_RESULT = frozenset({"4", "7"})   # 確定後（'4' 旧仕様 / '7' 実測確認: 2026-06-13 函館1R）
+_KUBUN_CANCEL = frozenset({"3"})        # 取消/除外
 
 
 def parse_race_key_from_se(record: str) -> str:

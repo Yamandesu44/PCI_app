@@ -203,7 +203,8 @@ def main() -> None:
                     if not se_saved:
                         _save_raw("dumped_se.txt", rec)
                         se_saved = True
-                    if rec[2:3] == "4" and not se_result_saved:
+                    # 確定後 SE は DataKubun='4' または '7'（実測で '7' を確認）
+                    if rec[2:3] in {"4", "7"} and not se_result_saved:
                         _save_raw("dumped_se_result.txt", rec)
                         se_result_saved = True
                 if spec == "RA" and ra_count < 3:

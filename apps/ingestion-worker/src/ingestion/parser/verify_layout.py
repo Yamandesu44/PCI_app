@@ -41,9 +41,9 @@ _DATA_KUBUN: dict[str, str] = {
     "1": "新規",
     "2": "更新",
     "3": "取消/除外",
-    "4": "確定（SE）",
+    "4": "確定",
     "5": "成績確定",
-    "7": "確定（RA）",  # RA レコードで実測確認: 2026-06-13 函館1R
+    "7": "確定",  # RA・SE ともに実測確認: 2026-06-13 函館1R
     "9": "レース中止",
 }
 
@@ -219,6 +219,46 @@ def format_report(report: LayoutReport) -> str:
     return "\n".join(lines)
 
 
+def format_byte_map(record: str, ruler_from: int = 82) -> str:
+    """CP932 バイトの非空白マップとバイトルーラーを返す（フィールド位置特定用）。
+
+    非空白マップ: space(0x20)/NUL(0x00) 以外の連続バイト列を列挙する。
+    バイトルーラー: ruler_from 以降を 10 バイトごとに表示する。
+    結果フィールドが未確定の SE 等で正しい byte オフセットを目視特定するために使う。
+    """
+    raw = to_cp932(record)
+    n = len(raw)
+    lines: list[str] = []
+
+    lines.append(f"\n{'=' * 72}")
+    lines.append(f" バイトマップ  len={n}  — フィールド位置特定用")
+    lines.append(f"{'=' * 72}")
+
+    # 非空白領域マップ（space/NUL を空白とみなす）
+    blank = {0x20, 0x00}
+    lines.append("[非空白領域マップ]  (space/NUL を除いた連続バイト):")
+    i = 0
+    while i < n:
+        if raw[i] not in blank:
+            j = i
+            while j < n and raw[j] not in blank:
+                j += 1
+            decoded = raw[i:j].decode("cp932", errors="replace")
+            lines.append(f"  [{i:4d}:{j:4d}] (len{j - i:3d}) {decoded!r}")
+            i = j
+        else:
+            i += 1
+
+    # バイトルーラー（ruler_from 以降）
+    lines.append(f"\n[バイトルーラー: {ruler_from}〜{n}]  (10バイトごと):")
+    for pos in range(ruler_from, n, 10):
+        chunk = raw[pos : pos + 10]
+        decoded = chunk.decode("cp932", errors="replace")
+        lines.append(f"  [{pos:4d}:{pos + 10:4d}] {decoded!r}")
+
+    return "\n".join(lines)
+
+
 def _extract_record(text: str) -> str:
     """ファイル/標準入力のテキストから最初のレコード行を取り出す。
 
@@ -232,8 +272,20 @@ def _extract_record(text: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """エントリーポイント。
+
+    Usage::
+
+        verify_layout [--map] [FILE]
+
+    --map: 仕様マップ照合に加え、CP932 バイト全域の非空白マップと
+           バイトルーラーを出力する。SE 等の結果フィールドオフセットを
+           特定する際に使う（出力が長くなる）。
+    """
     args = sys.argv[1:] if argv is None else argv
-    text = Path(args[0]).read_text(encoding="utf-8") if args else sys.stdin.read()
+    show_map = "--map" in args
+    file_args = [a for a in args if not a.startswith("--")]
+    text = Path(file_args[0]).read_text(encoding="utf-8") if file_args else sys.stdin.read()
 
     record = _extract_record(text)
     if not record:
@@ -247,6 +299,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(format_report(report))
+    if show_map:
+        print(format_byte_map(record))
     return 0
 
 
