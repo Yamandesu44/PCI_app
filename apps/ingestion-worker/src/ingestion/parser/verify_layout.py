@@ -1,13 +1,19 @@
 """実 JV-Data レコードを仕様マップ（jv_spec）と突き合わせて検証するハーネス。
 
-JV-Link 不要・Linux でも実行可能。Windows で取得した 1 レコードをファイルに保存し::
+Windows での使い方（どちらでも可）::
 
-    python -m ingestion.parser.verify_layout dumped_ra.txt
+    # 直接実行 — PYTHONPATH 不要（このファイルを src 配下から参照）
+    cd C:\\path\\to\\PCI_app\\apps\\ingestion-worker
+    py -3.12-32 src\\ingestion\\parser\\verify_layout.py dumped_ra.txt
 
-で各バイトオフセットの値を一覧表示し、仕様書のフィールド位置を 1 つずつ確定する。
-標準入力からも読める::
+    # -m 実行 — 先に PYTHONPATH を設定する
+    cd C:\\path\\to\\PCI_app\\apps\\ingestion-worker
+    set PYTHONPATH=%CD%\\src
+    py -3.12-32 -m ingestion.parser.verify_layout dumped_ra.txt
 
-    type dumped_ra.txt | python -m ingestion.parser.verify_layout
+ファイルの代わりに標準入力も使える::
+
+    type dumped_ra.txt | py -3.12-32 src\\ingestion\\parser\\verify_layout.py
 
 設計意図:
   JV-Data のオフセットは全て **バイト** 単位。``record.encode("cp932")`` した bytes 上で
@@ -22,8 +28,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from ingestion.parser.common import decode_baba, decode_sex, decode_tenko
-from ingestion.parser.jv_spec import Confidence, FieldSpec, get_layout
+# 直接スクリプト実行（py verify_layout.py）時でも import ingestion.* が解決できるよう
+# このファイルの 3 階層上の src ディレクトリを sys.path に追加する。
+# -m 実行時はすでに解決済みなので二重登録になるだけで無害。
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from ingestion.parser.common import decode_baba, decode_sex, decode_tenko  # noqa: E402
+from ingestion.parser.jv_spec import Confidence, FieldSpec, get_layout  # noqa: E402
 
 _DATA_KUBUN: dict[str, str] = {
     "0": "削除",
