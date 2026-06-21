@@ -9,7 +9,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    database_url: str = "postgresql+psycopg://pci:pci_dev@localhost:5432/pci_dev"
+    database_url: str = "postgresql+psycopg2://pci:pci_dev@localhost:5432/pci_dev"
     gemini_api_key: str | None = None
     ingest_token: str | None = None  # Bearer token for /internal/ingest/* endpoints
 
