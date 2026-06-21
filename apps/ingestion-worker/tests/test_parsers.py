@@ -18,7 +18,7 @@ from ingestion.parser.common import (
     decode_tenko,
     decode_track,
 )
-from ingestion.parser.jv_spec import SE_RECORD_BYTES
+from ingestion.parser.jv_spec import RA_RECORD_BYTES, SE_RECORD_BYTES
 from ingestion.parser.master_parsers import parse_ch, parse_ks, parse_um
 from ingestion.parser.ra_parser import parse_ra
 from ingestion.parser.se_parser import (
@@ -32,6 +32,12 @@ from ingestion.parser.se_parser import (
 # ヘルパー: テスト用固定長レコード生成
 # ---------------------------------------------------------------------------
 
+def _ra_put(buf: bytearray, off: int, s: str) -> None:
+    """CP932 バイト列としてフィールドを byte オフセットへ書き込む（全角=2byte）。"""
+    b = s.encode("cp932")
+    buf[off:off + len(b)] = b
+
+
 def _ra(
     jyo_cd: str = "05",
     kaiji: str = "01",
@@ -41,35 +47,27 @@ def _ra(
     month_day: str = "0618",
     kyori: int = 1600,
     race_name: str = "3歳未勝利",
-    tosu: int = 10,
-    race_class: str = "3歳未勝利",
 ) -> str:
-    """Ver.4.9 RA レコードのテスト用フィクスチャ。
-    実測オフセット: KaisaiNengappi[11:19], JyoCd[19:21], RaceName[32:82], Tosu[82:84]
-    NOTE: ToraCd / TenkoCd / BabaCd / GradeCd は dump_records で確認後に追加予定
+    """RA レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
+
+    実測 byte: Hondai[33:93], Kyori[697:701], TrackCD[705:707]='17'(芝内回り)。
+    field_size/weather/track_condition の byte 位置は未確定のため省略（0/None を返す）。
     """
-    def p(v: str, w: int) -> str:
-        return v.ljust(w)[:w]
-
-    def pr(v: str, w: int) -> str:
-        return v.rjust(w, "0")[:w]
-
-    ra = (
-        "RA"
-        + "1"                          # [2:3]  DataKubun
-        + "20260618"                    # [3:11] MakeDate (作成日、固定)
-        + f"{nen}{month_day}"           # [11:19] KaisaiNengappi (開催年月日)
-        + jyo_cd                        # [19:21]
-        + kaiji                         # [21:23]
-        + nichiji                       # [23:25]
-        + race_no                       # [25:27]
-        + "1"                           # [27:28] YoubiCd
-        + pr(str(kyori), 4)             # [28:32] Kyori (仮置き)
-        + p(race_name, 50)              # [32:82] RaceName
-        + pr(str(tosu), 2)              # [82:84] Tosu
-        + p(race_class, 50)             # [84:134] RaceClass
-    )
-    return ra.ljust(200)
+    buf = bytearray(b" " * RA_RECORD_BYTES)
+    _ra_put(buf, 0, "RA")
+    _ra_put(buf, 2, "1")                       # DataKubun=1（新規）
+    _ra_put(buf, 3, "20260618")                # MakeDate
+    _ra_put(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
+    _ra_put(buf, 19, jyo_cd)
+    _ra_put(buf, 21, kaiji)
+    _ra_put(buf, 23, nichiji)
+    _ra_put(buf, 25, race_no)
+    _ra_put(buf, 27, "10")                     # YoubiCD (2byte)
+    _ra_put(buf, 29, "0000")                   # TokuNum (一般)
+    _ra_put(buf, 33, race_name)                # Hondai（全角30字まで）
+    _ra_put(buf, 697, f"{kyori:04d}")          # Kyori CONFIRMED
+    _ra_put(buf, 705, "17")                    # TrackCD='17'(芝内回り) CONFIRMED
+    return buf.decode("cp932")
 
 
 def _se_put(buf: bytearray, off: int, s: str) -> None:
@@ -289,8 +287,8 @@ class TestRaParser:
         assert result is not None
         assert result.distance_m == 0
 
-    def test_track_type_default_turf(self) -> None:
-        # ToraCd オフセット未確定のため暫定 "芝" を返す
+    def test_track_type_turf_from_trackcd(self) -> None:
+        # TrackCD='17'(芝内回り) を実測確定 → decode_track で "芝"
         result = parse_ra(_ra())
         assert result is not None
         assert result.track_type == "芝"
@@ -313,10 +311,11 @@ class TestRaParser:
         assert result is not None
         assert result.grade is None
 
-    def test_field_size(self) -> None:
-        result = parse_ra(_ra(tosu=8))
+    def test_field_size_unknown_is_zero(self) -> None:
+        # SyussoTosu の byte 位置は未特定のため暫定 0（RA --map で特定予定）
+        result = parse_ra(_ra())
         assert result is not None
-        assert result.field_size == 8
+        assert result.field_size == 0
 
     def test_jyo_cd(self) -> None:
         result = parse_ra(_ra(jyo_cd="05"))

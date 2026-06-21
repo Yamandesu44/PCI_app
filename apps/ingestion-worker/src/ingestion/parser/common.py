@@ -84,12 +84,6 @@ _BABA_MAP: dict[str, str] = {
     "4": "不良",
 }
 
-_TRACK_MAP: dict[str, str] = {
-    "1": "芝",
-    "2": "ダート",
-    "3": "障害",
-}
-
 _SEX_MAP: dict[str, str] = {
     "1": "牡",
     "2": "牝",
@@ -106,7 +100,21 @@ def decode_baba(code: str) -> str | None:
 
 
 def decode_track(code: str) -> str:
-    return _TRACK_MAP.get(code.strip(), "芝")
+    """TrackCD を芝/ダート/障害に変換する。
+
+    JV-Data Ver.4.9 の TrackCD は2桁コード: 10番台=芝, 20番台=ダート, 30番台=障害。
+    旧仕様の1桁コード(1/2/3)も受け付ける。
+    """
+    c = code.strip()
+    if c.isdigit():
+        n = int(c)
+        if n == 1 or 10 <= n <= 19:
+            return "芝"
+        if n == 2 or 20 <= n <= 29:
+            return "ダート"
+        if n == 3 or 30 <= n <= 39:
+            return "障害"
+    return "芝"
 
 
 def decode_sex(code: str) -> str | None:

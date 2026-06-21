@@ -1,45 +1,34 @@
 """RA レコード（レース詳細）パーサ。
 
-JV-Data Ver.4.9 実データより逆算したフィールド定義。
-Ver.3.0.0 からの変更点:
-  - [11:19] KaisaiNengappi（開催年月日 YYYYMMDD）が追加された
-  - 旧 Nen[20:24] / MonthDay[24:28] は KaisaiNengappi に統合
-  - JyoCd 以降が +8 にシフト
-  - RaceName は [32:82] から始まる（40文字ログで実測確認済み）
-  - ToraCd / TenkoCd / BabaCd / GradeCd の新オフセット未確定（dump_records で調査中）
+JV-Data 実データ（2026-06-13 函館1R, DataKubun=7 確定）で byte 位置を校正済み。
+オフセットは jv_spec.RA_FIELDS と一致させること（単一の真実の場所）。
 
-RA レコード総バイト数: 856 bytes（改行を含む場合は 857 or 858）
-エンコード: Shift-JIS（ただし JV-Link は Unicode 変換済み文字列を返すため str として処理）
+重要: JV-Link が返す Unicode 文字列は **CP932 バイト列に戻してから** byte オフセットで
+切り出す。競走名 Hondai[33:93]（全角30字=60byte）以降、char スライスは破綻するため
+全フィールドを to_cp932() 後の bytes 上で読む。
+
+byte オフセット（実測確定分）:
+  KaisaiNengappi [11:19]  YoubiCD [27:29]  TokuNum [29:33]
+  Hondai         [33:93]  （競走名本題 全角30字）
+  Kyori          [697:701] CONFIRMED 2026-06-13 函館1R = 1200
+  TrackCD        [705:707] CONFIRMED 実測 '17'=芝内回り
+
+未確定（実バイト位置未特定）→ 暫定デフォルト:
+  SyussoTosu / TenkoCD / SibaBabaCD / DirtBabaCD → field_size=0, weather=None, track_condition=None
 """
 
 from __future__ import annotations
 
 from ingestion.models import RaceEntriesRecord
 from ingestion.parser.common import (
-    _i,
-    _s,
+    _bi,
+    _bs,
     build_race_key,
+    decode_track,
     parse_race_date,
+    to_cp932,
 )
-
-# ---------------------------------------------------------------------------
-# RA レコード フィールド定義（Ver.4.9 実測オフセット）
-# ---------------------------------------------------------------------------
-# [0:2]   RecordSpec = "RA"
-# [2:3]   DataKubun (1=新規, 2=更新, 0=削除)
-# [3:11]  MakeDate (作成日 YYYYMMDD)
-# [11:19] KaisaiNengappi（開催年月日 YYYYMMDD）← Ver.4.9 追加
-# [19:21] JyoCd
-# [21:23] Kaiji（開催回）
-# [23:25] Nichiji（開催日）
-# [25:27] RaceNo
-# [27:28] YoubiCd
-# [28:32] ??? (実データ確認中: 非グレードは "0000"、G2は "0074" — 距離でも等級でもない可能性)
-# [32:82] RaceName（50 Unicode chars / 40文字ログで開始位置を実測確認済み）
-# [82:84] Tosu（出走頭数）
-# [84:134] RaceClass（レースクラス名）
-# ToraCd / TenkoCd / BabaCd / GradeCd: dump_records.py で全体確認後に追記予定
-# ---------------------------------------------------------------------------
+from ingestion.parser.jv_spec import RA_RECORD_BYTES
 
 
 def parse_ra(record: str) -> RaceEntriesRecord | None:
@@ -49,52 +38,58 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
       "1": 新規  "2": 更新  "7": 確定（レース後）  "0": 削除
     DataKubun "0"（削除）の場合は None を返す。
     """
-    if len(record) < 84:
-        raise ValueError(f"RA レコードが短すぎます: {len(record)} bytes")
+    raw = to_cp932(record)
+    if len(raw) < RA_RECORD_BYTES:
+        raise ValueError(
+            f"RA レコードが短すぎます: {len(raw)} bytes（{RA_RECORD_BYTES}必要）"
+        )
 
-    rec_spec = _s(record, 0, 2)
+    rec_spec = _bs(raw, 0, 2)
     if rec_spec != "RA":
         raise ValueError(f"RecordSpec が RA ではありません: {rec_spec!r}")
 
-    data_kubun = _s(record, 2, 3)
+    data_kubun = _bs(raw, 2, 3)
     if data_kubun == "0":
-        return None  # 削除レコード
+        return None
 
-    # 開催年月日は KaisaiNengappi [11:19] から取り出す
-    nen = _s(record, 11, 15)
-    month_day = _s(record, 15, 19)
-
-    jyo_cd = _s(record, 19, 21)
-    kaiji = _s(record, 21, 23)
-    nichiji = _s(record, 23, 25)
-    race_no = _s(record, 25, 27)
+    # 開催年月日 [11:19] — 全て半角のため char == byte
+    nen = _bs(raw, 11, 15)
+    month_day = _bs(raw, 15, 19)
+    jyo_cd = _bs(raw, 19, 21)
+    kaiji = _bs(raw, 21, 23)
+    nichiji = _bs(raw, 23, 25)
+    race_no = _bs(raw, 25, 27)
 
     race_key = build_race_key(jyo_cd, kaiji, nichiji, race_no, nen, month_day)
     race_date = parse_race_date(nen, month_day)
 
-    # [28:32] の正体は dump_records で確認中。100-4000m の範囲のみ距離として採用する。
-    kyori_raw = _i(record, 28, 32)
-    kyori = kyori_raw if 100 <= kyori_raw <= 4000 else 0
+    # 競走名 本題 [33:93] = 全角30字(60byte)。char スライスはここで破綻するため byte で読む。
+    race_name = _bs(raw, 33, 93)
 
-    # ToraCd / TenkoCd / BabaCd / GradeCd はオフセット未確定 → dump_records 確認後に追記
-    track_type = "芝"
+    # 距離 [697:701] — 実測確定（2026-06-13 函館1R = 1200m）
+    dist_raw = _bi(raw, 697, 701)
+    distance_m = dist_raw if 100 <= dist_raw <= 4000 else 0
+
+    # トラックコード [705:707] — 実測確定（'17'=芝内回り）
+    track_cd = _bs(raw, 705, 707)
+    track_type = decode_track(track_cd)
+
+    # 以下は実バイト位置が未確定のため暫定デフォルト。
+    # RA の --map 結果から SyussoTosu/TenkoCD/BabaCd の正しい位置を特定すること。
+    field_size = 0
     weather = None
     track_condition = None
     grade = None
-
-    race_name = _s(record, 32, 82) if len(record) >= 82 else _s(record, 32, len(record))
-    tosu = _i(record, 82, 84) if len(record) >= 84 else 0
-    race_class = _s(record, 84, 134) if len(record) >= 134 else race_name
 
     return RaceEntriesRecord(
         race_key=race_key,
         race_date=race_date,
         jyo_cd=jyo_cd,
-        distance_m=kyori,
+        distance_m=distance_m,
         track_type=track_type,
-        field_size=tosu,
+        field_size=field_size,
         track_condition=track_condition,
         weather=weather,
         grade=grade,
-        race_class=race_class or race_name or None,
+        race_class=race_name or None,
     )
