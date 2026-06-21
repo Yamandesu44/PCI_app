@@ -4,6 +4,13 @@
     py -3.12-32 src\\ingestion\\dump_records.py        # 直接実行（PYTHONPATH 不要）
     set PYTHONPATH=%CD%\\src & py -3.12-32 -m ingestion.dump_records
 
+実行すると最初の RA / SE（および確定後 SE）の生レコードを raw_dump/ に保存する:
+    raw_dump\\dumped_ra.txt         RA レコード（レース詳細）
+    raw_dump\\dumped_se.txt         SE レコード（最初の1件）
+    raw_dump\\dumped_se_result.txt  確定後 SE（DataKubun=4。無ければ作られない）
+保存後は JV-Link なしで何度でもオフライン検証できる:
+    py -3.12-32 -m ingestion.parser.verify_layout raw_dump\\dumped_ra.txt
+
 JV-Data 仕様の実バイト配置を確認し、パーサのオフセットを校正するための一時ツール。
 """
 
@@ -23,6 +30,22 @@ from dotenv import load_dotenv  # noqa: E402
 
 from ingestion.client.windows_client import WindowsJvLinkClient  # noqa: E402
 from ingestion.parser.verify_layout import format_report, verify  # noqa: E402
+
+# 生レコードの保存先 = apps/ingestion-worker/raw_dump/（.gitignore 済み）。
+# JRA-VAN 生データはコミット禁止のため、保存はこのディレクトリに限定する。
+_RAW_DUMP_DIR = Path(__file__).resolve().parents[2] / "raw_dump"
+
+
+def _save_raw(filename: str, record: str) -> None:
+    """生レコードを1行で raw_dump/ に書き出す（verify_layout の入力用）。
+
+    JV-Link を毎回叩かずに、保存した生レコードへ verify_layout を繰り返し当てて
+    jv_spec のオフセットをオフラインで校正できるようにするのが目的。
+    """
+    _RAW_DUMP_DIR.mkdir(exist_ok=True)
+    path = _RAW_DUMP_DIR / filename
+    path.write_text(record + "\n", encoding="utf-8")
+    print(f"  → 生レコード保存: {path}（verify_layout で検証可能）")
 
 
 def _dump(label: str, record: str, highlight: dict[tuple[int, int], str] | None = None) -> None:
@@ -158,6 +181,10 @@ def main() -> None:
     ra_count = 0
     se_count = 0
     scanned = 0
+    # 生レコード保存フラグ（画面表示の上限 3 とは独立に、最初の1件ずつ確保する）。
+    ra_saved = False
+    se_saved = False
+    se_result_saved = False
     # closing() で break 時も即座に JVClose し、JV-Link セッションを放置しない。
     try:
         with contextlib.closing(
@@ -166,6 +193,19 @@ def main() -> None:
             for rec in race_gen:
                 scanned += 1
                 spec = rec[:2]
+                # 表示とは独立に、最初の RA / SE（および確定後 SE）を raw_dump へ保存する。
+                # JV-Link 取得は1回で済み、以降は verify_layout を保存済みレコードへ
+                # 繰り返し当ててオフラインで jv_spec を校正できる。
+                if spec == "RA" and not ra_saved:
+                    _save_raw("dumped_ra.txt", rec)
+                    ra_saved = True
+                elif spec == "SE":
+                    if not se_saved:
+                        _save_raw("dumped_se.txt", rec)
+                        se_saved = True
+                    if rec[2:3] == "4" and not se_result_saved:
+                        _save_raw("dumped_se_result.txt", rec)
+                        se_result_saved = True
                 if spec == "RA" and ra_count < 3:
                     _dump(f"RA #{ra_count + 1}", rec, {
                         (3, 11):  "MakeDate",

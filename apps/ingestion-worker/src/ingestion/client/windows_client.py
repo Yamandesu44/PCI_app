@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -129,7 +129,7 @@ class WindowsJvLinkClient:
 
     def iter_race_records_raw(
         self, date_from: str, date_to: str, option: int = 1
-    ) -> Iterator[str]:
+    ) -> Generator[str, None, None]:
         """RACE データスペックの全レコード（RA/SE 混在）を1回の JVOpen で返す。
 
         デバッグ用。RA と SE を別々に JVOpen せず一括取得する。
@@ -154,7 +154,7 @@ class WindowsJvLinkClient:
         """調教師マスタ CH レコードを取得する（DIFF データ種別）。"""
         yield from self._iter_records("DIFF", record_types={"CH"})
 
-    def iter_diff_records_raw(self) -> Iterator[str]:
+    def iter_diff_records_raw(self) -> Generator[str, None, None]:
         """DIFF データスペックの全レコード（UM/KS/CH 混在）を1回の JVOpen で返す。
 
         UM/KS/CH を別々のジェネレータで取得して途中 break すると、各 JV-Link
