@@ -31,7 +31,37 @@ def _opt_i(record: str, start: int, end: int) -> int | None:
     return int(raw) if raw.isdigit() and int(raw) > 0 else None
 
 
-def build_race_key(jyo_cd: str, kaiji: str, nichiji: str, race_no: str, nen: str, month_day: str) -> str:
+# ---------------------------------------------------------------------------
+# バイト単位スライス（CP932）
+# ---------------------------------------------------------------------------
+# JV-Data 仕様のオフセットはすべて **バイト** 単位。JV-Link が返す Unicode str を
+# そのまま char でスライスすると、全角フィールド（馬名・馬主名・服色等）を跨いだ
+# 時点で以降が全部ズレる。jv_spec のオフセットは必ず CP932 バイト列上で適用する。
+
+
+def to_cp932(record: str) -> bytes:
+    """JV-Link が返す Unicode 文字列を元の CP932(Shift-JIS) バイト列に戻す。"""
+    return record.encode("cp932", errors="replace")
+
+
+def _bs(raw: bytes, start: int, end: int) -> str:
+    """CP932 バイト列から指定バイト範囲を取り出してデコード・トリムする。"""
+    return raw[start:end].decode("cp932", errors="replace").strip()
+
+
+def _bi(raw: bytes, start: int, end: int, default: int = 0) -> int:
+    s = _bs(raw, start, end)
+    return int(s) if s.isdigit() else default
+
+
+def _opt_bi(raw: bytes, start: int, end: int) -> int | None:
+    s = _bs(raw, start, end)
+    return int(s) if s.isdigit() and int(s) > 0 else None
+
+
+def build_race_key(
+    jyo_cd: str, kaiji: str, nichiji: str, race_no: str, nen: str, month_day: str
+) -> str:
     """レースキー 16桁を組み立てる: YYYY(4) + MMDD(4) + JYO(2) + KAI(2) + NICHI(2) + R(2)。"""
     return f"{nen}{month_day}{jyo_cd}{kaiji}{nichiji}{race_no}"
 

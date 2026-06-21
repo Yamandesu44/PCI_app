@@ -18,6 +18,7 @@ from ingestion.parser.common import (
     decode_tenko,
     decode_track,
 )
+from ingestion.parser.jv_spec import SE_RECORD_BYTES
 from ingestion.parser.master_parsers import parse_ch, parse_ks, parse_um
 from ingestion.parser.ra_parser import parse_ra
 from ingestion.parser.se_parser import (
@@ -71,6 +72,12 @@ def _ra(
     return ra.ljust(200)
 
 
+def _se_put(buf: bytearray, off: int, s: str) -> None:
+    """CP932 バイト列としてフィールドを byte オフセットへ書き込む（全角=2byte）。"""
+    b = s.encode("cp932")
+    buf[off:off + len(b)] = b
+
+
 def _se_entry(
     jyo_cd: str = "05",
     kaiji: str = "01",
@@ -85,44 +92,31 @@ def _se_entry(
     sex_cd: str = "1",
     trainer_code: str = "00001",
     jockey_code: str = "00001",
-    weight: int = 460,
 ) -> str:
-    """Ver.4.9 SE 出走前レコードのテスト用フィクスチャ。
-    実測オフセット: KaisaiNengappi[11:19], JyoCd[19:21], Wakuban[27:28],
-    Umaban[28:30], KettoNum[30:40], Bamei[40:58], SexCD[60:61],
-    KisyuCode[67:72], ChokyosiCode[77:82]
+    """SE 出走前レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
+
+    実測 byte: Bamei[40:76], SexCD[78:79], ChokyosiCode[85:90]（名略称[90:98]直前）,
+               KisyuCode[296:301]（名略称[306:314]直前）。
     """
-    def p(v: str, w: int) -> str:
-        return v.ljust(w)[:w]
-
-    def pr(v: str, w: int) -> str:
-        return v.rjust(w, "0")[:w]
-
-    se = (
-        "SE"                            # [0:2]
-        + "1"                           # [2:3]   DataKubun
-        + "20260617"                    # [3:11]  MakeDate（作成日）
-        + f"{nen}{month_day}"           # [11:19] KaisaiNengappi（開催日）
-        + jyo_cd                        # [19:21]
-        + kaiji                         # [21:23]
-        + nichiji                       # [23:25]
-        + race_no                       # [25:27]
-        + pr(str(frame_no), 1)          # [27:28] Wakuban（1桁）
-        + pr(str(horse_no), 2)          # [28:30] Umaban（2桁）
-        + p(ketto_num, 10)              # [30:40] KettoNum
-        + p(uma_name, 18)               # [40:58] Bamei
-        + "00"                          # [58:60] UmaKigoCD
-        + sex_cd                        # [60:61] SexCD
-        + "1"                           # [61:62] HinsyuCD
-        + "03"                          # [62:64] KeiroCD
-        + "000"                         # [64:67] 予備
-        + p(jockey_code, 5)             # [67:72] KisyuCode
-        + p("騎手略", 4)                # [72:76] 騎手略称（4全角）
-        + "0"                           # [76:77] 見習区分等
-        + p(trainer_code, 5)            # [77:82] ChokyosiCode
-        + p("調教師テスト", 36)         # [82:...] 調教師名
-    )
-    return se.ljust(600)
+    buf = bytearray(b" " * SE_RECORD_BYTES)
+    _se_put(buf, 0, "SE")
+    _se_put(buf, 2, "1")                       # DataKubun=1（新規・出走前）
+    _se_put(buf, 3, "20260617")                # MakeDate
+    _se_put(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
+    _se_put(buf, 19, jyo_cd)
+    _se_put(buf, 21, kaiji)
+    _se_put(buf, 23, nichiji)
+    _se_put(buf, 25, race_no)
+    _se_put(buf, 27, str(frame_no)[:1])        # Wakuban
+    _se_put(buf, 28, f"{horse_no:02d}")        # Umaban
+    _se_put(buf, 30, ketto_num[:10])           # KettoNum
+    _se_put(buf, 40, uma_name)                 # Bamei（全角）
+    _se_put(buf, 78, sex_cd)                   # SexCD
+    _se_put(buf, 85, trainer_code[:5])         # ChokyosiCode
+    _se_put(buf, 90, "調教師名")               # 調教師名略称（錨）
+    _se_put(buf, 296, jockey_code[:5])         # KisyuCode
+    _se_put(buf, 306, "騎手名")                # 騎手名略称（錨）
+    return buf.decode("cp932")
 
 
 def _se_result(
@@ -136,56 +130,41 @@ def _se_result(
     finish_pos: int = 1,
     race_time_s: float = 94.4,
     agari_3f_s: float = 33.9,
-    c1: int = 3,
-    c2: int = 3,
-    c3: int = 3,
-    c4: int = 3,
 ) -> str:
-    """Ver.4.9 SE 確定後レコードのテスト用フィクスチャ。
-    ヘッダは Ver.4.9（KaisaiNengappi[11:19], Umaban[28:30]）。
-    成績フィールドは暫定 [580:600]（確定後 SE 実データで要再校正）。
+    """SE 確定後レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
+
+    実測 byte: KakuteiJyuni[334:336], Time[338:342] MSSf, 上り3F[390:393]。
+    走破タイムは 分1+秒2+1/10秒1 の MSSf 形式（例 94.4s → '1344'）。
     """
-    def p(v: str, w: int) -> str:
-        return v.ljust(w)[:w]
+    buf = bytearray(b" " * SE_RECORD_BYTES)
+    _se_put(buf, 0, "SE")
+    _se_put(buf, 2, "7")                       # DataKubun=7（確定・実測区分）
+    _se_put(buf, 3, "20260618")                # MakeDate
+    _se_put(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
+    _se_put(buf, 19, jyo_cd)
+    _se_put(buf, 21, kaiji)
+    _se_put(buf, 23, nichiji)
+    _se_put(buf, 25, race_no)
+    _se_put(buf, 28, f"{horse_no:02d}")        # Umaban
 
-    def pr(v: str, w: int) -> str:
-        return v.rjust(w, "0")[:w]
+    # 走破タイム MSSf: 分1 + 秒2 + 1/10秒1
+    minutes = int(race_time_s // 60)
+    seconds = int(race_time_s % 60)
+    tenths = round((race_time_s - int(race_time_s)) * 10)
+    time_mssf = f"{minutes}{seconds:02d}{tenths}"   # 4桁
 
-    time_m = int(race_time_s // 60)
-    time_s = int(race_time_s % 60)
-    time_k = round((race_time_s - int(race_time_s)) * 10)
-    agari_bu = int(agari_3f_s)
-    agari_ko = round((agari_3f_s - agari_bu) * 10)
+    # 上り3F: 3桁 1/10秒（33.9s → '339'）
+    agari_tenths = round(agari_3f_s * 10)
 
-    header = (
-        "SE"                            # [0:2]
-        + "4"                           # [2:3]   DataKubun=4（確定）
-        + "20260618"                    # [3:11]  MakeDate
-        + f"{nen}{month_day}"           # [11:19] KaisaiNengappi
-        + jyo_cd                        # [19:21]
-        + kaiji                         # [21:23]
-        + nichiji                       # [23:25]
-        + race_no                       # [25:27]
-        + "0"                           # [27:28] Wakuban
-        + pr(str(horse_no), 2)          # [28:30] Umaban
-    )
-    result_fields = (
-        pr(str(finish_pos), 2)
-        + pr(str(time_m), 2)
-        + pr(str(time_s), 2)
-        + pr(str(time_k), 2)
-        + pr(str(agari_bu), 2)
-        + pr(str(agari_ko), 2)
-        + pr(str(c1), 2)
-        + pr(str(c2), 2)
-        + pr(str(c3), 2)
-        + pr(str(c4), 2)
-    )
-    se = header.ljust(580) + result_fields
-    return se.ljust(620)
+    _se_put(buf, 334, f"{finish_pos:02d}")     # KakuteiJyuni
+    _se_put(buf, 338, time_mssf)               # Time
+    _se_put(buf, 390, f"{agari_tenths:03d}")   # HaronTimeL3
+    return buf.decode("cp932")
 
 
-def _um(ketto: str = "2023100001", name: str = "テストホース", sex: str = "1", birth_year: int = 2023) -> str:
+def _um(
+    ketto: str = "2023100001", name: str = "テストホース", sex: str = "1", birth_year: int = 2023
+) -> str:
     """Ver.4.9 UM レコードのテスト用フィクスチャ。
     実測オフセット: ketto[12:22], birth[38:46], name[46:64], sex[182:183]
     """
@@ -403,7 +382,9 @@ class TestSeEntryParser:
         assert result is None
 
     def test_race_key_extraction(self) -> None:
-        rec = _se_entry(nen="2026", month_day="0620", jyo_cd="05", kaiji="01", nichiji="01", race_no="03")
+        rec = _se_entry(
+            nen="2026", month_day="0620", jyo_cd="05", kaiji="01", nichiji="01", race_no="03"
+        )
         key = parse_race_key_from_se(rec)
         assert key == "2026062005010103"
 
@@ -444,11 +425,15 @@ class TestSeResultParser:
         assert result is not None
         assert abs(result.agari_3f_s - 33.9) < 0.15
 
-    def test_corner_4(self) -> None:
-        rec = _se_result(c4=5)
-        result = parse_se_result(rec)
+    def test_corners_unresolved_returns_none(self) -> None:
+        # コーナー通過順位の実バイト位置は未特定（旧 [291:299] は騎手コード領域の
+        # 誤認だった）。2レコード目で差分校正するまで現状は None を返す。
+        result = parse_se_result(_se_result())
         assert result is not None
-        assert result.corner_4 == 5
+        assert result.corner_1 is None
+        assert result.corner_2 is None
+        assert result.corner_3 is None
+        assert result.corner_4 is None
 
     def test_entry_record_returns_none(self) -> None:
         rec = _se_entry()

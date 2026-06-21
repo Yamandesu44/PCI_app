@@ -132,23 +132,31 @@ SE_FIELDS: tuple[FieldSpec, ...] = (
     # ----- ここから全角テキスト領域。char で切ると以降が全部ズレる -----
     FieldSpec("Bamei", 40, 36, "text", _C, "馬名（全角18字=36byte）= char ドリフト開始点"),
     FieldSpec("UmaKigoCD", 76, 2, "code", _T, "馬記号コード"),
-    FieldSpec("SexCD", 78, 1, "code", _T, "性別コード（1=牡 2=牝 3=騸）"),
+    FieldSpec("SexCD", 78, 1, "code", _C, "性別コード（1=牡 2=牝 3=騸）。実測確定"),
     FieldSpec("HinsyuCD", 79, 1, "code", _T, "品種コード"),
     FieldSpec("KeiroCD", 80, 2, "code", _T, "毛色コード"),
-    # ----- 以下は dump_records の実測仮説（byte）。特に確定後(DataKubun=4)で要校正 -----
-    FieldSpec(
-        "ChokyosiCode", 85, 5, "code", _T,
-        "調教師コード（dump_records=確認済の注記/要再確認）",
-    ),
-    FieldSpec("KisyuCode", 236, 5, "code", _T, "騎手コード"),
-    FieldSpec("BaTaijyu", 264, 3, "num", _T, "馬体重(kg)"),
-    FieldSpec("KakuteiJyuni", 274, 2, "num", _T, "確定着順（99=中止/失格）"),
-    FieldSpec("Time", 278, 4, "num", _T, "走破タイム（分1+秒2+1/10秒1 等。要桁構成確認）"),
-    FieldSpec("Jyuni1c", 291, 2, "num", _T, "1コーナー通過順位"),
-    FieldSpec("Jyuni2c", 293, 2, "num", _T, "2コーナー通過順位"),
-    FieldSpec("Jyuni3c", 295, 2, "num", _T, "3コーナー通過順位"),
-    FieldSpec("Jyuni4c", 297, 2, "num", _T, "4コーナー通過順位"),
-    FieldSpec("HaronTimeL3", 330, 3, "num", _T, "後3ハロンタイム（上り3F・1/10秒, 3桁）"),
+    # ----- 以下は実データ(2026-06-13 函館1R, DataKubun=7)で byte 確定 -----
+    # 錨1: 調教師名略称 '青木孝文' @ [90:98] → 直前 [85:90] が調教師コード
+    FieldSpec("ChokyosiCode", 85, 5, "code", _C, "調教師コード。名略称[90:98]が直後で確定"),
+    # 錨2: 騎手名略称 '河原田菜' @ [306:314] → 直前 [296:301]=現/[301:306]=変更前
+    FieldSpec("KisyuCode", 296, 5, "code", _C, "騎手コード。名略称[306:314]が直後で確定"),
+    FieldSpec("KisyuCodeBefore", 301, 5, "code", _T, "変更前騎手コード（無変更時 00000）"),
+    # 錨3: 馬体重 '456' + 増減符号 '-' @ [327] のパターンで確定
+    FieldSpec("BaTaijyu", 324, 3, "num", _C, "馬体重(kg)。直後[327]に増減符号"),
+    FieldSpec("NyusenJyuni", 332, 2, "num", _C, "入線順位"),
+    FieldSpec("KakuteiJyuni", 334, 2, "num", _C, "確定着順（99=中止/失格 00=未確定）"),
+    FieldSpec("Time", 338, 4, "num", _C, "走破タイム MSSf（分1+秒2+1/10秒1）。'1107'=1:10.7"),
+    # 錨4: 上り3F '358'(=35.8s) の直後 [393:403] が1着馬血統番号 → 位置確定
+    FieldSpec("HaronTimeL3", 390, 3, "num", _C, "後3ハロンタイム（上り3F・1/10秒, 3桁）"),
+    FieldSpec("ChakuKettoNum1", 393, 10, "code", _C, "1着馬(勝ち馬)血統登録番号。錨"),
+    FieldSpec("ChakuBamei1", 403, 36, "text", _C, "1着馬(勝ち馬)馬名 全角18字。錨"),
+    # コーナー通過順位: 旧 [291:299] は騎手コード領域の誤認だった。実バイト位置は
+    # この1レコードでは特定不能（着差/オッズ領域 [342:390] と値が一致しない）。
+    # 要: 別馬の2レコード目を dump し、着順と共に変化するバイトを差分特定する。
+    FieldSpec("Jyuni1c", 0, 0, "num", _T, "1角通過順位【未特定: 2レコード目で要差分校正】"),
+    FieldSpec("Jyuni2c", 0, 0, "num", _T, "2角通過順位【未特定】"),
+    FieldSpec("Jyuni3c", 0, 0, "num", _T, "3角通過順位【未特定】"),
+    FieldSpec("Jyuni4c", 0, 0, "num", _T, "4角通過順位【未特定】"),
 )
 
 
