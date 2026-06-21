@@ -62,6 +62,35 @@ def _dump_nonblank_regions(label: str, record: str) -> None:
         print("  (非空白領域なし — レコードがほぼ空)")
 
 
+def _to_cp932(record: str) -> bytes:
+    """JV-Link が返す Unicode 文字列を元の CP932(Shift-JIS) バイト列に戻す。
+
+    JV-Data 仕様書のオフセットは「バイト」単位。全角=2byte/半角=1byte なので、
+    Unicode 位置ではなく本バイト列の位置で切り出すと仕様書と直接対応する。
+    errors='replace' で未対応文字は1バイトに化けるが、開催データの数値・コード列は
+    CP932 で可逆なので結果セクションの解析には影響しない。
+    """
+    return record.encode("cp932", errors="replace")
+
+
+def _dump_bytes(label: str, record: str, offsets: dict[tuple[int, int], str]) -> None:
+    """CP932 バイト列の指定オフセットを表示する（仕様書バイト位置の検証用）。"""
+    raw = _to_cp932(record)
+    print(f"\n--- {label}: CP932フィールド (bytelen={len(raw)}) ---")
+    for (s, e), name in sorted(offsets.items()):
+        txt = "(範囲外)" if len(raw) < e else raw[s:e].decode("cp932", errors="replace")
+        print(f"  [{s}:{e}] {txt!r}  ← {name}")
+
+
+def _dump_byte_ruler(label: str, record: str, start: int, end: int) -> None:
+    """CP932 バイト列を10バイトごとに表示する（結果セクションの位置特定用）。"""
+    raw = _to_cp932(record)
+    print(f"\n--- {label}: バイトルーラー [{start}:{end}] (bytelen={len(raw)}) ---")
+    for pos in range(start, min(end, len(raw)), 10):
+        chunk = raw[pos:pos + 10]
+        print(f"  [{pos:4d}:{pos + 10:4d}] {chunk.decode('cp932', errors='replace')!r}")
+
+
 def main() -> None:
     load_dotenv()
     sid = os.environ.get("JV_LINK_SID", "")
@@ -158,8 +187,18 @@ def main() -> None:
                         (32, 82): "RaceName? (50chars)",
                         (82, 84): "Tosu?",
                     })
-                    # 距離・レース名がどこにあるか不明なので全体の非空白領域を出す
-                    _dump_nonblank_regions(f"RA #{ra_count + 1}", rec)
+                    # CP932 バイト位置で仕様書フィールドを検証する（距離=byte697 等）。
+                    _dump_bytes(f"RA #{ra_count + 1}", rec, {
+                        (614, 615): "GradeCD?",
+                        (617, 619): "SyubetuCD?(競走種別)",
+                        (697, 701): "Kyori?(距離)",
+                        (705, 707): "TrackCD?(芝ダ)",
+                        (819, 821): "SyussoTosu?(出走頭数)",
+                        (823, 824): "TenkoCD?(天候)",
+                        (824, 825): "SibaBabaCD?(芝馬場)",
+                        (825, 826): "DirtBabaCD?(ダ馬場)",
+                    })
+                    _dump_byte_ruler(f"RA #{ra_count + 1}", rec, 690, 840)
                     ra_count += 1
                 elif spec == "SE" and se_count < 3:
                     data_kubun = rec[2:3]
@@ -174,13 +213,20 @@ def main() -> None:
                         (67, 72): "KisyuCode",
                         (77, 82): "ChokyosiCode",
                     })
-                    # 最初の SE と確定後(DataKubun=4)は全走査して非空白領域を表示する。
-                    #   - 1件目: 騎手コード/調教師コードの位置を実データで検証するため
-                    #   - DataKubun=4: 着順・タイム・通過順位の位置特定のため
-                    if se_count == 0 or data_kubun == "4":
-                        _dump_nonblank_regions(
-                            f"SE #{se_count + 1} (DataKubun={data_kubun})", rec
-                        )
+                    # CP932 バイト位置で調教師/騎手コード・成績フィールドを検証する。
+                    # ChokyosiCode=byte85 は実データで確定済み。他は仕様書からの推定値で、
+                    # バイトルーラーと突き合わせて確定する。
+                    _dump_bytes(f"SE #{se_count + 1}", rec, {
+                        (85, 90): "ChokyosiCode(調教師)",
+                        (236, 241): "KisyuCode?(騎手)",
+                        (264, 267): "BaTaijyu?(馬体重)",
+                        (274, 276): "KakuteiJyuni?(確定着順)",
+                        (278, 282): "Time?(走破ﾀｲﾑ)",
+                        (291, 299): "Jyuni1-4c?(通過順)",
+                        (330, 333): "HaronTimeL3?(上り3F)",
+                    })
+                    # 結果セクション全体をバイト単位で見て位置を確定する。
+                    _dump_byte_ruler(f"SE #{se_count + 1}", rec, 80, 345)
                     se_count += 1
                 if ra_count >= 3 and se_count >= 3:
                     break
