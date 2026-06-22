@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Protocol
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
@@ -31,3 +32,15 @@ class RaceRepository(Protocol):
     def save_jockey(self, jockey: Jockey) -> None: ...
 
     def save_trainer(self, trainer: Trainer) -> None: ...
+
+    def ensure_horses(self, ketto_nums: Iterable[str]) -> None:
+        """参照される馬マスタが無ければプレースホルダを作成する（FK 整合の自己修復）。"""
+        ...
+
+    def ensure_jockeys(self, codes: Iterable[str]) -> None:
+        """参照される騎手マスタが無ければプレースホルダを作成する（FK 整合の自己修復）。"""
+        ...
+
+    def ensure_trainers(self, codes: Iterable[str]) -> None:
+        """参照される調教師マスタが無ければプレースホルダを作成する（FK 整合の自己修復）。"""
+        ...

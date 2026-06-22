@@ -39,6 +39,12 @@ class RegisterRaceEntriesUseCase:
         )
         self._repo.save_race(race)
 
+        # FK 整合の自己修復: 参照される馬/騎手/調教師マスタが未取得でも
+        # 出走表を登録できるよう、欠損マスタをプレースホルダで補完する。
+        self._repo.ensure_horses(e.ketto_num for e in entries)
+        self._repo.ensure_jockeys(e.jockey_code for e in entries)
+        self._repo.ensure_trainers(e.trainer_code for e in entries)
+
         for e in entries:
             entry = RaceEntry(
                 race_key=key,
@@ -113,6 +119,11 @@ class RecordRaceResultUseCase:
             finish_positions.append(r.finish_pos)
 
         rpci_result = aggregate_rpci(pci_values, finish_positions)
+
+        # FK 整合の自己修復（成績側でも保険）。出走表が先に登録済みなら no-op。
+        self._repo.ensure_horses(e.ketto_num for e in entries_to_save)
+        self._repo.ensure_jockeys(e.jockey_code for e in entries_to_save)
+        self._repo.ensure_trainers(e.trainer_code for e in entries_to_save)
 
         for entry in entries_to_save:
             running_style = _resolve_running_style(entry, self._repo)

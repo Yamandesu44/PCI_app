@@ -139,6 +139,59 @@ class TestSaveAndFindEntries:
 
 
 @pytest.mark.integration
+class TestEnsureMastersSelfHeal:
+    """実データ取り込み再現: マスタ未取得でも FK 違反で落ちないこと（本番 PG）。"""
+
+    def test_register_entries_without_masters_succeeds(self, db_session: Session) -> None:
+        from pci.application.dto import EntryInput, RaceInfo
+        from pci.application.race_use_cases import RegisterRaceEntriesUseCase
+
+        repo = SqlAlchemyRaceRepository(db_session)
+        race_info = RaceInfo(
+            race_key=str(RACE_KEY),
+            race_date=RACE_DATE,
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=2,
+        )
+        entries = [
+            EntryInput(
+                horse_no=1, frame_no=1, ketto_num="2021000001",
+                weight=470.0, jockey_code="05339", trainer_code="01088",
+            ),
+            EntryInput(
+                horse_no=2, frame_no=2, ketto_num="2021000002",
+                weight=482.0, jockey_code="05339", trainer_code="01099",
+            ),
+        ]
+        # マスタを一切投入していない状態でも FK 違反 (IntegrityError) で落ちない
+        RegisterRaceEntriesUseCase(repo).execute(race_info, entries)
+        db_session.flush()
+
+        found = repo.find_entries(RACE_KEY)
+        assert len(found) == 2
+        # 参照される馬/騎手/調教師がプレースホルダとして補完されている
+        assert db_session.get(HorseModel, "2021000001") is not None
+        assert db_session.get(JockeyModel, "05339") is not None
+        assert db_session.get(TrainerModel, "01088") is not None
+        assert db_session.get(TrainerModel, "01099") is not None
+
+    def test_ensure_does_not_clobber_existing_master(self, db_session: Session) -> None:
+        repo = SqlAlchemyRaceRepository(db_session)
+        db_session.add(JockeyModel(code="05339", name="本物騎手"))
+        db_session.flush()
+
+        repo.ensure_jockeys(["05339", "09999"])
+        db_session.flush()
+
+        existing = db_session.get(JockeyModel, "05339")
+        placeholder = db_session.get(JockeyModel, "09999")
+        assert existing is not None and existing.name == "本物騎手"  # 上書きしない
+        assert placeholder is not None and placeholder.name == "09999"  # 欠損は補完
+
+
+@pytest.mark.integration
 class TestListRecentRaces:
     def _save_race(self, repo: SqlAlchemyRaceRepository, key_str: str, day: int) -> None:
         repo.save_race(

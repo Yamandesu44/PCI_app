@@ -8,6 +8,7 @@ import pytest
 
 from pci.application.dto import EntryInput, RaceInfo, ResultInput
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
+from pci.domain.racing.master import Horse
 from pci.domain.racing.race import RaceStatus
 from pci.domain.shared.race_key import RaceKey
 from tests.unit.application.fake_repository import FakeRaceRepository
@@ -88,6 +89,32 @@ class TestRegisterRaceEntriesUseCase:
         entries = repo.find_entries(RaceKey(RACE_KEY))
         assert entries[0].ketto_num == "2020100001"
         assert entries[1].ketto_num == "2020100002"
+
+    def test_missing_masters_are_self_healed(self) -> None:
+        """マスタ未取得でも出走表登録が FK 違反で落ちず、欠損マスタが補完される。
+
+        実データ取り込み再現: DIFF セットアップ未実行で馬/騎手/調教師マスタが
+        空でも、出走表登録は成功し参照先がプレースホルダで作られること。
+        """
+        repo = self._make_repo()
+        # マスタは一切登録していない状態で出走表を登録
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+
+        entries = repo.find_entries(RaceKey(RACE_KEY))
+        assert len(entries) == 3
+        # 参照される馬/騎手/調教師がプレースホルダとして補完されている
+        assert repo._horses.keys() == {"2020100001", "2020100002", "2020100003"}
+        assert repo._jockeys.keys() == {"J001", "J002", "J003"}
+        assert repo._trainers.keys() == {"T001", "T002", "T003"}
+
+    def test_real_master_overwrites_placeholder(self) -> None:
+        """先に補完したプレースホルダは、後から届く本物のマスタで上書きできる。"""
+        repo = self._make_repo()
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+        assert repo._horses["2020100001"].name == "2020100001"  # プレースホルダ
+
+        repo.save_horse(Horse(ketto_num="2020100001", name="テストホース", sex="牡"))
+        assert repo._horses["2020100001"].name == "テストホース"
 
     def test_race_optional_fields_stored(self) -> None:
         repo = self._make_repo()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
@@ -65,3 +67,18 @@ class FakeRaceRepository:
 
     def save_trainer(self, trainer: Trainer) -> None:
         self._trainers[trainer.code] = trainer
+
+    def ensure_horses(self, ketto_nums: Iterable[str]) -> None:
+        for ketto in ketto_nums:
+            if ketto and ketto not in self._horses:
+                self._horses[ketto] = Horse(ketto_num=ketto, name=ketto)
+
+    def ensure_jockeys(self, codes: Iterable[str]) -> None:
+        for code in codes:
+            if code and code not in self._jockeys:
+                self._jockeys[code] = Jockey(code=code, name=code)
+
+    def ensure_trainers(self, codes: Iterable[str]) -> None:
+        for code in codes:
+            if code and code not in self._trainers:
+                self._trainers[code] = Trainer(code=code, name=code)

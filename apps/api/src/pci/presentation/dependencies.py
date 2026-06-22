@@ -58,6 +58,11 @@ def get_session() -> Iterator[Session]:
     session = _session_maker()()
     try:
         yield session
+    except Exception:
+        # 失敗したトランザクションを巻き戻し、コネクションをクリーンにプールへ返す。
+        # これを怠ると後続リクエストが壊れたセッションを掴み接続リセットになり得る。
+        session.rollback()
+        raise
     finally:
         session.close()
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -138,6 +140,53 @@ class SqlAlchemyRaceRepository:
 
     def save_trainer(self, trainer: Trainer) -> None:
         self._s.merge(TrainerModel(code=trainer.code, name=trainer.name))
+
+    # ----- FK 整合の自己修復 -----
+    # 実データ取り込みでは、出走表(race_entries)が参照する馬/騎手/調教師マスタが
+    # 未取得（DIFF セットアップ未実行など）だと FK 違反で INSERT が落ちる。
+    # 出走表保存の前に欠損マスタをプレースホルダ（name=コード）で補完しておく。
+    # 後で本物のマスタが届けば merge で名前が上書きされる（冪等・順不同で安全）。
+    # flush() で entries より先にマスタを INSERT し、同一トランザクション内の
+    # FK 解決順序を保証する。
+
+    def ensure_horses(self, ketto_nums: Iterable[str]) -> None:
+        wanted = {k for k in ketto_nums if k}
+        if not wanted:
+            return
+        existing = set(
+            self._s.scalars(
+                select(HorseModel.ketto_num).where(HorseModel.ketto_num.in_(wanted))
+            ).all()
+        )
+        for ketto in wanted - existing:
+            self._s.add(HorseModel(ketto_num=ketto, name=ketto))
+        self._s.flush()
+
+    def ensure_jockeys(self, codes: Iterable[str]) -> None:
+        wanted = {c for c in codes if c}
+        if not wanted:
+            return
+        existing = set(
+            self._s.scalars(
+                select(JockeyModel.code).where(JockeyModel.code.in_(wanted))
+            ).all()
+        )
+        for code in wanted - existing:
+            self._s.add(JockeyModel(code=code, name=code))
+        self._s.flush()
+
+    def ensure_trainers(self, codes: Iterable[str]) -> None:
+        wanted = {c for c in codes if c}
+        if not wanted:
+            return
+        existing = set(
+            self._s.scalars(
+                select(TrainerModel.code).where(TrainerModel.code.in_(wanted))
+            ).all()
+        )
+        for code in wanted - existing:
+            self._s.add(TrainerModel(code=code, name=code))
+        self._s.flush()
 
     def _from_entry(self, e: RaceEntry) -> RaceEntryModel:
         return RaceEntryModel(
