@@ -146,7 +146,16 @@ def ingest_entries(
                 _log.debug("SE に対応する RA がありません: %s", race_key)
                 continue
 
-            races[race_key].entries.append(entry)
+            # 同一馬番の重複を後勝ちで排除する。出走前('1'/'2')→確定('7')の順で
+            # 両方届く場合（フィクスチャや週跨ぎ取得）、確定レコードは実馬体重を
+            # 持つため、後から来た確定で上書きするのが正しい。
+            entries = races[race_key].entries
+            for i, existing in enumerate(entries):
+                if existing.horse_no == entry.horse_no:
+                    entries[i] = entry
+                    break
+            else:
+                entries.append(entry)
 
             # 馬マスタ補完
             ketto, name, sex = get_horse_info_from_se(rec)

@@ -13,7 +13,11 @@ from unittest.mock import MagicMock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ingestion.batch import ingest_entries, ingest_masters, ingest_results
-from ingestion.client.fixture_client import FixtureJvLinkClient
+from ingestion.client.fixture_client import (
+    FixtureJvLinkClient,
+    _json_result_to_se,
+    _json_to_ra,
+)
 from ingestion.ingest_api import IngestApiClient
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -270,3 +274,106 @@ class TestFullPipeline:
         entry_race = api.register_entries.call_args[0][0]
         result_race = api.record_results.call_args[0][0]
         assert entry_race.race_key == result_race.race_key == _RACE_KEY
+
+
+# ---------------------------------------------------------------------------
+# 確定のみ取り込み（過去レースの実データ模擬）
+# ---------------------------------------------------------------------------
+
+
+class _ConfirmedOnlyClient:
+    """RA + 確定SE(DataKubun=7)のみを返すクライアント（過去レースの実データ模擬）。
+
+    過去レースは出走前(1/2)レコードが既に確定(7)へ置き換わっており、JV-Link は
+    確定レコードしか返さない。確定から出走表を再構成できないと「出走馬なし」で
+    レース未登録 → 成績送信が 404 になる（実際に発生した回帰）。
+    """
+
+    _PAST_KEY = "2026061302010101"
+
+    def __init__(self) -> None:
+        self._race_info = {
+            "race_key": self._PAST_KEY,
+            "distance_m": 1600,
+            "track_type": "芝",
+            "race_class": "3歳未勝利",
+        }
+        # 確定 SE に埋め込む出走情報（枠番・血統・騎手・調教師・馬体重）。
+        self._entries = [
+            {"horse_no": 1, "frame_no": 1, "ketto_num": "2023200001", "weight": 472.0,
+             "jockey_code": "01001", "trainer_code": "01001", "sex": "牡", "horse_name": "カコウマ1"},
+            {"horse_no": 2, "frame_no": 2, "ketto_num": "2023200002", "weight": 456.0,
+             "jockey_code": "01002", "trainer_code": "01002", "sex": "牝", "horse_name": "カコウマ2"},
+            {"horse_no": 3, "frame_no": 3, "ketto_num": "2023200003", "weight": 484.0,
+             "jockey_code": "01003", "trainer_code": "01001", "sex": "牡", "horse_name": "カコウマ3"},
+        ]
+        self._results = [
+            {"horse_no": 3, "finish_pos": 1, "race_time_s": 94.4, "agari_3f_s": 33.9},
+            {"horse_no": 1, "finish_pos": 2, "race_time_s": 94.6, "agari_3f_s": 34.2},
+            {"horse_no": 2, "finish_pos": 3, "race_time_s": 94.9, "agari_3f_s": 34.8},
+        ]
+
+    def iter_ra_records(self, date_from: str, date_to: str):  # type: ignore[no-untyped-def]
+        yield _json_to_ra(self._race_info)
+
+    def iter_se_records(self, date_from: str, date_to: str):  # type: ignore[no-untyped-def]
+        index = {int(e["horse_no"]): e for e in self._entries}
+        for result in self._results:
+            yield _json_result_to_se(
+                {"race_key": self._PAST_KEY}, result, index.get(int(result["horse_no"]))
+            )
+
+    def iter_um_records(self):  # type: ignore[no-untyped-def]
+        return iter(())
+
+    def iter_ks_records(self):  # type: ignore[no-untyped-def]
+        return iter(())
+
+    def iter_ch_records(self):  # type: ignore[no-untyped-def]
+        return iter(())
+
+
+class TestConfirmedOnlyIngest:
+    _PAST_KEY = "2026061302010101"
+
+    def test_entries_registered_from_confirmed_records(self) -> None:
+        """確定のみでも出走表が登録される（「出走馬なし」回帰の防止）。"""
+        api = _mock_api()
+        ingest_entries(_ConfirmedOnlyClient(), api, "20260613", "20260613")
+        assert api.register_entries.call_count == 1
+        record = api.register_entries.call_args[0][0]
+        assert record.race_key == self._PAST_KEY
+        assert len(record.entries) == 3
+
+    def test_entries_have_ketto_from_confirmed(self) -> None:
+        """確定レコードから血統番号が取れている（空にならない）。"""
+        api = _mock_api()
+        ingest_entries(_ConfirmedOnlyClient(), api, "20260613", "20260613")
+        record = api.register_entries.call_args[0][0]
+        ketto_nums = {e.ketto_num for e in record.entries}
+        assert ketto_nums == {"2023200001", "2023200002", "2023200003"}
+
+    def test_entries_have_real_weight_from_bataijyu(self) -> None:
+        """確定レコードの BaTaijyu から実馬体重が取れている。"""
+        api = _mock_api()
+        ingest_entries(_ConfirmedOnlyClient(), api, "20260613", "20260613")
+        record = api.register_entries.call_args[0][0]
+        weights = {e.horse_no: e.weight for e in record.entries}
+        assert weights == {1: 472.0, 2: 456.0, 3: 484.0}
+
+    def test_no_duplicate_entries(self) -> None:
+        """馬番が重複しない（確定レコードを二重カウントしない）。"""
+        api = _mock_api()
+        ingest_entries(_ConfirmedOnlyClient(), api, "20260613", "20260613")
+        record = api.register_entries.call_args[0][0]
+        horse_nos = sorted(e.horse_no for e in record.entries)
+        assert horse_nos == [1, 2, 3]
+
+    def test_results_recorded_from_confirmed_records(self) -> None:
+        """確定成績が記録される（レース未登録による 404 回帰の防止）。"""
+        api = _mock_api()
+        ingest_results(_ConfirmedOnlyClient(), api, "20260613", "20260613")
+        assert api.record_results.call_count == 1
+        record = api.record_results.call_args[0][0]
+        assert record.race_key == self._PAST_KEY
+        assert len(record.results) == 3

@@ -43,6 +43,15 @@ class FixtureJvLinkClient:
         for path in sorted(self._dir.glob("sample_race_result*.json")):
             yield json.loads(path.read_text(encoding="utf-8"))
 
+    def _entry_index(self) -> dict[tuple[str, int], dict[str, Any]]:
+        """(race_key, horse_no) → entry dict の索引。確定 SE の出走情報補完に使う。"""
+        index: dict[tuple[str, int], dict[str, Any]] = {}
+        for data in self._entries_json():
+            race_key = str(data["race_info"].get("race_key", ""))
+            for entry in data["entries"]:
+                index[(race_key, int(entry.get("horse_no", 0)))] = entry
+        return index
+
     # ----- race records -----
 
     def iter_ra_records(self, date_from: str, date_to: str) -> Iterator[str]:
@@ -58,10 +67,14 @@ class FixtureJvLinkClient:
                 rec = _json_entry_to_se(data["race_info"], entry)
                 if rec:
                     yield rec
-        # 確定後（成績）
+        # 確定後（成績）。実データの確定 SE は出走情報（枠番・血統・騎手・調教師・
+        # 馬体重）も保持するため、対応する entry を引いて埋める。
+        entry_index = self._entry_index()
         for data in self._results_json():
+            race_key = str(data.get("race_key", ""))
             for result in data["results"]:
-                rec = _json_result_to_se(data, result)
+                entry = entry_index.get((race_key, int(result.get("horse_no", 0))))
+                rec = _json_result_to_se(data, result, entry)
                 if rec:
                     yield rec
 
@@ -163,8 +176,14 @@ def _json_entry_to_se(info: dict[str, Any], entry: dict[str, Any]) -> str:
     return buf.decode("cp932")
 
 
-def _json_result_to_se(data: dict[str, Any], result: dict[str, Any]) -> str:
-    """result → SE 固定長レコード（確定後 / byte 正確）。"""
+def _json_result_to_se(
+    data: dict[str, Any], result: dict[str, Any], entry: dict[str, Any] | None = None
+) -> str:
+    """result → SE 固定長レコード（確定後 / byte 正確）。
+
+    実データの確定 SE は出走情報も保持するため、対応する entry があれば
+    枠番・血統・騎手・調教師・馬体重を埋める（過去レースの出走表再構成のため）。
+    """
     race_key = str(data.get("race_key", ""))
     if len(race_key) != 16:
         return ""
@@ -178,6 +197,16 @@ def _json_result_to_se(data: dict[str, Any], result: dict[str, Any]) -> str:
     _put(buf, 23, race_key[12:14])
     _put(buf, 25, race_key[14:16])
     _put(buf, 28, f"{int(result.get('horse_no', 0)):02d}")  # Umaban
+    if entry is not None:
+        _put(buf, 27, str(int(entry.get("frame_no", 0)))[:1])   # Wakuban
+        _put(buf, 30, str(entry.get("ketto_num", ""))[:10])     # KettoNum
+        _put(buf, 40, str(entry.get("horse_name", "")))         # Bamei（全角）
+        _put(buf, 78, _sex_cd(str(entry.get("sex", "牡"))))     # SexCD
+        _put(buf, 85, str(entry.get("trainer_code", ""))[:5])   # ChokyosiCode
+        _put(buf, 296, str(entry.get("jockey_code", ""))[:5])   # KisyuCode
+        ba_taijyu = int(float(entry.get("weight", 0) or 0))
+        if ba_taijyu > 0:
+            _put(buf, 324, f"{ba_taijyu:03d}")                  # BaTaijyu（馬体重）
     _put(buf, 334, f"{int(result.get('finish_pos', 0)):02d}")  # KakuteiJyuni
 
     # 走破タイム MSSf: 分1 + 秒2 + 1/10秒1

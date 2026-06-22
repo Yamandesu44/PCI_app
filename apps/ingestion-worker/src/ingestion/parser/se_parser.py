@@ -39,6 +39,10 @@ from ingestion.parser.jv_spec import SE_RECORD_BYTES
 _KUBUN_ENTRY = frozenset({"1", "2"})     # 出走前・出馬表
 _KUBUN_RESULT = frozenset({"4", "7"})    # 確定後（'4' 旧仕様 / '7' 実測確認）
 _KUBUN_CANCEL = frozenset({"3"})         # 取消/除外
+# エントリ情報（枠番・馬番・血統・騎手・調教師）を持つ DataKubun。
+# 確定後('4'/'7')レコードも全エントリ項目を含むため、過去レース（出走表が
+# 既に確定へ置き換わったデータ）でも出走表を再構成できる。取消('3')のみ除外。
+_KUBUN_ENTRYABLE = _KUBUN_ENTRY | _KUBUN_RESULT
 
 
 def parse_race_key_from_se(record: str) -> str:
@@ -57,9 +61,12 @@ def parse_race_key_from_se(record: str) -> str:
 
 
 def parse_se_entry(record: str) -> EntryRecord | None:
-    """SE レコード（出走前・出馬表）を EntryRecord に変換する。
+    """SE レコード（出走前・出馬表 / 確定後）を EntryRecord に変換する。
 
-    DataKubun が "1" または "2" の場合のみ変換。それ以外は None。
+    DataKubun が "1"/"2"（出走前）または "4"/"7"（確定後）の場合に変換する。
+    確定後レコードも枠番・馬番・血統・騎手・調教師を含むため、過去レース
+    （出走表が確定へ置き換わったデータ）でも出走表を再構成できる。
+    取消/除外("3")・その他は None。
     """
     raw = to_cp932(record)
     if len(raw) < 98:  # 騎手名略称 [90:98] までは最低限必要
@@ -70,7 +77,7 @@ def parse_se_entry(record: str) -> EntryRecord | None:
         raise ValueError(f"RecordSpec が SE ではありません: {rec_spec!r}")
 
     data_kubun = _bs(raw, 2, 3)
-    if data_kubun not in _KUBUN_ENTRY:
+    if data_kubun not in _KUBUN_ENTRYABLE:
         return None
 
     frame_no = _bi(raw, 27, 28)        # Wakuban（枠番 1桁）
@@ -80,8 +87,13 @@ def parse_se_entry(record: str) -> EntryRecord | None:
     # 騎手コード[296:301] はレコード後方。出馬表(短縮長)では範囲外になり得るため保護。
     jockey_code = _bs(raw, 296, 301) if len(raw) >= 301 else ""
 
-    # 馬体重は出馬表段階では未発表（"000"）。確定後 SE で取得するため暫定デフォルト。
+    # 馬体重: 確定後 SE は BaTaijyu[324:327] に実値。出馬表段階は未発表("000"/
+    # 範囲外)のため暫定デフォルト 460.0 を使う。
     weight = 460.0
+    if len(raw) >= 327:
+        bataijyu = _bs(raw, 324, 327)
+        if bataijyu.isdigit() and int(bataijyu) > 0:
+            weight = float(bataijyu)
 
     return EntryRecord(
         horse_no=horse_no,

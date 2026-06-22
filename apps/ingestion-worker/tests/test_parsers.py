@@ -84,15 +84,17 @@ def _se_entry(
     sex_cd: str = "1",
     trainer_code: str = "00001",
     jockey_code: str = "00001",
+    data_kubun: str = "1",
 ) -> str:
     """SE 出走前レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
 
     実測 byte: Bamei[40:76], SexCD[78:79], ChokyosiCode[85:90]（名略称[90:98]直前）,
                KisyuCode[296:301]（名略称[306:314]直前）。
+    data_kubun で区分を差し替え可能（"3"=取消/除外 など）。
     """
     buf = bytearray(b" " * SE_RECORD_BYTES)
     _put_field(buf, 0, "SE")
-    _put_field(buf, 2, "1")                       # DataKubun=1（新規・出走前）
+    _put_field(buf, 2, data_kubun[:1])            # DataKubun（既定 "1"=新規・出走前）
     _put_field(buf, 3, "20260617")                # MakeDate
     _put_field(buf, 11, f"{nen}{month_day}")      # KaisaiNengappi
     _put_field(buf, 19, jyo_cd)
@@ -119,13 +121,21 @@ def _se_result(
     nen: str = "2026",
     month_day: str = "0618",
     horse_no: int = 3,
+    frame_no: int = 3,
+    ketto_num: str = "2023100003",
+    trainer_code: str = "00003",
+    jockey_code: str = "00003",
+    ba_taijyu: int = 480,
     finish_pos: int = 1,
     race_time_s: float = 94.4,
     agari_3f_s: float = 33.9,
 ) -> str:
     """SE 確定後レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
 
-    実測 byte: KakuteiJyuni[334:336], Time[338:342] MSSf, 上り3F[390:393]。
+    実データの確定レコードは出走情報（枠番・馬番・血統・騎手・調教師・馬体重）と
+    成績（着順・タイム・上り）を両方含む。本フィクスチャもそれを再現する。
+    実測 byte: ChokyosiCode[85:90], KisyuCode[296:301], BaTaijyu[324:327],
+               KakuteiJyuni[334:336], Time[338:342] MSSf, 上り3F[390:393]。
     走破タイムは 分1+秒2+1/10秒1 の MSSf 形式（例 94.4s → '1344'）。
     """
     buf = bytearray(b" " * SE_RECORD_BYTES)
@@ -137,7 +147,11 @@ def _se_result(
     _put_field(buf, 21, kaiji)
     _put_field(buf, 23, nichiji)
     _put_field(buf, 25, race_no)
+    _put_field(buf, 27, str(frame_no)[:1])        # Wakuban
     _put_field(buf, 28, f"{horse_no:02d}")        # Umaban
+    _put_field(buf, 30, ketto_num[:10])           # KettoNum
+    _put_field(buf, 85, trainer_code[:5])         # ChokyosiCode
+    _put_field(buf, 296, jockey_code[:5])         # KisyuCode
 
     # 走破タイム MSSf: 分1 + 秒2 + 1/10秒1
     minutes = int(race_time_s // 60)
@@ -148,6 +162,7 @@ def _se_result(
     # 上り3F: 3桁 1/10秒（33.9s → '339'）
     agari_tenths = round(agari_3f_s * 10)
 
+    _put_field(buf, 324, f"{ba_taijyu:03d}")      # BaTaijyu（馬体重）
     _put_field(buf, 334, f"{finish_pos:02d}")     # KakuteiJyuni
     _put_field(buf, 338, time_mssf)               # Time
     _put_field(buf, 390, f"{agari_tenths:03d}")   # HaronTimeL3
@@ -360,8 +375,31 @@ class TestSeEntryParser:
         assert result is not None
         assert result.weight == 460.0
 
-    def test_result_record_returns_none(self) -> None:
-        rec = _se_result()
+    def test_confirmed_record_is_entryable(self) -> None:
+        # 確定後('7')レコードもエントリ情報を持つため EntryRecord を生成する。
+        # 過去レース（出走表が確定へ置き換わったデータ）の出走表再構成に必須。
+        rec = _se_result(
+            horse_no=3, frame_no=3, ketto_num="2023100003",
+            jockey_code="01184", trainer_code="00420",
+        )
+        result = parse_se_entry(rec)
+        assert result is not None
+        assert result.horse_no == 3
+        assert result.frame_no == 3
+        assert result.ketto_num == "2023100003"
+        assert result.jockey_code == "01184"
+        assert result.trainer_code == "00420"
+
+    def test_weight_from_confirmed_bataijyu(self) -> None:
+        # 確定後レコードは BaTaijyu[324:327] に実馬体重を持つ。
+        rec = _se_result(ba_taijyu=486)
+        result = parse_se_entry(rec)
+        assert result is not None
+        assert result.weight == 486.0
+
+    def test_cancel_record_returns_none(self) -> None:
+        # 取消/除外('3')は出走しないためエントリにしない。
+        rec = _se_entry(data_kubun="3")
         result = parse_se_entry(rec)
         assert result is None
 
