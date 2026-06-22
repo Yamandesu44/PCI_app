@@ -18,7 +18,7 @@ def pg_container() -> PostgresContainer:
 
 @pytest.fixture(scope="session")
 def db_engine(pg_container: PostgresContainer):  # type: ignore[no-untyped-def]
-    url = pg_container.get_connection_url()
+    url = pg_container.get_connection_url(driver="pg8000")
     engine = create_engine(url)
 
     alembic_cfg = Config("alembic.ini")
