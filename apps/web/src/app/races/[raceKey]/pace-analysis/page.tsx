@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 
 import { CommentCard } from "@/components/CommentCard";
 import { PaceAnalysisTable } from "@/components/PaceAnalysisTable";
+import { RaceHero } from "@/components/RaceHero";
 import { ReasonList } from "@/components/ReasonList";
 import { api } from "@/lib/api";
-import { ApiError, type PaceAnalysis } from "@pci/api-client";
+import { ApiError, type PaceAnalysis, type RaceDetail } from "@pci/api-client";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,12 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
   const { raceKey } = await params;
 
   let analysis: PaceAnalysis;
+  let race: RaceDetail;
   try {
-    analysis = await api.getPaceAnalysis(raceKey);
+    [analysis, race] = await Promise.all([
+      api.getPaceAnalysis(raceKey),
+      api.getRaceDetail(raceKey),
+    ]);
   } catch (err) {
     if (err instanceof ApiError && (err.status === 404 || err.status === 409)) {
       notFound();
@@ -38,6 +43,8 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
         <Link href="/">← トップ</Link>
         <span className="race-key">{analysis.race_key}</span>
       </p>
+
+      <RaceHero race={race} mode="analysis" />
 
       <section className="headline" style={{ borderColor: "#0f172a" }}>
         <span className="headline-tag" style={{ background: "#0f172a" }}>

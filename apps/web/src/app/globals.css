@@ -1,9 +1,27 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+  --primary: 222 47% 11%;
+  --primary-foreground: 210 40% 98%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 222 47% 11%;
+  --radius: 8px;
   --bg: #f8fafc;
-  --card: #ffffff;
+  --legacy-card: #ffffff;
   --text: #0f172a;
-  --muted: #64748b;
-  --border: #e2e8f0;
+  --legacy-muted: #64748b;
+  --legacy-border: #e2e8f0;
   --matched: #16a34a;
   --neutral: #64748b;
   --unfavorable: #b91c1c;
@@ -36,7 +54,7 @@ h1 {
 }
 
 .lead {
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-size: 1.05rem;
 }
 
@@ -53,7 +71,7 @@ h1 {
 
 .note {
   margin-top: 24px;
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-size: 0.85rem;
 }
 
@@ -75,8 +93,8 @@ h1 {
   flex-direction: column;
   gap: 6px;
   padding: 16px 18px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--legacy-card);
+  border: 1px solid var(--legacy-border);
   border-radius: 12px;
   text-decoration: none;
   color: var(--text);
@@ -90,8 +108,8 @@ h1 {
   align-self: flex-start;
   font-size: 0.7rem;
   font-weight: 700;
-  color: var(--muted);
-  border: 1px solid var(--border);
+  color: var(--legacy-muted);
+  border: 1px solid var(--legacy-border);
   border-radius: 999px;
   padding: 1px 8px;
 }
@@ -101,7 +119,7 @@ h1 {
 }
 
 .card span:last-child {
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-size: 0.85rem;
 }
 
@@ -116,12 +134,12 @@ h1 {
 .pci-table td {
   padding: 8px 10px;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--legacy-border);
 }
 
 .pci-table th {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-weight: 600;
 }
 
@@ -154,7 +172,7 @@ h1 {
   justify-content: space-between;
   align-items: center;
   font-size: 0.85rem;
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 
 .breadcrumb a {
@@ -166,10 +184,130 @@ h1 {
   font-family: ui-monospace, monospace;
 }
 
+/* ----- レース詳細 Hero ----- */
+.race-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 18px;
+  align-items: stretch;
+  margin: 14px 0 22px;
+  padding: 22px;
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.08) 0,
+      rgba(255, 255, 255, 0.08) 1px,
+      transparent 1px,
+      transparent 44px
+    );
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.race-hero-confirmed {
+  background:
+    linear-gradient(135deg, rgba(20, 83, 45, 0.95), rgba(15, 23, 42, 0.92)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.08) 0,
+      rgba(255, 255, 255, 0.08) 1px,
+      transparent 1px,
+      transparent 44px
+    );
+  border-color: #166534;
+}
+
+.race-hero-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.race-status {
+  align-self: flex-start;
+  margin-bottom: 10px;
+  padding: 3px 10px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.race-status.confirmed {
+  background: rgba(22, 163, 74, 0.35);
+}
+
+.race-status.upcoming {
+  background: rgba(37, 99, 235, 0.35);
+}
+
+.race-hero h1 {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.2;
+}
+
+.race-hero-sub {
+  margin: 8px 0 0;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.race-hero-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.race-hero-metrics div {
+  min-width: 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+}
+
+.race-hero-metrics dt {
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.race-hero-metrics dd {
+  margin: 3px 0 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .race-hero {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .race-hero h1 {
+    font-size: 1.65rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .race-hero-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ----- 見出し ----- */
 .headline {
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--legacy-card);
+  border: 1px solid var(--legacy-border);
   border-left-width: 6px;
   border-radius: 12px;
   padding: 20px;
@@ -197,7 +335,7 @@ h1 {
 
 .headline-detail {
   margin: 0;
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 
 .metrics {
@@ -205,12 +343,12 @@ h1 {
   gap: 24px;
   margin: 18px 0 0;
   padding: 14px 0 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--legacy-border);
 }
 
 .metrics dt {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 
 .metrics dd {
@@ -231,8 +369,8 @@ h1 {
 
 /* ----- パネル ----- */
 .panel {
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--legacy-card);
+  border: 1px solid var(--legacy-border);
   border-radius: 12px;
   padding: 18px 20px;
   margin-bottom: 20px;
@@ -294,7 +432,7 @@ h1 {
 }
 
 .horse {
-  border: 1px solid var(--border);
+  border: 1px solid var(--legacy-border);
   border-radius: 10px;
   padding: 12px 14px;
 }
@@ -344,7 +482,7 @@ h1 {
 .pai-value {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-weight: 700;
 }
 
@@ -380,7 +518,7 @@ h1 {
   margin: 10px 0 0;
   padding: 0;
   font-size: 0.85rem;
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 
 .reasons li {
@@ -388,7 +526,7 @@ h1 {
   justify-content: space-between;
   gap: 12px;
   padding: 3px 0;
-  border-top: 1px dashed var(--border);
+  border-top: 1px dashed var(--legacy-border);
 }
 
 .reason-contrib {
@@ -429,10 +567,11 @@ h1 {
 .empty {
   margin: 12px 0 0;
   padding: 16px 18px;
-  background: var(--card);
-  border: 1px dashed var(--border);
+  background: var(--legacy-card);
+  border: 1px dashed var(--legacy-border);
   border-radius: 12px;
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-size: 0.9rem;
   line-height: 1.7;
 }
+
