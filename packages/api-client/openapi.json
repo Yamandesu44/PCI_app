@@ -828,6 +828,17 @@
             ],
             "title": "Race L3F"
           },
+          "race_s3f": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Race S3F"
+          },
           "results": {
             "items": {
               "$ref": "#/components/schemas/ResultItem"

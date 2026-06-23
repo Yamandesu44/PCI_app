@@ -107,22 +107,27 @@ def calculate_pci(
 
 
 def calculate_rpci_from_lap(
-    winner_time: RaceTime,
-    race_furlong_3f: Furlong3Time,
-    distance: Distance,
+    race_s3f: Furlong3Time,
+    race_l3f: Furlong3Time,
 ) -> float:
-    """レースラップから RPCI（レースPCI）を算出する（TARGET 準拠）。
+    """前半3F / 後半3F 比から RPCI（レースPCI）を算出する（TARGET 準拠）。
 
-    RPCI は PCI と**同一の計算式**を、個別馬ではなく「レース代表値」へ適用した値:
-        winner_time      = 1着馬の走破タイム（= レース走破タイム）
-        race_furlong_3f  = レースラップの後半3ハロン（RA レコードの HaronTimeL3）
-        distance         = レース距離
+    TARGET の RPCI 公式:
+        RPCI = HaronTimeS3 / HaronTimeL3 × 100 − 50
 
-    PCI 式は calculate_pci に一元化されているため（ADR-0004）、それを再利用する。
-    全出走馬 PCI の単純平均（aggregate_rpci の暫定値）とは異なり、TARGET の RPCI と
-    一致する。レース後半3Fが取得できない場合は呼び出し側で平均にフォールバックする。
+    PCI 式の一元化（ADR-0004）のため calculate_pci を再利用する:
+        synthetic_time = S3 + L3  →  仮想1200m(6F)として射影
+        RPCI = calculate_pci(S3+L3, L3, distance=1200)
+
+    この射影で前半3Fを後半3Fと直接比較でき、距離に依存しない指数になる。
+    winner_time ベースの旧方式は距離が伸びるにつれ前半重みが増し TARGET と乖離していた。
+    全馬 PCI 平均は aggregate_rpci のフォールバック時のみ使用する。
     """
-    return calculate_pci(winner_time, race_furlong_3f, distance).value
+    return calculate_pci(
+        race_time=RaceTime(race_s3f.seconds + race_l3f.seconds),
+        furlong_3f=race_l3f,
+        distance=Distance(1200),
+    ).value
 
 
 def aggregate_rpci(

@@ -115,43 +115,48 @@ def test_distance_vo_accepts_minimum_valid() -> None:
 
 # ----- RPCI（レースラップ由来 / TARGET 準拠） -----
 
-# (winner_time_s, race_l3_s, distance_m, expected_rpci, label)
-# RPCI = (winner-L3)×600/(距離-600) ÷ L3 × 100 − 50（PCI と同一式）
+# (race_s3_s, race_l3_s, expected_rpci, label)
+# TARGET 公式: RPCI = S3 / L3 × 100 − 50（距離非依存の前後3F直接比）
 RPCI_GOLDEN_CASES = [
-    # 1600m, 勝ち時計95.0s, レース後半3F 35.0s
-    # Ave-3F=(95.0-35.0)×600/1000=36.0 / 35.0 → 1.02857 → RPCI=52.9
-    (95.0, 35.0, 1600, 52.9, "1600m・標準"),
-    # 2000m, 120.0s, レース後半3F 36.0s（イーブン）→ RPCI=50.0
-    (120.0, 36.0, 2000, 50.0, "2000m・イーブン"),
+    # イーブン: S3=L3 → RPCI=50.0
+    (35.0, 35.0, 50.0, "イーブン"),
+    # スロー: S3>L3 → RPCI>50 / 36.0/35.0=1.02857 → 52.9
+    (36.0, 35.0, 52.9, "スロー"),
+    # ハイ: S3<L3 → RPCI<50 / 34.0/35.0=0.97143 → 47.1
+    (34.0, 35.0, 47.1, "ハイ"),
+    # 函館1R(2026-06-13) 実測: S3=33.9 L3=34.6 / 33.9/34.6=0.97977 → 48.0
+    (33.9, 34.6, 48.0, "函館1R実測"),
 ]
 
 
 @pytest.mark.parametrize(
-    "winner_time_s, race_l3_s, distance_m, expected_rpci, label",
+    "race_s3_s, race_l3_s, expected_rpci, label",
     RPCI_GOLDEN_CASES,
     ids=[c[-1] for c in RPCI_GOLDEN_CASES],
 )
 def test_rpci_from_lap_golden(
-    winner_time_s: float,
+    race_s3_s: float,
     race_l3_s: float,
-    distance_m: int,
     expected_rpci: float,
     label: str,
 ) -> None:
     rpci = calculate_rpci_from_lap(
-        winner_time=RaceTime(winner_time_s),
-        race_furlong_3f=Furlong3Time(race_l3_s),
-        distance=Distance(distance_m),
+        race_s3f=Furlong3Time(race_s3_s),
+        race_l3f=Furlong3Time(race_l3_s),
     )
     assert rpci == pytest.approx(expected_rpci, abs=0.05), (
         f"[{label}] RPCI mismatch: got {rpci}, expected {expected_rpci}"
     )
 
 
-def test_rpci_from_lap_equals_pci_formula() -> None:
-    """RPCI はレース代表値に PCI 式を適用したものと厳密一致（式の一元化を保証）。"""
-    args = (RaceTime(94.4), Furlong3Time(33.9), Distance(1600))
-    assert calculate_rpci_from_lap(*args) == calculate_pci(*args).value
+def test_rpci_from_lap_equals_pci_on_1200m() -> None:
+    """S3/L3方式はS3+L3=仮想1200mとしてcalculate_pciを呼ぶことで式一元化を保証。"""
+    s3, l3 = Furlong3Time(33.9), Furlong3Time(34.6)
+    assert calculate_rpci_from_lap(s3, l3) == calculate_pci(
+        race_time=RaceTime(s3.seconds + l3.seconds),
+        furlong_3f=l3,
+        distance=Distance(1200),
+    ).value
 
 
 def test_aggregate_rpci_uses_lap_value_when_provided() -> None:

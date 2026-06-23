@@ -75,6 +75,7 @@ class RecordRaceResultUseCase:
         results: list[ResultInput],
         track_condition: str | None = None,
         weather: str | None = None,
+        race_s3f: float | None = None,
         race_l3f: float | None = None,
     ) -> RaceResultOutput:
         key = RaceKey(race_key_str)
@@ -119,17 +120,15 @@ class RecordRaceResultUseCase:
             pci_values.append(pci_val)
             finish_positions.append(r.finish_pos)
 
-        # TARGET 準拠 RPCI: RA の HaronTimeL3（レース後半3F）が得られた場合は
-        # 勝ち馬の走破タイムと組み合わせてラップから算出する。未取得時は全馬平均にフォールバック。
+        # TARGET 準拠 RPCI: RA の S3(前半3F)/L3(後半3F) 比から算出。
+        # RPCI = S3/L3 × 100 − 50（距離非依存の前後ペース指数）。
+        # S3/L3 どちらか未取得時は全馬 PCI 平均にフォールバックする。
         race_rpci: float | None = None
-        if race_l3f is not None:
-            winner = next((r for r in results if r.finish_pos == 1), None)
-            if winner is not None:
-                race_rpci = calculate_rpci_from_lap(
-                    RaceTime(winner.race_time_s),
-                    Furlong3Time(race_l3f),
-                    distance,
-                )
+        if race_s3f is not None and race_l3f is not None:
+            race_rpci = calculate_rpci_from_lap(
+                Furlong3Time(race_s3f),
+                Furlong3Time(race_l3f),
+            )
 
         rpci_result = aggregate_rpci(pci_values, finish_positions, race_rpci=race_rpci)
 

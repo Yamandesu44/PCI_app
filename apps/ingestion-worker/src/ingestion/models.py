@@ -76,6 +76,7 @@ class RaceEntriesRecord:
     weather: str | None = None
     grade: str | None = None
     race_class: str | None = None
+    race_s3f: float | None = None  # HaronTimeS3（前半3F秒）。確定後RAのみ値あり
     race_l3f: float | None = None  # HaronTimeL3（後半3F秒）。確定後RAのみ値あり
     entries: list[EntryRecord] = field(default_factory=list)
 
@@ -87,5 +88,6 @@ class RaceResultRecord:
     race_key: str
     track_condition: str | None = None
     weather: str | None = None
+    race_s3f: float | None = None  # RA の HaronTimeS3（前半3F秒）。RPCI 算出に使用
     race_l3f: float | None = None  # RA の HaronTimeL3（後半3F秒）。RPCI 算出に使用
     results: list[ResultRecord] = field(default_factory=list)

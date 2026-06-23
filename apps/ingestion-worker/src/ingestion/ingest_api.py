@@ -137,6 +137,7 @@ class IngestApiClient:
             "race_key": record.race_key,
             "track_condition": record.track_condition,
             "weather": record.weather,
+            "race_s3f": record.race_s3f,
             "race_l3f": record.race_l3f,
             "results": [
                 {
@@ -158,6 +159,6 @@ class IngestApiClient:
             record.race_key,
             result.get("rpci") or 0.0,
             result.get("pci3"),
-            " (ラップ由来)" if record.race_l3f is not None else " (平均フォールバック)",
+            " (S3/L3ラップ由来)" if (record.race_s3f and record.race_l3f) else " (平均フォールバック)",
         )
         return result
