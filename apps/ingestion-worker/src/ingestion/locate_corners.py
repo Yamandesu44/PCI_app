@@ -55,24 +55,26 @@ def show_horse_info(raw: bytes) -> None:
     horse_no = _bs(raw, 28, 30)
     ketto_num = _bs(raw, 30, 40)
     data_kubun = _bs(raw, 2, 3)
+    jyo_cd = _bs(raw, 19, 21)
+    race_no = _bs(raw, 25, 27)
     finish_pos = _bs(raw, 334, 336)
-    print(f"\n【馬情報】 DataKubun={data_kubun} 馬番={horse_no} KettoNum={ketto_num} 確定着順={finish_pos}")
+    agari = _bs(raw, 390, 393)
+    print(f"\n【馬情報】 DataKubun={data_kubun} 場CD={jyo_cd} R={race_no} 馬番={horse_no} KettoNum={ketto_num} 着順={finish_pos} 上り3F={int(agari)/10:.1f}s")
     print("\n--- バイトルーラー [330:410] (コーナー探索対象域) ---")
-    for pos in range(330, min(410, len(raw)), 8):
-        chunk = raw[pos:pos + 8]
+    for pos in range(330, min(410, len(raw)), 10):
+        chunk = raw[pos:pos + 10]
         decoded = chunk.decode("cp932", errors="replace")
-        vals = [f"[{pos+i}]={raw[pos+i]:02x}" for i in range(len(chunk))]
-        print(f"  [{pos:3d}:{pos+8:3d}] {decoded!r}  ({' '.join(vals)})")
+        print(f"  [{pos:3d}:{pos+10:3d}] {decoded!r}")
 
 
-
-    """実データ候補オフセット [356:364] の内容を表示する。"""
+def show_hypothesis(raw: bytes) -> None:
+    """現在のコーナー候補オフセット [_CORNER_HYPOTHESIS_START] の内容を表示する。"""
     print(f"\n--- SE レコード長: {len(raw)} bytes (期待値: 553) ---")
     if len(raw) < _CORNER_HYPOTHESIS_START + 8:
         print(f"  (警告: レコードが短すぎます)")
         return
 
-    print(f"\n【実データ候補】コーナー通過順位 @ [{_CORNER_HYPOTHESIS_START}:{_CORNER_HYPOTHESIS_START + 8}]:")
+    print(f"\n【候補】コーナー通過順位 @ [{_CORNER_HYPOTHESIS_START}:{_CORNER_HYPOTHESIS_START + 8}]:")
     for i, name in enumerate(["corner_1", "corner_2", "corner_3", "corner_4"]):
         s = _CORNER_HYPOTHESIS_START + i * 2
         e = s + 2
