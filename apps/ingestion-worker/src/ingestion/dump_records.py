@@ -122,7 +122,16 @@ def main() -> None:
     else:
         race_from = (datetime.date.today() - datetime.timedelta(days=7)).strftime("%Y%m%d")
     race_option = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    print(f"RACE fromtime: {race_from} / option: {race_option}")
+    # 第3引数: レース番号フィルタ（例: "9" または "09"）。省略時は最初の1件を保存。
+    race_num_filter = sys.argv[3].zfill(2) if len(sys.argv) > 3 else None
+    # 第4引数: 競馬場コードフィルタ（例: "06"=阪神 "01"=札幌 "02"=函館）。省略時は全場。
+    jyo_cd_filter = sys.argv[4].zfill(2) if len(sys.argv) > 4 else None
+    print(f"RACE fromtime: {race_from} / option: {race_option}", end="")
+    if race_num_filter:
+        print(f" / race_num={race_num_filter}", end="")
+    if jyo_cd_filter:
+        print(f" / jyo_cd={jyo_cd_filter}", end="")
+    print()
     client = WindowsJvLinkClient(sid=sid)
 
     # DIFF マスタ（UM/KS/CH を1回の JVOpen でまとめて取得）。
@@ -197,9 +206,21 @@ def main() -> None:
                 # JV-Link 取得は1回で済み、以降は verify_layout を保存済みレコードへ
                 # 繰り返し当ててオフラインで jv_spec を校正できる。
                 if spec == "RA" and not ra_saved:
-                    _save_raw("dumped_ra.txt", rec)
-                    ra_saved = True
+                    # RA も競馬場・レース番号フィルタを適用
+                    ra_jyo = rec[19:21] if len(rec) > 21 else ""
+                    ra_rno = rec[25:27] if len(rec) > 27 else ""
+                    if (jyo_cd_filter is None or ra_jyo == jyo_cd_filter) and \
+                       (race_num_filter is None or ra_rno == race_num_filter):
+                        _save_raw("dumped_ra.txt", rec)
+                        ra_saved = True
                 elif spec == "SE":
+                    # レース番号・競馬場フィルタ（SE は [19:21]=JyoCD, [25:27]=RaceNum）
+                    se_jyo = rec[19:21] if len(rec) > 21 else ""
+                    se_rno = rec[25:27] if len(rec) > 27 else ""
+                    if jyo_cd_filter and se_jyo != jyo_cd_filter:
+                        continue
+                    if race_num_filter and se_rno != race_num_filter:
+                        continue
                     if not se_saved:
                         _save_raw("dumped_se.txt", rec)
                         se_saved = True
