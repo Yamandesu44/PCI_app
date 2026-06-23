@@ -27,7 +27,7 @@ export function PaceProfileChart({ data }: PaceProfileChartProps) {
               boxShadow: "0 12px 30px rgba(15, 23, 42, 0.08)",
             }}
           />
-          <Bar dataKey="value" fill="#0f172a" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="value" fill="#0f172a" />
         </BarChart>
       </ResponsiveContainer>
     </div>
