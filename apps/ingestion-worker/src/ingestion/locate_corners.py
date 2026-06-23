@@ -50,7 +50,22 @@ def _decode_2byte(raw: bytes, offset: int) -> int | None:
     return n if _CORNER_MIN <= n <= _CORNER_MAX else None
 
 
-def show_hypothesis(raw: bytes) -> None:
+def show_horse_info(raw: bytes) -> None:
+    """ダンプされた馬の識別情報と成績セクションのバイトルーラーを表示する。"""
+    horse_no = _bs(raw, 28, 30)
+    ketto_num = _bs(raw, 30, 40)
+    data_kubun = _bs(raw, 2, 3)
+    finish_pos = _bs(raw, 334, 336)
+    print(f"\n【馬情報】 DataKubun={data_kubun} 馬番={horse_no} KettoNum={ketto_num} 確定着順={finish_pos}")
+    print("\n--- バイトルーラー [330:410] (コーナー探索対象域) ---")
+    for pos in range(330, min(410, len(raw)), 8):
+        chunk = raw[pos:pos + 8]
+        decoded = chunk.decode("cp932", errors="replace")
+        vals = [f"[{pos+i}]={raw[pos+i]:02x}" for i in range(len(chunk))]
+        print(f"  [{pos:3d}:{pos+8:3d}] {decoded!r}  ({' '.join(vals)})")
+
+
+
     """実データ候補オフセット [356:364] の内容を表示する。"""
     print(f"\n--- SE レコード長: {len(raw)} bytes (期待値: 553) ---")
     if len(raw) < _CORNER_HYPOTHESIS_START + 8:
@@ -203,6 +218,7 @@ def main() -> None:
     if len(paths) == 1:
         raw = raws[0]
         print(f"\n=== {paths[0].name} ===")
+        show_horse_info(raw)
         show_hypothesis(raw)
 
         if corners is not None:
