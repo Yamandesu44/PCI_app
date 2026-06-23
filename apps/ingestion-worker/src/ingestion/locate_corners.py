@@ -57,9 +57,11 @@ def show_horse_info(raw: bytes) -> None:
     data_kubun = _bs(raw, 2, 3)
     jyo_cd = _bs(raw, 19, 21)
     race_no = _bs(raw, 25, 27)
+    kai_date = _bs(raw, 11, 19)   # KaisaiNengappi YYYYMMDD
     finish_pos = _bs(raw, 334, 336)
-    agari = _bs(raw, 390, 393)
-    print(f"\n【馬情報】 DataKubun={data_kubun} 場CD={jyo_cd} R={race_no} 馬番={horse_no} KettoNum={ketto_num} 着順={finish_pos} 上り3F={int(agari)/10:.1f}s")
+    agari_raw = _bs(raw, 390, 393)
+    agari_str = f"{int(agari_raw)/10:.1f}s" if agari_raw.isdigit() else agari_raw
+    print(f"\n【馬情報】 DataKubun={data_kubun} 開催日={kai_date} 場CD={jyo_cd} R={race_no} 馬番={horse_no} KettoNum={ketto_num} 着順={finish_pos} 上り3F={agari_str}")
     print("\n--- バイトルーラー [330:410] (コーナー探索対象域) ---")
     for pos in range(330, min(410, len(raw)), 10):
         chunk = raw[pos:pos + 10]
@@ -132,25 +134,30 @@ def search_corners(
 ) -> list[int]:
     """SE レコード全体から既知コーナー順位が連続する位置を探す。
 
-    ゼロ埋め（"04"）とスペース埋め（" 4"）の両形式を試す。
+    以下の形式を試す:
+      - 2byte ゼロ埋め "04"
+      - 2byte スペース埋め " 4"
+      - 1byte ASCII 数字 "4"（7頭以下の少頭数レース向け）
     """
     c1, c2, c3, c4 = corners
     results: list[int] = []
 
-    for fmt in (f"{c1:02d}", f" {c1}"), (f"{c2:02d}", f" {c2}"), \
-               (f"{c3:02d}", f" {c3}"), (f"{c4:02d}", f" {c4}"):
-        pass  # use below
-
+    # 2byte 形式（ゼロ埋め・スペース埋め）
     for z1, z2, z3, z4 in (
         (f"{c1:02d}", f"{c2:02d}", f"{c3:02d}", f"{c4:02d}"),  # ゼロ埋め "04"
         (f" {c1}", f" {c2}", f" {c3}", f" {c4}"),              # スペース埋め " 4"
     ):
         target = (z1 + z2 + z3 + z4).encode("ascii")
-        pos = 0
-        while pos <= len(raw) - 8:
-            if raw[pos : pos + 8] == target:
+        for pos in range(len(raw) - len(target) + 1):
+            if raw[pos : pos + len(target)] == target:
                 results.append(pos)
-            pos += 1
+
+    # 1byte 形式（9頭以下の少頭数レースのみ有効）
+    if all(1 <= c <= 9 for c in (c1, c2, c3, c4)):
+        target_1b = f"{c1}{c2}{c3}{c4}".encode("ascii")
+        for pos in range(len(raw) - 3):
+            if raw[pos : pos + 4] == target_1b:
+                results.append(pos)
 
     return sorted(set(results))
 
@@ -231,9 +238,14 @@ def main() -> None:
             candidates = search_corners(raw, corners)
             if candidates:
                 print(f"\n★ 全レコード検索: オフセット候補 = {candidates}")
+                all_1byte = all(1 <= x <= 9 for x in corners)
                 for off in candidates:
-                    block = raw[off : off + 8].decode("cp932", errors="replace")
-                    print(f"   [{off}:{off + 8}] = {block!r}")
+                    block8 = raw[off : off + 8].decode("cp932", errors="replace")
+                    block4 = raw[off : off + 4].decode("cp932", errors="replace")
+                    if all_1byte and len(block8) >= 4 and block4 == f"{c1}{c2}{c3}{c4}":
+                        print(f"   [{off}:{off + 4}] = {block4!r}  ← 1byte形式")
+                    else:
+                        print(f"   [{off}:{off + 8}] = {block8!r}")
                 if _CORNER_HYPOTHESIS_START in candidates:
                     print(
                         f"\n→ 仮説 [{_CORNER_HYPOTHESIS_START}] が一致！"
