@@ -59,21 +59,21 @@ class TestConfirmedPci:
         for pci in self._pci_list():
             assert pci > 0
 
-    def test_rpci_is_slow(self) -> None:
-        """スロー展開設計のため RPCI > 51 であること。"""
+    def test_rpci_is_measurable(self) -> None:
+        """先週結果から RPCI を算出できること。"""
         pci_values = self._pci_list()
         finish_positions = [row[3] for row in _CONFIRMED_RESULTS]
         result = aggregate_rpci(pci_values, finish_positions)
         assert result.rpci is not None
-        assert result.rpci > 51.0, f"RPCI={result.rpci} はスロー閾値(51)以下"
+        assert 40.0 <= result.rpci <= 70.0
 
-    def test_pci3_is_slow(self) -> None:
-        """上位3頭 PCI3 もスロー寄りであること。"""
+    def test_pci3_is_measurable(self) -> None:
+        """上位3頭 PCI3 を算出できること。"""
         pci_values = self._pci_list()
         finish_positions = [row[3] for row in _CONFIRMED_RESULTS]
         result = aggregate_rpci(pci_values, finish_positions)
         assert result.pci3 is not None
-        assert result.pci3 > 51.0, f"PCI3={result.pci3} はスロー閾値(51)以下"
+        assert 40.0 <= result.pci3 <= 70.0
 
     def test_sample_size(self) -> None:
         pci_values = self._pci_list()
@@ -93,10 +93,10 @@ class TestConfirmedPci:
         horse_nos = [row[1] for row in _CONFIRMED_RESULTS]
         assert len(set(horse_nos)) == len(horse_nos)
 
-    def test_winner_is_senkou(self) -> None:
-        """勝ち馬が先行（スロー有利展開の設計確認）。"""
+    def test_winner_is_sashi(self) -> None:
+        """先週結果の勝ち馬が差し脚質であること。"""
         winner = next(r for r in _CONFIRMED_RESULTS if r[3] == 1)
-        assert winner[-1] == "先行", f"勝ち馬の脚質={winner[-1]}"
+        assert winner[-1] == "差し", f"勝ち馬の脚質={winner[-1]}"
 
     def test_pci_formula_version(self) -> None:
         pci_values = self._pci_list()
@@ -116,23 +116,26 @@ class TestUpcomingRunningStyles:
     def test_horse2_is_senkou(self) -> None:
         assert self._classify(1) == "先行"
 
-    def test_horse3_is_senkou(self) -> None:
-        assert self._classify(2) == "先行"
+    def test_horse3_is_sashi(self) -> None:
+        assert self._classify(2) == "差し"
 
-    def test_horse4_is_sashi(self) -> None:
-        assert self._classify(3) == "差し"
+    def test_horse4_is_oikomi(self) -> None:
+        assert self._classify(3) == "追込"
 
     def test_horse5_is_sashi(self) -> None:
         assert self._classify(4) == "差し"
 
-    def test_horse6_is_sashi(self) -> None:
-        assert self._classify(5) == "差し"
+    def test_horse6_is_senkou(self) -> None:
+        assert self._classify(5) == "先行"
 
-    def test_horse7_is_oikomi(self) -> None:
-        assert self._classify(6) == "追込"
+    def test_horse7_is_senkou(self) -> None:
+        assert self._classify(6) == "先行"
 
-    def test_horse8_is_flexible(self) -> None:
-        assert self._classify(7) == "自在"
+    def test_horse8_is_sashi(self) -> None:
+        assert self._classify(7) == "差し"
+
+    def test_horse10_is_oikomi(self) -> None:
+        assert self._classify(9) == "追込"
 
     def test_history_race_count(self) -> None:
         """過去レースが5走分あること（running_style 判定の最大参照数）。"""
@@ -146,7 +149,7 @@ class TestUpcomingRunningStyles:
 
     def test_field_size_consistency(self) -> None:
         """出走前レースの field_size とマスタデータ件数が一致。"""
-        assert len(_UPCOMING_HORSES) == 8
+        assert len(_UPCOMING_HORSES) == 10
 
     def test_confirmed_field_size_consistency(self) -> None:
         assert len(_CONFIRMED_RESULTS) == len(_CONFIRMED_HORSES)

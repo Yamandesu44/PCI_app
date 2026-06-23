@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """開発用データシードスクリプト。
 
-fixture データを PostgreSQL に投入し、フルスタック E2E を可能にする。
+TARGET 取り込み後の状態に近い週次データを PostgreSQL に投入し、
+フルスタック E2E を可能にする。
 何度実行しても同じ結果（冪等）。
 
 使い方:
@@ -18,8 +19,8 @@ fixture データを PostgreSQL に投入し、フルスタック E2E を可能�
     python scripts/seed_dev.py --reset
 
 シード後の確認 URL:
-    http://localhost:3000/races/2026062705010101/forecast       （展開予想）
-    http://localhost:3000/races/2026061705010101/pace-analysis  （確定後ペース分析）
+    http://localhost:3000/races/2026062809011111/forecast       （今週特別登録）
+    http://localhost:3000/races/2026062109011111/pace-analysis  （先週結果）
 """
 
 from __future__ import annotations
@@ -50,74 +51,88 @@ from pci.infrastructure.database.models import (
 # レースキー（apps/web/src/app/page.tsx と合わせる）
 # ---------------------------------------------------------------------------
 
-UPCOMING_RACE_KEY = "2026062705010101"   # 2026-06-27 東京1回1日目1R（今週末・出走前）
-CONFIRMED_RACE_KEY = "2026061705010101"  # 2026-06-17 東京1回1日目1R（確定後）
+UPCOMING_RACE_KEY = "2026062809011111"   # 2026-06-28 阪神11R（今週末・特別登録）
+CONFIRMED_RACE_KEY = "2026062109011111"  # 2026-06-21 阪神11R（先週結果）
 
 # ---------------------------------------------------------------------------
 # マスタデータ
 # ---------------------------------------------------------------------------
 
 _JOCKEYS = [
-    {"code": "JKY001", "name": "田中太郎"},
-    {"code": "JKY002", "name": "鈴木次郎"},
+    {"code": "TBD", "name": "騎手未定"},
+    {"code": "JKY101", "name": "横山和生"},
+    {"code": "JKY102", "name": "川田将雅"},
+    {"code": "JKY103", "name": "戸崎圭太"},
+    {"code": "JKY104", "name": "武豊"},
 ]
 
 _TRAINERS = [
-    {"code": "TRN001", "name": "山田三郎"},
-    {"code": "TRN002", "name": "中村四郎"},
+    {"code": "TRN101", "name": "上村洋行"},
+    {"code": "TRN102", "name": "木村哲也"},
+    {"code": "TRN103", "name": "友道康夫"},
+    {"code": "TRN104", "name": "手塚貴久"},
+    {"code": "TRN105", "name": "池江泰寿"},
+    {"code": "TRN106", "name": "中竹和也"},
 ]
 
 # ---------------------------------------------------------------------------
-# 出走前レースの馬データ
+# 今週分の特別登録データ
+# TARGET の特別登録では枠番・斤量・騎手が未確定のため、seed では仮番・0kg・騎手未定で保持する。
 # 5走分の4角通過順位 (c4_history) で脚質を設計:
 #   逃げ: 1〜2番手率 >= 60% / 先行: 3〜5番手 >= 60%
 #   差し: 6〜9番手 >= 60% / 追込: 10番手以降 >= 60%
 # ---------------------------------------------------------------------------
 # (ketto_num, name, sex, birth_year, c4_history[5走分・最新順])
 _UPCOMING_HORSES = [
-    ("2023000001", "フウライボー", "牡", 2023, [1, 1, 2, 1, 1]),      # 逃げ  100%
-    ("2023000002", "カゼノコ",   "牝", 2023, [3, 3, 4, 4, 3]),      # 先行  100%
-    ("2023000003", "ミチシルベ", "牡", 2023, [4, 4, 3, 5, 4]),      # 先行  100%
-    ("2023000004", "アゲアシ",   "牡", 2023, [6, 7, 6, 6, 7]),      # 差し  100%
-    ("2023000005", "ハナイキ",   "牝", 2023, [7, 8, 7, 8, 7]),      # 差し  100%
-    ("2023000006", "オソカラ",   "牡", 2023, [8, 7, 8, 7, 6]),      # 差し  100%
-    ("2023000007", "ドベドベ",   "牝", 2023, [12, 11, 10, 12, 11]), # 追込  100%
-    ("2023000008", "キマグレ",   "牡", 2023, [2, 6, 4, 8, 3]),      # 自在（散らばり）
+    ("2021100001", "ベラジオオペラ", "牡", 2020, [2, 2, 3, 2, 2]),      # 逃げ寄り先行
+    ("2021100002", "ロードデルレイ", "牡", 2020, [5, 5, 6, 5, 4]),      # 先行
+    ("2021100003", "レガレイラ", "牝", 2021, [7, 8, 9, 7, 8]),          # 差し
+    ("2021100004", "ジャスティンパレス", "牡", 2019, [10, 11, 10, 9, 11]), # 追込
+    ("2021100005", "ソールオリエンス", "牡", 2020, [8, 9, 8, 7, 10]),   # 差し
+    ("2021100006", "ドゥレッツァ", "牡", 2020, [4, 4, 5, 4, 3]),        # 先行
+    ("2021100007", "プラダリア", "牡", 2019, [3, 4, 4, 3, 4]),          # 先行
+    ("2021100008", "ローシャムパーク", "牡", 2019, [6, 6, 7, 5, 6]),    # 差し
+    ("2021100009", "ディープボンド", "牡", 2017, [2, 3, 2, 3, 2]),      # 逃げ寄り先行
+    ("2021100010", "ブローザホーン", "牡", 2019, [11, 10, 12, 11, 10]), # 追込
 ]
 
 # 脚質判定の根拠となる過去5走スタブ（status=result が必要）
 _HISTORY_RACES = [
-    ("2026050505010101", datetime.date(2026, 5,  5)),
-    ("2026051205010101", datetime.date(2026, 5, 12)),
-    ("2026051905010101", datetime.date(2026, 5, 19)),
-    ("2026052605010101", datetime.date(2026, 5, 26)),
-    ("2026060205010101", datetime.date(2026, 6,  2)),
+    ("2026042609011001", datetime.date(2026, 4, 26)),
+    ("2026050308011101", datetime.date(2026, 5, 3)),
+    ("2026051005011101", datetime.date(2026, 5, 10)),
+    ("2026053108011101", datetime.date(2026, 5, 31)),
+    ("2026061409011101", datetime.date(2026, 6, 14)),
 ]
 
 # ---------------------------------------------------------------------------
-# 確定後レースの馬・成績データ（1600m芝・スロー展開・先行有利）
+# 先週分の確定結果データ（TARGET RA/SE 取り込み相当）
 # ---------------------------------------------------------------------------
 # (ketto_num, name, sex, birth_year)
 _CONFIRMED_HORSES = [
-    ("2022000001", "スロートップ",   "牡", 2022),
-    ("2022000002", "スローセカンド", "牝", 2022),
-    ("2022000003", "スローサード",   "牡", 2022),
-    ("2022000004", "スローフォース", "牡", 2022),
-    ("2022000005", "ハナドタ",       "牝", 2022),
-    ("2022000006", "オシマイ",       "牡", 2022),
+    ("2020100101", "サトノグランツ", "牡", 2020),
+    ("2020100102", "シュヴァリエローズ", "牡", 2018),
+    ("2020100103", "ヨーホーレイク", "牡", 2018),
+    ("2020100104", "ボッケリーニ", "牡", 2016),
+    ("2020100105", "マイネルエンペラー", "牡", 2020),
+    ("2020100106", "ディープモンスター", "牡", 2018),
+    ("2020100107", "ハヤヤッコ", "牡", 2016),
+    ("2020100108", "メイショウブレゲ", "牡", 2019),
 ]
 
 # (ketto_num, horse_no, frame_no, finish_pos, race_time_s, agari_3f_s,
 #  corner_1, corner_2, corner_3, corner_4, running_style)
 _CONFIRMED_RESULTS = [
-    ("2022000001", 1, 1, 1, 96.5, 34.5, 2, 2, 2, 2, "先行"),  # 先行が勝利 → スロー
-    ("2022000002", 2, 1, 2, 96.8, 34.3, 5, 5, 4, 4, "差し"),
-    ("2022000003", 3, 2, 3, 97.0, 34.2, 6, 6, 5, 5, "差し"),
-    ("2022000004", 4, 2, 4, 97.3, 34.0, 7, 7, 7, 6, "差し"),
-    ("2022000005", 5, 3, 5, 97.5, 35.5, 1, 1, 1, 1, "逃げ"),  # 逃げ馬は後退
-    ("2022000006", 6, 3, 6, 97.8, 34.8, 8, 8, 8, 7, "追込"),  # 追込は届かず
+    ("2020100103", 1, 1, 1, 132.8, 34.7, 6, 6, 5, 4, "差し"),
+    ("2020100101", 2, 2, 2, 133.0, 35.0, 4, 4, 4, 3, "先行"),
+    ("2020100105", 3, 3, 3, 133.2, 35.2, 2, 2, 2, 2, "先行"),
+    ("2020100102", 4, 4, 4, 133.4, 34.9, 8, 8, 8, 7, "差し"),
+    ("2020100106", 5, 5, 5, 133.6, 35.1, 7, 7, 7, 6, "差し"),
+    ("2020100104", 6, 6, 6, 133.9, 35.8, 3, 3, 3, 5, "先行"),
+    ("2020100107", 7, 7, 7, 134.1, 35.0, 10, 10, 10, 9, "追込"),
+    ("2020100108", 8, 8, 8, 134.4, 35.4, 11, 11, 11, 10, "追込"),
 ]
-_CONFIRMED_DISTANCE_M = 1600
+_CONFIRMED_DISTANCE_M = 2200
 
 # ---------------------------------------------------------------------------
 # ヘルパー
@@ -133,11 +148,13 @@ def _pci(race_time_s: float, agari_3f_s: float, distance_m: int) -> float:
 
 
 def _jockey(horse_no: int) -> str:
-    return "JKY001" if horse_no % 2 == 1 else "JKY002"
+    # 特別登録段階では騎手未定が多いため、出走前データは TBD を使う。
+    return "TBD"
 
 
 def _trainer(horse_no: int, boundary: int = 4) -> str:
-    return "TRN001" if horse_no <= boundary else "TRN002"
+    trainer_codes = ["TRN101", "TRN102", "TRN103", "TRN104", "TRN105", "TRN106"]
+    return trainer_codes[(horse_no - 1) % len(trainer_codes)]
 
 
 # ---------------------------------------------------------------------------
@@ -170,15 +187,15 @@ def _seed_history(s: Session) -> None:
             RaceModel(
                 race_key=race_key,
                 race_date=race_date,
-                jyo_cd="05",
-                distance_m=1800,
+                jyo_cd="09",
+                distance_m=2200,
                 track_type="芝",
                 field_size=len(_UPCOMING_HORSES),
                 status="result",
                 track_condition="良",
                 weather="晴",
-                grade=None,
-                race_class="3歳未勝利",
+                grade="G1",
+                race_class="TARGET直近5走",
                 rpci_actual=None,
                 pci3_actual=None,
             )
@@ -212,20 +229,20 @@ def _seed_history(s: Session) -> None:
 
 
 def _seed_upcoming(s: Session) -> None:
-    print(f"  出走前レース ({UPCOMING_RACE_KEY}) を投入中...")
+    print(f"  今週特別登録レース ({UPCOMING_RACE_KEY}) を投入中...")
     s.merge(
         RaceModel(
             race_key=UPCOMING_RACE_KEY,
-            race_date=datetime.date(2026, 6, 27),
-            jyo_cd="05",
-            distance_m=1800,
+            race_date=datetime.date(2026, 6, 28),
+            jyo_cd="09",
+            distance_m=2200,
             track_type="芝",
             field_size=len(_UPCOMING_HORSES),
             status="entries",
             track_condition="良",
             weather="晴",
-            grade=None,
-            race_class="3歳未勝利",
+            grade="G1",
+            race_class="宝塚記念 特別登録",
             rpci_actual=None,
             pci3_actual=None,
         )
@@ -237,9 +254,9 @@ def _seed_upcoming(s: Session) -> None:
             RaceEntryModel(
                 race_key=UPCOMING_RACE_KEY,
                 horse_no=horse_no,
-                frame_no=horse_no,
+                frame_no=0,
                 ketto_num=ketto,
-                weight=460.0,
+                weight=0.0,
                 jockey_code=_jockey(horse_no),
                 trainer_code=_trainer(horse_no),
                 finish_pos=None,
@@ -257,7 +274,7 @@ def _seed_upcoming(s: Session) -> None:
 
 
 def _seed_confirmed(s: Session) -> tuple[float | None, float | None]:
-    print(f"  確定後レース ({CONFIRMED_RACE_KEY}) を PCI 算出込みで投入中...")
+    print(f"  先週結果レース ({CONFIRMED_RACE_KEY}) を PCI 算出込みで投入中...")
     pci_values: list[float] = []
     finish_positions: list[int] = []
 
@@ -270,16 +287,16 @@ def _seed_confirmed(s: Session) -> tuple[float | None, float | None]:
     s.merge(
         RaceModel(
             race_key=CONFIRMED_RACE_KEY,
-            race_date=datetime.date(2026, 6, 17),
-            jyo_cd="05",
+            race_date=datetime.date(2026, 6, 21),
+            jyo_cd="09",
             distance_m=_CONFIRMED_DISTANCE_M,
             track_type="芝",
             field_size=len(_CONFIRMED_RESULTS),
             status="result",
             track_condition="良",
             weather="晴",
-            grade=None,
-            race_class="3歳未勝利",
+            grade="G2",
+            race_class="先週重賞結果",
             rpci_actual=rpci_res.rpci,
             pci3_actual=rpci_res.pci3,
         )
@@ -296,7 +313,7 @@ def _seed_confirmed(s: Session) -> tuple[float | None, float | None]:
                 frame_no=frame_no,
                 ketto_num=ketto,
                 weight=460.0,
-                jockey_code=_jockey(horse_no),
+                jockey_code=f"JKY10{((horse_no - 1) % 4) + 1}",
                 trainer_code=_trainer(horse_no, boundary=3),
                 finish_pos=finish_pos,
                 race_time_s=rt_s,
@@ -330,13 +347,13 @@ def _print_summary(rpci: float | None, pci3: float | None) -> None:
     print("シード完了")
     print("=" * 60)
     print()
-    print(f"【出走前レース】  {UPCOMING_RACE_KEY}  1800m芝 8頭")
-    styles = ["逃げ", "先行", "先行", "差し", "差し", "差し", "追込", "自在"]
+    print(f"【今週特別登録】  {UPCOMING_RACE_KEY}  阪神11R 芝2200m 10頭")
+    styles = ["逃げ", "先行", "差し", "追込", "差し", "先行", "先行", "差し", "逃げ", "追込"]
     for i, (ketto, name, _, _, _) in enumerate(_UPCOMING_HORSES):
         print(f"  {i+1:2}. {name}（{styles[i]}）  {ketto}")
     print()
-    print(f"【確定後レース】  {CONFIRMED_RACE_KEY}  1600m芝 6頭")
-    print(f"  RPCI={rpci}  PCI3={pci3}  → スローペース（先行有利）")
+    print(f"【先週結果】  {CONFIRMED_RACE_KEY}  阪神11R 芝2200m 8頭")
+    print(f"  RPCI={rpci}  PCI3={pci3}")
     for ketto, hno, _, pos, rt, a3f, *_ in _CONFIRMED_RESULTS:
         pci = _pci(rt, a3f, _CONFIRMED_DISTANCE_M)
         name = next(n for k, n, *_ in _CONFIRMED_HORSES if k == ketto)
