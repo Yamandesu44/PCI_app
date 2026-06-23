@@ -83,7 +83,7 @@ class WindowsJvLinkClient:
 
     _dispatch: Any  # pythoncom IDispatch (生オブジェクト)
 
-    def __init__(self, sid: str, software_id: str = "UNKNOWN") -> None:
+    def __init__(self, sid: str, software_id: str = "UNKNOWN", race_option: int = 1) -> None:
         if sys.platform != "win32":
             raise RuntimeError(
                 "WindowsJvLinkClient は Windows 環境でのみ動作します。"
@@ -91,6 +91,7 @@ class WindowsJvLinkClient:
             )
         self._sid = sid
         self._software_id = software_id
+        self._race_option = race_option
         # JVOpen は同一データを短時間に複数回開くと、2回目以降が空になることがある。
         # main の all 実行では masters / entries / results が同じクライアントを共有するため、
         # 取得済みレコードをプロセス内で再利用して、実データ取り込みの欠落を防ぐ。
@@ -128,13 +129,13 @@ class WindowsJvLinkClient:
 
     def iter_ra_records(self, date_from: str, date_to: str) -> Iterator[str]:
         """指定期間の RA レコードを JV-Link から取得する。"""
-        for record in self._cached_records("RACE", date_from, date_to, option=1):
+        for record in self._cached_records("RACE", date_from, date_to, option=self._race_option):
             if record[:2] == "RA" and _record_in_date_range(record, date_from, date_to):
                 yield record
 
     def iter_se_records(self, date_from: str, date_to: str) -> Iterator[str]:
         """指定期間の SE レコードを JV-Link から取得する。"""
-        for record in self._cached_records("RACE", date_from, date_to, option=1):
+        for record in self._cached_records("RACE", date_from, date_to, option=self._race_option):
             if record[:2] == "SE" and _record_in_date_range(record, date_from, date_to):
                 yield record
 

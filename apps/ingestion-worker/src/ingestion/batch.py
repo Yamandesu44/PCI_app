@@ -53,7 +53,7 @@ def _setup_logging() -> None:
     )
 
 
-def _build_client(mode: str) -> JvLinkClient:
+def _build_client(mode: str, race_option: int = 1) -> JvLinkClient:
     if mode == "fixture":
         return FixtureJvLinkClient()
     if mode == "jvlink":
@@ -62,7 +62,7 @@ def _build_client(mode: str) -> JvLinkClient:
         sid = os.environ.get("JV_LINK_SID", "")
         if not sid:
             raise RuntimeError("JV_LINK_SID 環境変数が未設定です。.env に追記してください。")
-        return WindowsJvLinkClient(sid=sid)
+        return WindowsJvLinkClient(sid=sid, race_option=race_option)
     raise ValueError(f"未知のモード: {mode!r}。'fixture' または 'jvlink' を指定してください。")
 
 
@@ -274,6 +274,13 @@ def main() -> None:
         default="all",
         help="実行ステップ（デフォルト: all）",
     )
+    parser.add_argument(
+        "--race-option",
+        type=int,
+        choices=[1, 2, 3, 4],
+        default=1,
+        help="JVOpen RACE の option。通常データ=1、今週・特別登録などの未来データ=2。",
+    )
     args = parser.parse_args()
 
     date_from: str = args.date
@@ -282,10 +289,16 @@ def main() -> None:
     api_base_url = os.environ.get("API_BASE_URL", "http://localhost:8000")
     ingest_token = os.environ.get("INGEST_TOKEN", "")
 
-    client = _build_client(args.mode)
+    client = _build_client(args.mode, race_option=args.race_option)
     api = IngestApiClient(base_url=api_base_url, token=ingest_token)
 
-    _log.info("=== ingestion-worker 開始 mode=%s date=%s→%s ===", args.mode, date_from, date_to)
+    _log.info(
+        "=== ingestion-worker 開始 mode=%s date=%s→%s race_option=%s ===",
+        args.mode,
+        date_from,
+        date_to,
+        args.race_option,
+    )
 
     try:
         if args.step in ("all", "masters"):

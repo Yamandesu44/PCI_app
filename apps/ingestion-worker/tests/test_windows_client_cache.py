@@ -15,9 +15,14 @@ def _race_record(spec: str, race_date: str) -> str:
     return f"{spec}{' ' * 9}{race_date}{' ' * 20}"
 
 
-def _client_with_records(records: list[str], calls: list[tuple[Any, ...]]) -> WindowsJvLinkClient:
+def _client_with_records(
+    records: list[str],
+    calls: list[tuple[Any, ...]],
+    race_option: int = 1,
+) -> WindowsJvLinkClient:
     client = WindowsJvLinkClient.__new__(WindowsJvLinkClient)
     client._record_cache = {}
+    client._race_option = race_option
 
     def fake_iter_records(*args: Any, **kwargs: Any):  # type: ignore[no-untyped-def]
         calls.append((args, kwargs))
@@ -45,6 +50,14 @@ def test_race_records_are_opened_once_for_ra_and_se() -> None:
     assert [r[:2] for r in ra] == ["RA"]
     assert [r[:2] for r in se] == ["SE", "SE"]
     assert len(calls) == 1
+
+
+def test_race_option_is_passed_to_jvopen_cache() -> None:
+    calls: list[tuple[Any, ...]] = []
+    client = _client_with_records([_race_record("RA", "20260627")], calls, race_option=2)
+
+    assert len(list(client.iter_ra_records("20260627", "20260628"))) == 1
+    assert calls[0][1]["option"] == 2
 
 
 def test_diff_records_are_opened_once_for_all_masters() -> None:

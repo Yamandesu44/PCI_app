@@ -84,6 +84,9 @@ python -m ingestion.batch --mode jvlink --date 20260619
 # 期間指定（先週結果 + 今週特別登録などをまとめて取得する時）
 python -m ingestion.batch --mode jvlink --date 20260613 --date-to 20260628
 
+# 週末の特別登録・出馬表など未来データを取得する時
+python -m ingestion.batch --mode jvlink --date 20260627 --date-to 20260628 --race-option 2 --step entries
+
 # ステップ単位で実行
 python -m ingestion.batch --mode fixture --step masters   # マスタのみ
 python -m ingestion.batch --mode fixture --step entries   # 出走表のみ
@@ -93,6 +96,9 @@ python -m ingestion.batch --mode fixture --step results   # 確定成績のみ
 `--mode jvlink` では、同一プロセス内で取得した RACE / DIFF レコードを再利用します。
 JV-Link は同じデータを短時間に複数回 `JVOpen` すると2回目以降が空になる場合があるため、
 通常は `--step all` のまま一度で取り込んでください。
+
+先週までの確定成績は通常データなので `--race-option 1`（デフォルト）を使います。
+週末の特別登録・出馬表など、未来日の予想対象は `--race-option 2 --step entries` で取り込みます。
 
 ## テスト
 
