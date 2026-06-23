@@ -106,7 +106,10 @@ class WindowsJvLinkClient:
                 "pywin32 がインストールされていません。`pip install pci-ingestion-worker[win]` を実行してください。"
             ) from exc
 
-        jv = win32com.client.Dispatch("JVDTLab.JVLink.1")
+        try:
+            jv = win32com.client.Dispatch("JVDTLab.JVLink.1")
+        except Exception as exc:
+            raise RuntimeError(_dispatch_error_message(exc)) from exc
         # JV-Link 4.9.x のタイプライブラリには Long 型パラメータのデフォルト値が
         # 空文字列で定義されているバグがある。win32com の _ApplyTypes_ / InvokeTypes が
         # int('') を呼び出してクラッシュするため、生の IDispatch を直接使う。
@@ -298,3 +301,25 @@ def _record_in_date_range(record: str, date_from: str, date_to: str) -> bool:
     if date_to and race_date > date_to:
         return False
     return True
+
+
+def _dispatch_error_message(exc: Exception) -> str:
+    """JV-Link COM の起動失敗を、復旧手順付きのメッセージに変換する。"""
+    hresult = getattr(exc, "hresult", None)
+    if hresult is None and getattr(exc, "args", None):
+        first = exc.args[0]
+        if isinstance(first, int):
+            hresult = first
+
+    if hresult == -2147221164:
+        return (
+            "JV-Link COM クラス JVDTLab.JVLink.1 が登録されていません。"
+            "JV-Link が未インストール、または現在の Python の 32/64bit と "
+            "JV-Link COM の bit 数が一致していない可能性があります。"
+            "以前使っていた .venv がある場合は、その .venv を有効化してから "
+            "python -m ingestion.batch を実行してください。"
+        )
+    return (
+        "JV-Link COM を起動できませんでした。JV-Link のインストール、"
+        "利用キー設定、Python/pywin32 の環境を確認してください。"
+    )

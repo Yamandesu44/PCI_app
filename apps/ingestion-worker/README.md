@@ -42,9 +42,19 @@ Windows のコマンドプロンプトで作業する場合:
 
 ```bat
 cd /d C:\Users\yuuta\PCI_app\apps\ingestion-worker
+python -m venv .venv
+.venv\Scripts\activate.bat
 python -m pip install -e ".[win]"
 copy .env.example .env
 notepad .env
+```
+
+既に Claude Code で使っていた `.venv` がある場合は、新規作成せずに有効化だけで構いません。
+
+```bat
+cd /d C:\Users\yuuta\PCI_app\apps\ingestion-worker
+.venv\Scripts\activate.bat
+python -m pip install -e ".[win]"
 ```
 
 `.env` には JRA-VAN DataLab の利用キーを設定します。
@@ -57,6 +67,10 @@ JV_LINK_SID=ここに利用キーを設定
 
 `No module named 'ingestion'` が出る場合は、`python -m pip install -e ".[win]"`
 が未実行です。もう一度 `apps\ingestion-worker` で上記コマンドを実行してください。
+
+`クラスが登録されていません` が出る場合は、JV-Link COM が現在の Python から見えていません。
+以前使っていた `.venv` を有効化して実行してください。それでも解消しない場合は、
+JV-Link のインストール状態と Python の 32/64bit が JV-Link COM と合っているかを確認してください。
 
 ## 実行
 
