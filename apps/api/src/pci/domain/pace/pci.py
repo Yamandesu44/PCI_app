@@ -106,15 +106,38 @@ def calculate_pci(
     )
 
 
+def calculate_rpci_from_lap(
+    winner_time: RaceTime,
+    race_furlong_3f: Furlong3Time,
+    distance: Distance,
+) -> float:
+    """レースラップから RPCI（レースPCI）を算出する（TARGET 準拠）。
+
+    RPCI は PCI と**同一の計算式**を、個別馬ではなく「レース代表値」へ適用した値:
+        winner_time      = 1着馬の走破タイム（= レース走破タイム）
+        race_furlong_3f  = レースラップの後半3ハロン（RA レコードの HaronTimeL3）
+        distance         = レース距離
+
+    PCI 式は calculate_pci に一元化されているため（ADR-0004）、それを再利用する。
+    全出走馬 PCI の単純平均（aggregate_rpci の暫定値）とは異なり、TARGET の RPCI と
+    一致する。レース後半3Fが取得できない場合は呼び出し側で平均にフォールバックする。
+    """
+    return calculate_pci(winner_time, race_furlong_3f, distance).value
+
+
 def aggregate_rpci(
     pci_values: list[float],
     finish_positions: list[int],
+    race_rpci: float | None = None,
 ) -> RpciResult:
     """複数馬の PCI から RPCI と PCI3 を集計する。
 
     Args:
         pci_values:       各馬の PCI 値（finish_positions と同順）
         finish_positions: 各馬の着順（pci_values と同順）
+        race_rpci:        レースラップ由来の RPCI（TARGET 準拠）。指定時はこれを
+                          RPCI として採用する。None の場合は全完走馬 PCI の平均で
+                          暫定算出する（レースラップ未取得時のフォールバック）。
 
     Returns:
         RpciResult（rpci, pci3, formula_version, sample_size, reasons）
@@ -127,19 +150,28 @@ def aggregate_rpci(
     if len(pci_values) != len(finish_positions):
         raise ValueError("pci_values と finish_positions の長さが一致しません。")
 
-    rpci = round(sum(pci_values) / len(pci_values), 1)
+    if race_rpci is not None:
+        rpci = round(race_rpci, 1)
+        rpci_reason = Reason(
+            code="rpci_lap",
+            description=f"レースラップ後半3Fから算出（TARGET準拠）→ RPCI={rpci}",
+        )
+    else:
+        rpci = round(sum(pci_values) / len(pci_values), 1)
+        rpci_reason = Reason(
+            code="rpci_sample",
+            description=(
+                f"全完走馬 {len(pci_values)} 頭の PCI 平均 → RPCI={rpci}"
+                "（暫定: レースラップ未取得）"
+            ),
+        )
 
     top3_pcis = [
         pci for pci, pos in zip(pci_values, finish_positions, strict=True) if pos in (1, 2, 3)
     ]
     pci3: float | None = round(sum(top3_pcis) / len(top3_pcis), 1) if top3_pcis else None
 
-    reasons: list[Reason] = [
-        Reason(
-            code="rpci_sample",
-            description=f"全完走馬 {len(pci_values)} 頭の PCI 平均 → RPCI={rpci}",
-        ),
-    ]
+    reasons: list[Reason] = [rpci_reason]
     if pci3 is not None:
         reasons.append(
             Reason(

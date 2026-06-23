@@ -11,7 +11,12 @@
 
 import pytest
 
-from pci.domain.pace.pci import FORMULA_VERSION, calculate_pci
+from pci.domain.pace.pci import (
+    FORMULA_VERSION,
+    aggregate_rpci,
+    calculate_pci,
+    calculate_rpci_from_lap,
+)
 from pci.domain.shared.measurements import Distance, Furlong3Time, RaceTime
 
 # ----- ゴールデンテーブル -----
@@ -106,3 +111,61 @@ def test_distance_vo_accepts_minimum_valid() -> None:
     """800m はギリギリ有効。"""
     d = Distance(800)
     assert d.meters == 800
+
+
+# ----- RPCI（レースラップ由来 / TARGET 準拠） -----
+
+# (winner_time_s, race_l3_s, distance_m, expected_rpci, label)
+# RPCI = (winner-L3)×600/(距離-600) ÷ L3 × 100 − 50（PCI と同一式）
+RPCI_GOLDEN_CASES = [
+    # 1600m, 勝ち時計95.0s, レース後半3F 35.0s
+    # Ave-3F=(95.0-35.0)×600/1000=36.0 / 35.0 → 1.02857 → RPCI=52.9
+    (95.0, 35.0, 1600, 52.9, "1600m・標準"),
+    # 2000m, 120.0s, レース後半3F 36.0s（イーブン）→ RPCI=50.0
+    (120.0, 36.0, 2000, 50.0, "2000m・イーブン"),
+]
+
+
+@pytest.mark.parametrize(
+    "winner_time_s, race_l3_s, distance_m, expected_rpci, label",
+    RPCI_GOLDEN_CASES,
+    ids=[c[-1] for c in RPCI_GOLDEN_CASES],
+)
+def test_rpci_from_lap_golden(
+    winner_time_s: float,
+    race_l3_s: float,
+    distance_m: int,
+    expected_rpci: float,
+    label: str,
+) -> None:
+    rpci = calculate_rpci_from_lap(
+        winner_time=RaceTime(winner_time_s),
+        race_furlong_3f=Furlong3Time(race_l3_s),
+        distance=Distance(distance_m),
+    )
+    assert rpci == pytest.approx(expected_rpci, abs=0.05), (
+        f"[{label}] RPCI mismatch: got {rpci}, expected {expected_rpci}"
+    )
+
+
+def test_rpci_from_lap_equals_pci_formula() -> None:
+    """RPCI はレース代表値に PCI 式を適用したものと厳密一致（式の一元化を保証）。"""
+    args = (RaceTime(94.4), Furlong3Time(33.9), Distance(1600))
+    assert calculate_rpci_from_lap(*args) == calculate_pci(*args).value
+
+
+def test_aggregate_rpci_uses_lap_value_when_provided() -> None:
+    """race_rpci 指定時は平均ではなくラップ由来値を採用する。"""
+    pci_values = [40.0, 45.0, 50.0]  # 平均=45.0
+    finish_positions = [1, 2, 3]
+    result = aggregate_rpci(pci_values, finish_positions, race_rpci=58.3)
+    assert result.rpci == 58.3  # 平均45.0 ではない
+    assert result.pci3 == pytest.approx(45.0)  # PCI3 は従来どおり上位3頭平均
+    assert any(r.code == "rpci_lap" for r in result.reasons)
+
+
+def test_aggregate_rpci_falls_back_to_average_without_lap() -> None:
+    """race_rpci 未指定時は従来どおり全馬平均でフォールバックする。"""
+    result = aggregate_rpci([40.0, 45.0, 50.0], [1, 2, 3])
+    assert result.rpci == pytest.approx(45.0)
+    assert any(r.code == "rpci_sample" for r in result.reasons)
