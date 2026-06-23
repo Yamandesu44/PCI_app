@@ -85,10 +85,10 @@ python -m ingestion.batch --mode jvlink --date 20260619
 python -m ingestion.batch --mode jvlink --date 20260613 --date-to 20260628
 
 # 週末の特別登録・出馬表など未来データの取得可否を確認する時
-python -m ingestion.probe_race_options --date 20260624 --date-to 20260628
+python -m ingestion.probe_race_options --date 20260624 --date-to 20260628 --days-back 14
 
 # probe でデータが返った option を使い、未来日の予想対象を取り込む（例: option=4）
-python -m ingestion.batch --mode jvlink --date 20260624 --date-to 20260628 --race-option 4 --step entries
+python -m ingestion.batch --mode jvlink --date 20260617 --date-to 20260628 --race-option 4 --step entries
 
 # ステップ単位で実行
 python -m ingestion.batch --mode fixture --step masters   # マスタのみ
@@ -102,9 +102,9 @@ JV-Link は同じデータを短時間に複数回 `JVOpen` すると2回目以�
 
 先週までの確定成績は通常データなので `--race-option 1`（デフォルト）を使います。
 週末の特別登録・出馬表など、未来日の予想対象は先に
-`python -m ingestion.probe_race_options --date 20260624 --date-to 20260628`
-で `option=1..4` の取得可否を確認し、`dates=[20260627:..., 20260628:...]`
-が出る option を `--race-option` に指定してください。
+`python -m ingestion.probe_race_options --date 20260624 --date-to 20260628 --days-back 14`
+で `option=1..4` の取得可否を確認し、`target_dates=[20260627:..., 20260628:...]`
+が出る `fromtime` と option を、`--date` と `--race-option` に指定してください。
 
 `JVOpen 失敗: エラーコード -1（該当データなし）` は、JV-Link 自体の起動失敗ではなく、
 指定した `fromtime` / `option` の組み合わせで返るデータがない状態です。
