@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pci.domain.shared.measurements import Distance, Furlong3Time, RaceTime
 from pci.domain.shared.reason import Reason
 
-FORMULA_VERSION = "pci-v1"
+FORMULA_VERSION = "pci-v2"
 
 
 @dataclass(frozen=True)
@@ -45,10 +45,14 @@ def calculate_pci(
 ) -> PciResult:
     """PCI を計算して返す。
 
-    公開情報ベースの計算式（pci-v1）:
-        前半1Fタイム = (走破タイム - 上がり3F) / ((距離 - 600) / 200)
-        後半1Fタイム = 上がり3F / 3
-        PCI = (前半1Fタイム / 後半1Fタイム) × 50
+    TARGET公式と一致する計算式（pci-v2）:
+        Ave-3F   = (走破タイム - 上がり3F) × 600 ÷ (距離 - 600)
+        PCI      = Ave-3F ÷ 上がり3F × 100 − 50
+
+    備考: pci-v1 は ratio × 50 を使用していたが、TARGET の式は
+          ratio × 100 − 50 (ratio = Ave-3F / 上がり3F) であるため修正。
+          均等ペースで PCI=50 の基準は変わらないが、50 からの乖離幅が
+          v1 の 2 倍になる（TARGET 値と一致するスケール）。
 
     Args:
         race_time:  走破タイム（秒）
@@ -72,8 +76,8 @@ def calculate_pci(
     front_time = t - a
     front_pace = front_time / front_furlongs  # 秒/F（大きいほど遅い）
     back_pace = a / 3.0  # 秒/F
-    ratio = front_pace / back_pace
-    pci = round(ratio * 50.0, 1)
+    ratio = front_pace / back_pace  # = Ave-3F / 上がり3F
+    pci = round(ratio * 100.0 - 50.0, 1)
 
     if pci > 50.0:
         pace_trend = "スロー"

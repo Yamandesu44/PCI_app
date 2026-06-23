@@ -157,7 +157,7 @@ class TestRecordRaceResultUseCase:
         output = RecordRaceResultUseCase(repo).execute(RACE_KEY, RESULTS)
 
         assert output.rpci > 0
-        assert output.formula_version == "pci-v1"
+        assert output.formula_version == "pci-v2"
 
     def test_pci3_is_average_of_top3(self) -> None:
         repo = self._setup_repo()

@@ -202,7 +202,7 @@ class TestIngestResults:
         body = seeded_client.post("/internal/ingest/results", json=RESULTS_PAYLOAD).json()
         assert set(body.keys()) == {"race_key", "rpci", "pci3", "formula_version", "entry_pcis"}
         assert body["race_key"] == RACE_KEY
-        assert body["formula_version"] == "pci-v1"
+        assert body["formula_version"] == "pci-v2"
 
     def test_rpci_is_numeric(self, seeded_client: TestClient) -> None:
         body = seeded_client.post("/internal/ingest/results", json=RESULTS_PAYLOAD).json()

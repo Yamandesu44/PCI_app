@@ -200,7 +200,7 @@ class TestPaceAnalysisEndpoint:
         body = client.get(f"/api/v1/races/{CONFIRMED_KEY}/pace-analysis").json()
         assert set(body.keys()) == PACE_ANALYSIS_KEYS
         assert body["race_key"] == CONFIRMED_KEY
-        assert body["formula_version"] == "pci-v1"  # PCI 系は formula_version 必須
+        assert body["formula_version"] == "pci-v2"  # PCI 系は formula_version 必須
         assert body["sample_size"] == 3
         assert body["rpci_actual"] is not None
         assert body["pci3_actual"] is not None
