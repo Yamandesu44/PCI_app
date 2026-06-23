@@ -31,7 +31,7 @@ src/ingestion/
 pip install -e ".[dev]"
 
 # 本番環境（Windows）
-pip install -e ".[win]"
+python -m pip install -e ".[win]"
 
 # 環境変数
 cp .env.example .env
@@ -42,6 +42,7 @@ Windows のコマンドプロンプトで作業する場合:
 
 ```bat
 cd /d C:\Users\yuuta\PCI_app\apps\ingestion-worker
+python -m pip install -e ".[win]"
 copy .env.example .env
 notepad .env
 ```
@@ -53,6 +54,9 @@ API_BASE_URL=http://localhost:8000
 INGEST_TOKEN=
 JV_LINK_SID=ここに利用キーを設定
 ```
+
+`No module named 'ingestion'` が出る場合は、`python -m pip install -e ".[win]"`
+が未実行です。もう一度 `apps\ingestion-worker` で上記コマンドを実行してください。
 
 ## 実行
 
