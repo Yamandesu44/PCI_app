@@ -265,6 +265,30 @@ def _seed_confirmed(s: Session) -> tuple[float | None, float | None]:
         pci = _pci(rt_s, a3f_s, _CONFIRMED_DISTANCE_M)
         pci_values.append(pci)
         finish_positions.append(finish_pos)
+
+    rpci_res = aggregate_rpci(pci_values, finish_positions)
+    s.merge(
+        RaceModel(
+            race_key=CONFIRMED_RACE_KEY,
+            race_date=datetime.date(2026, 6, 17),
+            jyo_cd="05",
+            distance_m=_CONFIRMED_DISTANCE_M,
+            track_type="芝",
+            field_size=len(_CONFIRMED_RESULTS),
+            status="result",
+            track_condition="良",
+            weather="晴",
+            grade=None,
+            race_class="3歳未勝利",
+            rpci_actual=rpci_res.rpci,
+            pci3_actual=rpci_res.pci3,
+        )
+    )
+    # 親レースを先に確定させ、直後の race_entries 登録で FK 違反にならないようにする。
+    s.flush()
+
+    for ketto, horse_no, frame_no, finish_pos, rt_s, a3f_s, c1, c2, c3, c4, rs in _CONFIRMED_RESULTS:
+        pci = _pci(rt_s, a3f_s, _CONFIRMED_DISTANCE_M)
         s.merge(
             RaceEntryModel(
                 race_key=CONFIRMED_RACE_KEY,
@@ -286,24 +310,6 @@ def _seed_confirmed(s: Session) -> tuple[float | None, float | None]:
             )
         )
 
-    rpci_res = aggregate_rpci(pci_values, finish_positions)
-    s.merge(
-        RaceModel(
-            race_key=CONFIRMED_RACE_KEY,
-            race_date=datetime.date(2026, 6, 17),
-            jyo_cd="05",
-            distance_m=_CONFIRMED_DISTANCE_M,
-            track_type="芝",
-            field_size=len(_CONFIRMED_RESULTS),
-            status="result",
-            track_condition="良",
-            weather="晴",
-            grade=None,
-            race_class="3歳未勝利",
-            rpci_actual=rpci_res.rpci,
-            pci3_actual=rpci_res.pci3,
-        )
-    )
     s.flush()
     return rpci_res.rpci, rpci_res.pci3
 
