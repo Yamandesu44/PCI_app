@@ -161,18 +161,18 @@ def parse_se_result(record: str) -> ResultRecord | None:
     if race_time_s <= 0 or agari_3f_s <= 0:
         return None
 
-    # コーナー通過順位 [531:539]: Jyuni1c-4c 各2byte。
-    # 仮説オフセット（locate_corners.py で実データ検証を推奨）。
+    # コーナー通過順位 [356:364]: Jyuni1c-4c 各2byte。
+    # 2026-06-21 阪神9R(2000m) SE の locate_corners.py スキャンで特定した実データ候補。
     # 有効範囲外（0 または > 18）は None とし、脚質判定をスキップする。
     return ResultRecord(
         horse_no=horse_no,
         finish_pos=finish_pos,
         race_time_s=race_time_s,
         agari_3f_s=agari_3f_s,
-        corner_1=_corner_pos(raw, 531, 533),
-        corner_2=_corner_pos(raw, 533, 535),
-        corner_3=_corner_pos(raw, 535, 537),
-        corner_4=_corner_pos(raw, 537, 539),
+        corner_1=_corner_pos(raw, 356, 358),
+        corner_2=_corner_pos(raw, 358, 360),
+        corner_3=_corner_pos(raw, 360, 362),
+        corner_4=_corner_pos(raw, 362, 364),
     )
 
 

@@ -31,7 +31,7 @@ from ingestion.parser.common import _bs, to_cp932
 
 _CORNER_MIN = 1
 _CORNER_MAX = 18
-_CORNER_HYPOTHESIS_START = 531  # 仮説: 1/2/3着馬情報 の後（SE 末尾から 22 byte 前）
+_CORNER_HYPOTHESIS_START = 356  # 実データ候補: 2026-06-21 阪神9R スキャンで特定
 
 
 def _read_record(path: Path) -> bytes:
@@ -51,13 +51,13 @@ def _decode_2byte(raw: bytes, offset: int) -> int | None:
 
 
 def show_hypothesis(raw: bytes) -> None:
-    """仮説オフセット [531:539] の内容を表示する。"""
+    """実データ候補オフセット [356:364] の内容を表示する。"""
     print(f"\n--- SE レコード長: {len(raw)} bytes (期待値: 553) ---")
     if len(raw) < _CORNER_HYPOTHESIS_START + 8:
         print(f"  (警告: レコードが短すぎます)")
         return
 
-    print(f"\n【仮説】コーナー通過順位 @ [{_CORNER_HYPOTHESIS_START}:{_CORNER_HYPOTHESIS_START + 8}]:")
+    print(f"\n【実データ候補】コーナー通過順位 @ [{_CORNER_HYPOTHESIS_START}:{_CORNER_HYPOTHESIS_START + 8}]:")
     for i, name in enumerate(["corner_1", "corner_2", "corner_3", "corner_4"]):
         s = _CORNER_HYPOTHESIS_START + i * 2
         e = s + 2

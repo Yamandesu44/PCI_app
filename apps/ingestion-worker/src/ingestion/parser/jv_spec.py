@@ -157,6 +157,14 @@ SE_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("NyusenJyuni", 332, 2, "num", _C, "入線順位"),
     FieldSpec("KakuteiJyuni", 334, 2, "num", _C, "確定着順（99=中止/失格 00=未確定）"),
     FieldSpec("Time", 338, 4, "num", _C, "走破タイム MSSf（分1+秒2+1/10秒1）。'1107'=1:10.7"),
+    # コーナー通過順位 [356:364]: 各2byte×4本。
+    # 実データ（2026-06-21 阪神9R 2000m SE）で locate_corners.py スキャンにより特定。
+    # 553byte 全体で唯一の「4連続有効値（1-18）@2byte 刻み」候補 → [356:364]=10,10,5,10。
+    # netkeiba 通過順位との照合で CONFIRMED に昇格すること。
+    FieldSpec("Jyuni1c", 356, 2, "num", _T, "コーナー通過順位1（実データ候補: [356:358]）"),
+    FieldSpec("Jyuni2c", 358, 2, "num", _T, "コーナー通過順位2（実データ候補: [358:360]）"),
+    FieldSpec("Jyuni3c", 360, 2, "num", _T, "コーナー通過順位3（実データ候補: [360:362]）"),
+    FieldSpec("Jyuni4c", 362, 2, "num", _T, "コーナー通過順位4（実データ候補: [362:364]）"),
     # 錨4: 上り3F '358'(=35.8s) の直後 [393:403] が1着馬血統番号 → 位置確定
     FieldSpec("HaronTimeL3", 390, 3, "num", _C, "後3ハロンタイム（上り3F・1/10秒, 3桁）"),
     FieldSpec("ChakuKettoNum1", 393, 10, "code", _C, "1着馬(勝ち馬)血統登録番号。錨"),
@@ -167,13 +175,6 @@ SE_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("ChakuBamei2", 449, 36, "text", _T, "2着馬名 全角18字（仮説）"),
     FieldSpec("ChakuKettoNum3", 485, 10, "code", _T, "3着馬血統登録番号（仮説）"),
     FieldSpec("ChakuBamei3", 495, 36, "text", _T, "3着馬名 全角18字（仮説）"),
-    # コーナー通過順位 [531:539]: 各2byte×4本（仮説オフセット）。
-    # locate_corners.py で実データとの照合を推奨。
-    # 実データ確認時は confidence を CONFIRMED に変更し、コメントを更新すること。
-    FieldSpec("Jyuni1c", 531, 2, "num", _T, "コーナー通過順位1（仮説: [531:533]）"),
-    FieldSpec("Jyuni2c", 533, 2, "num", _T, "コーナー通過順位2（仮説: [533:535]）"),
-    FieldSpec("Jyuni3c", 535, 2, "num", _T, "コーナー通過順位3（仮説: [535:537]）"),
-    FieldSpec("Jyuni4c", 537, 2, "num", _T, "コーナー通過順位4（仮説: [537:539]）"),
 )
 
 

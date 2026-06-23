@@ -138,7 +138,7 @@ def _se_result(
     実測 byte: ChokyosiCode[85:90], KisyuCode[296:301], BaTaijyu[324:327],
                KakuteiJyuni[334:336], Time[338:342] MSSf, 上り3F[390:393]。
     走破タイムは 分1+秒2+1/10秒1 の MSSf 形式（例 94.4s → '1344'）。
-    corners: (c1, c2, c3, c4) を指定するとコーナー通過順位を [531:539] に書き込む（仮説）。
+    corners: (c1, c2, c3, c4) を指定するとコーナー通過順位を [356:364] に書き込む（実データ候補）。
     """
     buf = bytearray(b" " * SE_RECORD_BYTES)
     _put_field(buf, 0, "SE")
@@ -169,13 +169,13 @@ def _se_result(
     _put_field(buf, 338, time_mssf)               # Time
     _put_field(buf, 390, f"{agari_tenths:03d}")   # HaronTimeL3
 
-    # コーナー通過順位 [531:539]: 各 2byte。仮説オフセット。
+    # コーナー通過順位 [356:364]: 各 2byte。実データ候補オフセット。
     if corners is not None:
         c1, c2, c3, c4 = corners
-        _put_field(buf, 531, f"{c1:02d}")
-        _put_field(buf, 533, f"{c2:02d}")
-        _put_field(buf, 535, f"{c3:02d}")
-        _put_field(buf, 537, f"{c4:02d}")
+        _put_field(buf, 356, f"{c1:02d}")
+        _put_field(buf, 358, f"{c2:02d}")
+        _put_field(buf, 360, f"{c3:02d}")
+        _put_field(buf, 362, f"{c4:02d}")
 
     return buf.decode("cp932")
 
@@ -468,7 +468,7 @@ class TestSeResultParser:
         assert result.corner_4 is None
 
     def test_corners_extracted_from_hypothesis_offset(self) -> None:
-        """仮説オフセット [531:539] にコーナーを書き込むと正しく抽出される。"""
+        """実データ候補オフセット [356:364] にコーナーを書き込むと正しく抽出される。"""
         rec = _se_result(corners=(5, 5, 4, 2))
         result = parse_se_result(rec)
         assert result is not None
