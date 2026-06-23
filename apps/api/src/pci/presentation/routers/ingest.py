@@ -99,6 +99,7 @@ class ResultBody(BaseModel):
     race_key: str = Field(pattern=r"^\d{16}$")
     track_condition: str | None = None
     weather: str | None = None
+    race_l3f: float | None = None  # RA HaronTimeL3（後半3ハロン秒）。TARGET 準拠 RPCI に使用
     results: list[ResultItem]
 
 
@@ -225,6 +226,7 @@ def ingest_results(
         results,
         track_condition=body.track_condition,
         weather=body.weather,
+        race_l3f=body.race_l3f,
     )
     session.commit()
     return ResultResponse(

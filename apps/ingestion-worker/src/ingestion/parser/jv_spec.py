@@ -107,6 +107,17 @@ RA_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("TenkoCD", 823, 1, "code", _T, "天候コード【要再調査: 確定後で '0'】"),
     FieldSpec("SibaBabaCD", 824, 1, "code", _T, "芝馬場状態コード【要再調査】"),
     FieldSpec("DirtBabaCD", 825, 1, "code", _T, "ダート馬場状態コード【要再調査】"),
+    # ----- ラップタイム / HaronTime ブロック — 実測確定（2026-06-13 函館1R） -----
+    # locate_haron ツールで LapTime 配列(890) と HaronTime ブロック(969) を特定。
+    # LapTime[890:965] = 各ハロン 3桁×25本=75byte（1200mは6本, 残り 000）
+    # HaronTimeS3[969:972] 前半3F / HaronTimeS4[972:975] 前半4F
+    FieldSpec("HaronTimeS3", 969, 3, "num", _C, "前半3ハロンタイム合計（1/10秒3桁）。実測確定"),
+    FieldSpec("HaronTimeS4", 972, 3, "num", _C, "前半4ハロンタイム合計（1/10秒3桁）。実測確定"),
+    FieldSpec(
+        "HaronTimeL3", 975, 3, "num", _C,
+        "後半3ハロンタイム合計（1/10秒3桁）= RPCI 算出に使用。実測確定",
+    ),
+    FieldSpec("HaronTimeL4", 978, 3, "num", _C, "後半4ハロンタイム合計（1/10秒3桁）。実測確定"),
 )
 
 

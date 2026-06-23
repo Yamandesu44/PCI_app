@@ -74,6 +74,11 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
     track_cd = _bs(raw, 705, 707)
     track_type = decode_track(track_cd)
 
+    # HaronTimeL3 [975:978] — 実測確定（2026-06-13 函館1R で locate_haron ツール使用）
+    # 確定後(DataKubun=7)の RA のみ値を持つ。出走前レコードでは '000' になる場合がある。
+    haron_l3_raw = _bi(raw, 975, 978)
+    race_l3f = haron_l3_raw / 10.0 if haron_l3_raw > 0 else None
+
     # 以下は実バイト位置が未確定のため暫定デフォルト。
     # RA の --map 結果から SyussoTosu/TenkoCD/BabaCd の正しい位置を特定すること。
     field_size = 0
@@ -92,4 +97,5 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
         weather=weather,
         grade=grade,
         race_class=race_name or None,
+        race_l3f=race_l3f,
     )

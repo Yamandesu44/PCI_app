@@ -817,6 +817,17 @@
             "title": "Race Key",
             "type": "string"
           },
+          "race_l3f": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Race L3F"
+          },
           "results": {
             "items": {
               "$ref": "#/components/schemas/ResultItem"

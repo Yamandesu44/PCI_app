@@ -137,6 +137,7 @@ class IngestApiClient:
             "race_key": record.race_key,
             "track_condition": record.track_condition,
             "weather": record.weather,
+            "race_l3f": record.race_l3f,
             "results": [
                 {
                     "horse_no": r.horse_no,
@@ -153,9 +154,10 @@ class IngestApiClient:
         }
         result = self._post("/internal/ingest/results", payload)
         _log.info(
-            "成績登録 %s: RPCI=%.1f PCI3=%s",
+            "成績登録 %s: RPCI=%.1f PCI3=%s%s",
             record.race_key,
             result.get("rpci") or 0.0,
             result.get("pci3"),
+            " (ラップ由来)" if record.race_l3f is not None else " (平均フォールバック)",
         )
         return result

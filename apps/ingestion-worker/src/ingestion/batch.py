@@ -34,7 +34,7 @@ from ingestion.models import (
     TrainerRecord,
 )
 from ingestion.parser.master_parsers import parse_ch, parse_ks, parse_um
-from ingestion.parser.ra_parser import parse_ra
+from ingestion.parser.ra_parser import parse_ra as _parse_ra
 from ingestion.parser.se_parser import (
     get_horse_info_from_se,
     parse_race_key_from_se,
@@ -124,7 +124,7 @@ def ingest_entries(
 
     for rec in client.iter_ra_records(date_from, date_to):
         try:
-            ra = parse_ra(rec)
+            ra = _parse_ra(rec)
             if ra:
                 races[ra.race_key] = ra
         except Exception as exc:
@@ -193,9 +193,20 @@ def ingest_results(
     date_from: str,
     date_to: str,
 ) -> None:
-    """SE レコード（DataKubun=4）から確定成績を取り込む。"""
+    """SE レコード（DataKubun=4/7）+ RA レコード（DataKubun=7）から確定成績を取り込む。"""
     # race_key → RaceResultRecord のバッファ
     race_results: dict[str, RaceResultRecord] = {}
+
+    # RA 確定レコード（DataKubun=7）から HaronTimeL3（後半3F）を収集する。
+    # ingest_entries より後に呼ばれるが、RA は SE と独立したデータ種別のため再取得可能。
+    race_l3f_map: dict[str, float] = {}
+    for rec in client.iter_ra_records(date_from, date_to):
+        try:
+            ra = _parse_ra(rec)
+            if ra and ra.race_l3f is not None:
+                race_l3f_map[ra.race_key] = ra.race_l3f
+        except Exception as exc:
+            _log.warning("RA(results) パースエラー: %s | %.40s", exc, rec)
 
     for rec in client.iter_se_records(date_from, date_to):
         try:
@@ -213,6 +224,9 @@ def ingest_results(
     for race_key, rr in race_results.items():
         if not rr.results:
             continue
+        rr.race_l3f = race_l3f_map.get(race_key)
+        if rr.race_l3f is not None:
+            _log.debug("レース後半3F取得 %s: %.1f 秒", race_key, rr.race_l3f)
         try:
             api.record_results(rr)
         except Exception as exc:

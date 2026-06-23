@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pci.application.dto import EntryInput, RaceInfo, RaceResultOutput, ResultInput
-from pci.domain.pace.pci import aggregate_rpci, calculate_pci
+from pci.domain.pace.pci import aggregate_rpci, calculate_pci, calculate_rpci_from_lap
 from pci.domain.pace.running_style import classify_running_style
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -75,6 +75,7 @@ class RecordRaceResultUseCase:
         results: list[ResultInput],
         track_condition: str | None = None,
         weather: str | None = None,
+        race_l3f: float | None = None,
     ) -> RaceResultOutput:
         key = RaceKey(race_key_str)
         race = self._repo.find_by_key(key)
@@ -118,7 +119,19 @@ class RecordRaceResultUseCase:
             pci_values.append(pci_val)
             finish_positions.append(r.finish_pos)
 
-        rpci_result = aggregate_rpci(pci_values, finish_positions)
+        # TARGET 準拠 RPCI: RA の HaronTimeL3（レース後半3F）が得られた場合は
+        # 勝ち馬の走破タイムと組み合わせてラップから算出する。未取得時は全馬平均にフォールバック。
+        race_rpci: float | None = None
+        if race_l3f is not None:
+            winner = next((r for r in results if r.finish_pos == 1), None)
+            if winner is not None:
+                race_rpci = calculate_rpci_from_lap(
+                    RaceTime(winner.race_time_s),
+                    Furlong3Time(race_l3f),
+                    distance,
+                )
+
+        rpci_result = aggregate_rpci(pci_values, finish_positions, race_rpci=race_rpci)
 
         # FK 整合の自己修復（成績側でも保険）。出走表が先に登録済みなら no-op。
         self._repo.ensure_horses(e.ketto_num for e in entries_to_save)
