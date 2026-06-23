@@ -91,6 +91,10 @@ class WindowsJvLinkClient:
             )
         self._sid = sid
         self._software_id = software_id
+        # JVOpen は同一データを短時間に複数回開くと、2回目以降が空になることがある。
+        # main の all 実行では masters / entries / results が同じクライアントを共有するため、
+        # 取得済みレコードをプロセス内で再利用して、実データ取り込みの欠落を防ぐ。
+        self._record_cache: dict[tuple[str, str, str, int], list[str]] = {}
         self._open_com()
 
     def _open_com(self) -> None:
@@ -121,11 +125,15 @@ class WindowsJvLinkClient:
 
     def iter_ra_records(self, date_from: str, date_to: str) -> Iterator[str]:
         """指定期間の RA レコードを JV-Link から取得する。"""
-        yield from self._iter_records("RACE", date_from, date_to, record_types={"RA"})
+        for record in self._cached_records("RACE", date_from, date_to, option=1):
+            if record[:2] == "RA" and _record_in_date_range(record, date_from, date_to):
+                yield record
 
     def iter_se_records(self, date_from: str, date_to: str) -> Iterator[str]:
         """指定期間の SE レコードを JV-Link から取得する。"""
-        yield from self._iter_records("RACE", date_from, date_to, record_types={"SE"})
+        for record in self._cached_records("RACE", date_from, date_to, option=1):
+            if record[:2] == "SE" and _record_in_date_range(record, date_from, date_to):
+                yield record
 
     def iter_race_records_raw(
         self, date_from: str, date_to: str, option: int = 1
@@ -144,15 +152,21 @@ class WindowsJvLinkClient:
 
     def iter_um_records(self) -> Iterator[str]:
         """競走馬マスタ UM レコードを取得する（DIFF データ種別）。"""
-        yield from self._iter_records("DIFF", record_types={"UM"})
+        for record in self._cached_records("DIFF", "", "", option=4):
+            if record[:2] == "UM":
+                yield record
 
     def iter_ks_records(self) -> Iterator[str]:
         """騎手マスタ KS レコードを取得する（DIFF データ種別）。"""
-        yield from self._iter_records("DIFF", record_types={"KS"})
+        for record in self._cached_records("DIFF", "", "", option=4):
+            if record[:2] == "KS":
+                yield record
 
     def iter_ch_records(self) -> Iterator[str]:
         """調教師マスタ CH レコードを取得する（DIFF データ種別）。"""
-        yield from self._iter_records("DIFF", record_types={"CH"})
+        for record in self._cached_records("DIFF", "", "", option=4):
+            if record[:2] == "CH":
+                yield record
 
     def iter_diff_records_raw(self) -> Generator[str, None, None]:
         """DIFF データスペックの全レコード（UM/KS/CH 混在）を1回の JVOpen で返す。
@@ -249,3 +263,38 @@ class WindowsJvLinkClient:
                 dispid_close, _LCID, _DISPATCH_METHOD,
                 (_VT_I4, 0), (),
             )
+
+    def _cached_records(
+        self,
+        data_spec: str,
+        date_from: str = "",
+        date_to: str = "",
+        option: int = 1,
+    ) -> list[str]:
+        """同一プロセス内で JVOpen 結果を再利用する。"""
+        key = (data_spec, date_from, date_to, option)
+        if key not in self._record_cache:
+            self._record_cache[key] = list(
+                self._iter_records(
+                    data_spec,
+                    date_from,
+                    date_to,
+                    record_types=None,
+                    option=option,
+                )
+            )
+        return self._record_cache[key]
+
+
+def _record_in_date_range(record: str, date_from: str, date_to: str) -> bool:
+    """JV-Data レコードの開催年月日が指定範囲内かを判定する。"""
+    if not date_from and not date_to:
+        return True
+    race_date = record[11:19]
+    if len(race_date) != 8 or not race_date.isdigit():
+        return True
+    if date_from and race_date < date_from:
+        return False
+    if date_to and race_date > date_to:
+        return False
+    return True

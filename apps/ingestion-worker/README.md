@@ -35,7 +35,23 @@ pip install -e ".[win]"
 
 # 環境変数
 cp .env.example .env
-# .env を編集して API_BASE_URL / INGEST_TOKEN を設定
+# .env を編集して API_BASE_URL / INGEST_TOKEN / JV_LINK_SID を設定
+```
+
+Windows のコマンドプロンプトで作業する場合:
+
+```bat
+cd /d C:\Users\yuuta\PCI_app\apps\ingestion-worker
+copy .env.example .env
+notepad .env
+```
+
+`.env` には JRA-VAN DataLab の利用キーを設定します。
+
+```env
+API_BASE_URL=http://localhost:8000
+INGEST_TOKEN=
+JV_LINK_SID=ここに利用キーを設定
 ```
 
 ## 実行
@@ -47,11 +63,18 @@ python -m ingestion.batch --mode fixture
 # 本番モード（Windows + JV-Link COM）
 python -m ingestion.batch --mode jvlink --date 20260619
 
+# 期間指定（先週結果 + 今週特別登録などをまとめて取得する時）
+python -m ingestion.batch --mode jvlink --date 20260613 --date-to 20260628
+
 # ステップ単位で実行
 python -m ingestion.batch --mode fixture --step masters   # マスタのみ
 python -m ingestion.batch --mode fixture --step entries   # 出走表のみ
 python -m ingestion.batch --mode fixture --step results   # 確定成績のみ
 ```
+
+`--mode jvlink` では、同一プロセス内で取得した RACE / DIFF レコードを再利用します。
+JV-Link は同じデータを短時間に複数回 `JVOpen` すると2回目以降が空になる場合があるため、
+通常は `--step all` のまま一度で取り込んでください。
 
 ## テスト
 
