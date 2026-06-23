@@ -79,37 +79,35 @@ def show_hypothesis(raw: bytes) -> None:
 def scan_candidate_windows(raw: bytes, scan_start: int = 300) -> None:
     """全 2byte ウィンドウをスキャンして有効なコーナー値（1-18）を表示する。
 
-    各 2byte 位置の値を確認し、有効値が 4 連続している箇所をハイライトする。
+    start, start+2, start+4, start+6 の 4 箇所が全て有効値（1-18）の箇所を列挙する。
+    valid_positions リスト経由ではなく直接オフセットを総当たりすることで、
+    隣接バイトに別の有効値があっても誤検知しない。
     """
     print(f"\n--- 全スキャン: 有効コーナー値（1-18）の 2byte ウィンドウ [{scan_start}:{len(raw)}] ---")
-    valid_positions: list[tuple[int, int]] = []  # (offset, value)
-    for i in range(scan_start, len(raw) - 1):
-        v = _decode_2byte(raw, i)
-        if v is not None:
-            valid_positions.append((i, v))
-
-    if not valid_positions:
-        print("  有効値なし")
-        return
-
-    # 連続する 4 ウィンドウ（オフセット差が 2 ずつ）を探す
     print("  連続4箇所の候補（コーナー1〜4 として妥当な連続）:")
     found_any = False
-    for idx in range(len(valid_positions) - 3):
-        o0, v0 = valid_positions[idx]
-        o1, v1 = valid_positions[idx + 1]
-        o2, v2 = valid_positions[idx + 2]
-        o3, v3 = valid_positions[idx + 3]
-        if o1 == o0 + 2 and o2 == o0 + 4 and o3 == o0 + 6:
-            print(f"  [{o0}:{o0 + 8}] => {v0},{v1},{v2},{v3}")
-            found_any = True
+    for start in range(scan_start, len(raw) - 7):
+        v0 = _decode_2byte(raw, start)
+        if v0 is None:
+            continue
+        v1 = _decode_2byte(raw, start + 2)
+        if v1 is None:
+            continue
+        v2 = _decode_2byte(raw, start + 4)
+        if v2 is None:
+            continue
+        v3 = _decode_2byte(raw, start + 6)
+        if v3 is None:
+            continue
+        print(f"  [{start}:{start + 8}] => {v0},{v1},{v2},{v3}")
+        found_any = True
 
     if not found_any:
         print("  4連続の候補なし（個別に全有効位置を表示します）:")
-        for off, val in valid_positions[:40]:
-            print(f"    [{off}:{off + 2}] = {val}")
-        if len(valid_positions) > 40:
-            print(f"    ... 他 {len(valid_positions) - 40} 件")
+        for i in range(scan_start, len(raw) - 1):
+            v = _decode_2byte(raw, i)
+            if v is not None:
+                print(f"    [{i}:{i + 2}] = {v}")
 
 
 def search_corners(
