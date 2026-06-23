@@ -279,7 +279,10 @@ def main() -> None:
         type=int,
         choices=[1, 2, 3, 4],
         default=1,
-        help="JVOpen RACE の option。通常データ=1、今週・特別登録などの未来データ=2。",
+        help=(
+            "JVOpen RACE の option。通常データ=1。"
+            "未来データは ingestion.probe_race_options で取得できる option を確認してください。"
+        ),
     )
     args = parser.parse_args()
 

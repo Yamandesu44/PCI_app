@@ -84,8 +84,11 @@ python -m ingestion.batch --mode jvlink --date 20260619
 # 期間指定（先週結果 + 今週特別登録などをまとめて取得する時）
 python -m ingestion.batch --mode jvlink --date 20260613 --date-to 20260628
 
-# 週末の特別登録・出馬表など未来データを取得する時
-python -m ingestion.batch --mode jvlink --date 20260627 --date-to 20260628 --race-option 2 --step entries
+# 週末の特別登録・出馬表など未来データの取得可否を確認する時
+python -m ingestion.probe_race_options --date 20260624 --date-to 20260628
+
+# probe でデータが返った option を使い、未来日の予想対象を取り込む（例: option=4）
+python -m ingestion.batch --mode jvlink --date 20260624 --date-to 20260628 --race-option 4 --step entries
 
 # ステップ単位で実行
 python -m ingestion.batch --mode fixture --step masters   # マスタのみ
@@ -98,7 +101,15 @@ JV-Link は同じデータを短時間に複数回 `JVOpen` すると2回目以�
 通常は `--step all` のまま一度で取り込んでください。
 
 先週までの確定成績は通常データなので `--race-option 1`（デフォルト）を使います。
-週末の特別登録・出馬表など、未来日の予想対象は `--race-option 2 --step entries` で取り込みます。
+週末の特別登録・出馬表など、未来日の予想対象は先に
+`python -m ingestion.probe_race_options --date 20260624 --date-to 20260628`
+で `option=1..4` の取得可否を確認し、`dates=[20260627:..., 20260628:...]`
+が出る option を `--race-option` に指定してください。
+
+`JVOpen 失敗: エラーコード -1（該当データなし）` は、JV-Link 自体の起動失敗ではなく、
+指定した `fromtime` / `option` の組み合わせで返るデータがない状態です。
+特別登録のような未来データでは、レース当日 `20260627` を `--date` にするより、
+データが公開・更新された日（例: `20260624`）から問い合わせる方が取得できる場合があります。
 
 ## テスト
 
