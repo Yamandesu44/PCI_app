@@ -1,7 +1,5 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-
 interface PaceProfileChartProps {
   data: Array<{
     style: string;
@@ -9,27 +7,30 @@ interface PaceProfileChartProps {
   }>;
 }
 
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
 export function PaceProfileChart({ data }: PaceProfileChartProps) {
   return (
-    <div className="h-56 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
-          <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="style" tickLine={false} axisLine={false} fontSize={12} />
-          <YAxis hide domain={[0, 100]} />
-          <Tooltip
-            cursor={{ fill: "rgba(15, 23, 42, 0.04)" }}
-            formatter={(value) => [`${Number(value).toFixed(0)}`, "有利度"]}
-            labelStyle={{ color: "#0f172a", fontWeight: 700 }}
-            contentStyle={{
-              border: "1px solid #e5e7eb",
-              borderRadius: 8,
-              boxShadow: "0 12px 30px rgba(15, 23, 42, 0.08)",
-            }}
-          />
-          <Bar dataKey="value" fill="#0f172a" />
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="grid gap-3">
+      {data.map((item) => {
+        const value = clampPercent(item.value);
+        return (
+          <div key={item.style} className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-semibold text-slate-800">{item.style}</span>
+              <span className="font-mono text-xs font-semibold text-slate-500">{value}</span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-slate-950 transition-[width] duration-300"
+                style={{ width: `${value}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
