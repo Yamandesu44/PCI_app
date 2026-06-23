@@ -18,7 +18,7 @@ fixture データを PostgreSQL に投入し、フルスタック E2E を可能�
     python scripts/seed_dev.py --reset
 
 シード後の確認 URL:
-    http://localhost:3000/races/2026062005010101/forecast       （展開予想）
+    http://localhost:3000/races/2026062705010101/forecast       （展開予想）
     http://localhost:3000/races/2026061705010101/pace-analysis  （確定後ペース分析）
 """
 
@@ -50,7 +50,7 @@ from pci.infrastructure.database.models import (
 # レースキー（apps/web/src/app/page.tsx と合わせる）
 # ---------------------------------------------------------------------------
 
-UPCOMING_RACE_KEY = "2026062005010101"   # 2026-06-20 東京1回1日目1R（出走前）
+UPCOMING_RACE_KEY = "2026062705010101"   # 2026-06-27 東京1回1日目1R（今週末・出走前）
 CONFIRMED_RACE_KEY = "2026061705010101"  # 2026-06-17 東京1回1日目1R（確定後）
 
 # ---------------------------------------------------------------------------
@@ -216,7 +216,7 @@ def _seed_upcoming(s: Session) -> None:
     s.merge(
         RaceModel(
             race_key=UPCOMING_RACE_KEY,
-            race_date=datetime.date(2026, 6, 20),
+            race_date=datetime.date(2026, 6, 27),
             jyo_cd="05",
             distance_m=1800,
             track_type="芝",
