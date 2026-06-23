@@ -129,6 +129,7 @@ def _se_result(
     finish_pos: int = 1,
     race_time_s: float = 94.4,
     agari_3f_s: float = 33.9,
+    corners: tuple[int, int, int, int] | None = None,
 ) -> str:
     """SE 確定後レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
 
@@ -137,6 +138,7 @@ def _se_result(
     実測 byte: ChokyosiCode[85:90], KisyuCode[296:301], BaTaijyu[324:327],
                KakuteiJyuni[334:336], Time[338:342] MSSf, 上り3F[390:393]。
     走破タイムは 分1+秒2+1/10秒1 の MSSf 形式（例 94.4s → '1344'）。
+    corners: (c1, c2, c3, c4) を指定するとコーナー通過順位を [531:539] に書き込む（仮説）。
     """
     buf = bytearray(b" " * SE_RECORD_BYTES)
     _put_field(buf, 0, "SE")
@@ -166,6 +168,15 @@ def _se_result(
     _put_field(buf, 334, f"{finish_pos:02d}")     # KakuteiJyuni
     _put_field(buf, 338, time_mssf)               # Time
     _put_field(buf, 390, f"{agari_tenths:03d}")   # HaronTimeL3
+
+    # コーナー通過順位 [531:539]: 各 2byte。仮説オフセット。
+    if corners is not None:
+        c1, c2, c3, c4 = corners
+        _put_field(buf, 531, f"{c1:02d}")
+        _put_field(buf, 533, f"{c2:02d}")
+        _put_field(buf, 535, f"{c3:02d}")
+        _put_field(buf, 537, f"{c4:02d}")
+
     return buf.decode("cp932")
 
 
@@ -447,14 +458,37 @@ class TestSeResultParser:
         assert result is not None
         assert abs(result.agari_3f_s - 33.9) < 0.15
 
-    def test_corners_unresolved_returns_none(self) -> None:
-        # コーナー通過順位の実バイト位置は未特定（旧 [291:299] は騎手コード領域の
-        # 誤認だった）。2レコード目で差分校正するまで現状は None を返す。
+    def test_corners_absent_returns_none(self) -> None:
+        """コーナーデータを埋め込まない（空白）レコードは None を返す。"""
         result = parse_se_result(_se_result())
         assert result is not None
         assert result.corner_1 is None
         assert result.corner_2 is None
         assert result.corner_3 is None
+        assert result.corner_4 is None
+
+    def test_corners_extracted_from_hypothesis_offset(self) -> None:
+        """仮説オフセット [531:539] にコーナーを書き込むと正しく抽出される。"""
+        rec = _se_result(corners=(5, 5, 4, 2))
+        result = parse_se_result(rec)
+        assert result is not None
+        assert result.corner_1 == 5
+        assert result.corner_2 == 5
+        assert result.corner_3 == 4
+        assert result.corner_4 == 2
+
+    def test_corner_zero_returns_none(self) -> None:
+        """コーナー順位 '00' は有効範囲外（0）→ None を返す。"""
+        rec = _se_result(corners=(0, 0, 0, 0))
+        result = parse_se_result(rec)
+        assert result is not None
+        assert result.corner_4 is None
+
+    def test_corner_out_of_range_returns_none(self) -> None:
+        """コーナー順位が 19 以上（フルゲート超）→ None を返す。"""
+        rec = _se_result(corners=(19, 19, 19, 19))
+        result = parse_se_result(rec)
+        assert result is not None
         assert result.corner_4 is None
 
     def test_entry_record_returns_none(self) -> None:

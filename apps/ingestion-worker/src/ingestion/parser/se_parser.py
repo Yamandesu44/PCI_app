@@ -25,6 +25,8 @@ from ingestion.parser.common import (
 )
 from ingestion.parser.jv_spec import SE_RECORD_BYTES
 
+_CORNER_MAX = 18  # フルゲート最大頭数（有効コーナー通過順位の上限）
+
 # ---------------------------------------------------------------------------
 # SE レコード byte オフセット（jv_spec.SE_FIELDS と一致。実測確定）
 # ---------------------------------------------------------------------------
@@ -35,6 +37,18 @@ from ingestion.parser.jv_spec import SE_RECORD_BYTES
 #         Time[338:342] MSSf 上り3F[390:393]（直後[393:403]=1着馬血統番号）
 # コーナー通過順位は未特定（2レコード目で差分校正予定）→ None を返す。
 # ---------------------------------------------------------------------------
+
+def _corner_pos(raw: bytes, start: int, end: int) -> int | None:
+    """コーナー通過順位を CP932 バイト列から取り出す。
+
+    有効範囲 [1..18] 外の値（"00" や非数字、> 18）は None を返す。
+    """
+    s = raw[start:end].decode("cp932", errors="replace").strip()
+    if not s.isdigit():
+        return None
+    n = int(s)
+    return n if 1 <= n <= _CORNER_MAX else None
+
 
 _KUBUN_ENTRY = frozenset({"1", "2"})     # 出走前・出馬表
 _KUBUN_RESULT = frozenset({"4", "7"})    # 確定後（'4' 旧仕様 / '7' 実測確認）
@@ -147,16 +161,18 @@ def parse_se_result(record: str) -> ResultRecord | None:
     if race_time_s <= 0 or agari_3f_s <= 0:
         return None
 
-    # コーナー通過順位: 旧 [291:299] は騎手コード領域の誤認だった。実位置未特定 → None。
+    # コーナー通過順位 [531:539]: Jyuni1c-4c 各2byte。
+    # 仮説オフセット（locate_corners.py で実データ検証を推奨）。
+    # 有効範囲外（0 または > 18）は None とし、脚質判定をスキップする。
     return ResultRecord(
         horse_no=horse_no,
         finish_pos=finish_pos,
         race_time_s=race_time_s,
         agari_3f_s=agari_3f_s,
-        corner_1=None,
-        corner_2=None,
-        corner_3=None,
-        corner_4=None,
+        corner_1=_corner_pos(raw, 531, 533),
+        corner_2=_corner_pos(raw, 533, 535),
+        corner_3=_corner_pos(raw, 535, 537),
+        corner_4=_corner_pos(raw, 537, 539),
     )
 
 

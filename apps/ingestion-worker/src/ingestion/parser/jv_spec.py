@@ -161,10 +161,19 @@ SE_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("HaronTimeL3", 390, 3, "num", _C, "後3ハロンタイム（上り3F・1/10秒, 3桁）"),
     FieldSpec("ChakuKettoNum1", 393, 10, "code", _C, "1着馬(勝ち馬)血統登録番号。錨"),
     FieldSpec("ChakuBamei1", 403, 36, "text", _C, "1着馬(勝ち馬)馬名 全角18字。錨"),
-    # コーナー通過順位 [Jyuni1c-4c]: 旧 [291:299] は騎手コード領域の誤認だった。実バイト
-    # 位置はこの1レコードでは特定不能（着差/オッズ領域 [342:390] と値が一致しない）。
-    # 確定するまで本マップには列挙しない（se_parser は corner=None を返す）。
-    # 要: 別馬の2レコード目を dump し、着順と共に変化するバイトを差分特定する。
+    # 2着/3着馬情報（各10byte血統番号 + 36byte馬名）が続いた後にコーナー通過順位が来る。
+    # 合計 [439:531] = 10+36+10+36=92byte（仮説・未実測確認）。
+    FieldSpec("ChakuKettoNum2", 439, 10, "code", _T, "2着馬血統登録番号（仮説）"),
+    FieldSpec("ChakuBamei2", 449, 36, "text", _T, "2着馬名 全角18字（仮説）"),
+    FieldSpec("ChakuKettoNum3", 485, 10, "code", _T, "3着馬血統登録番号（仮説）"),
+    FieldSpec("ChakuBamei3", 495, 36, "text", _T, "3着馬名 全角18字（仮説）"),
+    # コーナー通過順位 [531:539]: 各2byte×4本（仮説オフセット）。
+    # locate_corners.py で実データとの照合を推奨。
+    # 実データ確認時は confidence を CONFIRMED に変更し、コメントを更新すること。
+    FieldSpec("Jyuni1c", 531, 2, "num", _T, "コーナー通過順位1（仮説: [531:533]）"),
+    FieldSpec("Jyuni2c", 533, 2, "num", _T, "コーナー通過順位2（仮説: [533:535]）"),
+    FieldSpec("Jyuni3c", 535, 2, "num", _T, "コーナー通過順位3（仮説: [535:537]）"),
+    FieldSpec("Jyuni4c", 537, 2, "num", _T, "コーナー通過順位4（仮説: [537:539]）"),
 )
 
 
