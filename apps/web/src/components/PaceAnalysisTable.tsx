@@ -9,6 +9,7 @@ export function PaceAnalysisTable({ horses }: { horses: HorsePaceAnalysis[] }) {
         <tr>
           <th>着</th>
           <th>馬番</th>
+          <th>馬名</th>
           <th>脚質</th>
           <th>PCI</th>
           <th>傾向</th>
@@ -25,6 +26,7 @@ export function PaceAnalysisTable({ horses }: { horses: HorsePaceAnalysis[] }) {
                 <span className="horse-no sm">{h.horse_no}</span>
                 {h.is_pci3_contributor ? <span className="pci3-mark">★</span> : null}
               </td>
+              <td>{h.horse_name ?? "—"}</td>
               <td>{h.running_style ?? "—"}</td>
               <td className="num">{h.pci !== null && h.pci !== undefined ? h.pci.toFixed(1) : "—"}</td>
               <td>

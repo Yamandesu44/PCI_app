@@ -379,6 +379,8 @@ export interface components {
             agari_3f_s?: number | null;
             /** Finish Pos */
             finish_pos?: number | null;
+            /** Horse Name */
+            horse_name?: string | null;
             /** Horse No */
             horse_no: number;
             /**

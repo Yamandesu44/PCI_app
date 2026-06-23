@@ -181,6 +181,7 @@ class HorsePaceAnalysisSchema(BaseModel):
 
     horse_no: int
     finish_pos: int | None = None
+    horse_name: str | None = None
     running_style: str | None = None
     pci: float | None = None
     agari_3f_s: float | None = None
@@ -213,6 +214,7 @@ class PaceAnalysisSchema(BaseModel):
                 HorsePaceAnalysisSchema(
                     horse_no=h.horse_no,
                     finish_pos=h.finish_pos,
+                    horse_name=h.horse_name,
                     running_style=h.running_style,
                     pci=h.pci,
                     agari_3f_s=h.agari_3f_s,

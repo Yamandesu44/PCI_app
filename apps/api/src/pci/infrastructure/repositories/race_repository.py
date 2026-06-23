@@ -63,6 +63,17 @@ class SqlAlchemyRaceRepository:
         )
         return [self._to_entry(m) for m in self._s.scalars(stmt).all()]
 
+    def find_horse_names(self, ketto_nums: Iterable[str]) -> dict[str, str]:
+        wanted = list(ketto_nums)
+        if not wanted:
+            return {}
+        rows = self._s.execute(
+            select(HorseModel.ketto_num, HorseModel.name).where(
+                HorseModel.ketto_num.in_(wanted)
+            )
+        ).all()
+        return {r.ketto_num: r.name for r in rows}
+
     # ----- 書き込み -----
 
     def save_race(self, race: Race) -> None:

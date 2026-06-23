@@ -122,6 +122,7 @@ class GetPaceAnalysisUseCase:
         entries = self._repo.find_entries(key)
         rpci, pci3, sample_size, reasons = self._aggregate(entries)
 
+        name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)
         horses = [
             HorsePaceAnalysisOutput(
                 horse_no=e.horse_no,
@@ -130,6 +131,7 @@ class GetPaceAnalysisUseCase:
                 pci=e.pci_actual,
                 agari_3f_s=e.agari_3f_s,
                 is_pci3_contributor=e.finish_pos in _PCI3_POSITIONS,
+                horse_name=name_map.get(e.ketto_num),
             )
             for e in sorted(entries, key=_result_order)
         ]

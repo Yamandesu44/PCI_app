@@ -170,6 +170,7 @@ class HorsePaceAnalysisOutput:
     pci: float | None = None
     agari_3f_s: float | None = None
     is_pci3_contributor: bool = False
+    horse_name: str | None = None
 
 
 @dataclass

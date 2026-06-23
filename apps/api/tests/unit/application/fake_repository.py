@@ -68,6 +68,10 @@ class FakeRaceRepository:
     def save_trainer(self, trainer: Trainer) -> None:
         self._trainers[trainer.code] = trainer
 
+    def find_horse_names(self, ketto_nums: Iterable[str]) -> dict[str, str]:
+        wanted = set(ketto_nums)
+        return {k: h.name for k, h in self._horses.items() if k in wanted}
+
     def ensure_horses(self, ketto_nums: Iterable[str]) -> None:
         for ketto in ketto_nums:
             if ketto and ketto not in self._horses:
