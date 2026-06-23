@@ -21,7 +21,7 @@ FORECAST_KEYS = {
     "comment",
 }
 
-HORSE_KEYS = {"horse_no", "running_style", "pai", "fit_label", "reasons"}
+HORSE_KEYS = {"horse_no", "horse_name", "running_style", "pai", "fit_label", "reasons"}
 
 COMMENT_KEYS = {"headline", "body", "model_version", "reasons"}
 
@@ -140,6 +140,7 @@ class TestForecastEndpoint:
         assert len(body["horses"]) == 6
         for horse in body["horses"]:
             assert set(horse.keys()) == HORSE_KEYS
+            assert horse["horse_name"]
             assert 0.0 <= horse["pai"] <= 100.0
             assert horse["fit_label"] in ("合致", "中立", "不利")
             assert horse["reasons"], "説明可能性: reasons は必須"

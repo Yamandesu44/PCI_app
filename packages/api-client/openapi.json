@@ -388,6 +388,17 @@
             "title": "Fit Label",
             "type": "string"
           },
+          "horse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horse Name"
+          },
           "horse_no": {
             "title": "Horse No",
             "type": "integer"

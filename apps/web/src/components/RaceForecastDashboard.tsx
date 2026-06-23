@@ -58,6 +58,10 @@ function reasonText(horse: HorseFit): string {
   return horse.reasons?.[0]?.description ?? `${horse.running_style}の展開適性が高い馬です。`;
 }
 
+function horseDisplayName(horse: HorseFit): string {
+  return horse.horse_name ?? `馬番 ${horse.horse_no}`;
+}
+
 function toneClass(index: number): string {
   const tones = [
     "border-slate-900 bg-slate-950 text-white",
@@ -184,8 +188,10 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
                   PAI {horse.pai.toFixed(0)}
                 </span>
               </div>
-              <h3 className="mt-4 text-xl font-semibold">馬番 {horse.horse_no}</h3>
-              <p className="mt-1 text-sm opacity-80">{horse.running_style}</p>
+              <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
+              <p className="mt-1 text-sm opacity-80">
+                馬番 {horse.horse_no} ・ {horse.running_style}
+              </p>
               <p className="mt-4 text-sm leading-6 opacity-90">{reasonText(horse)}</p>
             </article>
           ))}

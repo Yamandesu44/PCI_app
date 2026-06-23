@@ -92,10 +92,13 @@ class ForecastRaceUseCase:
 
         scenario = build_pace_scenario(forecast, fit_results, profiles)
 
+        name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)
+        ketto_by_no = {e.horse_no: e.ketto_num for e in entries}
         fit_by_no = {r.horse_no: r for r in fit_results}
         horses = [
             HorseFitOutput(
                 horse_no=p.horse_no,
+                horse_name=name_map.get(ketto_by_no.get(p.horse_no, "")),
                 running_style=str(p.running_style),
                 pai=fit_by_no[p.horse_no].pai,
                 fit_label=str(fit_by_no[p.horse_no].fit_label),

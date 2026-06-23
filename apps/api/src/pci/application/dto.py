@@ -86,6 +86,7 @@ class HorseFitOutput:
     """ForecastRaceUseCase の馬単位出力。"""
 
     horse_no: int
+    horse_name: str | None
     running_style: str
     pai: float
     fit_label: str

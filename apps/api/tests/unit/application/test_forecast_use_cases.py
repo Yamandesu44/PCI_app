@@ -9,6 +9,7 @@ import pytest
 from pci.application.dto import EntryInput, RaceInfo
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
+from pci.domain.racing.master import Horse
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
@@ -116,6 +117,15 @@ class TestForecastRaceUseCase:
             assert 0.0 <= h.pai <= 100.0
             assert h.fit_label in ("合致", "中立", "不利")
             assert h.reasons  # 説明可能性
+
+    def test_forecast_includes_horse_names(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=2)
+        repo.save_horse(Horse(ketto_num="2020100001", name="サンプルホース"))
+
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        assert output.horses[0].horse_name == "サンプルホース"
 
     def test_styles_derived_from_history(self) -> None:
         """過去走の4角順位から脚質が反映され、展開予想に効く。"""

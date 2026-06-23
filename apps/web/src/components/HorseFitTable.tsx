@@ -14,6 +14,7 @@ export function HorseFitTable({ horses }: { horses: HorseFit[] }) {
           <li key={h.horse_no} className={`horse fit-${tone}`}>
             <div className="horse-head">
               <span className="horse-no">{h.horse_no}</span>
+              <span className="horse-style">{h.horse_name ?? `馬番 ${h.horse_no}`}</span>
               <span className="horse-style">{h.running_style}</span>
               <span className={`fit-badge fit-${tone}`}>{h.fit_label}</span>
               <span className="pai-value">PAI {h.pai.toFixed(0)}</span>

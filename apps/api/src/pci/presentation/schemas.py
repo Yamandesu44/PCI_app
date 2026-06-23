@@ -47,6 +47,7 @@ class HorseFitSchema(BaseModel):
     """馬単位の展開適性（PAI）。"""
 
     horse_no: int
+    horse_name: str | None = None
     running_style: str
     pai: float = Field(ge=0.0, le=100.0)
     fit_label: str
@@ -84,6 +85,7 @@ class ForecastSchema(BaseModel):
             horses=[
                 HorseFitSchema(
                     horse_no=h.horse_no,
+                    horse_name=h.horse_name,
                     running_style=h.running_style,
                     pai=h.pai,
                     fit_label=h.fit_label,

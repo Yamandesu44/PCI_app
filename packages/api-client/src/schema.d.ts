@@ -358,6 +358,8 @@ export interface components {
         HorseFitSchema: {
             /** Fit Label */
             fit_label: string;
+            /** Horse Name */
+            horse_name?: string | null;
             /** Horse No */
             horse_no: number;
             /** Pai */
