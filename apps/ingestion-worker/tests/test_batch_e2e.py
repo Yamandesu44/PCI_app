@@ -10,9 +10,11 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from ingestion.batch import ingest_entries, ingest_masters, ingest_results
+from ingestion.batch import ingest_entries, ingest_masters, ingest_results, iter_date_chunks
 from ingestion.client.fixture_client import (
     FixtureJvLinkClient,
     _json_result_to_se,
@@ -42,6 +44,22 @@ def _mock_api() -> MagicMock:
         "entry_pcis": {1: 52.7, 2: 49.7, 3: 53.5},
     }
     return api
+
+
+class TestDateChunks:
+    def test_returns_single_range_when_disabled(self) -> None:
+        assert iter_date_chunks("20000101", "20000131", 0) == [("20000101", "20000131")]
+
+    def test_splits_range_by_chunk_days(self) -> None:
+        assert iter_date_chunks("20000101", "20000110", 4) == [
+            ("20000101", "20000104"),
+            ("20000105", "20000108"),
+            ("20000109", "20000110"),
+        ]
+
+    def test_rejects_reversed_range(self) -> None:
+        with pytest.raises(ValueError):
+            iter_date_chunks("20000110", "20000101", 4)
 
 
 # ---------------------------------------------------------------------------

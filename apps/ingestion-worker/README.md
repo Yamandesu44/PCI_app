@@ -98,6 +98,10 @@ python -m ingestion.batch --mode jvlink --date 20260619
 # 期間指定（先週結果 + 今週特別登録などをまとめて取得する時）
 python -m ingestion.batch --mode jvlink --date 20260613 --date-to 20260628
 
+# 過去成績を長期で取り込む時（例: 2000年以降）
+# 途中失敗時に再開しやすいよう、31日ごとに分割して取得します。
+python -m ingestion.batch --mode jvlink --date 20000101 --date-to 20260621 --step all --chunk-days 31
+
 # 週末の特別登録・出馬表など未来データの取得可否を確認する時
 python -m ingestion.probe_race_options --date 20260624 --date-to 20260628 --days-back 14
 

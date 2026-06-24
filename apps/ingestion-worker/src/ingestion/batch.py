@@ -280,6 +280,25 @@ def ingest_results(
             _log.error("成績送信エラー %s: %s", race_key, exc)
 
 
+def iter_date_chunks(date_from: str, date_to: str, chunk_days: int) -> list[tuple[str, str]]:
+    """長期取り込みを、指定日数ごとの範囲に分割する。"""
+    if chunk_days <= 0:
+        return [(date_from, date_to)]
+
+    start = datetime.datetime.strptime(date_from, "%Y%m%d").date()
+    end = datetime.datetime.strptime(date_to, "%Y%m%d").date()
+    if start > end:
+        raise ValueError("--date は --date-to 以前の日付にしてください。")
+
+    chunks: list[tuple[str, str]] = []
+    current = start
+    while current <= end:
+        chunk_end = min(current + datetime.timedelta(days=chunk_days - 1), end)
+        chunks.append((current.strftime("%Y%m%d"), chunk_end.strftime("%Y%m%d")))
+        current = chunk_end + datetime.timedelta(days=1)
+    return chunks
+
+
 # ---------------------------------------------------------------------------
 # メインエントリーポイント
 # ---------------------------------------------------------------------------
@@ -329,6 +348,15 @@ def main() -> None:
             "未来データは ingestion.probe_race_options で取得できる option を確認してください。"
         ),
     )
+    parser.add_argument(
+        "--chunk-days",
+        type=int,
+        default=0,
+        help=(
+            "長期レンジを指定日数ごとに分割して取り込む。"
+            "0 の場合は従来どおり一括で処理する。"
+        ),
+    )
     args = parser.parse_args()
 
     date_from: str = args.date
@@ -364,13 +392,21 @@ def main() -> None:
             _log.info("--- マスタデータ取り込み ---")
             ingest_masters(client, api)
 
-        if args.step in ("all", "entries"):
-            _log.info("--- 出走表取り込み ---")
-            ingest_entries(client, api, date_from, date_to)
+        chunks = iter_date_chunks(date_from, date_to, args.chunk_days)
+        if len(chunks) > 1:
+            _log.info("--- 日付レンジ分割: %d チャンク ---", len(chunks))
 
-        if args.step in ("all", "results"):
-            _log.info("--- 確定成績取り込み ---")
-            ingest_results(client, api, date_from, date_to)
+        for chunk_from, chunk_to in chunks:
+            if len(chunks) > 1:
+                _log.info("--- 取り込み範囲 %s→%s ---", chunk_from, chunk_to)
+
+            if args.step in ("all", "entries"):
+                _log.info("--- 出走表取り込み ---")
+                ingest_entries(client, api, chunk_from, chunk_to)
+
+            if args.step in ("all", "results"):
+                _log.info("--- 確定成績取り込み ---")
+                ingest_results(client, api, chunk_from, chunk_to)
 
         _log.info("=== ingestion-worker 完了 ===")
 
