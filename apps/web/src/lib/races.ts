@@ -64,3 +64,29 @@ export function formatRaceDate(isoDate: string): string {
 export function raceTitle(race: RaceSummary): string {
   return `${jyoName(race.jyo_cd)} ${raceNumber(race.race_key)} ・ ${race.track_type}${race.distance_m}m`;
 }
+
+/** コース条件を短く表示する。 */
+export function raceCondition(race: Pick<RaceSummary, "track_type" | "distance_m">): string {
+  return `${race.track_type}${race.distance_m}m`;
+}
+
+/** グレード・クラスを一覧用のラベルへ。未設定時は一般戦として扱う。 */
+export function raceClassLabel(race: Pick<RaceSummary, "grade" | "race_class">): string {
+  return race.grade ?? race.race_class ?? "一般";
+}
+
+/** レース番号を数値化する。一覧ソート用なので、不正値は最後に寄せる。 */
+export function raceNumberValue(raceKey: string): number {
+  if (raceKey.length !== 16) return 999;
+  const value = Number(raceKey.slice(14, 16));
+  return Number.isFinite(value) ? value : 999;
+}
+
+/** 開催日・競馬場・レース番号の順で並べるための比較関数。 */
+export function compareRaceSummary(a: RaceSummary, b: RaceSummary): number {
+  return (
+    a.race_date.localeCompare(b.race_date) ||
+    a.jyo_cd.localeCompare(b.jyo_cd) ||
+    raceNumberValue(a.race_key) - raceNumberValue(b.race_key)
+  );
+}

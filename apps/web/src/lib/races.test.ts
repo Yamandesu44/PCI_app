@@ -3,10 +3,14 @@ import { describe, expect, it } from "vitest";
 import type { RaceSummary } from "@pci/api-client";
 
 import {
+  compareRaceSummary,
   formatRaceDate,
   jyoName,
+  raceClassLabel,
+  raceCondition,
   raceHref,
   raceNumber,
+  raceNumberValue,
   raceTitle,
   statusLabel,
   statusTone,
@@ -94,5 +98,38 @@ describe("raceTitle", () => {
   it("競馬場・レース番号・トラック・距離を1行に整形する", () => {
     const race = makeRace({ jyo_cd: "05", track_type: "芝", distance_m: 1600 });
     expect(raceTitle(race)).toBe("東京 11R ・ 芝1600m");
+  });
+});
+
+describe("raceCondition / raceClassLabel", () => {
+  it("コース条件を短く表示する", () => {
+    expect(raceCondition(makeRace({ track_type: "ダ", distance_m: 1700 }))).toBe("ダ1700m");
+  });
+
+  it("グレードを優先し、なければクラス、最後に一般へフォールバックする", () => {
+    expect(raceClassLabel(makeRace({ grade: "G3", race_class: "OP" }))).toBe("G3");
+    expect(raceClassLabel(makeRace({ grade: null, race_class: "3勝" }))).toBe("3勝");
+    expect(raceClassLabel(makeRace({ grade: null, race_class: null }))).toBe("一般");
+  });
+});
+
+describe("raceNumberValue / compareRaceSummary", () => {
+  it("レース番号をソート用の数値にする", () => {
+    expect(raceNumberValue("2026062005010109")).toBe(9);
+    expect(raceNumberValue("SHORT")).toBe(999);
+  });
+
+  it("開催日・競馬場・レース番号の順に並べる", () => {
+    const races = [
+      makeRace({ race_key: "2026062106010111", race_date: "2026-06-21", jyo_cd: "06" }),
+      makeRace({ race_key: "2026062005010110", race_date: "2026-06-20", jyo_cd: "05" }),
+      makeRace({ race_key: "2026062005010109", race_date: "2026-06-20", jyo_cd: "05" }),
+    ];
+
+    expect([...races].sort(compareRaceSummary).map((race) => race.race_key)).toEqual([
+      "2026062005010109",
+      "2026062005010110",
+      "2026062106010111",
+    ]);
   });
 });
