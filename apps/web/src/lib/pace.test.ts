@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   benefitRecommendation,
   confidenceInsight,
+  discountRecommendation,
   fitTone,
   forecastDecisionChecklist,
   paceMeta,
@@ -11,6 +12,7 @@ import {
   pciTone,
   pciToneLabel,
   sanitizeBeginnerComment,
+  sortDiscountCandidates,
   sortByPai,
 } from "./pace";
 
@@ -138,6 +140,34 @@ describe("benefitRecommendation", () => {
     const out = benefitRecommendation({ pai: 58, running_style: "逃げ" }, 1);
     expect(out.label).toBe("押さえ");
     expect(out.tone).toBe("keep");
+  });
+});
+
+describe("discountRecommendation", () => {
+  it("不利または低い適性の馬は評価下げにする", () => {
+    const out = discountRecommendation({ fit_label: "不利", pai: 42, running_style: "差し" });
+    expect(out.label).toBe("評価下げ");
+    expect(out.tone).toBe("avoid");
+    expect(out.reason).toContain("直線");
+  });
+
+  it("明確な不利でない低めの馬は過信注意にする", () => {
+    const out = discountRecommendation({ fit_label: "中立", pai: 55, running_style: "逃げ" });
+    expect(out.label).toBe("過信注意");
+    expect(out.tone).toBe("caution");
+  });
+});
+
+describe("sortDiscountCandidates", () => {
+  it("不利ラベルを優先し、その中では適性指数が低い順に並べる", () => {
+    const input = [
+      { horse_no: 1, running_style: "逃げ", pai: 65, fit_label: "中立", reasons: [] },
+      { horse_no: 2, running_style: "差し", pai: 48, fit_label: "不利", reasons: [] },
+      { horse_no: 3, running_style: "先行", pai: 40, fit_label: "不利", reasons: [] },
+      { horse_no: 4, running_style: "追込", pai: 38, fit_label: "中立", reasons: [] },
+    ];
+
+    expect(sortDiscountCandidates(input).map((horse) => horse.horse_no)).toEqual([3, 2, 4, 1]);
   });
 });
 

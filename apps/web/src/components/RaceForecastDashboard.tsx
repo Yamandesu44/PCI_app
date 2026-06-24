@@ -11,9 +11,11 @@ import { formatRaceDate, jyoName, raceNumber } from "@/lib/races";
 import {
   benefitRecommendation,
   confidenceInsight,
+  discountRecommendation,
   forecastDecisionChecklist,
   paceSpeedFromIndex,
   paiBarWidth,
+  sortDiscountCandidates,
   sortByPai,
 } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
@@ -86,6 +88,14 @@ function roleClass(tone: ReturnType<typeof benefitRecommendation>["tone"]): stri
   return tones[tone];
 }
 
+function discountClass(tone: ReturnType<typeof discountRecommendation>["tone"]): string {
+  const tones = {
+    avoid: "border-rose-200 bg-rose-50 text-rose-950",
+    caution: "border-amber-200 bg-amber-50 text-amber-950",
+  };
+  return tones[tone];
+}
+
 function confidenceClass(tone: ReturnType<typeof confidenceInsight>["tone"]): string {
   const tones = {
     strong: "border-emerald-200 bg-emerald-50 text-emerald-950",
@@ -98,6 +108,9 @@ function confidenceClass(tone: ReturnType<typeof confidenceInsight>["tone"]): st
 export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardProps) {
   const horses = forecast.horses ?? [];
   const topHorses = sortByPai(horses).slice(0, 5);
+  const discountHorses = sortDiscountCandidates(horses)
+    .filter((horse) => horse.fit_label === "不利" || horse.pai < 60)
+    .slice(0, 3);
   const styleScores = buildStyleScores(horses);
   const confidence = confidencePct(forecast.confidence);
   const confidenceMeta = confidenceInsight(forecast.confidence);
@@ -279,6 +292,46 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
             );
           })}
         </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">評価を下げたい馬</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              今回の流れが向きにくい馬を、割引理由つきで表示します。
+            </p>
+          </div>
+        </div>
+        {discountHorses.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
+            展開面だけで大きく割り引きたい馬は見当たりません。
+          </p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-3">
+            {discountHorses.map((horse) => {
+              const discount = discountRecommendation(horse);
+              return (
+                <article
+                  key={horse.horse_no}
+                  className={`rounded-lg border p-4 shadow-sm ${discountClass(discount.tone)}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold text-slate-900">
+                      {discount.label}
+                    </span>
+                    <span className="text-xs font-semibold opacity-70">適性 {horse.pai.toFixed(0)}</span>
+                  </div>
+                  <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
+                  <p className="mt-1 text-sm opacity-80">
+                    馬番 {horse.horse_no} ・ {horse.running_style} ・ {horse.fit_label}
+                  </p>
+                  <p className="mt-4 text-sm leading-6 opacity-90">{discount.reason}</p>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">

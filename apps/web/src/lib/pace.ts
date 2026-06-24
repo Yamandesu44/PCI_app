@@ -280,6 +280,60 @@ export function benefitRecommendation(horse: Pick<HorseFit, "pai" | "running_sty
   };
 }
 
+export type DiscountTone = "avoid" | "caution";
+
+export interface DiscountRecommendation {
+  label: string;
+  tone: DiscountTone;
+  reason: string;
+}
+
+function styleDiscountReason(style: string): string {
+  if (style.includes("逃")) {
+    return "前に行く形が取れないと、持ち味を出しにくくなります。";
+  }
+  if (style.includes("先")) {
+    return "好位で運べない流れになると、最後まで踏ん張りにくくなります。";
+  }
+  if (style.includes("差")) {
+    return "前が止まりにくい流れでは、直線で届き切らないリスクがあります。";
+  }
+  if (style.includes("追")) {
+    return "展開の助けが少ないと、後ろから届かせるには条件が厳しくなります。";
+  }
+  return "今回の流れとかみ合わない場合、力を出し切れない可能性があります。";
+}
+
+/** 展開面から評価を下げたい馬を、検討用の自然語に変換する。 */
+export function discountRecommendation(
+  horse: Pick<HorseFit, "fit_label" | "pai" | "running_style">,
+): DiscountRecommendation {
+  const reason = styleDiscountReason(horse.running_style);
+
+  if (horse.fit_label === "不利" || horse.pai < 45) {
+    return {
+      label: "評価下げ",
+      tone: "avoid",
+      reason: `${reason} 人気しているなら慎重に扱いたい一頭です。`,
+    };
+  }
+
+  return {
+    label: "過信注意",
+    tone: "caution",
+    reason: `${reason} 強く買い切るより、相手までで考えたい一頭です。`,
+  };
+}
+
+/** 展開が向きにくい馬を、割引度が高い順に返す。 */
+export function sortDiscountCandidates(horses: HorseFit[]): HorseFit[] {
+  return [...horses].sort((a, b) => {
+    const aPenalty = a.fit_label === "不利" ? 0 : 1;
+    const bPenalty = b.fit_label === "不利" ? 0 : 1;
+    return aPenalty - bPenalty || a.pai - b.pai;
+  });
+}
+
 export interface ForecastDecisionChecklistItem {
   label: string;
   value: string;
