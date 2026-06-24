@@ -221,6 +221,58 @@ export function sortByPai(horses: HorseFit[]): HorseFit[] {
   return [...horses].sort((a, b) => b.pai - a.pai);
 }
 
+export type RaceSpotlightTone = "focus" | "value" | "caution" | "normal";
+
+export interface RaceSpotlight {
+  label: string;
+  tone: RaceSpotlightTone;
+  reason: string;
+}
+
+/** 一覧画面で、先に確認したいレースかどうかを短いラベルにする。 */
+export function raceSpotlight({
+  confidence,
+  fieldSize,
+  horses,
+}: {
+  confidence: number;
+  fieldSize: number;
+  horses: HorseFit[];
+}): RaceSpotlight {
+  const topHorse = sortByPai(horses)[0];
+  const topPai = topHorse?.pai ?? 0;
+
+  if (confidence >= 0.7 && topPai >= 80) {
+    return {
+      label: "注目",
+      tone: "focus",
+      reason: "展開の読み筋と中心候補がそろっています。",
+    };
+  }
+
+  if (confidence < 0.5) {
+    return {
+      label: "波乱注意",
+      tone: "caution",
+      reason: "展開が読み切りにくく、決め打ちは控えたいレースです。",
+    };
+  }
+
+  if (fieldSize >= 14 && topPai >= 70) {
+    return {
+      label: "妙味",
+      tone: "value",
+      reason: "頭数が多く、展開で浮上する候補を探しやすいレースです。",
+    };
+  }
+
+  return {
+    label: "通常",
+    tone: "normal",
+    reason: "基本情報を確認してから詳細を見るレースです。",
+  };
+}
+
 export type BenefitRoleTone = "main" | "partner" | "value" | "keep";
 
 export interface BenefitRecommendation {

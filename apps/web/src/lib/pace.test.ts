@@ -11,6 +11,7 @@ import {
   paiBarWidth,
   pciTone,
   pciToneLabel,
+  raceSpotlight,
   sanitizeBeginnerComment,
   sortDiscountCandidates,
   sortByPai,
@@ -113,6 +114,58 @@ describe("sortByPai", () => {
     const out = sortByPai(input);
     expect(out.map((h) => h.horse_no)).toEqual([2, 1]);
     expect(input[0]?.horse_no).toBe(1);
+  });
+});
+
+describe("raceSpotlight", () => {
+  it("信頼度と最上位馬の適性が高いレースを注目にする", () => {
+    const out = raceSpotlight({
+      confidence: 0.72,
+      fieldSize: 12,
+      horses: [{ horse_no: 1, running_style: "先行", pai: 84, fit_label: "合う", reasons: [] }],
+    });
+
+    expect(out).toMatchObject({ label: "注目", tone: "focus" });
+  });
+
+  it("多頭数で展開恩恵候補がいるレースを妙味にする", () => {
+    const out = raceSpotlight({
+      confidence: 0.58,
+      fieldSize: 16,
+      horses: [{ horse_no: 1, running_style: "差し", pai: 74, fit_label: "合う", reasons: [] }],
+    });
+
+    expect(out).toMatchObject({ label: "妙味", tone: "value" });
+  });
+
+  it("信頼度が低いレースを波乱注意にする", () => {
+    const out = raceSpotlight({
+      confidence: 0.42,
+      fieldSize: 10,
+      horses: [{ horse_no: 1, running_style: "逃げ", pai: 66, fit_label: "中立", reasons: [] }],
+    });
+
+    expect(out).toMatchObject({ label: "波乱注意", tone: "caution" });
+  });
+
+  it("信頼度が低い場合は多頭数でも波乱注意を優先する", () => {
+    const out = raceSpotlight({
+      confidence: 0.42,
+      fieldSize: 16,
+      horses: [{ horse_no: 1, running_style: "差し", pai: 76, fit_label: "合う", reasons: [] }],
+    });
+
+    expect(out).toMatchObject({ label: "波乱注意", tone: "caution" });
+  });
+
+  it("強い特徴がないレースは通常にする", () => {
+    const out = raceSpotlight({
+      confidence: 0.55,
+      fieldSize: 12,
+      horses: [{ horse_no: 1, running_style: "追込", pai: 62, fit_label: "中立", reasons: [] }],
+    });
+
+    expect(out).toMatchObject({ label: "通常", tone: "normal" });
   });
 });
 

@@ -10,7 +10,14 @@ import {
 } from "lucide-react";
 
 import { api } from "@/lib/api";
-import { confidenceInsight, paceSpeedFromIndex, sanitizeBeginnerComment, sortByPai } from "@/lib/pace";
+import {
+  confidenceInsight,
+  paceSpeedFromIndex,
+  raceSpotlight,
+  sanitizeBeginnerComment,
+  sortByPai,
+  type RaceSpotlightTone,
+} from "@/lib/pace";
 import { isForecastRace, isRaceInRange, weekendRange } from "@/lib/raceSchedule";
 import {
   compareRaceSummary,
@@ -109,6 +116,16 @@ function selectRaceDate(dates: string[], requestedDate: string | undefined, week
   return upcomingDate ?? dates.at(-1) ?? null;
 }
 
+function spotlightClass(tone: RaceSpotlightTone): string {
+  const classes: Record<RaceSpotlightTone, string> = {
+    focus: "border-rose-200 bg-rose-50 text-rose-700",
+    value: "border-amber-200 bg-amber-50 text-amber-700",
+    caution: "border-slate-300 bg-slate-100 text-slate-700",
+    normal: "border-slate-200 bg-white text-slate-500",
+  };
+  return classes[tone];
+}
+
 function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featured?: boolean }) {
   const { race, forecast } = item;
   const tone = statusTone(race.status);
@@ -116,6 +133,14 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
   const confidence = forecast ? confidenceInsight(forecast.confidence) : null;
   const topHorse = forecast ? topHorseLabel(forecast) : null;
   const headline = forecast?.comment?.headline ? sanitizeBeginnerComment(forecast.comment.headline) : null;
+  const spotlight = forecast
+    ? raceSpotlight({
+        confidence: forecast.confidence,
+        fieldSize: race.field_size,
+        horses: forecast.horses ?? [],
+      })
+    : null;
+  const showSpotlight = spotlight !== null && spotlight.tone !== "normal";
 
   return (
     <Link
@@ -146,16 +171,28 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
               {race.field_size}頭 ・ {raceActionLabel(race)}
             </p>
           </div>
-          <span
-            className={[
-              "shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold",
-              tone === "confirmed"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-sky-200 bg-sky-50 text-sky-700",
-            ].join(" ")}
-          >
-            {statusLabel(race.status)}
-          </span>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <span
+              className={[
+                "rounded-full border px-2 py-0.5 text-xs font-semibold",
+                tone === "confirmed"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-sky-200 bg-sky-50 text-sky-700",
+              ].join(" ")}
+            >
+              {statusLabel(race.status)}
+            </span>
+            {showSpotlight ? (
+              <span
+                className={[
+                  "rounded-full border px-2 py-0.5 text-xs font-semibold",
+                  spotlightClass(spotlight.tone),
+                ].join(" ")}
+              >
+                {spotlight.label}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {forecast && speed ? (
@@ -169,6 +206,7 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
               </span>
             </div>
             {topHorse ? <span className="truncate">候補: {topHorse}</span> : null}
+            {showSpotlight ? <span className="truncate text-slate-500">{spotlight.reason}</span> : null}
             {headline ? <span className="truncate text-slate-500">{headline}</span> : null}
           </div>
         ) : (
