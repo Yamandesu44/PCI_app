@@ -280,6 +280,53 @@ export function benefitRecommendation(horse: Pick<HorseFit, "pai" | "running_sty
   };
 }
 
+export interface ForecastDecisionChecklistItem {
+  label: string;
+  value: string;
+  detail: string;
+}
+
+function horseName(horse: HorseFit): string {
+  return horse.horse_name ?? `${horse.horse_no}番`;
+}
+
+/** 詳細画面の冒頭で見せる「今回どう見るか」の要約を作る。 */
+export function forecastDecisionChecklist({
+  predictedRpci,
+  confidence,
+  horses,
+}: {
+  predictedRpci: number | null | undefined;
+  confidence: number;
+  horses: HorseFit[];
+}): ForecastDecisionChecklistItem[] {
+  const speed = paceSpeedFromIndex(predictedRpci);
+  const confidenceMeta = confidenceInsight(confidence);
+  const topHorse = sortByPai(horses)[0];
+  const topRecommendation = topHorse ? benefitRecommendation(topHorse, 0) : null;
+
+  return [
+    {
+      label: "展開",
+      value: speed.beginnerLabel,
+      detail: speed.bettingHint,
+    },
+    {
+      label: "中心候補",
+      value: topHorse ? `${horseName(topHorse)} / ${topRecommendation?.label}` : "判断材料が不足",
+      detail:
+        topHorse && topRecommendation
+          ? topRecommendation.reason
+          : "出走馬データがそろうと、展開が向きそうな馬を表示します。",
+    },
+    {
+      label: "検討方針",
+      value: confidenceMeta.label,
+      detail: confidenceMeta.bettingHint,
+    },
+  ];
+}
+
 export type PciTone = "slow" | "high" | "even" | "unknown";
 
 /**

@@ -4,6 +4,7 @@ import {
   benefitRecommendation,
   confidenceInsight,
   fitTone,
+  forecastDecisionChecklist,
   paceMeta,
   paceSpeedFromIndex,
   paiBarWidth,
@@ -137,6 +138,43 @@ describe("benefitRecommendation", () => {
     const out = benefitRecommendation({ pai: 58, running_style: "逃げ" }, 1);
     expect(out.label).toBe("押さえ");
     expect(out.tone).toBe("keep");
+  });
+});
+
+describe("forecastDecisionChecklist", () => {
+  it("展開・中心候補・検討方針の3項目を作る", () => {
+    const checklist = forecastDecisionChecklist({
+      predictedRpci: 48,
+      confidence: 0.72,
+      horses: [
+        {
+          horse_no: 1,
+          horse_name: "テストホース",
+          running_style: "先行",
+          pai: 86,
+          fit_label: "合致",
+          reasons: [],
+        },
+        { horse_no: 2, running_style: "差し", pai: 70, fit_label: "合致", reasons: [] },
+      ],
+    });
+
+    expect(checklist).toHaveLength(3);
+    expect(checklist[0]).toMatchObject({ label: "展開", value: "やや速い流れ" });
+    expect(checklist[1]?.value).toContain("テストホース");
+    expect(checklist[2]).toMatchObject({ label: "検討方針", value: "読みやすい" });
+  });
+
+  it("馬データがない場合は中心候補を不足扱いにする", () => {
+    const checklist = forecastDecisionChecklist({
+      predictedRpci: null,
+      confidence: 0.4,
+      horses: [],
+    });
+
+    expect(checklist[0]?.value).toBe("判断材料が不足");
+    expect(checklist[1]?.value).toBe("判断材料が不足");
+    expect(checklist[2]?.value).toBe("変動注意");
   });
 });
 

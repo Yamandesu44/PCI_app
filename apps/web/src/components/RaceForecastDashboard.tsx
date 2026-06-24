@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, BarChart3, Gauge, TrendingUp } from "lucide-react";
+import { Activity, BarChart3, Gauge, ListChecks, TrendingUp } from "lucide-react";
 
 import { HorseFitTable } from "@/components/HorseFitTable";
 import { PaceHeadline } from "@/components/PaceHeadline";
@@ -8,7 +8,14 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatRaceDate, jyoName, raceNumber } from "@/lib/races";
-import { benefitRecommendation, confidenceInsight, paceSpeedFromIndex, paiBarWidth, sortByPai } from "@/lib/pace";
+import {
+  benefitRecommendation,
+  confidenceInsight,
+  forecastDecisionChecklist,
+  paceSpeedFromIndex,
+  paiBarWidth,
+  sortByPai,
+} from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 
 interface RaceForecastDashboardProps {
@@ -96,6 +103,11 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
   const confidenceMeta = confidenceInsight(forecast.confidence);
   const course = `${race.track_type}${race.distance_m}m`;
   const predictedSpeed = paceSpeedFromIndex(forecast.predicted_rpci);
+  const decisionChecklist = forecastDecisionChecklist({
+    predictedRpci: forecast.predicted_rpci,
+    confidence: forecast.confidence,
+    horses,
+  });
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-6 md:px-8 md:py-8">
@@ -142,6 +154,26 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
             </div>
             <Progress value={confidence} className="mt-2 bg-slate-200" />
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <ListChecks className="h-4 w-4 text-slate-500" />
+          <h2 className="m-0 text-lg font-semibold tracking-normal text-slate-950">
+            今回の検討サマリー
+          </h2>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {decisionChecklist.map((item) => (
+            <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="m-0 text-xs font-semibold text-slate-500">{item.label}</p>
+              <p className="m-0 mt-2 text-lg font-semibold tracking-normal text-slate-950">
+                {item.value}
+              </p>
+              <p className="m-0 mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
+            </div>
+          ))}
         </div>
       </section>
 
