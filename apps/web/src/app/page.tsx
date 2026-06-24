@@ -18,6 +18,7 @@ import {
   groupRacesByDateAndVenue,
   raceClassLabel,
   raceCondition,
+  raceDates,
   raceHref,
   raceNumber,
   statusLabel,
@@ -42,6 +43,10 @@ interface RaceVenueItemGroup {
 interface RaceDateItemGroup {
   raceDate: string;
   venues: RaceVenueItemGroup[];
+}
+
+interface HomePageProps {
+  searchParams?: Promise<{ date?: string }>;
 }
 
 async function loadRaces(): Promise<{ races: RaceSummary[]; error: string | null }> {
@@ -93,6 +98,15 @@ function groupRaceItemsByDateAndVenue(items: RaceListItem[]): RaceDateItemGroup[
         .filter((item): item is RaceListItem => item !== undefined),
     })),
   }));
+}
+
+function selectRaceDate(dates: string[], requestedDate: string | undefined, weekend: { from: string; to: string }): string | null {
+  if (requestedDate && dates.includes(requestedDate)) return requestedDate;
+  const weekendDate = dates.find((date) => date >= weekend.from && date <= weekend.to);
+  if (weekendDate) return weekendDate;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const upcomingDate = dates.find((date) => date >= todayKey);
+  return upcomingDate ?? dates.at(-1) ?? null;
 }
 
 function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featured?: boolean }) {
@@ -189,6 +203,36 @@ function StatTile({
   );
 }
 
+function RaceDateTabs({ dates, selectedDate }: { dates: string[]; selectedDate: string | null }) {
+  if (dates.length === 0) return null;
+
+  return (
+    <nav
+      className="mb-8 flex gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm"
+      aria-label="開催日を選択"
+    >
+      {dates.map((date) => {
+        const selected = date === selectedDate;
+        return (
+          <Link
+            key={date}
+            href={`/?date=${date}`}
+            className={[
+              "shrink-0 rounded-md border px-4 py-2 text-sm font-semibold transition",
+              selected
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "border-slate-200 bg-white text-slate-700 hover:border-slate-400",
+            ].join(" ")}
+            aria-current={selected ? "page" : undefined}
+          >
+            {formatRaceDate(date)}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
 function RaceGroupedSection({
   id,
   title,
@@ -261,22 +305,28 @@ function RaceGroupedSection({
   );
 }
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const params = await searchParams;
   const { races, error } = await loadRaces();
   const sortedRaces = [...races].sort(compareRaceSummary);
   const items = error ? [] : await enrichForecasts(sortedRaces);
   const weekend = weekendRange();
+  const dates = raceDates(items.map((item) => item.race));
+  const selectedDate = selectRaceDate(dates, params?.date, weekend);
+  const visibleItems = selectedDate
+    ? items.filter(({ race }) => race.race_date === selectedDate)
+    : items;
 
-  const weekendItems = items.filter(
+  const weekendItems = visibleItems.filter(
     ({ race }) => isForecastRace(race) && isRaceInRange(race, weekend),
   );
-  const upcomingItems = items.filter(
+  const upcomingItems = visibleItems.filter(
     ({ race }) =>
       isForecastRace(race) &&
       !weekendItems.some((item) => item.race.race_key === race.race_key),
   );
-  const confirmedItems = items.filter(({ race }) => statusTone(race.status) === "confirmed");
-  const venueCount = new Set(items.map(({ race }) => race.jyo_cd)).size;
+  const confirmedItems = visibleItems.filter(({ race }) => statusTone(race.status) === "confirmed");
+  const venueCount = new Set(visibleItems.map(({ race }) => race.jyo_cd)).size;
 
   return (
     <main className="mx-auto max-w-6xl px-5 py-6 text-slate-950">
@@ -286,7 +336,7 @@ export default async function HomePage() {
             <p className="m-0 text-sm font-semibold text-slate-500">Race Board</p>
             <h1 className="m-0 mt-2 text-2xl font-semibold tracking-normal">レース一覧</h1>
             <p className="m-0 mt-2 text-sm leading-6 text-slate-600">
-              今週末の予想対象を先頭に、出走前レースと確定後レースを分けて確認できます。
+              開催日を選んで、競馬場ごとにレースを確認できます。
             </p>
           </div>
           <nav className="flex flex-wrap gap-2" aria-label="レース一覧フィルター">
@@ -317,6 +367,8 @@ export default async function HomePage() {
         <StatTile icon={<CheckCircle2 className="h-4 w-4" />} label="確定後" value={confirmedItems.length} />
         <StatTile icon={<ListFilter className="h-4 w-4" />} label="開催場" value={venueCount} />
       </section>
+
+      <RaceDateTabs dates={dates} selectedDate={selectedDate} />
 
       <div className="space-y-9">
         <RaceGroupedSection

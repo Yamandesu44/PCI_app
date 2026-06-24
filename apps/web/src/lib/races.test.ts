@@ -10,6 +10,7 @@ import {
   raceClassLabel,
   raceCondition,
   raceHref,
+  raceDates,
   raceNumber,
   raceNumberValue,
   raceTitle,
@@ -153,5 +154,17 @@ describe("groupRacesByDateAndVenue", () => {
       "2026062005010110",
     ]);
     expect(groups[1]?.venues[0]?.venueName).toBe("中山");
+  });
+});
+
+describe("raceDates", () => {
+  it("重複を除いた開催日を昇順で返す", () => {
+    const races = [
+      makeRace({ race_date: "2026-06-28" }),
+      makeRace({ race_date: "2026-06-27" }),
+      makeRace({ race_date: "2026-06-28" }),
+    ];
+
+    expect(raceDates(races)).toEqual(["2026-06-27", "2026-06-28"]);
   });
 });

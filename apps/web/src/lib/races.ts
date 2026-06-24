@@ -124,3 +124,8 @@ export function groupRacesByDateAndVenue(races: RaceSummary[]): RaceDateGroup[] 
     })),
   }));
 }
+
+/** レース一覧に含まれる開催日を昇順で返す。 */
+export function raceDates(races: Pick<RaceSummary, "race_date">[]): string[] {
+  return [...new Set(races.map((race) => race.race_date))].sort();
+}
