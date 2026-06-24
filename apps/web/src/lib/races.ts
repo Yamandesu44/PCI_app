@@ -90,3 +90,37 @@ export function compareRaceSummary(a: RaceSummary, b: RaceSummary): number {
     raceNumberValue(a.race_key) - raceNumberValue(b.race_key)
   );
 }
+
+export interface RaceVenueGroup {
+  jyoCd: string;
+  venueName: string;
+  races: RaceSummary[];
+}
+
+export interface RaceDateGroup {
+  raceDate: string;
+  venues: RaceVenueGroup[];
+}
+
+/** レース一覧を netkeiba 風に「日付 → 競馬場 → レース順」でまとめる。 */
+export function groupRacesByDateAndVenue(races: RaceSummary[]): RaceDateGroup[] {
+  const sorted = [...races].sort(compareRaceSummary);
+  const dateGroups = new Map<string, Map<string, RaceSummary[]>>();
+
+  for (const race of sorted) {
+    const venueGroups = dateGroups.get(race.race_date) ?? new Map<string, RaceSummary[]>();
+    const venueRaces = venueGroups.get(race.jyo_cd) ?? [];
+    venueRaces.push(race);
+    venueGroups.set(race.jyo_cd, venueRaces);
+    dateGroups.set(race.race_date, venueGroups);
+  }
+
+  return [...dateGroups.entries()].map(([raceDate, venueGroups]) => ({
+    raceDate,
+    venues: [...venueGroups.entries()].map(([jyoCd, venueRaces]) => ({
+      jyoCd,
+      venueName: jyoName(jyoCd),
+      races: venueRaces,
+    })),
+  }));
+}

@@ -5,6 +5,7 @@ import type { RaceSummary } from "@pci/api-client";
 import {
   compareRaceSummary,
   formatRaceDate,
+  groupRacesByDateAndVenue,
   jyoName,
   raceClassLabel,
   raceCondition,
@@ -131,5 +132,26 @@ describe("raceNumberValue / compareRaceSummary", () => {
       "2026062005010110",
       "2026062106010111",
     ]);
+  });
+});
+
+describe("groupRacesByDateAndVenue", () => {
+  it("日付ごと、競馬場ごとにまとめ、レース番号順に並べる", () => {
+    const races = [
+      makeRace({ race_key: "2026062106010111", race_date: "2026-06-21", jyo_cd: "06" }),
+      makeRace({ race_key: "2026062009010102", race_date: "2026-06-20", jyo_cd: "09" }),
+      makeRace({ race_key: "2026062005010110", race_date: "2026-06-20", jyo_cd: "05" }),
+      makeRace({ race_key: "2026062005010109", race_date: "2026-06-20", jyo_cd: "05" }),
+    ];
+
+    const groups = groupRacesByDateAndVenue(races);
+
+    expect(groups.map((group) => group.raceDate)).toEqual(["2026-06-20", "2026-06-21"]);
+    expect(groups[0]?.venues.map((venue) => venue.venueName)).toEqual(["東京", "阪神"]);
+    expect(groups[0]?.venues[0]?.races.map((race) => race.race_key)).toEqual([
+      "2026062005010109",
+      "2026062005010110",
+    ]);
+    expect(groups[1]?.venues[0]?.venueName).toBe("中山");
   });
 });

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
-  ArrowRight,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -16,12 +15,11 @@ import { isForecastRace, isRaceInRange, weekendRange } from "@/lib/raceSchedule"
 import {
   compareRaceSummary,
   formatRaceDate,
-  jyoName,
+  groupRacesByDateAndVenue,
   raceClassLabel,
   raceCondition,
   raceHref,
   raceNumber,
-  raceTitle,
   statusLabel,
   statusTone,
 } from "@/lib/races";
@@ -33,6 +31,17 @@ export const dynamic = "force-dynamic";
 interface RaceListItem {
   race: RaceSummary;
   forecast: Forecast | null;
+}
+
+interface RaceVenueItemGroup {
+  jyoCd: string;
+  venueName: string;
+  items: RaceListItem[];
+}
+
+interface RaceDateItemGroup {
+  raceDate: string;
+  venues: RaceVenueItemGroup[];
 }
 
 async function loadRaces(): Promise<{ races: RaceSummary[]; error: string | null }> {
@@ -72,87 +81,90 @@ function topHorseLabel(forecast: Forecast): string | null {
   return `${name} / ${top.running_style}`;
 }
 
-function RaceCard({ item, featured = false }: { item: RaceListItem; featured?: boolean }) {
+function groupRaceItemsByDateAndVenue(items: RaceListItem[]): RaceDateItemGroup[] {
+  const itemByRaceKey = new Map(items.map((item) => [item.race.race_key, item]));
+  return groupRacesByDateAndVenue(items.map((item) => item.race)).map((dateGroup) => ({
+    raceDate: dateGroup.raceDate,
+    venues: dateGroup.venues.map((venueGroup) => ({
+      jyoCd: venueGroup.jyoCd,
+      venueName: venueGroup.venueName,
+      items: venueGroup.races
+        .map((race) => itemByRaceKey.get(race.race_key))
+        .filter((item): item is RaceListItem => item !== undefined),
+    })),
+  }));
+}
+
+function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featured?: boolean }) {
   const { race, forecast } = item;
   const tone = statusTone(race.status);
   const speed = forecast ? paceSpeedFromIndex(forecast.predicted_rpci) : null;
   const confidence = forecast ? confidenceInsight(forecast.confidence) : null;
   const topHorse = forecast ? topHorseLabel(forecast) : null;
-  const headline = forecast?.comment?.headline
-    ? sanitizeBeginnerComment(forecast.comment.headline)
-    : speed?.beginnerSummary;
+  const headline = forecast?.comment?.headline ? sanitizeBeginnerComment(forecast.comment.headline) : null;
 
   return (
     <Link
       className={[
-        "group flex h-full flex-col rounded-lg border bg-white p-4 text-slate-950 shadow-sm transition",
-        "hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-md",
-        featured ? "border-slate-900" : "border-slate-200",
+        "group grid grid-cols-[42px_1fr] gap-3 rounded-md border bg-white p-3 text-slate-950 shadow-sm transition",
+        "hover:border-slate-400 hover:bg-slate-50",
+        featured ? "border-slate-300" : "border-slate-200",
       ].join(" ")}
       href={raceHref(race)}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="m-0 text-xs font-semibold text-slate-500">
-            {formatRaceDate(race.race_date)} ・ {jyoName(race.jyo_cd)}
-          </p>
-          <h2 className="m-0 mt-1 text-base font-semibold leading-tight tracking-normal">
-            {raceNumber(race.race_key)} ・ {raceCondition(race)}
-          </h2>
-        </div>
-        <span
-          className={[
-            "shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold",
-            tone === "confirmed"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-sky-200 bg-sky-50 text-sky-700",
-          ].join(" ")}
-        >
-          {statusLabel(race.status)}
-        </span>
-      </div>
+      <span
+        className={[
+          "flex h-10 w-10 items-center justify-center rounded-md text-sm font-bold text-white",
+          tone === "confirmed" ? "bg-emerald-600" : "bg-blue-600",
+        ].join(" ")}
+      >
+        {raceNumber(race.race_key)}
+      </span>
 
-      <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-slate-600">
-        <span className="rounded-md bg-slate-100 px-2 py-1">{raceClassLabel(race)}</span>
-        <span className="rounded-md bg-slate-100 px-2 py-1">{race.field_size}頭</span>
-        <span className="rounded-md bg-slate-100 px-2 py-1">{raceTitle(race).split("・")[0].trim()}</span>
-      </div>
-
-      <div className="mt-4 flex-1 border-t border-slate-100 pt-4">
-        {forecast && speed ? (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="m-0 text-xs font-semibold text-slate-500">想定展開</p>
-                <p className="m-0 text-lg font-semibold tracking-normal">{speed.beginnerLabel}</p>
-              </div>
-              <div className="text-right">
-                <p className="m-0 text-xs font-semibold text-slate-500">信頼度</p>
-                <p className="m-0 text-sm font-semibold text-slate-800">{confidence?.label}</p>
-              </div>
-            </div>
-            {topHorse ? (
-              <p className="m-0 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                展開が向く候補: <span className="font-semibold text-slate-950">{topHorse}</span>
-              </p>
-            ) : null}
-            {headline ? <p className="m-0 text-sm leading-6 text-slate-600">{headline}</p> : null}
+      <div className="min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="m-0 truncate text-sm font-semibold leading-tight">
+              {raceClassLabel(race)}
+              <span className="ml-2 text-xs font-medium text-slate-500">{raceCondition(race)}</span>
+            </p>
+            <p className="m-0 mt-1 text-xs text-slate-500">
+              {race.field_size}頭 ・ {raceActionLabel(race)}
+            </p>
           </div>
-        ) : tone === "confirmed" ? (
-          <p className="m-0 text-sm leading-6 text-slate-600">
-            確定後の流れと各馬の走りを確認できます。
-          </p>
+          <span
+            className={[
+              "shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold",
+              tone === "confirmed"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-sky-200 bg-sky-50 text-sky-700",
+            ].join(" ")}
+          >
+            {statusLabel(race.status)}
+          </span>
+        </div>
+
+        {forecast && speed ? (
+          <div className="mt-2 grid gap-1 text-xs text-slate-600">
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              <span>
+                展開: <span className="font-semibold text-slate-950">{speed.beginnerLabel}</span>
+              </span>
+              <span>
+                信頼度: <span className="font-semibold text-slate-950">{confidence?.label}</span>
+              </span>
+            </div>
+            {topHorse ? <span className="truncate">候補: {topHorse}</span> : null}
+            {headline ? <span className="truncate text-slate-500">{headline}</span> : null}
+          </div>
         ) : (
-          <p className="m-0 text-sm leading-6 text-slate-600">
-            出走馬データがそろうと、展開プレビューがここに表示されます。
+          <p className="m-0 mt-2 text-xs text-slate-500">
+            {tone === "confirmed"
+              ? "確定後の流れと各馬の走りを確認できます。"
+              : "出走馬データがそろうと展開プレビューを表示します。"}
           </p>
         )}
       </div>
-
-      <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-950">
-        {raceActionLabel(race)}
-        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" aria-hidden />
-      </span>
     </Link>
   );
 }
@@ -177,7 +189,7 @@ function StatTile({
   );
 }
 
-function RaceSection({
+function RaceGroupedSection({
   id,
   title,
   description,
@@ -190,6 +202,8 @@ function RaceSection({
   items: RaceListItem[];
   featured?: boolean;
 }) {
+  const dateGroups = groupRaceItemsByDateAndVenue(items);
+
   return (
     <section id={id} className="scroll-mt-5">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
@@ -205,9 +219,41 @@ function RaceSection({
           表示できるレースがありません。
         </p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {items.map((item) => (
-            <RaceCard key={item.race.race_key} item={item} featured={featured} />
+        <div className="space-y-4">
+          {dateGroups.map((dateGroup) => (
+            <section
+              key={dateGroup.raceDate}
+              className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <h3 className="m-0 text-base font-semibold tracking-normal text-slate-950">
+                  {formatRaceDate(dateGroup.raceDate)}
+                </h3>
+                <span className="text-xs font-semibold text-slate-500">
+                  {dateGroup.venues.reduce((sum, venue) => sum + venue.items.length, 0)}R
+                </span>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                {dateGroup.venues.map((venueGroup) => (
+                  <div key={venueGroup.jyoCd} className="min-w-0 rounded-lg bg-slate-50 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <h4 className="m-0 text-sm font-semibold text-slate-900">
+                        {venueGroup.venueName}
+                      </h4>
+                      <span className="text-xs font-medium text-slate-500">
+                        {venueGroup.items.length}件
+                      </span>
+                    </div>
+                    <div className="grid gap-2">
+                      {venueGroup.items.map((item) => (
+                        <RaceCompactRow key={item.race.race_key} item={item} featured={featured} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -273,7 +319,7 @@ export default async function HomePage() {
       </section>
 
       <div className="space-y-9">
-        <RaceSection
+        <RaceGroupedSection
           id="weekend"
           title="今週末の予想対象"
           description={`${formatRaceDate(weekend.from)} - ${formatRaceDate(weekend.to)} の出走前レース`}
@@ -281,14 +327,14 @@ export default async function HomePage() {
           featured
         />
 
-        <RaceSection
+        <RaceGroupedSection
           id="upcoming"
           title="その他の出走前レース"
           description="展開予想を確認できる未確定レース"
           items={upcomingItems}
         />
 
-        <RaceSection
+        <RaceGroupedSection
           id="confirmed"
           title="確定後レース"
           description="ペース分析と回顧コメントを確認できるレース"
