@@ -45,20 +45,20 @@ class _Connection:
     races = [
         {
             "開催年月日": "20260628",
-            "競馬場コード": "09",
+            "競馬場コード": "02",
             "開催回": "01",
-            "開催日次": "11",
+            "開催日次": "06",
             "レース番号": "11",
             "距離": "2200",
             "芝ダ": "芝",
-            "レース名": "宝塚記念",
-            "グレード": "G1",
+            "レース名": "函館記念",
+            "グレード": "G3",
         }
     ]
     entries = [
         {
             "開催年月日": "20260628",
-            "競馬場コード": "09",
+            "競馬場コード": "02",
             "レース番号": "11",
             "血統登録番号": "2021100001",
             "馬名": "ベラジオオペラ",
@@ -67,7 +67,7 @@ class _Connection:
         },
         {
             "開催年月日": "20260628",
-            "競馬場コード": "09",
+            "競馬場コード": "02",
             "レース番号": "11",
             "血統登録番号": "2021100002",
             "馬名": "ロードデルレイ",
@@ -87,10 +87,10 @@ def test_fetch_special_entries_converts_mykeibadb_rows() -> None:
 
     assert len(races) == 1
     race = races[0]
-    assert race.race_key == "2026062809011111"
+    assert race.race_key == "2026062802010611"
     assert race.distance_m == 2200
     assert race.track_type == "芝"
-    assert race.race_class == "宝塚記念 特別登録"
+    assert race.race_class == "函館記念 特別登録"
     assert [entry.horse_no for entry in race.entries] == [1, 2]
     assert [entry.ketto_num for entry in race.entries] == ["2021100001", "2021100002"]
     assert {entry.jockey_code for entry in race.entries} == {"TBD"}
@@ -105,3 +105,33 @@ def test_fetch_special_horses_uses_horse_names() -> None:
         "2021100001": "ベラジオオペラ",
         "2021100002": "ロードデルレイ",
     }
+
+
+def test_fetch_special_entries_excludes_known_stale_hanshin_race() -> None:
+    class _StaleConnection(_Connection):
+        races = [
+            {
+                "開催年月日": "20260628",
+                "競馬場コード": "09",
+                "開催回": "01",
+                "開催日次": "11",
+                "レース番号": "11",
+                "距離": "2200",
+                "芝ダ": "芝",
+                "レース名": "宝塚記念",
+                "グレード": "G1",
+            }
+        ]
+        entries = [
+            {
+                "開催年月日": "20260628",
+                "競馬場コード": "09",
+                "レース番号": "11",
+                "血統登録番号": "2021100001",
+                "馬名": "ベラジオオペラ",
+            }
+        ]
+
+    client = MyKeibaDbClient(connection=_StaleConnection())
+
+    assert client.fetch_special_entries("20260627", "20260628") == []

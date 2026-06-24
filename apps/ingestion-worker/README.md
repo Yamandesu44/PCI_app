@@ -76,6 +76,7 @@ MYKEIBADB_PORT=3306
 MYKEIBADB_USER=root
 MYKEIBADB_PASSWORD=
 MYKEIBADB_DATABASE=mykeibadb
+MYKEIBADB_EXCLUDE_RACE_KEYS=
 ```
 
 `No module named 'ingestion'` が出る場合は、`python -m pip install -e ".[win]"`
@@ -130,6 +131,8 @@ JV-Link は同じデータを短時間に複数回 `JVOpen` すると2回目以�
 mykeibadb を使う場合は、JRA-VAN から mykeibadb 側 MySQL へ取り込み済みであることが前提です。
 `TOKUBETSU_TOROKUBA` / `TOKUBETSU_TOROKUBAGOTO_JOHO` を読み、
 PCI_app の `races` / `race_entries` に変換して Ingest API へ投入します。
+mykeibadb 側に実施されない特別登録が残っている場合は、`MYKEIBADB_EXCLUDE_RACE_KEYS` に
+カンマ区切りで race_key を指定すると取り込み対象から除外できます。
 
 ## テスト
 

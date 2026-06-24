@@ -108,8 +108,8 @@ describe("raceCondition / raceClassLabel", () => {
     expect(raceCondition(makeRace({ track_type: "ダ", distance_m: 1700 }))).toBe("ダ1700m");
   });
 
-  it("グレードを優先し、なければクラス、最後に一般へフォールバックする", () => {
-    expect(raceClassLabel(makeRace({ grade: "G3", race_class: "OP" }))).toBe("G3");
+  it("レース名を優先し、特別登録の接尾辞を外して表示する", () => {
+    expect(raceClassLabel(makeRace({ grade: "G3", race_class: "函館記念 特別登録" }))).toBe("函館記念");
     expect(raceClassLabel(makeRace({ grade: null, race_class: "3勝" }))).toBe("3勝");
     expect(raceClassLabel(makeRace({ grade: null, race_class: null }))).toBe("一般");
   });

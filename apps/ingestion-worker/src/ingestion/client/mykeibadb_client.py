@@ -16,6 +16,11 @@ _ENTRY_TABLE_CANDIDATES = (
     "tokubetsu_torokubagoto_joho",
 )
 
+_DEFAULT_EXCLUDED_RACE_KEYS = {
+    # 2026/06/28 は TARGET の特別登録上、阪神開催がないため除外する。
+    "2026062809011111",
+}
+
 _PLACE_CODES = {
     "札幌": "01",
     "函館": "02",
@@ -49,6 +54,7 @@ class MyKeibaDbConfig:
     password: str = ""
     database: str = "mykeibadb"
     charset: str = "utf8mb4"
+    excluded_race_keys: frozenset[str] = frozenset(_DEFAULT_EXCLUDED_RACE_KEYS)
 
     @classmethod
     def from_env(cls) -> MyKeibaDbConfig:
@@ -62,6 +68,7 @@ class MyKeibaDbConfig:
                 password=parsed.password or "",
                 database=parsed.path.lstrip("/") or "mykeibadb",
             )
+        excluded = os.environ.get("MYKEIBADB_EXCLUDE_RACE_KEYS", "")
         return cls(
             host=os.environ.get("MYKEIBADB_HOST", "localhost"),
             port=int(os.environ.get("MYKEIBADB_PORT", "3306")),
@@ -69,6 +76,7 @@ class MyKeibaDbConfig:
             password=os.environ.get("MYKEIBADB_PASSWORD", ""),
             database=os.environ.get("MYKEIBADB_DATABASE", "mykeibadb"),
             charset=os.environ.get("MYKEIBADB_CHARSET", "utf8mb4"),
+            excluded_race_keys=frozenset(_parse_excluded_race_keys(excluded)),
         )
 
 
@@ -94,7 +102,10 @@ class MyKeibaDbClient:
         by_loose_key: dict[str, RaceEntriesRecord] = {}
         for row in races:
             race = _race_from_row(row)
-            if date_from <= race.race_date.strftime("%Y%m%d") <= date_to:
+            if (
+                date_from <= race.race_date.strftime("%Y%m%d") <= date_to
+                and race.race_key not in self._config.excluded_race_keys
+            ):
                 by_key[race.race_key] = race
                 by_loose_key[_loose_race_key(row)] = race
 
@@ -297,6 +308,11 @@ def _normalize_name(value: str) -> str:
 
 def _first_value(row: dict[str, Any]) -> str:
     return str(next(iter(row.values())))
+
+
+def _parse_excluded_race_keys(value: str) -> set[str]:
+    specified = {item.strip() for item in value.split(",") if item.strip()}
+    return _DEFAULT_EXCLUDED_RACE_KEYS | specified
 
 
 def _str_or_none(value: Any) -> str | None:

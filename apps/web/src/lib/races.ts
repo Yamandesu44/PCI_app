@@ -72,7 +72,8 @@ export function raceCondition(race: Pick<RaceSummary, "track_type" | "distance_m
 
 /** グレード・クラスを一覧用のラベルへ。未設定時は一般戦として扱う。 */
 export function raceClassLabel(race: Pick<RaceSummary, "grade" | "race_class">): string {
-  return race.grade ?? race.race_class ?? "一般";
+  const name = race.race_class?.replace(/\s*特別登録$/, "").trim();
+  return name || race.grade || "一般";
 }
 
 /** レース番号を数値化する。一覧ソート用なので、不正値は最後に寄せる。 */
