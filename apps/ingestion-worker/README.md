@@ -98,9 +98,10 @@ python -m ingestion.batch --mode jvlink --date 20260619
 # 期間指定（先週結果 + 今週特別登録などをまとめて取得する時）
 python -m ingestion.batch --mode jvlink --date 20260613 --date-to 20260628
 
-# 過去成績を長期で取り込む時（例: 2000年以降）
-# 途中失敗時に再開しやすいよう、31日ごとに分割して取得します。
-python -m ingestion.batch --mode jvlink --date 20000101 --date-to 20260621 --step all --chunk-days 31
+# 過去成績を長期で反映したい時（例: 2000年以降）
+# まず TARGET / mykeibadb 側で JRA-VAN から MySQL へ取り込みます。
+# PCI_app 側の mykeibadb 読み取りは、現時点では週末の特別登録のみ対応しています。
+# 確定済み過去成績を MySQL から反映するには、mykeibadb の通常レース・成績テーブル対応が必要です。
 
 # 週末の特別登録・出馬表など未来データの取得可否を確認する時
 python -m ingestion.probe_race_options --date 20260624 --date-to 20260628 --days-back 14
@@ -133,8 +134,10 @@ JV-Link は同じデータを短時間に複数回 `JVOpen` すると2回目以�
 データが公開・更新された日（例: `20260624`）から問い合わせる方が取得できる場合があります。
 
 mykeibadb を使う場合は、JRA-VAN から mykeibadb 側 MySQL へ取り込み済みであることが前提です。
-`TOKUBETSU_TOROKUBA` / `TOKUBETSU_TOROKUBAGOTO_JOHO` を読み、
-PCI_app の `races` / `race_entries` に変換して Ingest API へ投入します。
+現在の `--mode mykeibadb` は `TOKUBETSU_TOROKUBA` / `TOKUBETSU_TOROKUBAGOTO_JOHO`
+を読み、週末の特別登録を PCI_app の `races` / `race_entries` に変換して Ingest API へ投入します。
+2000年以降の確定済み過去成績を MySQL から反映する場合は、mykeibadb の通常レース・成績テーブルを
+読み取る取り込み処理を追加してください。
 mykeibadb 側に実施されない特別登録が残っている場合は、`MYKEIBADB_EXCLUDE_RACE_KEYS` に
 カンマ区切りで race_key を指定すると取り込み対象から除外できます。
 
