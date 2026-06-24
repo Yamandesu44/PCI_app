@@ -59,6 +59,16 @@ class FakeRaceRepository:
     def save_entry(self, entry: RaceEntry) -> None:
         self._entries[(str(entry.race_key), entry.horse_no)] = entry
 
+    def delete_race(self, key: RaceKey) -> bool:
+        race_key = str(key)
+        existed = self._races.pop(race_key, None) is not None
+        self._entries = {
+            entry_key: entry
+            for entry_key, entry in self._entries.items()
+            if entry_key[0] != race_key
+        }
+        return existed
+
     def save_horse(self, horse: Horse) -> None:
         self._horses[horse.ketto_num] = horse
 

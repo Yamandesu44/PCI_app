@@ -21,6 +21,7 @@ from pci.application.ingest_use_cases import (
 )
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
 from pci.config.settings import get_settings
+from pci.domain.shared.race_key import RaceKey
 from pci.presentation.dependencies import RepositoryDep, SessionDep
 
 router = APIRouter(prefix="/internal/ingest", tags=["ingest"])
@@ -238,3 +239,23 @@ def ingest_results(
         formula_version=out.formula_version,
         entry_pcis=out.entry_pcis,
     )
+
+
+@router.delete("/races/{race_key}", response_model=IngestResponse, status_code=status.HTTP_200_OK)
+def delete_ingested_race(
+    race_key: str,
+    repo: RepositoryDep,
+    session: SessionDep,
+    _auth: AuthDep,
+) -> IngestResponse:
+    """取り込み対象外になったレースを、関連する予想データごと削除する。"""
+    try:
+        key = RaceKey(race_key)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    deleted = repo.delete_race(key)
+    session.commit()
+    return IngestResponse(accepted=1 if deleted else 0)

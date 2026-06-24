@@ -193,6 +193,29 @@ class TestIngestEntries:
         assert resp.status_code == 422
 
 
+class TestDeleteIngestedRace:
+    def test_deletes_existing_race(self, client: TestClient, fake_repo: FakeRaceRepository) -> None:
+        client.post("/internal/ingest/entries", json=ENTRIES_PAYLOAD)
+
+        resp = client.delete(f"/internal/ingest/races/{RACE_KEY}")
+
+        assert resp.status_code == 200
+        assert resp.json()["accepted"] == 1
+        assert RACE_KEY not in fake_repo._races
+        assert not any(key[0] == RACE_KEY for key in fake_repo._entries)
+
+    def test_unknown_race_is_idempotent(self, client: TestClient) -> None:
+        resp = client.delete("/internal/ingest/races/9999999999999999")
+
+        assert resp.status_code == 200
+        assert resp.json()["accepted"] == 0
+
+    def test_invalid_race_key_returns_422(self, client: TestClient) -> None:
+        resp = client.delete("/internal/ingest/races/SHORT")
+
+        assert resp.status_code == 422
+
+
 class TestIngestResults:
     def test_returns_200(self, seeded_client: TestClient) -> None:
         resp = seeded_client.post("/internal/ingest/results", json=RESULTS_PAYLOAD)

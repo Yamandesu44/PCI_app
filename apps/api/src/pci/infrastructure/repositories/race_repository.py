@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
@@ -14,6 +14,8 @@ from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import (
     HorseModel,
     JockeyModel,
+    PaceFitModel,
+    PredictedPaceModel,
     RaceEntryModel,
     RaceModel,
     TrainerModel,
@@ -81,6 +83,15 @@ class SqlAlchemyRaceRepository:
 
     def save_entry(self, entry: RaceEntry) -> None:
         self._s.merge(self._from_entry(entry))
+
+    def delete_race(self, key: RaceKey) -> bool:
+        """レース本体と、画面表示に関わる関連データをまとめて削除する。"""
+        race_key = str(key)
+        self._s.execute(delete(PaceFitModel).where(PaceFitModel.race_key == race_key))
+        self._s.execute(delete(PredictedPaceModel).where(PredictedPaceModel.race_key == race_key))
+        self._s.execute(delete(RaceEntryModel).where(RaceEntryModel.race_key == race_key))
+        result = self._s.execute(delete(RaceModel).where(RaceModel.race_key == race_key))
+        return bool(result.rowcount)
 
     # ----- 変換（domain ↔ ORM） -----
 

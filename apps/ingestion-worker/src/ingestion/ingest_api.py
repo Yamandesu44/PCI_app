@@ -56,6 +56,14 @@ class IngestApiClient:
         result: dict[str, Any] = resp.json()
         return result
 
+    def _delete(self, path: str) -> dict[str, Any]:
+        url = f"{self._base_url}{path}"
+        resp = self._http.delete(url, headers=self._headers())
+        if resp.is_error:
+            raise RuntimeError(f"Ingest API エラー {resp.status_code} {path}: {resp.text[:1000]}")
+        result: dict[str, Any] = resp.json()
+        return result
+
     # ----- マスタデータ -----
 
     def upsert_horses(self, horses: list[HorseRecord]) -> int:
@@ -159,6 +167,17 @@ class IngestApiClient:
             record.race_key,
             result.get("rpci") or 0.0,
             result.get("pci3"),
-            " (S3/L3ラップ由来)" if (record.race_s3f and record.race_l3f) else " (平均フォールバック)",
+            (
+                " (S3/L3ラップ由来)"
+                if (record.race_s3f and record.race_l3f)
+                else " (平均フォールバック)"
+            ),
         )
         return result
+
+    def delete_race(self, race_key: str) -> int:
+        """取り込み対象外になったレースをAPI側DBから削除する。"""
+        result = self._delete(f"/internal/ingest/races/{race_key}")
+        accepted = int(result.get("accepted", 0))
+        _log.info("レース削除 %s: %d 件", race_key, accepted)
+        return accepted

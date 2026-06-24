@@ -71,6 +71,12 @@ def ingest_mykeibadb_special_entries(api: IngestApiClient, date_from: str, date_
     from ingestion.client.mykeibadb_client import MyKeibaDbClient
 
     client = MyKeibaDbClient()
+    for race_key in sorted(client.excluded_race_keys):
+        try:
+            api.delete_race(race_key)
+        except Exception as exc:
+            _log.error("mykeibadb 除外レース削除エラー %s: %s", race_key, exc)
+
     races = client.fetch_special_entries(date_from, date_to)
     horses = client.fetch_special_horses(date_from, date_to)
 

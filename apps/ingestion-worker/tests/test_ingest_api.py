@@ -36,6 +36,7 @@ def _make_http_client(response_body: dict[str, Any], status_code: int = 200) -> 
     resp.text = ""
     client = Mock(spec=httpx.Client)
     client.post.return_value = resp
+    client.delete.return_value = resp
     return client
 
 
@@ -166,3 +167,15 @@ class TestRecordResults:
         api = IngestApiClient("http://api", http_client=http)
         result = api.record_results(self._make_record())
         assert result["rpci"] == 53.5
+
+
+class TestDeleteRace:
+    def test_sends_to_delete_endpoint(self) -> None:
+        http = _make_http_client({"accepted": 1})
+        api = IngestApiClient("http://api", http_client=http)
+
+        result = api.delete_race("2026062809011111")
+
+        assert result == 1
+        url = http.delete.call_args.args[0]
+        assert "/internal/ingest/races/2026062809011111" in url

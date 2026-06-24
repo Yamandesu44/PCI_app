@@ -91,6 +91,10 @@ class MyKeibaDbClient:
         self._config = config or MyKeibaDbConfig.from_env()
         self._connection = connection
 
+    @property
+    def excluded_race_keys(self) -> frozenset[str]:
+        return self._config.excluded_race_keys
+
     def fetch_special_entries(self, date_from: str, date_to: str) -> list[RaceEntriesRecord]:
         connection = self._connection or self._connect()
         race_table = self._find_table(connection, _RACE_TABLE_CANDIDATES)
