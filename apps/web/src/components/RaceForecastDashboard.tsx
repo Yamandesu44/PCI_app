@@ -8,7 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatRaceDate, jyoName, raceNumber } from "@/lib/races";
-import { benefitRecommendation, paceSpeedFromIndex, paiBarWidth, sortByPai } from "@/lib/pace";
+import { benefitRecommendation, confidenceInsight, paceSpeedFromIndex, paiBarWidth, sortByPai } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 
 interface RaceForecastDashboardProps {
@@ -79,11 +79,21 @@ function roleClass(tone: ReturnType<typeof benefitRecommendation>["tone"]): stri
   return tones[tone];
 }
 
+function confidenceClass(tone: ReturnType<typeof confidenceInsight>["tone"]): string {
+  const tones = {
+    strong: "border-emerald-200 bg-emerald-50 text-emerald-950",
+    normal: "border-sky-200 bg-sky-50 text-sky-950",
+    caution: "border-amber-200 bg-amber-50 text-amber-950",
+  };
+  return tones[tone];
+}
+
 export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardProps) {
   const horses = forecast.horses ?? [];
   const topHorses = sortByPai(horses).slice(0, 5);
   const styleScores = buildStyleScores(horses);
   const confidence = confidencePct(forecast.confidence);
+  const confidenceMeta = confidenceInsight(forecast.confidence);
   const course = `${race.track_type}${race.distance_m}m`;
   const predictedSpeed = paceSpeedFromIndex(forecast.predicted_rpci);
 
@@ -126,7 +136,9 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
             <p className="mt-1 text-sm text-slate-600">{forecast.scenario_headline}</p>
             <div className="mt-4 flex items-center justify-between text-sm">
               <span className="text-slate-500">展開信頼度</span>
-              <span className="font-semibold text-slate-950">{confidence}%</span>
+              <span className="font-semibold text-slate-950">
+                {confidenceMeta.label} ・ {confidence}%
+              </span>
             </div>
             <Progress value={confidence} className="mt-2 bg-slate-200" />
           </div>
@@ -167,9 +179,24 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
             <CardDescription>モデルが今回の展開をどれだけ強く見ているか。</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-5xl font-semibold text-slate-950">{confidence}%</div>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="text-5xl font-semibold text-slate-950">{confidence}%</div>
+                <p className="mt-2 text-sm font-semibold text-slate-600">{confidenceMeta.label}</p>
+              </div>
+              <span
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${confidenceClass(
+                  confidenceMeta.tone,
+                )}`}
+              >
+                {confidenceMeta.label}
+              </span>
+            </div>
             <Progress value={confidence} className="mt-4 h-3" />
-            <p className="mt-4 text-sm leading-6 text-muted-foreground">{forecast.scenario_detail}</p>
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="m-0 text-sm leading-6 text-slate-700">{confidenceMeta.summary}</p>
+              <p className="m-0 mt-2 text-sm leading-6 text-slate-600">{confidenceMeta.bettingHint}</p>
+            </div>
           </CardContent>
         </Card>
       </section>

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import { api } from "@/lib/api";
-import { paceSpeedFromIndex, sanitizeBeginnerComment, sortByPai } from "@/lib/pace";
+import { confidenceInsight, paceSpeedFromIndex, sanitizeBeginnerComment, sortByPai } from "@/lib/pace";
 import { isForecastRace, isRaceInRange, weekendRange } from "@/lib/raceSchedule";
 import {
   compareRaceSummary,
@@ -61,17 +61,6 @@ async function enrichForecasts(races: RaceSummary[]): Promise<RaceListItem[]> {
   );
 }
 
-function confidencePct(confidence: number): number {
-  return Math.max(0, Math.min(100, Math.round(confidence * 100)));
-}
-
-function confidenceLabel(confidence: number): string {
-  const pct = confidencePct(confidence);
-  if (pct >= 70) return "読みやすい";
-  if (pct >= 50) return "標準";
-  return "変動注意";
-}
-
 function raceActionLabel(race: RaceSummary): string {
   return statusTone(race.status) === "confirmed" ? "ペース分析へ" : "展開予想へ";
 }
@@ -87,6 +76,7 @@ function RaceCard({ item, featured = false }: { item: RaceListItem; featured?: b
   const { race, forecast } = item;
   const tone = statusTone(race.status);
   const speed = forecast ? paceSpeedFromIndex(forecast.predicted_rpci) : null;
+  const confidence = forecast ? confidenceInsight(forecast.confidence) : null;
   const topHorse = forecast ? topHorseLabel(forecast) : null;
   const headline = forecast?.comment?.headline
     ? sanitizeBeginnerComment(forecast.comment.headline)
@@ -138,9 +128,7 @@ function RaceCard({ item, featured = false }: { item: RaceListItem; featured?: b
               </div>
               <div className="text-right">
                 <p className="m-0 text-xs font-semibold text-slate-500">信頼度</p>
-                <p className="m-0 text-sm font-semibold text-slate-800">
-                  {confidenceLabel(forecast.confidence)}
-                </p>
+                <p className="m-0 text-sm font-semibold text-slate-800">{confidence?.label}</p>
               </div>
             </div>
             {topHorse ? (

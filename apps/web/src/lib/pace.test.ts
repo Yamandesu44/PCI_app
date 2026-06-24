@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   benefitRecommendation,
+  confidenceInsight,
   fitTone,
   paceMeta,
   paceSpeedFromIndex,
@@ -61,6 +62,34 @@ describe("sanitizeBeginnerComment", () => {
     expect(out).not.toMatch(/\b(PCI3?|RPCI|PAI)\b/i);
     expect(out).not.toMatch(/\d+\.\d+/);
     expect(out).toContain("ペース判定");
+  });
+});
+
+describe("confidenceInsight", () => {
+  it("高い信頼度は読みやすいにする", () => {
+    const out = confidenceInsight(0.72);
+    expect(out.pct).toBe(72);
+    expect(out.label).toBe("読みやすい");
+    expect(out.tone).toBe("strong");
+    expect(out.bettingHint).toContain("中心候補");
+  });
+
+  it("中程度の信頼度は標準にする", () => {
+    const out = confidenceInsight(0.55);
+    expect(out.label).toBe("標準");
+    expect(out.tone).toBe("normal");
+  });
+
+  it("低い信頼度は変動注意にする", () => {
+    const out = confidenceInsight(0.31);
+    expect(out.label).toBe("変動注意");
+    expect(out.tone).toBe("caution");
+    expect(out.summary).toContain("読み切りにくく");
+  });
+
+  it("パーセントは0から100に丸める", () => {
+    expect(confidenceInsight(-0.1).pct).toBe(0);
+    expect(confidenceInsight(1.5).pct).toBe(100);
   });
 });
 

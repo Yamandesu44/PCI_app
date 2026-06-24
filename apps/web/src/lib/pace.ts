@@ -160,6 +160,49 @@ export function paceSpeedSymbol(value: number | null | undefined): string {
   return paceSpeedFromIndex(value).symbol;
 }
 
+export type ConfidenceTone = "strong" | "normal" | "caution";
+
+export interface ConfidenceInsight {
+  pct: number;
+  label: string;
+  tone: ConfidenceTone;
+  summary: string;
+  bettingHint: string;
+}
+
+/** 展開信頼度を、初心者にも判断しやすい自然語へ変換する。 */
+export function confidenceInsight(confidence: number): ConfidenceInsight {
+  const pct = Math.max(0, Math.min(100, Math.round(confidence * 100)));
+
+  if (pct >= 70) {
+    return {
+      pct,
+      label: "読みやすい",
+      tone: "strong",
+      summary: "展開の方向性が比較的はっきりしています。",
+      bettingHint: "中心候補を決めて、相手を絞る検討がしやすいレースです。",
+    };
+  }
+
+  if (pct >= 50) {
+    return {
+      pct,
+      label: "標準",
+      tone: "normal",
+      summary: "大きく崩れにくい一方で、決めつけすぎは避けたい信頼度です。",
+      bettingHint: "展開が向く馬を重視しつつ、地力上位も残して見たいレースです。",
+    };
+  }
+
+  return {
+    pct,
+    label: "変動注意",
+    tone: "caution",
+    summary: "展開が読み切りにくく、想定と違う流れになる余地があります。",
+    bettingHint: "軸を強く決めすぎず、相手候補を少し広めに見たいレースです。",
+  };
+}
+
 export type FitTone = "matched" | "neutral" | "unfavorable";
 
 export function fitTone(label: string): FitTone {
