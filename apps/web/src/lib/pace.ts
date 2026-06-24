@@ -58,6 +58,9 @@ export interface PaceSpeedMeta {
   label: string;
   symbol: string;
   description: string;
+  beginnerLabel: string;
+  beginnerSummary: string;
+  bettingHint: string;
   color: string;
 }
 
@@ -67,6 +70,9 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     label: "超ハイ",
     symbol: "H++",
     description: "前半負荷がかなり高い流れ。差し・追込の浮上に注意。",
+    beginnerLabel: "かなり速い流れ",
+    beginnerSummary: "前半からかなり流れそうです。前で運ぶ馬には最後まで粘る力が求められます。",
+    bettingHint: "最後に脚を使える馬や、後ろで我慢できる馬を相手に入れておきたいです。",
     color: "#1d4ed8",
   },
   high: {
@@ -74,6 +80,9 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     label: "ハイ",
     symbol: "H",
     description: "前半が速めの流れ。持続力と差し脚が活きやすい。",
+    beginnerLabel: "やや速い流れ",
+    beginnerSummary: "前半から流れそうです。前の馬が苦しくなれば、後ろから運ぶ馬にも出番があります。",
+    bettingHint: "長く脚を使える馬や、流れに乗って差せる馬を重視したいです。",
     color: "#2563eb",
   },
   average: {
@@ -81,6 +90,9 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     label: "平均",
     symbol: "M",
     description: "標準的な流れ。脚質差は比較的小さめ。",
+    beginnerLabel: "平均的な流れ",
+    beginnerSummary: "大きく偏らない流れになりそうです。展開だけで極端な有利不利は出にくいです。",
+    bettingHint: "展開よりも、近走内容やコース相性を合わせて見たいです。",
     color: "#64748b",
   },
   slow: {
@@ -88,6 +100,9 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     label: "スロー",
     symbol: "S",
     description: "前半が緩めの流れ。逃げ・先行の粘り込みに注意。",
+    beginnerLabel: "やや落ち着いた流れ",
+    beginnerSummary: "前半は落ち着きそうです。前めで運ぶ馬が余力を残しやすくなります。",
+    bettingHint: "前の位置を取れそうな馬や、直線で素早く動ける馬を重視したいです。",
     color: "#dc2626",
   },
   verySlow: {
@@ -95,6 +110,9 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     label: "超スロー",
     symbol: "S++",
     description: "前半がかなり緩い流れ。位置取りと瞬発力が重要。",
+    beginnerLabel: "かなり落ち着いた流れ",
+    beginnerSummary: "前半はかなり落ち着きそうです。後ろから届かせるには一気に動ける力が必要です。",
+    bettingHint: "前めで運べる馬と、短い直線勝負に強い馬を中心に見たいです。",
     color: "#991b1b",
   },
   unknown: {
@@ -102,9 +120,27 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     label: "判定不可",
     symbol: "-",
     description: "判定に必要な指標がありません。",
+    beginnerLabel: "判断材料が不足",
+    beginnerSummary: "流れをはっきり決めるだけの材料が足りません。",
+    bettingHint: "展開は決めつけず、馬の地力や近走内容も広めに見てください。",
     color: "#94a3b8",
   },
 };
+
+const RAW_INDEX_WITH_VALUE = /\b(?:PCI3?|RPCI|PAI)\b\s*(?:は|が|:|：|=|＝)?\s*\d+(?:\.\d+)?/gi;
+const RAW_INDEX_NAME = /\b(?:PCI3?|RPCI|PAI)\b/gi;
+const DECIMAL_VALUE = /\d+\.\d+/g;
+
+/**
+ * 初心者向けコメントの最終防衛線。
+ * API や AI 生成文に専門指標・小数が混ざっても、表示直前に読み物として丸める。
+ */
+export function sanitizeBeginnerComment(text: string): string {
+  return text
+    .replace(RAW_INDEX_WITH_VALUE, "ペース判定")
+    .replace(RAW_INDEX_NAME, "ペース指標")
+    .replace(DECIMAL_VALUE, "具体的な数値");
+}
 
 /** PCI/RPCI/PCI3の実数値を、非専門家向けの5段階ペース速度へ変換する。 */
 export function paceSpeedFromIndex(value: number | null | undefined): PaceSpeedMeta {

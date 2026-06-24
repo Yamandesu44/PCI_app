@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -31,10 +32,17 @@ GEMINI_COMMENTARY_VERSION = "comment-gemini-v1"
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 _PACE_WORD: dict[PaceLabel, str] = {
-    PaceLabel.HIGH: "速い流れ（ハイペース）",
+    PaceLabel.HIGH: "やや速い流れ",
     PaceLabel.AVERAGE: "平均的な流れ",
-    PaceLabel.SLOW: "緩い流れ（スローペース）",
+    PaceLabel.SLOW: "やや落ち着いた流れ",
 }
+
+_RAW_INDEX_WITH_VALUE = re.compile(
+    r"\b(?:PCI3?|RPCI|PAI)\b\s*(?:は|が|:|：|=|＝)?\s*\d+(?:\.\d+)?",
+    re.IGNORECASE,
+)
+_RAW_INDEX_NAME = re.compile(r"\b(?:PCI3?|RPCI|PAI)\b", re.IGNORECASE)
+_DECIMAL_VALUE = re.compile(r"\d+\.\d+")
 
 
 class GeminiCommentGenerator:
@@ -78,8 +86,8 @@ class GeminiCommentGenerator:
         if not headline or not body:
             raise ValueError(f"Gemini レスポンスが不完全です: {parsed}")
         return Commentary(
-            headline=headline,
-            body=tuple(body),
+            headline=_sanitize_beginner_comment(headline),
+            body=tuple(_sanitize_beginner_comment(p) for p in body),
             model_version=GEMINI_COMMENTARY_VERSION,
             reasons=_forecast_reasons(data),
         )
@@ -91,8 +99,8 @@ class GeminiCommentGenerator:
         if not headline or not body:
             raise ValueError(f"Gemini レスポンスが不完全です: {parsed}")
         return Commentary(
-            headline=headline,
-            body=tuple(body),
+            headline=_sanitize_beginner_comment(headline),
+            body=tuple(_sanitize_beginner_comment(p) for p in body),
             model_version=GEMINI_COMMENTARY_VERSION,
             reasons=_review_reasons(data),
         )
@@ -119,7 +127,7 @@ class GeminiCommentGenerator:
 
 def _build_forecast_prompt(data: ForecastCommentInput) -> str:
     beneficiary_text = (
-        "・".join(f"{b.horse_no}番（展開向き度 {b.pai}）" for b in data.beneficiaries)
+        "・".join(f"{b.horse_no}番" for b in data.beneficiaries)
         if data.beneficiaries
         else "特になし"
     )
@@ -137,10 +145,12 @@ def _build_forecast_prompt(data: ForecastCommentInput) -> str:
 想定されるペース: {_PACE_WORD[data.pace_label]}（想定指数: {data.predicted_rpci}）
 展開の確信度: {data.confidence:.0%}
 前に行きたい馬の頭数: {len(data.front_runners)}頭
-展開が向くと予想される馬（馬番・適性スコア）: {beneficiary_text}
+展開が向くと予想される馬: {beneficiary_text}
 
 === 出力ルール ===
 ・PCI・RPCI・PAI・脚質コードなど専門用語は使わない
+・小数や指数の実数値を本文に出さない
+・「速い」「平均的」「落ち着いた」などの自然な言葉で説明する
 ・headline: 展開の結論を20〜35文字で一文にまとめる
 ・body: 以下の段落構成にする
   - 段落1: 前に行く馬が何頭いて、レースの流れがどうなりそうか
@@ -169,8 +179,7 @@ def _build_review_prompt(data: ReviewCommentInput) -> str:
     if confirmed:
         w = min(confirmed, key=lambda h: h.finish_pos if h.finish_pos is not None else 9999)
         style = f"（{w.running_style}）" if w.running_style else ""
-        pci_text = f"、自身のペース指数 {w.pci}" if w.pci is not None else ""
-        winner_text = f"{w.horse_no}番{style}{pci_text}"
+        winner_text = f"{w.horse_no}番{style}"
 
     sample_note = (
         "・段落3: 完走データが少ないため評価は参考値である旨を一言添える"
@@ -188,6 +197,8 @@ def _build_review_prompt(data: ReviewCommentInput) -> str:
 
 === 出力ルール ===
 ・PCI・RPCI・PCI3など専門用語は使わず平易な表現にする
+・小数や指数の実数値を本文に出さない
+・「速い」「平均的」「落ち着いた」などの自然な言葉で説明する
 ・headline: 実際のペースを20〜35文字で一文にまとめる
 ・body: 以下の段落構成にする
   - 段落1: 実際にどんなペースになり、どんな展開だったか
@@ -196,6 +207,13 @@ def _build_review_prompt(data: ReviewCommentInput) -> str:
 
 必ず以下のJSONフォーマットのみを返してください（コードブロック不要）:
 {{"headline": "...", "body": ["...", "..."]}}"""
+
+
+def _sanitize_beginner_comment(text: str) -> str:
+    """初心者向け表示から専門指標名と小数を取り除く最終防衛線。"""
+    text = _RAW_INDEX_WITH_VALUE.sub("ペース判定", text)
+    text = _RAW_INDEX_NAME.sub("ペース指標", text)
+    return _DECIMAL_VALUE.sub("具体的な数値", text)
 
 
 # ----- reasons 生成 -----

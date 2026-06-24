@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pci.domain.pace.commentary import (
     COMMENTARY_VERSION,
     BeneficiaryRef,
@@ -14,6 +16,17 @@ from pci.domain.pace.commentary import (
     RuleBasedCommentGenerator,
 )
 from pci.domain.pace.rpci_forecast import PaceLabel
+
+_BEGINNER_FORBIDDEN = re.compile(r"\b(PCI3?|RPCI|PAI)\b|\d+\.\d+", re.IGNORECASE)
+
+
+def _visible_text(out) -> str:
+    body = "\n".join(out.body)
+    return f"{out.headline}\n{body}"
+
+
+def _assert_beginner_safe(out: object) -> None:
+    assert _BEGINNER_FORBIDDEN.search(_visible_text(out)) is None
 
 
 def _forecast_input(
@@ -63,7 +76,11 @@ class TestForecastComment:
         )
         joined = "".join(out.body)
         assert "7番" in joined
-        assert "88.0" in joined
+        _assert_beginner_safe(out)
+
+    def test_forecast_visible_text_hides_raw_indexes(self) -> None:
+        out = RuleBasedCommentGenerator().forecast_comment(_forecast_input())
+        _assert_beginner_safe(out)
 
     def test_no_beneficiary_uses_fallback_wording(self) -> None:
         out = RuleBasedCommentGenerator().forecast_comment(_forecast_input(beneficiaries=()))
@@ -97,9 +114,9 @@ class TestReviewComment:
                 horses=(ReviewHorseRef(1, 1, "先行", 54.0),),
             )
         )
-        assert "スロー" in out.headline
+        assert "落ち着いた" in out.headline
         assert out.model_version == COMMENTARY_VERSION
-        assert "52.0" in "".join(out.body)  # PCI3 を含む
+        _assert_beginner_safe(out)
 
     def test_high_pace_classified(self) -> None:
         out = RuleBasedCommentGenerator().review_comment(
@@ -112,7 +129,8 @@ class TestReviewComment:
                 horses=(ReviewHorseRef(5, 1, "差し", 44.0),),
             )
         )
-        assert "ハイ" in out.headline
+        assert "速い" in out.headline
+        _assert_beginner_safe(out)
 
     def test_winner_mentioned(self) -> None:
         out = RuleBasedCommentGenerator().review_comment(
@@ -146,6 +164,7 @@ class TestReviewComment:
         assert "不足" in out.headline
         assert out.body  # 空ではない
         assert out.reasons
+        _assert_beginner_safe(out)
 
     def test_small_sample_caveat(self) -> None:
         out = RuleBasedCommentGenerator().review_comment(

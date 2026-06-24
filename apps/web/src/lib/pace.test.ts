@@ -7,6 +7,7 @@ import {
   paiBarWidth,
   pciTone,
   pciToneLabel,
+  sanitizeBeginnerComment,
   sortByPai,
 } from "./pace";
 
@@ -44,6 +45,21 @@ describe("paceSpeedFromIndex", () => {
   it("null/undefinedは判定不可にする", () => {
     expect(paceSpeedFromIndex(null).label).toBe("判定不可");
     expect(paceSpeedFromIndex(undefined).symbol).toBe("-");
+  });
+
+  it("初心者向けラベルを持つ", () => {
+    expect(paceSpeedFromIndex(48).beginnerLabel).toBe("やや速い流れ");
+    expect(paceSpeedFromIndex(53).beginnerSummary).toContain("前半");
+  });
+});
+
+describe("sanitizeBeginnerComment", () => {
+  it("指標名と小数を初心者向け表示から隠す", () => {
+    const text = "想定RPCIは48.6で、PAI 88.0の馬を重視。PCI3は52.1です。";
+    const out = sanitizeBeginnerComment(text);
+    expect(out).not.toMatch(/\b(PCI3?|RPCI|PAI)\b/i);
+    expect(out).not.toMatch(/\d+\.\d+/);
+    expect(out).toContain("ペース判定");
   });
 });
 

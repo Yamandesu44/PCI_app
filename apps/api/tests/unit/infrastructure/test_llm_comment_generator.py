@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from unittest.mock import Mock
 
@@ -21,6 +22,13 @@ from pci.infrastructure.llm_comment_generator import (
 )
 
 # ----- テスト用ヘルパー -----
+
+_BEGINNER_FORBIDDEN = re.compile(r"\b(PCI3?|RPCI|PAI)\b|\d+\.\d+", re.IGNORECASE)
+
+
+def _visible_text(result) -> str:
+    body = "\n".join(result.body)
+    return f"{result.headline}\n{body}"
 
 
 def _make_http_client(headline: str, body: list[str]) -> Mock:
@@ -92,6 +100,15 @@ class TestForecastComment:
         gen = GeminiCommentGenerator("fake", http_client=client)
         result = gen.forecast_comment(_forecast_input())
         assert list(result.body) == body
+
+    def test_sanitizes_raw_indexes_from_visible_text(self) -> None:
+        client = _make_http_client(
+            "想定RPCIは48.1です。",
+            ["PAI 84.5の馬が向きます。", "PCI3は52.5です。"],
+        )
+        gen = GeminiCommentGenerator("fake", http_client=client)
+        result = gen.forecast_comment(_forecast_input())
+        assert _BEGINNER_FORBIDDEN.search(_visible_text(result)) is None
 
     def test_model_version_is_gemini(self) -> None:
         client = _make_http_client("見出し", ["本文"])
@@ -178,6 +195,15 @@ class TestReviewComment:
         gen = GeminiCommentGenerator("fake", http_client=client)
         result = gen.review_comment(_review_input())
         assert result.model_version == GEMINI_COMMENTARY_VERSION
+
+    def test_sanitizes_review_raw_indexes_from_visible_text(self) -> None:
+        client = _make_http_client(
+            "実績RPCIは53.0でした。",
+            ["PCI3は52.5で、勝ち馬のPCIは54.2です。"],
+        )
+        gen = GeminiCommentGenerator("fake", http_client=client)
+        result = gen.review_comment(_review_input())
+        assert _BEGINNER_FORBIDDEN.search(_visible_text(result)) is None
 
     def test_falls_back_when_rpci_is_none(self) -> None:
         """rpci_actual が None の場合は API を呼ばずにフォールバックする。"""

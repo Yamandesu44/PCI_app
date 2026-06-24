@@ -1,28 +1,30 @@
 import { ReasonList } from "@/components/ReasonList";
+import { sanitizeBeginnerComment } from "@/lib/pace";
 import type { Comment } from "@pci/api-client";
 
 /**
  * 展開コメント（自然文の解説）。
  *
- * RPCI・PAI といった指標を「読み物」に翻訳し、PCI を知らないファンが
- * 最初に目を通す導入として機能する（コアバリュー）。生成方式（model_version）は
- * 根拠として明示し、説明可能性を担保する。
+ * 専門指標を「読み物」に翻訳し、PCI を知らないファンが最初に目を通す導入として
+ * 機能する（コアバリュー）。生成方式（model_version）は根拠内に閉じ、本文からは遠ざける。
  */
 export function CommentCard({ comment }: { comment: Comment }) {
-  const body = comment.body ?? [];
+  const headline = sanitizeBeginnerComment(comment.headline);
+  const body = (comment.body ?? []).map(sanitizeBeginnerComment);
   const reasons = comment.reasons ?? [];
 
   return (
     <section className="panel comment-card">
       <h3>この展開をやさしく解説</h3>
-      <p className="comment-lead">{comment.headline}</p>
+      <p className="comment-lead">{headline}</p>
       {body.map((para, i) => (
         <p key={i} className="comment-para">
           {para}
         </p>
       ))}
       <details className="rationale">
-        <summary>コメントの根拠（{comment.model_version}）</summary>
+        <summary>コメントの根拠</summary>
+        <p className="comment-model">生成方式: {comment.model_version}</p>
         <ReasonList reasons={reasons} />
       </details>
     </section>
