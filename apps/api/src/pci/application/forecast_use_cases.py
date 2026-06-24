@@ -13,6 +13,11 @@ from pci.application.dto import (
     HorseFitOutput,
     ReasonOutput,
 )
+from pci.domain.pace.affinity import (
+    HorsePaceAffinityProfile,
+    PaceAffinityRaceResult,
+    build_horse_pace_affinity_profile,
+)
 from pci.domain.pace.adaptability import HorsePaceProfile, PaceAdaptabilityScorer, PaiResult
 from pci.domain.pace.commentary import (
     BeneficiaryRef,
@@ -29,6 +34,7 @@ from pci.domain.pace.rpci_forecast import (
 )
 from pci.domain.pace.running_style import RunningStyleLabel, classify_running_style
 from pci.domain.pace.scenario import build_pace_scenario
+from pci.domain.racing.race import Race
 from pci.domain.racing.repository import RaceRepository
 from pci.domain.shared.race_key import RaceKey
 from pci.domain.shared.reason import Reason
@@ -68,9 +74,11 @@ class ForecastRaceUseCase:
         profiles = [
             HorsePaceProfile(
                 horse_no=e.horse_no,
-                running_style=self._resolve_style(e.ketto_num),
+                running_style=style,
+                pace_affinity=self._build_affinity_profile(e.ketto_num, style, race),
             )
             for e in entries
+            for style in (self._resolve_style(e.ketto_num),)
         ]
 
         context = RaceContext(
@@ -143,6 +151,34 @@ class ForecastRaceUseCase:
         recent = self._repo.find_horse_recent_entries(ketto_num, limit=5)
         c4 = tuple(e.corner_4 for e in recent if e.corner_4 is not None)
         return classify_running_style(c4).label
+
+    def _build_affinity_profile(
+        self, ketto_num: str, style: RunningStyleLabel, target_race: Race
+    ) -> HorsePaceAffinityProfile:
+        """過去好走時のペースから、馬ごとの得意なレース質を作る。"""
+        recent = self._repo.find_horse_recent_entries(ketto_num, limit=12)
+        results: list[PaceAffinityRaceResult] = []
+        for entry in recent:
+            past_race = self._repo.find_by_key(entry.race_key)
+            if past_race is None:
+                continue
+            results.append(
+                PaceAffinityRaceResult(
+                    race_key=entry.race_key,
+                    race_date=past_race.race_date,
+                    finish_pos=entry.finish_pos,
+                    grade=past_race.grade,
+                    rpci_actual=past_race.rpci_actual,
+                    pci3_actual=past_race.pci3_actual,
+                    pci_actual=entry.pci_actual,
+                )
+            )
+        return build_horse_pace_affinity_profile(
+            ketto_num,
+            style,
+            tuple(results),
+            as_of=target_race.race_date,
+        )
 
 
 def _to_reason_outputs(reasons: tuple[Reason, ...]) -> list[ReasonOutput]:

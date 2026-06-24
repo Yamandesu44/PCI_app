@@ -21,6 +21,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from pci.domain.pace.affinity import (
+    HorsePaceAffinityProfile,
+    affinity_label,
+    level_display,
+    pace_level_from_index,
+)
 from pci.domain.pace.rpci_forecast import RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
@@ -46,6 +52,7 @@ class HorsePaceProfile:
     running_style: RunningStyleLabel
     distance_aptitude_m: int | None = None
     weak_on_off_track: bool = False
+    pace_affinity: HorsePaceAffinityProfile | None = None
 
 
 @dataclass(frozen=True)
@@ -91,14 +98,15 @@ class PaceAdaptabilityScorer:
         distance_penalty = self._distance_penalty(profile, race_distance_m, reasons)
         track_penalty = self._track_penalty(profile, track_condition, reasons)
 
-        pai = round(
+        base_pai = round(
             min(max(100.0 - rpci_penalty - distance_penalty - track_penalty, 0.0), 100.0), 1
         )
+        pai = self._blend_pace_affinity(base_pai, profile, forecast, reasons)
         label = self._classify(pai)
         reasons.append(
             Reason(
                 code="pai",
-                description=f"PAI={pai} → 展開「{label}」（想定{forecast.label}）",
+                description=f"今回の流れとの総合的な相性は「{label}」です。",
             )
         )
 
@@ -129,11 +137,7 @@ class PaceAdaptabilityScorer:
         reasons.append(
             Reason(
                 code="rpci_diff",
-                description=(
-                    f"脚質「{profile.running_style}」の好ペースRPCI {preferred:.0f} と "
-                    f"想定RPCI {forecast.value} の差 {gap:.1f} → 減点 {penalty:.1f}"
-                ),
-                contribution=-round(penalty, 1),
+                description=_style_reason(profile.running_style, penalty),
             )
         )
         return penalty
@@ -143,7 +147,7 @@ class PaceAdaptabilityScorer:
     ) -> float:
         if profile.distance_aptitude_m is None:
             reasons.append(
-                Reason(code="distance_no_data", description="距離適性データなし → 減点なし")
+                Reason(code="distance_no_data", description="距離面は大きな不安材料を見ていません。")
             )
             return 0.0
         gap_m = abs(race_distance_m - profile.distance_aptitude_m)
@@ -151,11 +155,7 @@ class PaceAdaptabilityScorer:
         reasons.append(
             Reason(
                 code="distance_diff",
-                description=(
-                    f"距離適性 {profile.distance_aptitude_m}m と本レース {race_distance_m}m の差 "
-                    f"{gap_m}m → 減点 {penalty:.1f}"
-                ),
-                contribution=-round(penalty, 1),
+                description=_distance_reason(penalty),
             )
         )
         return penalty
@@ -168,13 +168,40 @@ class PaceAdaptabilityScorer:
             reasons.append(
                 Reason(
                     code="off_track",
-                    description=f"道悪不安 × 馬場「{track_condition}」→ 減点 {penalty:.1f}",
-                    contribution=-round(penalty, 1),
+                    description="馬場が渋ると力を出し切れない可能性があります。",
                 )
             )
             return penalty
-        reasons.append(Reason(code="track_ok", description="馬場不適性なし → 減点なし"))
+        reasons.append(Reason(code="track_ok", description="馬場面は大きな不安材料を見ていません。"))
         return 0.0
+
+    def _blend_pace_affinity(
+        self,
+        base_pai: float,
+        profile: HorsePaceProfile,
+        forecast: RpciForecast,
+        reasons: list[Reason],
+    ) -> float:
+        if profile.pace_affinity is None:
+            return base_pai
+
+        predicted_level = pace_level_from_index(forecast.value)
+        pace_affinity_score = profile.pace_affinity.scores[predicted_level]
+        label = affinity_label(pace_affinity_score)
+        preferred = level_display(profile.pace_affinity.preferred_level)
+        current = level_display(predicted_level)
+        if profile.pace_affinity.is_fallback:
+            description = (
+                "過去好走データが少ないため脚質傾向から補完しています。"
+                f"得意な流れは{preferred}寄りで、今回との相性は「{label}」です。"
+            )
+        else:
+            description = (
+                f"過去の好走は{preferred}に集まっており、"
+                f"今回の{current}との相性は「{label}」です。"
+            )
+        reasons.append(Reason(code="pace_affinity", description=description))
+        return round((base_pai * 0.5) + (pace_affinity_score * 0.5), 1)
 
     def _classify(self, pai: float) -> FitLabel:
         if pai >= self._w.matched_threshold:
@@ -182,6 +209,22 @@ class PaceAdaptabilityScorer:
         if pai < self._w.unfavorable_threshold:
             return FitLabel.UNFAVORABLE
         return FitLabel.NEUTRAL
+
+
+def _style_reason(style: RunningStyleLabel, penalty: float) -> str:
+    if penalty <= 10.0:
+        return f"脚質「{style}」の持ち味を出しやすい流れです。"
+    if penalty <= 30.0:
+        return f"脚質「{style}」としては極端な不利までは見ていません。"
+    return f"脚質「{style}」だけで見ると、今回は少し力を出しにくい流れです。"
+
+
+def _distance_reason(penalty: float) -> str:
+    if penalty <= 5.0:
+        return "距離面は大きな不安材料を見ていません。"
+    if penalty <= 15.0:
+        return "距離面では少し注意が必要です。"
+    return "距離面では適性から外れる可能性があります。"
 
 
 @dataclass(frozen=True)

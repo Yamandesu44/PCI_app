@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import datetime
+import re
 
 import pytest
 
 from pci.application.dto import EntryInput, RaceInfo
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
+from pci.domain.pace.rpci_forecast import PaceLabel, RaceContext, RpciForecast
 from pci.domain.racing.master import Horse
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
+from pci.domain.shared.reason import Reason
 from tests.unit.application.fake_mart_repository import FakeMartRepository
 from tests.unit.application.fake_repository import FakeRaceRepository
 
@@ -44,7 +47,16 @@ def _register_upcoming(repo: FakeRaceRepository, n: int = 6, distance_m: int = 1
     RegisterRaceEntriesUseCase(repo).execute(info, entries)
 
 
-def _seed_history(repo: FakeRaceRepository, ketto_num: str, corner4: int, count: int = 3) -> None:
+def _seed_history(
+    repo: FakeRaceRepository,
+    ketto_num: str,
+    corner4: int,
+    count: int = 3,
+    *,
+    rpci_actual: float | None = None,
+    finish_pos: int = 3,
+    grade: str | None = None,
+) -> None:
     """指定馬に、確定済みの過去走（4角通過順位 corner4）を count 走分与える。"""
     for i in range(count):
         rk = f"202605{i + 1:02d}05010101"
@@ -57,6 +69,8 @@ def _seed_history(repo: FakeRaceRepository, ketto_num: str, corner4: int, count:
                 track_type="芝",
                 field_size=12,
                 status=RaceStatus.RESULT,
+                grade=grade,
+                rpci_actual=rpci_actual,
             )
         )
         repo.save_entry(
@@ -68,10 +82,24 @@ def _seed_history(repo: FakeRaceRepository, ketto_num: str, corner4: int, count:
                 weight=480.0,
                 jockey_code="J001",
                 trainer_code="T001",
-                finish_pos=3,
+                finish_pos=finish_pos,
                 corner_4=corner4,
             )
         )
+
+
+class _FixedForecaster:
+    def __init__(self, value: float, label: PaceLabel) -> None:
+        self._forecast = RpciForecast(
+            value=value,
+            label=label,
+            confidence=0.7,
+            model_version="fixed-test",
+            reasons=(Reason(code="fixed", description="テスト用の固定予想"),),
+        )
+
+    def forecast(self, context: RaceContext) -> RpciForecast:
+        return self._forecast
 
 
 class TestForecastRaceUseCase:
@@ -183,3 +211,33 @@ class TestForecastRaceUseCase:
         assert output.comment.body  # 段落本文あり
         assert output.comment.model_version == "comment-v1"
         assert output.comment.reasons  # 説明可能性
+
+    def test_high_pace_good_run_gets_higher_fit_when_predicted_high(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=2)
+        _seed_history(repo, "2020100001", corner4=10, rpci_actual=46.0, finish_pos=1)
+        _seed_history(repo, "2020100002", corner4=1, rpci_actual=56.0, finish_pos=1)
+
+        output = ForecastRaceUseCase(
+            repo,
+            forecaster=_FixedForecaster(46.0, PaceLabel.HIGH),
+        ).execute(UPCOMING)
+
+        by_no = {horse.horse_no: horse for horse in output.horses}
+        assert by_no[1].pai > by_no[2].pai
+        assert any("過去の好走" in reason.description for reason in by_no[1].reasons)
+
+    def test_horse_reasons_hide_raw_pci_values(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=1)
+        _seed_history(repo, "2020100001", corner4=10, rpci_actual=46.0, finish_pos=1)
+
+        output = ForecastRaceUseCase(
+            repo,
+            forecaster=_FixedForecaster(46.0, PaceLabel.HIGH),
+        ).execute(UPCOMING)
+
+        descriptions = " ".join(reason.description for reason in output.horses[0].reasons)
+        assert "PCI" not in descriptions
+        assert "RPCI" not in descriptions
+        assert re.search(r"\d+\.\d+", descriptions) is None
