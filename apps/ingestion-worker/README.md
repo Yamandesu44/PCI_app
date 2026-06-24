@@ -33,6 +33,12 @@ pip install -e ".[dev]"
 # 本番環境（Windows）
 python -m pip install -e ".[win]"
 
+# mykeibadb MySQL 読み取りを使う場合
+python -m pip install -e ".[mysql]"
+
+# Windows で JV-Link と mykeibadb の両方を使う場合
+python -m pip install -e ".[win,mysql]"
+
 # 環境変数
 cp .env.example .env
 # .env を編集して API_BASE_URL / INGEST_TOKEN / JV_LINK_SID を設定
@@ -54,7 +60,7 @@ notepad .env
 ```bat
 cd /d C:\Users\yuuta\PCI_app\apps\ingestion-worker
 .venv\Scripts\activate.bat
-python -m pip install -e ".[win]"
+python -m pip install -e ".[win,mysql]"
 ```
 
 `.env` には JRA-VAN DataLab の利用キーを設定します。
@@ -63,6 +69,13 @@ python -m pip install -e ".[win]"
 API_BASE_URL=http://localhost:8000
 INGEST_TOKEN=
 JV_LINK_SID=ここに利用キーを設定
+
+# mykeibadb を使う場合
+MYKEIBADB_HOST=localhost
+MYKEIBADB_PORT=3306
+MYKEIBADB_USER=root
+MYKEIBADB_PASSWORD=
+MYKEIBADB_DATABASE=mykeibadb
 ```
 
 `No module named 'ingestion'` が出る場合は、`python -m pip install -e ".[win]"`
@@ -90,6 +103,9 @@ python -m ingestion.probe_race_options --date 20260624 --date-to 20260628 --days
 # probe でデータが返った option を使い、未来日の予想対象を取り込む（例: option=4）
 python -m ingestion.batch --mode jvlink --date 20260617 --date-to 20260628 --race-option 4 --step entries
 
+# mykeibadb の特別登録テーブルから週末の予想対象を取り込む
+python -m ingestion.batch --mode mykeibadb --date 20260627 --date-to 20260628 --step special-entries
+
 # ステップ単位で実行
 python -m ingestion.batch --mode fixture --step masters   # マスタのみ
 python -m ingestion.batch --mode fixture --step entries   # 出走表のみ
@@ -110,6 +126,10 @@ JV-Link は同じデータを短時間に複数回 `JVOpen` すると2回目以�
 指定した `fromtime` / `option` の組み合わせで返るデータがない状態です。
 特別登録のような未来データでは、レース当日 `20260627` を `--date` にするより、
 データが公開・更新された日（例: `20260624`）から問い合わせる方が取得できる場合があります。
+
+mykeibadb を使う場合は、JRA-VAN から mykeibadb 側 MySQL へ取り込み済みであることが前提です。
+`TOKUBETSU_TOROKUBA` / `TOKUBETSU_TOROKUBAGOTO_JOHO` を読み、
+PCI_app の `races` / `race_entries` に変換して Ingest API へ投入します。
 
 ## テスト
 

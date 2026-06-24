@@ -66,6 +66,42 @@ def _build_client(mode: str, race_option: int = 1) -> JvLinkClient:
     raise ValueError(f"未知のモード: {mode!r}。'fixture' または 'jvlink' を指定してください。")
 
 
+def ingest_mykeibadb_special_entries(api: IngestApiClient, date_from: str, date_to: str) -> None:
+    """mykeibadb の特別登録テーブルから出走前レースを取り込む。"""
+    from ingestion.client.mykeibadb_client import MyKeibaDbClient
+
+    client = MyKeibaDbClient()
+    races = client.fetch_special_entries(date_from, date_to)
+    horses = client.fetch_special_horses(date_from, date_to)
+
+    if not races:
+        _log.info("mykeibadb 特別登録データが見つかりません: %s→%s", date_from, date_to)
+        return
+
+    if horses:
+        api.upsert_horses(horses)
+
+    # 特別登録では騎手未定が多いため、TBD を共通プレースホルダとして登録する。
+    api.upsert_jockeys([JockeyRecord(code="TBD", name="未定")])
+
+    trainer_codes = {
+        entry.trainer_code
+        for race in races
+        for entry in race.entries
+        if entry.trainer_code and entry.trainer_code != "TBD"
+    }
+    trainers = [TrainerRecord(code="TBD", name="未定")]
+    trainers.extend(TrainerRecord(code=code, name=code) for code in sorted(trainer_codes))
+    api.upsert_trainers(trainers)
+
+    for race in races:
+        race.field_size = len(race.entries)
+        try:
+            api.register_entries(race)
+        except Exception as exc:
+            _log.error("mykeibadb 特別登録送信エラー %s: %s", race.race_key, exc)
+
+
 # ---------------------------------------------------------------------------
 # マスタデータ取り込み
 # ---------------------------------------------------------------------------
@@ -254,9 +290,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["fixture", "jvlink"],
+        choices=["fixture", "jvlink", "mykeibadb"],
         default="fixture",
-        help="データソース（fixture=開発用JSON / jvlink=本番Windows COM）",
+        help=(
+            "データソース（fixture=開発用JSON / jvlink=本番Windows COM / "
+            "mykeibadb=MySQL特別登録）"
+        ),
     )
     parser.add_argument(
         "--date",
@@ -270,7 +309,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--step",
-        choices=["all", "masters", "entries", "results"],
+        choices=["all", "masters", "entries", "results", "special-entries"],
         default="all",
         help="実行ステップ（デフォルト: all）",
     )
@@ -292,7 +331,6 @@ def main() -> None:
     api_base_url = os.environ.get("API_BASE_URL", "http://localhost:8000")
     ingest_token = os.environ.get("INGEST_TOKEN", "")
 
-    client = _build_client(args.mode, race_option=args.race_option)
     api = IngestApiClient(base_url=api_base_url, token=ingest_token)
 
     _log.info(
@@ -304,6 +342,18 @@ def main() -> None:
     )
 
     try:
+        if args.mode == "mykeibadb":
+            if args.step not in ("all", "special-entries"):
+                raise RuntimeError(
+                    "mykeibadb モードでは --step special-entries を指定してください。"
+                )
+            _log.info("--- mykeibadb 特別登録取り込み ---")
+            ingest_mykeibadb_special_entries(api, date_from, date_to)
+            _log.info("=== ingestion-worker 完了 ===")
+            return
+
+        client = _build_client(args.mode, race_option=args.race_option)
+
         if args.step in ("all", "masters"):
             _log.info("--- マスタデータ取り込み ---")
             ingest_masters(client, api)

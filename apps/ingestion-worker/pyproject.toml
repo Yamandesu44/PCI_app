@@ -17,6 +17,9 @@ dependencies = [
 win = [
     "pywin32>=306",
 ]
+mysql = [
+    "PyMySQL>=1.1",
+]
 dev = [
     "pytest>=8",
     "ruff>=0.4",
