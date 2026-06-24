@@ -178,6 +178,65 @@ export function sortByPai(horses: HorseFit[]): HorseFit[] {
   return [...horses].sort((a, b) => b.pai - a.pai);
 }
 
+export type BenefitRoleTone = "main" | "partner" | "value" | "keep";
+
+export interface BenefitRecommendation {
+  label: string;
+  tone: BenefitRoleTone;
+  reason: string;
+}
+
+function styleBenefitReason(style: string): string {
+  if (style.includes("逃")) {
+    return "前で自分の形を作れれば、流れの後押しを受けやすいタイプです。";
+  }
+  if (style.includes("先")) {
+    return "好位で流れに乗れるため、極端なロスなく力を出しやすいタイプです。";
+  }
+  if (style.includes("差")) {
+    return "前が苦しくなる流れなら、直線で脚を伸ばしやすいタイプです。";
+  }
+  if (style.includes("追")) {
+    return "展開が速くなれば、後半に浮上する余地があるタイプです。";
+  }
+  return "今回の流れとかみ合えば、力を出しやすいタイプです。";
+}
+
+/** 展開恩恵馬を、馬券検討で使いやすい役割ラベルへ変換する。 */
+export function benefitRecommendation(horse: Pick<HorseFit, "pai" | "running_style">, rank: number): BenefitRecommendation {
+  const reason = styleBenefitReason(horse.running_style);
+
+  if (rank === 0 && horse.pai >= 80) {
+    return {
+      label: "軸候補",
+      tone: "main",
+      reason: `${reason} まず中心として確認したい一頭です。`,
+    };
+  }
+
+  if (rank <= 2 && horse.pai >= 70) {
+    return {
+      label: "相手候補",
+      tone: "partner",
+      reason: `${reason} 上位候補の相手として押さえたい一頭です。`,
+    };
+  }
+
+  if (horse.pai >= 70) {
+    return {
+      label: "穴で拾う",
+      tone: "value",
+      reason: `${reason} 人気次第では妙味を見込めます。`,
+    };
+  }
+
+  return {
+    label: "押さえ",
+    tone: "keep",
+    reason: `${reason} 強く決め打たず、相手までで考えたい一頭です。`,
+  };
+}
+
 export type PciTone = "slow" | "high" | "even" | "unknown";
 
 /**

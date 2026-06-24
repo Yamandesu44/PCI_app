@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  benefitRecommendation,
   fitTone,
   paceMeta,
   paceSpeedFromIndex,
@@ -80,6 +81,33 @@ describe("sortByPai", () => {
     const out = sortByPai(input);
     expect(out.map((h) => h.horse_no)).toEqual([2, 1]);
     expect(input[0]?.horse_no).toBe(1);
+  });
+});
+
+describe("benefitRecommendation", () => {
+  it("最上位かつ適性が高い馬は軸候補にする", () => {
+    const out = benefitRecommendation({ pai: 86, running_style: "先行" }, 0);
+    expect(out.label).toBe("軸候補");
+    expect(out.tone).toBe("main");
+    expect(out.reason).toContain("好位");
+  });
+
+  it("上位の適性馬は相手候補にする", () => {
+    const out = benefitRecommendation({ pai: 74, running_style: "差し" }, 2);
+    expect(out.label).toBe("相手候補");
+    expect(out.reason).toContain("直線");
+  });
+
+  it("順位が下でも適性があれば穴で拾うにする", () => {
+    const out = benefitRecommendation({ pai: 72, running_style: "追込" }, 4);
+    expect(out.label).toBe("穴で拾う");
+    expect(out.tone).toBe("value");
+  });
+
+  it("適性が控えめなら押さえにする", () => {
+    const out = benefitRecommendation({ pai: 58, running_style: "逃げ" }, 1);
+    expect(out.label).toBe("押さえ");
+    expect(out.tone).toBe("keep");
   });
 });
 

@@ -8,7 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatRaceDate, jyoName, raceNumber } from "@/lib/races";
-import { paceSpeedFromIndex, paiBarWidth, sortByPai } from "@/lib/pace";
+import { benefitRecommendation, paceSpeedFromIndex, paiBarWidth, sortByPai } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 
 interface RaceForecastDashboardProps {
@@ -54,10 +54,6 @@ function buildStyleScores(horses: HorseFit[]): StyleScore[] {
   return base;
 }
 
-function reasonText(horse: HorseFit): string {
-  return horse.reasons?.[0]?.description ?? `${horse.running_style}の展開適性が高い馬です。`;
-}
-
 function horseDisplayName(horse: HorseFit): string {
   return horse.horse_name ?? `馬番 ${horse.horse_no}`;
 }
@@ -71,6 +67,16 @@ function toneClass(index: number): string {
     "border-rose-200 bg-rose-50 text-rose-950",
   ];
   return tones[index] ?? "border-border bg-card text-card-foreground";
+}
+
+function roleClass(tone: ReturnType<typeof benefitRecommendation>["tone"]): string {
+  const tones = {
+    main: "bg-white text-slate-950",
+    partner: "bg-emerald-100 text-emerald-950",
+    value: "bg-amber-100 text-amber-950",
+    keep: "bg-slate-100 text-slate-700",
+  };
+  return tones[tone];
 }
 
 export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardProps) {
@@ -173,29 +179,46 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
           <div>
             <h2 className="text-lg font-semibold text-slate-950">展開恩恵馬 TOP5</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              適性指数が高い順に、今回の流れが向く馬を表示します。
+              今回の流れが向く馬を、検討時の役割つきで表示します。
             </p>
           </div>
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {topHorses.map((horse, index) => (
-            <article
-              key={horse.horse_no}
-              className={`rounded-lg border p-4 shadow-sm ${toneClass(index)}`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold opacity-70">#{index + 1}</span>
-                <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold text-slate-900">
-                  PAI {horse.pai.toFixed(0)}
-                </span>
-              </div>
-              <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
-              <p className="mt-1 text-sm opacity-80">
-                馬番 {horse.horse_no} ・ {horse.running_style}
-              </p>
-              <p className="mt-4 text-sm leading-6 opacity-90">{reasonText(horse)}</p>
-            </article>
-          ))}
+          {topHorses.map((horse, index) => {
+            const recommendation = benefitRecommendation(horse, index);
+            return (
+              <article
+                key={horse.horse_no}
+                className={`rounded-lg border p-4 shadow-sm ${toneClass(index)}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold opacity-70">#{index + 1}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${roleClass(
+                      recommendation.tone,
+                    )}`}
+                  >
+                    {recommendation.label}
+                  </span>
+                </div>
+                <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
+                <p className="mt-1 text-sm opacity-80">
+                  馬番 {horse.horse_no} ・ {horse.running_style}
+                </p>
+                <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <dt className="text-xs font-semibold opacity-70">適性指数</dt>
+                    <dd className="mt-1 text-2xl font-semibold">{horse.pai.toFixed(0)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold opacity-70">評価</dt>
+                    <dd className="mt-1 font-semibold">{horse.fit_label}</dd>
+                  </div>
+                </dl>
+                <p className="mt-4 text-sm leading-6 opacity-90">{recommendation.reason}</p>
+              </article>
+            );
+          })}
         </div>
       </section>
 
