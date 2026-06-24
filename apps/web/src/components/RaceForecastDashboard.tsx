@@ -8,7 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatRaceDate, jyoName, raceNumber } from "@/lib/races";
-import { paiBarWidth, sortByPai } from "@/lib/pace";
+import { paceSpeedFromIndex, paiBarWidth, sortByPai } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 
 interface RaceForecastDashboardProps {
@@ -79,6 +79,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
   const styleScores = buildStyleScores(horses);
   const confidence = confidencePct(forecast.confidence);
   const course = `${race.track_type}${race.distance_m}m`;
+  const predictedSpeed = paceSpeedFromIndex(forecast.predicted_rpci);
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-6 md:px-8 md:py-8">
@@ -205,13 +206,18 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
               <BarChart3 className="h-4 w-4" />
               ペース分析
             </CardTitle>
-            <CardDescription>想定RPCIと脚質別スコアから、レースの流れを確認します。</CardDescription>
+            <CardDescription>想定ペースと脚質別スコアから、レースの流れを確認します。</CardDescription>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-lg bg-muted p-3">
-                <dt className="text-muted-foreground">想定RPCI</dt>
-                <dd className="mt-1 text-2xl font-semibold">{forecast.predicted_rpci.toFixed(1)}</dd>
+                <dt className="text-muted-foreground">想定ペース</dt>
+                <dd className="mt-1 text-2xl font-semibold" style={{ color: predictedSpeed.color }}>
+                  {predictedSpeed.symbol} {predictedSpeed.label}
+                </dd>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {predictedSpeed.description}
+                </p>
               </div>
               <div className="rounded-lg bg-muted p-3">
                 <dt className="text-muted-foreground">先導候補</dt>
@@ -246,7 +252,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
         <CardContent className="p-0">
           <Accordion type="single" collapsible>
             <AccordionItem value="pci-detail" className="border-0 px-5">
-              <AccordionTrigger>PCI詳細データ</AccordionTrigger>
+              <AccordionTrigger>判定根拠データ</AccordionTrigger>
               <AccordionContent>
                 <div className="grid gap-5">
                   <PaceHeadline

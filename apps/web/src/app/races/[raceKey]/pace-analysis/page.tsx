@@ -6,16 +6,13 @@ import { PaceAnalysisTable } from "@/components/PaceAnalysisTable";
 import { RaceHero } from "@/components/RaceHero";
 import { ReasonList } from "@/components/ReasonList";
 import { api } from "@/lib/api";
+import { paceSpeedFromIndex } from "@/lib/pace";
 import { ApiError, type PaceAnalysis, type RaceDetail } from "@pci/api-client";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ raceKey: string }>;
-}
-
-function fmt(value: number | null | undefined): string {
-  return value !== null && value !== undefined ? value.toFixed(1) : "—";
 }
 
 export default async function PaceAnalysisPage({ params }: PageProps) {
@@ -36,6 +33,8 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
   }
 
   const horses = analysis.horses ?? [];
+  const resultSpeed = paceSpeedFromIndex(analysis.rpci_actual);
+  const pci3Speed = paceSpeedFromIndex(analysis.pci3_actual);
 
   return (
     <main className="container">
@@ -53,12 +52,16 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
         <h2 className="headline-title">レースの実際のペースを PCI で振り返る</h2>
         <dl className="metrics">
           <div>
-            <dt>実績RPCI</dt>
-            <dd>{fmt(analysis.rpci_actual)}</dd>
+            <dt>実績ペース</dt>
+            <dd style={{ color: resultSpeed.color }}>
+              {resultSpeed.symbol} {resultSpeed.label}
+            </dd>
           </div>
           <div>
-            <dt>PCI3</dt>
-            <dd>{fmt(analysis.pci3_actual)}</dd>
+            <dt>上位3頭ペース</dt>
+            <dd style={{ color: pci3Speed.color }}>
+              {pci3Speed.symbol} {pci3Speed.label}
+            </dd>
           </div>
           <div>
             <dt>対象頭数</dt>
@@ -80,7 +83,7 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
       {analysis.comment ? <CommentCard comment={analysis.comment} /> : null}
 
       <section className="panel">
-        <h3>各馬 PCI（着順・★=PCI3 寄与）</h3>
+        <h3>各馬 PCI判定（着順・★=上位3頭ペース寄与）</h3>
         <PaceAnalysisTable horses={horses} />
       </section>
     </main>

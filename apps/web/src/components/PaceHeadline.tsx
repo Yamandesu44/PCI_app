@@ -1,5 +1,5 @@
 import { ReasonList } from "@/components/ReasonList";
-import { paceMeta } from "@/lib/pace";
+import { paceMeta, paceSpeedFromIndex } from "@/lib/pace";
 import type { Reason } from "@pci/api-client";
 
 interface PaceHeadlineProps {
@@ -23,6 +23,7 @@ export function PaceHeadline({
   reasons,
 }: PaceHeadlineProps) {
   const meta = paceMeta(paceLabel);
+  const speed = paceSpeedFromIndex(predictedRpci);
   const confidencePct = Math.round(confidence * 100);
 
   return (
@@ -36,8 +37,10 @@ export function PaceHeadline({
 
       <dl className="metrics">
         <div>
-          <dt>想定RPCI</dt>
-          <dd>{predictedRpci.toFixed(1)}</dd>
+          <dt>想定ペース</dt>
+          <dd style={{ color: speed.color }}>
+            {speed.symbol} {speed.label}
+          </dd>
         </div>
         <div>
           <dt>確信度</dt>

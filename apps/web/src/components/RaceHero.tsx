@@ -1,4 +1,5 @@
 import { formatRaceDate, jyoName, raceNumber, statusLabel, statusTone } from "@/lib/races";
+import { paceSpeedFromIndex } from "@/lib/pace";
 import type { RaceDetail } from "@pci/api-client";
 
 interface RaceHeroProps {
@@ -10,17 +11,15 @@ function optionalLabel(value: string | null | undefined): string {
   return value && value.trim().length > 0 ? value : "未発表";
 }
 
-function fmt(value: number | null | undefined): string {
-  return value !== null && value !== undefined ? value.toFixed(1) : "-";
-}
-
 /** レース詳細ページの冒頭で、予測・分析の前提になる条件をひと目で伝える。 */
 export function RaceHero({ race, mode }: RaceHeroProps) {
   const tone = statusTone(race.status);
+  const resultSpeed = paceSpeedFromIndex(race.rpci_actual);
+  const pci3Speed = paceSpeedFromIndex(race.pci3_actual);
   const primaryMetric =
     mode === "forecast"
       ? { label: "出走頭数", value: `${race.field_size}頭` }
-      : { label: "実績RPCI", value: fmt(race.rpci_actual) };
+      : { label: "実績ペース", value: `${resultSpeed.symbol} ${resultSpeed.label}` };
 
   return (
     <section className={`race-hero race-hero-${tone}`}>
@@ -51,8 +50,10 @@ export function RaceHero({ race, mode }: RaceHeroProps) {
           <dd>{optionalLabel(race.track_condition)}</dd>
         </div>
         <div>
-          <dt>PCI3</dt>
-          <dd>{fmt(race.pci3_actual)}</dd>
+          <dt>上位3頭ペース</dt>
+          <dd style={{ color: pci3Speed.color }}>
+            {pci3Speed.symbol} {pci3Speed.label}
+          </dd>
         </div>
       </dl>
     </section>

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { fitTone, paceMeta, paiBarWidth, pciTone, pciToneLabel, sortByPai } from "./pace";
+import {
+  fitTone,
+  paceMeta,
+  paceSpeedFromIndex,
+  paiBarWidth,
+  pciTone,
+  pciToneLabel,
+  sortByPai,
+} from "./pace";
 
 describe("paceMeta", () => {
   it("既知ラベルを tone に対応づける", () => {
@@ -20,6 +28,22 @@ describe("fitTone", () => {
     expect(fitTone("合致")).toBe("matched");
     expect(fitTone("不利")).toBe("unfavorable");
     expect(fitTone("中立")).toBe("neutral");
+  });
+});
+
+describe("paceSpeedFromIndex", () => {
+  it("PCI/RPCI系の数値を5段階のペース速度に分類する", () => {
+    expect(paceSpeedFromIndex(46.9).label).toBe("超ハイ");
+    expect(paceSpeedFromIndex(47).label).toBe("ハイ");
+    expect(paceSpeedFromIndex(50).label).toBe("平均");
+    expect(paceSpeedFromIndex(52).label).toBe("平均");
+    expect(paceSpeedFromIndex(52.1).label).toBe("スロー");
+    expect(paceSpeedFromIndex(55.1).label).toBe("超スロー");
+  });
+
+  it("null/undefinedは判定不可にする", () => {
+    expect(paceSpeedFromIndex(null).label).toBe("判定不可");
+    expect(paceSpeedFromIndex(undefined).symbol).toBe("-");
   });
 });
 

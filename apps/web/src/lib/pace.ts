@@ -45,6 +45,85 @@ export function paceMeta(label: string): PaceMeta {
   return PACE_META[label] ?? FALLBACK_PACE;
 }
 
+export type PaceSpeedLevel =
+  | "veryHigh"
+  | "high"
+  | "average"
+  | "slow"
+  | "verySlow"
+  | "unknown";
+
+export interface PaceSpeedMeta {
+  level: PaceSpeedLevel;
+  label: string;
+  symbol: string;
+  description: string;
+  color: string;
+}
+
+const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
+  veryHigh: {
+    level: "veryHigh",
+    label: "超ハイ",
+    symbol: "H++",
+    description: "前半負荷がかなり高い流れ。差し・追込の浮上に注意。",
+    color: "#1d4ed8",
+  },
+  high: {
+    level: "high",
+    label: "ハイ",
+    symbol: "H",
+    description: "前半が速めの流れ。持続力と差し脚が活きやすい。",
+    color: "#2563eb",
+  },
+  average: {
+    level: "average",
+    label: "平均",
+    symbol: "M",
+    description: "標準的な流れ。脚質差は比較的小さめ。",
+    color: "#64748b",
+  },
+  slow: {
+    level: "slow",
+    label: "スロー",
+    symbol: "S",
+    description: "前半が緩めの流れ。逃げ・先行の粘り込みに注意。",
+    color: "#dc2626",
+  },
+  verySlow: {
+    level: "verySlow",
+    label: "超スロー",
+    symbol: "S++",
+    description: "前半がかなり緩い流れ。位置取りと瞬発力が重要。",
+    color: "#991b1b",
+  },
+  unknown: {
+    level: "unknown",
+    label: "判定不可",
+    symbol: "-",
+    description: "判定に必要な指標がありません。",
+    color: "#94a3b8",
+  },
+};
+
+/** PCI/RPCI/PCI3の実数値を、非専門家向けの5段階ペース速度へ変換する。 */
+export function paceSpeedFromIndex(value: number | null | undefined): PaceSpeedMeta {
+  if (value === null || value === undefined) return PACE_SPEED_META.unknown;
+  if (value < 47) return PACE_SPEED_META.veryHigh;
+  if (value < 50) return PACE_SPEED_META.high;
+  if (value <= 52) return PACE_SPEED_META.average;
+  if (value <= 55) return PACE_SPEED_META.slow;
+  return PACE_SPEED_META.verySlow;
+}
+
+export function paceSpeedLabel(value: number | null | undefined): string {
+  return paceSpeedFromIndex(value).label;
+}
+
+export function paceSpeedSymbol(value: number | null | undefined): string {
+  return paceSpeedFromIndex(value).symbol;
+}
+
 export type FitTone = "matched" | "neutral" | "unfavorable";
 
 export function fitTone(label: string): FitTone {
