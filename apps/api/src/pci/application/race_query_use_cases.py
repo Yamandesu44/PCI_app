@@ -32,11 +32,18 @@ _JV_PLACEHOLDERS: frozenset[str] = frozenset({"@", "＠", "...", "…", "-", "�
 
 
 def _clean_race_label(value: str | None) -> str | None:
-    """レース名・グレードの JV-Data プレースホルダを None に正規化する。"""
+    """レース名・グレードの JV-Data プレースホルダを None に正規化する。
+
+    DB内の固定長フィールドは "@" + スペースパディングが CP932 で文字化けした形で
+    残っているため、先頭文字が "@"/"＠" の場合もプレースホルダとして除去する。
+    """
     if not value:
         return None
     name = value.strip()
     if not name or name in _JV_PLACEHOLDERS:
+        return None
+    # 固定長パディング残留: "@縲縲縲..." のように先頭が @ の場合もプレースホルダ
+    if name[0] in {"@", "＠"}:
         return None
     return name
 

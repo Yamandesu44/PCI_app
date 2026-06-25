@@ -87,6 +87,26 @@ class TestListRacesUseCase:
         assert out[0].grade is None
         assert out[0].race_class is None
 
+    def test_jv_placeholder_with_mojibake_padding_filtered_to_none(self) -> None:
+        """'@' + 文字化けパディング（固定長フィールド残留）も None になる。"""
+        repo = FakeRaceRepository()
+        # DB実データ: "@" + CP932 パディングが文字化けした文字列
+        mojibake_at = "@縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲縲・ｽ"
+        race = Race(
+            race_key=RaceKey("2026062005010112"),
+            race_date=datetime.date(2026, 6, 20),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=12,
+            status=RaceStatus.RESULT,
+            grade=None,
+            race_class=mojibake_at,
+        )
+        repo.save_race(race)
+        out = ListRacesUseCase(repo).execute()
+        assert out[0].race_class is None
+
     def test_limit_clamped_to_maximum(self) -> None:
         repo = FakeRaceRepository()
         for d in range(1, 11):

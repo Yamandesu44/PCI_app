@@ -81,6 +81,8 @@ function normalizeRaceClass(value: string | null | undefined): string | null {
   const name = value?.replace(/\s*特別登録$/, "").trim();
   if (!name) return null;
   if (new Set(["@", "＠", "...", "…", "-", "－"]).has(name)) return null;
+  // DB内の固定長パディング残留: "@縲縲縲..." のように先頭が @ の場合もプレースホルダ
+  if (name.startsWith("@") || name.startsWith("＠")) return null;
   return name;
 }
 
