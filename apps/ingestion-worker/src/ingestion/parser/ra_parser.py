@@ -10,6 +10,7 @@ JV-Data 実データ（2026-06-13 函館1R, DataKubun=7 確定）で byte 位置
 byte オフセット（実測確定分）:
   KaisaiNengappi [11:19]  YoubiCD [27:29]  TokuNum [29:33]
   Hondai         [33:93]  （競走名本題 全角30字）
+  JyokenName     [623:683] 競走条件名称（Hondai が空の一般戦名補完に使用）
   Kyori          [697:701] CONFIRMED 2026-06-13 函館1R = 1200
   TrackCD        [705:707] CONFIRMED 実測 '17'=芝内回り
 
@@ -65,6 +66,8 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
 
     # 競走名 本題 [33:93] = 全角30字(60byte)。char スライスはここで破綻するため byte で読む。
     race_name = _normalize_race_name(_bs(raw, 33, 93))
+    # 一般戦では Hondai が "@" になり、条件名だけが入るため補完する。
+    condition_name = _normalize_race_name(_bs(raw, 623, 683))
 
     # 距離 [697:701] — 実測確定（2026-06-13 函館1R = 1200m）
     dist_raw = _bi(raw, 697, 701)
@@ -98,7 +101,7 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
         track_condition=track_condition,
         weather=weather,
         grade=grade,
-        race_class=race_name or None,
+        race_class=race_name or condition_name or None,
         race_s3f=race_s3f,
         race_l3f=race_l3f,
     )

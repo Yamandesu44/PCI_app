@@ -73,13 +73,14 @@ export function raceCondition(race: Pick<RaceSummary, "track_type" | "distance_m
 /** グレード・クラスを一覧用のラベルへ。未設定時は一般戦として扱う。 */
 export function raceClassLabel(race: Pick<RaceSummary, "grade" | "race_class">): string {
   const name = normalizeRaceClass(race.race_class);
-  return name || race.grade || "一般";
+  const grade = normalizeRaceClass(race.grade);
+  return name || grade || "一般";
 }
 
 function normalizeRaceClass(value: string | null | undefined): string | null {
   const name = value?.replace(/\s*特別登録$/, "").trim();
   if (!name) return null;
-  if (name === "@" || name === "..." || name === "-") return null;
+  if (new Set(["@", "＠", "...", "…", "-", "－"]).has(name)) return null;
   return name;
 }
 

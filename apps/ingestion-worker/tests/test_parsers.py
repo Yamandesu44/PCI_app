@@ -47,6 +47,7 @@ def _ra(
     month_day: str = "0618",
     kyori: int = 1600,
     race_name: str = "3歳未勝利",
+    condition_name: str | None = None,
 ) -> str:
     """RA レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
 
@@ -65,6 +66,8 @@ def _ra(
     _put_field(buf, 27, "10")                     # YoubiCD (2byte)
     _put_field(buf, 29, "0000")                   # TokuNum (一般)
     _put_field(buf, 33, race_name)                # Hondai（全角30字まで）
+    if condition_name is not None:
+        _put_field(buf, 623, condition_name)      # JyokenName（競走条件名称）
     _put_field(buf, 697, f"{kyori:04d}")          # Kyori CONFIRMED
     _put_field(buf, 705, "17")                    # TrackCD='17'(芝内回り) CONFIRMED
     return buf.decode("cp932")
@@ -308,6 +311,11 @@ class TestRaParser:
         result = parse_ra(_ra(race_name="@"))
         assert result is not None
         assert result.race_class is None
+
+    def test_condition_name_used_when_hondai_is_placeholder(self) -> None:
+        result = parse_ra(_ra(race_name="@", condition_name="3歳未勝利"))
+        assert result is not None
+        assert result.race_class == "3歳未勝利"
 
     def test_weather_unknown(self) -> None:
         # TenkoCd オフセット未確定のため None を返す

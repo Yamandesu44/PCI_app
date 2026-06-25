@@ -96,7 +96,8 @@ RA_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("SyubetuCD", 617, 2, "code", _T, "競走種別コード"),
     FieldSpec("KigoCD", 619, 3, "code", _T, "競走記号コード"),
     FieldSpec("JyuryoCD", 622, 1, "code", _T, "重量種別コード"),
-    # 623〜696 は JyokenCD 配列 + 競走条件名称(60byte) 等。未マップ（byte ルーラーで調査）。
+    FieldSpec("JyokenName", 623, 60, "text", _T, "競走条件名称（例: 3歳未勝利）。Hondai が空の一般戦名補完に使用"),
+    # 683〜696 は JyokenCD 配列等。未マップ（byte ルーラーで調査）。
     # 実測確定: 2026-06-13 函館1R(JyoCD=02 Kyori=1200 TrackCD=17)
     FieldSpec("Kyori", 697, 4, "num", _C, "距離(m)。実測確定"),
     FieldSpec("TrackCD", 705, 2, "code", _C, "トラックコード(10番台=芝/20番台=ダ)。実測 '17'=芝"),
