@@ -66,10 +66,13 @@ async function loadRaces(): Promise<{ races: RaceSummary[]; error: string | null
   }
 }
 
-async function enrichForecasts(races: RaceSummary[]): Promise<RaceListItem[]> {
+async function enrichForecasts(
+  races: RaceSummary[],
+  shouldFetchForecast: (race: RaceSummary) => boolean,
+): Promise<RaceListItem[]> {
   return Promise.all(
     races.map(async (race) => {
-      if (!isForecastRace(race)) {
+      if (!shouldFetchForecast(race)) {
         return { race, forecast: null };
       }
 
@@ -355,14 +358,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const { races, error } = await loadRaces();
   const sortedRaces = [...races].sort(compareRaceSummary);
-  const items = error ? [] : await enrichForecasts(sortedRaces);
   const weekend = weekendRange();
   const today = todayKey();
-  const dates = raceDates(items.map((item) => item.race));
+  const dates = raceDates(sortedRaces);
   const selectedDate = selectRaceDate(dates, params?.date, weekend);
-  const visibleItems = selectedDate
-    ? items.filter(({ race }) => race.race_date === selectedDate)
-    : items;
+  const visibleRaces = selectedDate
+    ? sortedRaces.filter((race) => race.race_date === selectedDate)
+    : sortedRaces;
+  const visibleItems = error
+    ? []
+    : await enrichForecasts(
+        visibleRaces,
+        (race) => isForecastRace(race) && race.race_date >= today,
+      );
 
   const weekendItems = visibleItems.filter(
     ({ race }) => isForecastRace(race) && isRaceInRange(race, weekend),
