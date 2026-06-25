@@ -58,7 +58,7 @@ interface HomePageProps {
 
 async function loadRaces(): Promise<{ races: RaceSummary[]; error: string | null }> {
   try {
-    return { races: await api.listRaces(100), error: null };
+    return { races: await api.listRaces(1000), error: null };
   } catch (err) {
     const detail =
       err instanceof ApiError ? `APIエラー (${err.status})` : "APIに接続できませんでした";
@@ -114,6 +114,14 @@ function selectRaceDate(dates: string[], requestedDate: string | undefined, week
   const todayKey = new Date().toISOString().slice(0, 10);
   const upcomingDate = dates.find((date) => date >= todayKey);
   return upcomingDate ?? dates.at(-1) ?? null;
+}
+
+function todayKey(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = `${today.getMonth() + 1}`.padStart(2, "0");
+  const date = `${today.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${date}`;
 }
 
 function spotlightClass(tone: RaceSpotlightTone): string {
@@ -349,6 +357,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const sortedRaces = [...races].sort(compareRaceSummary);
   const items = error ? [] : await enrichForecasts(sortedRaces);
   const weekend = weekendRange();
+  const today = todayKey();
   const dates = raceDates(items.map((item) => item.race));
   const selectedDate = selectRaceDate(dates, params?.date, weekend);
   const visibleItems = selectedDate
@@ -361,6 +370,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const upcomingItems = visibleItems.filter(
     ({ race }) =>
       isForecastRace(race) &&
+      race.race_date >= today &&
       !weekendItems.some((item) => item.race.race_key === race.race_key),
   );
   const confirmedItems = visibleItems.filter(({ race }) => statusTone(race.status) === "confirmed");

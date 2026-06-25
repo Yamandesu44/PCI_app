@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/v1/races", tags=["races"])
 
 # レースキーは16桁数字。境界で検証し、不正値は 422 を返す（use case へ到達させない）。
 RaceKeyPath = Annotated[str, Path(pattern=r"^\d{16}$", description="16桁のレースキー")]
-LimitQuery = Annotated[int, Query(ge=1, le=100, description="取得件数の上限")]
+LimitQuery = Annotated[int, Query(ge=1, le=1000, description="取得件数の上限")]
 
 
 @router.get("", response_model=list[RaceSummarySchema])

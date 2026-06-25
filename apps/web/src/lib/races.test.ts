@@ -112,6 +112,7 @@ describe("raceCondition / raceClassLabel", () => {
     expect(raceClassLabel(makeRace({ grade: "G3", race_class: "函館記念 特別登録" }))).toBe("函館記念");
     expect(raceClassLabel(makeRace({ grade: null, race_class: "3勝" }))).toBe("3勝");
     expect(raceClassLabel(makeRace({ grade: null, race_class: null }))).toBe("一般");
+    expect(raceClassLabel(makeRace({ grade: null, race_class: "@" }))).toBe("一般");
   });
 });
 

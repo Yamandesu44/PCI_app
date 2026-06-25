@@ -31,7 +31,7 @@ _PCI3_POSITIONS = (1, 2, 3)
 class ListRacesUseCase:
     """新しい順にレース一覧を取得する（トップ画面のレース選択用）。"""
 
-    _MAX_LIMIT = 100
+    _MAX_LIMIT = 1000
 
     def __init__(self, repo: RaceRepository) -> None:
         self._repo = repo

@@ -118,7 +118,7 @@ class TestListRacesEndpoint:
         assert resp.status_code == 422
 
     def test_limit_over_max_returns_422(self, client: TestClient) -> None:
-        resp = client.get("/api/v1/races?limit=101")
+        resp = client.get("/api/v1/races?limit=1001")
         assert resp.status_code == 422
 
 

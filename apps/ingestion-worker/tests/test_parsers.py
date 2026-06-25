@@ -304,6 +304,11 @@ class TestRaParser:
         assert result is not None
         assert result.track_type == "芝"
 
+    def test_placeholder_race_name_is_ignored(self) -> None:
+        result = parse_ra(_ra(race_name="@"))
+        assert result is not None
+        assert result.race_class is None
+
     def test_weather_unknown(self) -> None:
         # TenkoCd オフセット未確定のため None を返す
         result = parse_ra(_ra())

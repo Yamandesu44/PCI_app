@@ -64,7 +64,7 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
     race_date = parse_race_date(nen, month_day)
 
     # 競走名 本題 [33:93] = 全角30字(60byte)。char スライスはここで破綻するため byte で読む。
-    race_name = _bs(raw, 33, 93)
+    race_name = _normalize_race_name(_bs(raw, 33, 93))
 
     # 距離 [697:701] — 実測確定（2026-06-13 函館1R = 1200m）
     dist_raw = _bi(raw, 697, 701)
@@ -102,3 +102,11 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
         race_s3f=race_s3f,
         race_l3f=race_l3f,
     )
+
+
+def _normalize_race_name(value: str) -> str | None:
+    """JV-Data の空欄・プレースホルダーをレース名として採用しない。"""
+    name = value.strip()
+    if not name or name in {"@", "...", "-"}:
+        return None
+    return name
