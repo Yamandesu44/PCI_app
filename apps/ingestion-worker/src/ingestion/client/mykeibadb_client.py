@@ -234,7 +234,7 @@ class MyKeibaDbClient:
     def _connect(self) -> Any:
         try:
             import pymysql
-            from pymysql.cursors import DictCursor
+            from pymysql.cursors import SSDictCursor
         except ImportError as exc:
             raise RuntimeError(
                 "mykeibadb モードには PyMySQL が必要です。"
@@ -247,7 +247,9 @@ class MyKeibaDbClient:
             password=self._config.password,
             database=self._config.database,
             charset=self._config.charset,
-            cursorclass=DictCursor,
+            # 通常の DictCursor は execute() 時点で全件をクライアントメモリへ読む。
+            # 1年分の mykeibadb では大きすぎるため、サーバーサイドカーソルで逐次読む。
+            cursorclass=SSDictCursor,
         )
 
     def _find_table(self, connection: Any, candidates: tuple[str, ...]) -> str:
