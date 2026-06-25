@@ -27,6 +27,19 @@ from pci.domain.shared.reason import Reason
 
 _PCI3_POSITIONS = (1, 2, 3)
 
+# JV-Data の空欄プレースホルダ。DBに残った旧データを API 出力前に除去する。
+_JV_PLACEHOLDERS: frozenset[str] = frozenset({"@", "＠", "...", "…", "-", "－"})
+
+
+def _clean_race_label(value: str | None) -> str | None:
+    """レース名・グレードの JV-Data プレースホルダを None に正規化する。"""
+    if not value:
+        return None
+    name = value.strip()
+    if not name or name in _JV_PLACEHOLDERS:
+        return None
+    return name
+
 
 class ListRacesUseCase:
     """新しい順にレース一覧を取得する（トップ画面のレース選択用）。"""
@@ -49,8 +62,8 @@ class ListRacesUseCase:
                 track_type=r.track_type,
                 status=str(r.status),
                 field_size=r.field_size,
-                grade=r.grade,
-                race_class=r.race_class,
+                grade=_clean_race_label(r.grade),
+                race_class=_clean_race_label(r.race_class),
             )
             for r in races
         ]
@@ -79,8 +92,8 @@ class GetRaceDetailUseCase:
             field_size=race.field_size,
             track_condition=race.track_condition,
             weather=race.weather,
-            grade=race.grade,
-            race_class=race.race_class,
+            grade=_clean_race_label(race.grade),
+            race_class=_clean_race_label(race.race_class),
             rpci_actual=race.rpci_actual,
             pci3_actual=race.pci3_actual,
             entries=[
