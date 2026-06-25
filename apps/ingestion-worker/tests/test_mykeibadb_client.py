@@ -27,27 +27,27 @@ class _Cursor:
             self._result = [
                 {"Tables_in_mykeibadb": "TOKUBETSU_TOROKUBA"},
                 {"Tables_in_mykeibadb": "TOKUBETSU_TOROKUBAGOTO_JOHO"},
-                {"Tables_in_mykeibadb": "RA"},
-                {"Tables_in_mykeibadb": "SE"},
-                {"Tables_in_mykeibadb": "UM"},
-                {"Tables_in_mykeibadb": "KS"},
-                {"Tables_in_mykeibadb": "CH"},
+                {"Tables_in_mykeibadb": "race_shosai"},
+                {"Tables_in_mykeibadb": "umagoto_race_joho"},
+                {"Tables_in_mykeibadb": "kyosoba_master2"},
+                {"Tables_in_mykeibadb": "kishu_master"},
+                {"Tables_in_mykeibadb": "chokyoshi_master"},
             ]
             return
         table = sql.split("`")[1]
-        if table == "RA":
+        if table == "race_shosai":
             self._result = self._connection.ra
             return
-        if table == "SE":
+        if table == "umagoto_race_joho":
             self._result = self._connection.se
             return
-        if table == "UM":
+        if table == "kyosoba_master2":
             self._result = self._connection.um
             return
-        if table == "KS":
+        if table == "kishu_master":
             self._result = self._connection.ks
             return
-        if table == "CH":
+        if table == "chokyoshi_master":
             self._result = self._connection.ch
             return
         if "TOKUBETSU_TOROKUBAGOTO_JOHO" in sql:

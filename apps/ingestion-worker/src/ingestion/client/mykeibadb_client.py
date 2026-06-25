@@ -17,11 +17,48 @@ _ENTRY_TABLE_CANDIDATES = (
     "TOKUBETSU_TOROKUBAGOTO_JOHO",
     "tokubetsu_torokubagoto_joho",
 )
-_RA_TABLE_CANDIDATES = ("RA", "JV_RA", "JVRA", "RACE", "RACE_DETAIL", "レース詳細")
-_SE_TABLE_CANDIDATES = ("SE", "JV_SE", "JVSE", "UMA_RACE", "HORSE_RACE", "馬毎レース情報")
-_UM_TABLE_CANDIDATES = ("UM", "JV_UM", "JVUM", "HORSE_MASTER", "競走馬マスタ")
-_KS_TABLE_CANDIDATES = ("KS", "JV_KS", "JVKS", "JOCKEY_MASTER", "騎手マスタ")
-_CH_TABLE_CANDIDATES = ("CH", "JV_CH", "JVCH", "TRAINER_MASTER", "調教師マスタ")
+_RA_TABLE_CANDIDATES = (
+    "RA",
+    "JV_RA",
+    "JVRA",
+    "RACE",
+    "RACE_DETAIL",
+    "race_shosai",
+    "レース詳細",
+)
+_SE_TABLE_CANDIDATES = (
+    "SE",
+    "JV_SE",
+    "JVSE",
+    "UMA_RACE",
+    "HORSE_RACE",
+    "umagoto_race_joho",
+    "馬毎レース情報",
+)
+_UM_TABLE_CANDIDATES = (
+    "UM",
+    "JV_UM",
+    "JVUM",
+    "HORSE_MASTER",
+    "kyosoba_master2",
+    "競走馬マスタ",
+)
+_KS_TABLE_CANDIDATES = (
+    "KS",
+    "JV_KS",
+    "JVKS",
+    "JOCKEY_MASTER",
+    "kishu_master",
+    "騎手マスタ",
+)
+_CH_TABLE_CANDIDATES = (
+    "CH",
+    "JV_CH",
+    "JVCH",
+    "TRAINER_MASTER",
+    "chokyoshi_master",
+    "調教師マスタ",
+)
 
 _DEFAULT_EXCLUDED_RACE_KEYS = {
     # 2026/06/28 は TARGET の特別登録上、阪神開催がないため除外する。
@@ -238,6 +275,8 @@ _RACE_DATE_COLUMNS = (
     "race_date",
     "kaisai_date",
     "ymd",
+    "kaisai_nengetsuhi",
+    "kaisai_ymd",
     "年月日",
     "開催年月日",
     "月日",
@@ -245,16 +284,39 @@ _RACE_DATE_COLUMNS = (
     "kaisai_nengappi",
 )
 _RACE_YEAR_COLUMNS = ("year", "nen", "kaisai_nen", "開催年")
-_JYO_COLUMNS = ("jyo_cd", "keibajo_code", "keibajo_cd", "場コード", "競馬場コード", "場所")
+_JYO_COLUMNS = (
+    "jyo_cd",
+    "jyo_code",
+    "keibajo_code",
+    "keibajo_cd",
+    "場コード",
+    "競馬場コード",
+    "場所",
+)
 _JYO_NAME_COLUMNS = ("jyo_name", "keibajo_name", "競馬場", "場所名")
 _KAiji_COLUMNS = ("kaiji", "回次", "開催回")
 _NICHiji_COLUMNS = ("nichiji", "日次", "開催日次")
-_RACE_NO_COLUMNS = ("race_no", "race_bango", "race_num", "レース番号", "r")
-_DISTANCE_COLUMNS = ("distance_m", "kyori", "距離")
+_RACE_NO_COLUMNS = ("race_no", "race_bango", "race_num", "race_number", "レース番号", "r")
+_DISTANCE_COLUMNS = ("distance_m", "kyori", "kyori_m", "距離")
 _TRACK_COLUMNS = ("track_type", "track_code", "track_cd", "トラックコード", "芝ダ")
-_RACE_NAME_COLUMNS = ("race_name", "kyosomei_hondai", "レース名", "競走名", "名称")
+_RACE_NAME_COLUMNS = (
+    "race_name",
+    "kyosomei_hondai",
+    "kyoso_mei_hondai",
+    "hondai",
+    "レース名",
+    "競走名",
+    "名称",
+)
 _GRADE_COLUMNS = ("grade", "grade_code", "グレード", "重賞区分")
-_CONDITION_NAME_COLUMNS = ("condition_name", "jyoken_name", "条件名", "競走条件名称", "クラス")
+_CONDITION_NAME_COLUMNS = (
+    "condition_name",
+    "jyoken_name",
+    "kyoso_joken_name",
+    "条件名",
+    "競走条件名称",
+    "クラス",
+)
 _RAW_RECORD_COLUMNS = ("raw_record", "jv_record", "record", "line", "data", "レコード", "固定長")
 _DATA_KUBUN_COLUMNS = ("data_kubun", "datakubun", "データ区分")
 _RACE_S3F_COLUMNS = ("race_s3f", "haron_s3", "harontimes3", "前半3f", "前3f")
@@ -263,13 +325,19 @@ _RACE_L3F_COLUMNS = ("race_l3f", "haron_l3", "harontimel3", "後半3f", "後3f")
 _ENTRY_RACE_DATE_COLUMNS = _RACE_DATE_COLUMNS
 _FRAME_NO_COLUMNS = ("frame_no", "wakuban", "枠番")
 _ENTRY_HORSE_NO_COLUMNS = ("horse_no", "umaban", "馬番")
-_KETTO_COLUMNS = ("ketto_num", "ketto_toroku_bango", "血統登録番号", "kettobango")
+_KETTO_COLUMNS = (
+    "ketto_num",
+    "ketto_toroku_bango",
+    "ketto_toroku_no",
+    "kettobango",
+    "血統登録番号",
+)
 _HORSE_NAME_COLUMNS = ("horse_name", "bamei", "馬名")
-_SEX_COLUMNS = ("sex", "seibetsu", "性別")
-_BIRTH_YEAR_COLUMNS = ("birth_year", "seinengappi", "birth", "生年", "生年月日")
+_SEX_COLUMNS = ("sex", "seibetsu", "seibetsu_code", "性別")
+_BIRTH_YEAR_COLUMNS = ("birth_year", "seinengappi", "birth", "birth_date", "生年", "生年月日")
 _WEIGHT_COLUMNS = ("weight", "bataijyu", "馬体重")
-_JOCKEY_COLUMNS = ("jockey_code", "kisyu_code", "騎手コード")
-_TRAINER_COLUMNS = ("trainer_code", "chokyoshi_code", "調教師コード")
+_JOCKEY_COLUMNS = ("jockey_code", "kisyu_code", "kishu_code", "騎手コード")
+_TRAINER_COLUMNS = ("trainer_code", "chokyoshi_code", "chokyosi_code", "調教師コード")
 _FINISH_POS_COLUMNS = ("finish_pos", "kakutei_jyuni", "chakujun", "着順", "確定着順")
 _RACE_TIME_COLUMNS = ("race_time_s", "time", "走破タイム", "タイム")
 _AGARI_3F_COLUMNS = ("agari_3f_s", "harontimel3", "上り3f", "上がり3f", "後3f")
@@ -277,8 +345,18 @@ _CORNER_1_COLUMNS = ("corner_1", "jyuni1c", "1角", "第1コーナー")
 _CORNER_2_COLUMNS = ("corner_2", "jyuni2c", "2角", "第2コーナー")
 _CORNER_3_COLUMNS = ("corner_3", "jyuni3c", "3角", "第3コーナー")
 _CORNER_4_COLUMNS = ("corner_4", "jyuni4c", "4角", "第4コーナー")
-_MASTER_CODE_COLUMNS = ("code", "master_code", "騎手コード", "調教師コード")
-_MASTER_NAME_COLUMNS = ("name", "master_name", "氏名", "名前", "騎手名", "調教師名")
+_MASTER_CODE_COLUMNS = ("code", "master_code", "kishu_code", "chokyoshi_code", "騎手コード", "調教師コード")
+_MASTER_NAME_COLUMNS = (
+    "name",
+    "master_name",
+    "kishu_name",
+    "chokyoshi_name",
+    "shimei",
+    "氏名",
+    "名前",
+    "騎手名",
+    "調教師名",
+)
 
 
 def _race_from_row(row: dict[str, Any]) -> RaceEntriesRecord:
