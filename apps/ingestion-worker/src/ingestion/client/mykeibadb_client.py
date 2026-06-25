@@ -64,6 +64,7 @@ _DEFAULT_EXCLUDED_RACE_KEYS = {
     # 2026/06/28 は TARGET の特別登録上、阪神開催がないため除外する。
     "2026062809011111",
 }
+_FETCH_MANY_SIZE = 1000
 
 _PLACE_CODES = {
     "札幌": "01",
@@ -195,7 +196,7 @@ class MyKeibaDbClient:
         """mykeibadb の RA テーブルから指定期間のレース詳細レコードを返す。"""
         connection = self._connection or self._connect()
         table = self._find_table(connection, _RA_TABLE_CANDIDATES)
-        for row in self._fetch_table(connection, table):
+        for row in self._iter_table(connection, table):
             if not _row_in_date_range(row, date_from, date_to):
                 continue
             yield _raw_record(row) or _build_ra_record(row)
@@ -204,7 +205,7 @@ class MyKeibaDbClient:
         """mykeibadb の SE テーブルから指定期間の馬毎レース情報レコードを返す。"""
         connection = self._connection or self._connect()
         table = self._find_table(connection, _SE_TABLE_CANDIDATES)
-        for row in self._fetch_table(connection, table):
+        for row in self._iter_table(connection, table):
             if not _row_in_date_range(row, date_from, date_to):
                 continue
             yield _raw_record(row) or _build_se_record(row)
@@ -213,21 +214,21 @@ class MyKeibaDbClient:
         """mykeibadb の UM テーブルから競走馬マスタレコードを返す。"""
         connection = self._connection or self._connect()
         table = self._find_table(connection, _UM_TABLE_CANDIDATES)
-        for row in self._fetch_table(connection, table):
+        for row in self._iter_table(connection, table):
             yield _raw_record(row) or _build_um_record(row)
 
     def iter_ks_records(self) -> Iterator[str]:
         """mykeibadb の KS テーブルから騎手マスタレコードを返す。"""
         connection = self._connection or self._connect()
         table = self._find_table(connection, _KS_TABLE_CANDIDATES)
-        for row in self._fetch_table(connection, table):
+        for row in self._iter_table(connection, table):
             yield _raw_record(row) or _build_ks_record(row)
 
     def iter_ch_records(self) -> Iterator[str]:
         """mykeibadb の CH テーブルから調教師マスタレコードを返す。"""
         connection = self._connection or self._connect()
         table = self._find_table(connection, _CH_TABLE_CANDIDATES)
-        for row in self._fetch_table(connection, table):
+        for row in self._iter_table(connection, table):
             yield _raw_record(row) or _build_ch_record(row)
 
     def _connect(self) -> Any:
@@ -265,10 +266,21 @@ class MyKeibaDbClient:
         )
 
     def _fetch_table(self, connection: Any, table: str) -> list[dict[str, Any]]:
+        return list(self._iter_table(connection, table))
+
+    def _iter_table(self, connection: Any, table: str) -> Iterator[dict[str, Any]]:
+        """大きなテーブルを一括でメモリに載せず、一定件数ずつ読み出す。"""
         with connection.cursor() as cur:
             cur.execute(f"SELECT * FROM `{table}`")
-            rows: list[dict[str, Any]] = cur.fetchall()
-        return rows
+            fetchmany = getattr(cur, "fetchmany", None)
+            if fetchmany is None:
+                yield from cur.fetchall()
+                return
+            while True:
+                rows = fetchmany(_FETCH_MANY_SIZE)
+                if not rows:
+                    break
+                yield from rows
 
 
 _RACE_DATE_COLUMNS = (

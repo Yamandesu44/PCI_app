@@ -43,6 +43,7 @@ from ingestion.parser.se_parser import (
 )
 
 _log = logging.getLogger(__name__)
+_MASTER_FLUSH_SIZE = 1000
 
 
 def _setup_logging() -> None:
@@ -125,6 +126,9 @@ def ingest_masters(client: JvLinkClient, api: IngestApiClient) -> None:
             parsed = parse_um(rec)
             if parsed:
                 horses.append(parsed)
+                if len(horses) >= _MASTER_FLUSH_SIZE:
+                    api.upsert_horses(horses)
+                    horses.clear()
         except Exception as exc:
             _log.warning("UM パースエラー: %s | レコード先頭: %.40s", exc, rec)
     if horses:
@@ -136,6 +140,9 @@ def ingest_masters(client: JvLinkClient, api: IngestApiClient) -> None:
             parsed = parse_ks(rec)
             if parsed:
                 jockeys.append(parsed)
+                if len(jockeys) >= _MASTER_FLUSH_SIZE:
+                    api.upsert_jockeys(jockeys)
+                    jockeys.clear()
         except Exception as exc:
             _log.warning("KS パースエラー: %s", exc)
     if jockeys:
@@ -147,6 +154,9 @@ def ingest_masters(client: JvLinkClient, api: IngestApiClient) -> None:
             parsed = parse_ch(rec)
             if parsed:
                 trainers.append(parsed)
+                if len(trainers) >= _MASTER_FLUSH_SIZE:
+                    api.upsert_trainers(trainers)
+                    trainers.clear()
         except Exception as exc:
             _log.warning("CH パースエラー: %s", exc)
     if trainers:

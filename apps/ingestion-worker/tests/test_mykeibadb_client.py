@@ -61,6 +61,11 @@ class _Cursor:
     def fetchall(self) -> list[dict[str, Any]]:
         return self._result
 
+    def fetchmany(self, size: int) -> list[dict[str, Any]]:
+        rows = self._result[:size]
+        self._result = self._result[size:]
+        return rows
+
 
 class _Connection:
     ra = [
