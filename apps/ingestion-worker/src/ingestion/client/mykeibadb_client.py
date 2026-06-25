@@ -196,7 +196,7 @@ class MyKeibaDbClient:
         """mykeibadb の RA テーブルから指定期間のレース詳細レコードを返す。"""
         connection = self._connection or self._connect()
         table = self._find_table(connection, _RA_TABLE_CANDIDATES)
-        for row in self._iter_table(connection, table):
+        for row in self._iter_table_by_date_range(connection, table, date_from, date_to):
             if not _row_in_date_range(row, date_from, date_to):
                 continue
             yield _raw_record(row) or _build_ra_record(row)
@@ -205,7 +205,7 @@ class MyKeibaDbClient:
         """mykeibadb の SE テーブルから指定期間の馬毎レース情報レコードを返す。"""
         connection = self._connection or self._connect()
         table = self._find_table(connection, _SE_TABLE_CANDIDATES)
-        for row in self._iter_table(connection, table):
+        for row in self._iter_table_by_date_range(connection, table, date_from, date_to):
             if not _row_in_date_range(row, date_from, date_to):
                 continue
             yield _raw_record(row) or _build_se_record(row)
@@ -274,6 +274,62 @@ class MyKeibaDbClient:
         """大きなテーブルを一括でメモリに載せず、一定件数ずつ読み出す。"""
         with connection.cursor() as cur:
             cur.execute(f"SELECT * FROM `{table}`")
+            fetchmany = getattr(cur, "fetchmany", None)
+            if fetchmany is None:
+                yield from cur.fetchall()
+                return
+            while True:
+                rows = fetchmany(_FETCH_MANY_SIZE)
+                if not rows:
+                    break
+                yield from rows
+
+    def _iter_table_by_date_range(
+        self,
+        connection: Any,
+        table: str,
+        date_from: str,
+        date_to: str,
+    ) -> Iterator[dict[str, Any]]:
+        """開催日列があるテーブルは MySQL 側で対象チャンクだけに絞る。"""
+        if self._table_has_columns(connection, table, ("KAISAI_NEN", "KAISAI_GAPPI")):
+            ymd_expr = "CAST(CONCAT(`KAISAI_NEN`, LPAD(`KAISAI_GAPPI`, 4, '0')) AS UNSIGNED)"
+            yield from self._iter_query(
+                connection,
+                f"SELECT * FROM `{table}` WHERE {ymd_expr} BETWEEN %s AND %s",
+                (int(date_from), int(date_to)),
+            )
+            return
+        if self._table_has_columns(connection, table, ("KAISAI_NENGAPPI",)):
+            yield from self._iter_query(
+                connection,
+                f"SELECT * FROM `{table}` WHERE `KAISAI_NENGAPPI` BETWEEN %s AND %s",
+                (date_from, date_to),
+            )
+            return
+        yield from self._iter_table(connection, table)
+
+    def _table_has_columns(self, connection: Any, table: str, columns: tuple[str, ...]) -> bool:
+        try:
+            with connection.cursor() as cur:
+                cur.execute(f"SHOW COLUMNS FROM `{table}`")
+                rows = cur.fetchall()
+        except Exception:
+            return False
+        existing = {_normalize_name(_first_value(row)) for row in rows}
+        return all(_normalize_name(column) in existing for column in columns)
+
+    def _iter_query(
+        self,
+        connection: Any,
+        sql: str,
+        params: tuple[Any, ...] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        with connection.cursor() as cur:
+            if params is None:
+                cur.execute(sql)
+            else:
+                cur.execute(sql, params)
             fetchmany = getattr(cur, "fetchmany", None)
             if fetchmany is None:
                 yield from cur.fetchall()
