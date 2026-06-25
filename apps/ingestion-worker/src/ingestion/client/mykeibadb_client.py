@@ -286,6 +286,8 @@ class MyKeibaDbClient:
 
 
 _RACE_DATE_COLUMNS = (
+    "KAISAI_NENGAPPI",
+    "KAISAI_GAPPI",
     "race_date",
     "kaisai_date",
     "ymd",
@@ -299,6 +301,7 @@ _RACE_DATE_COLUMNS = (
 )
 _RACE_YEAR_COLUMNS = ("year", "nen", "kaisai_nen", "開催年")
 _JYO_COLUMNS = (
+    "KEIBAJO_CODE",
     "jyo_cd",
     "jyo_code",
     "keibajo_code",
@@ -314,6 +317,8 @@ _RACE_NO_COLUMNS = ("race_no", "race_bango", "race_num", "race_number", "レー�
 _DISTANCE_COLUMNS = ("distance_m", "kyori", "kyori_m", "距離")
 _TRACK_COLUMNS = ("track_type", "track_code", "track_cd", "トラックコード", "芝ダ")
 _RACE_NAME_COLUMNS = (
+    "KYOSOMEI_HONDAI",
+    "KYOSOMEI_RYAKUSHO_10",
     "race_name",
     "kyosomei_hondai",
     "kyoso_mei_hondai",
@@ -324,6 +329,7 @@ _RACE_NAME_COLUMNS = (
 )
 _GRADE_COLUMNS = ("grade", "grade_code", "グレード", "重賞区分")
 _CONDITION_NAME_COLUMNS = (
+    "KYOSO_JOKEN_MEISHO",
     "condition_name",
     "jyoken_name",
     "kyoso_joken_name",
@@ -335,6 +341,18 @@ _RAW_RECORD_COLUMNS = ("raw_record", "jv_record", "record", "line", "data", "レ
 _DATA_KUBUN_COLUMNS = ("data_kubun", "datakubun", "データ区分")
 _RACE_S3F_COLUMNS = ("race_s3f", "haron_s3", "harontimes3", "前半3f", "前3f")
 _RACE_L3F_COLUMNS = ("race_l3f", "haron_l3", "harontimel3", "後半3f", "後3f")
+
+# wmykeibadb が作成する MySQL テーブルは JV-Data の英字列名を大文字で持つ。
+_RACE_YEAR_COLUMNS = ("KAISAI_NEN",) + _RACE_YEAR_COLUMNS
+_KAiji_COLUMNS = ("KAISAI_KAI",) + _KAiji_COLUMNS
+_NICHiji_COLUMNS = ("KAISAI_NICHIME",) + _NICHiji_COLUMNS
+_RACE_NO_COLUMNS = ("RACE_BANGO",) + _RACE_NO_COLUMNS
+_DISTANCE_COLUMNS = ("KYORI",) + _DISTANCE_COLUMNS
+_TRACK_COLUMNS = ("TRACK_CODE",) + _TRACK_COLUMNS
+_GRADE_COLUMNS = ("GRADE_CODE",) + _GRADE_COLUMNS
+_DATA_KUBUN_COLUMNS = ("DATA_KUBUN",) + _DATA_KUBUN_COLUMNS
+_RACE_S3F_COLUMNS = ("ZENHAN_3F",) + _RACE_S3F_COLUMNS
+_RACE_L3F_COLUMNS = ("KOHAN_3F",) + _RACE_L3F_COLUMNS
 
 _ENTRY_RACE_DATE_COLUMNS = _RACE_DATE_COLUMNS
 _FRAME_NO_COLUMNS = ("frame_no", "wakuban", "枠番")
@@ -411,16 +429,16 @@ def _entry_from_row(row: dict[str, Any], horse_no: int) -> EntryRecord:
 def _race_key_from_row(row: dict[str, Any]) -> str:
     date = _date_from_row(row).strftime("%Y%m%d")
     jyo = _jyo_cd_from_row(row)
-    kaiji = (_str_or_none(_pick(row, _KAiji_COLUMNS)) or "01").zfill(2)[-2:]
-    nichiji = (_str_or_none(_pick(row, _NICHiji_COLUMNS)) or "01").zfill(2)[-2:]
-    race_no = (_str_or_none(_pick(row, _RACE_NO_COLUMNS)) or "00").zfill(2)[-2:]
+    kaiji = _code_or_none(_pick(row, _KAiji_COLUMNS), 2) or "01"
+    nichiji = _code_or_none(_pick(row, _NICHiji_COLUMNS), 2) or "01"
+    race_no = _code_or_none(_pick(row, _RACE_NO_COLUMNS), 2) or "00"
     return f"{date}{jyo}{kaiji}{nichiji}{race_no}"
 
 
 def _loose_race_key(row: dict[str, Any]) -> str:
     date = _date_from_row(row).strftime("%Y%m%d")
     jyo = _jyo_cd_from_row(row)
-    race_no = (_str_or_none(_pick(row, _RACE_NO_COLUMNS)) or "00").zfill(2)[-2:]
+    race_no = _code_or_none(_pick(row, _RACE_NO_COLUMNS), 2) or "00"
     return f"{date}{jyo}{race_no}"
 
 
@@ -443,10 +461,11 @@ def _date_from_row(row: dict[str, Any]) -> dt.date:
 
 
 def _jyo_cd_from_row(row: dict[str, Any]) -> str:
-    code = _str_or_none(_pick(row, _JYO_COLUMNS))
-    if code and code.isdigit():
-        return code.zfill(2)[-2:]
-    name = code or _str_or_none(_pick(row, _JYO_NAME_COLUMNS)) or ""
+    raw_code = _pick(row, _JYO_COLUMNS)
+    code = _code_or_none(raw_code, 2)
+    if code:
+        return code
+    name = _str_or_none(raw_code) or _str_or_none(_pick(row, _JYO_NAME_COLUMNS)) or ""
     for jyo_name, jyo_cd in _PLACE_CODES.items():
         if jyo_name in name:
             return jyo_cd
@@ -496,9 +515,9 @@ def _build_ra_record(row: dict[str, Any]) -> str:
     _put_cp932(buf, 3, dt.date.today().strftime("%Y%m%d"))
     _put_cp932(buf, 11, f"{nen}{month_day}")
     _put_cp932(buf, 19, _jyo_cd_from_row(row))
-    _put_cp932(buf, 21, (_str_or_none(_pick(row, _KAiji_COLUMNS)) or "01").zfill(2)[-2:])
-    _put_cp932(buf, 23, (_str_or_none(_pick(row, _NICHiji_COLUMNS)) or "01").zfill(2)[-2:])
-    _put_cp932(buf, 25, (_str_or_none(_pick(row, _RACE_NO_COLUMNS)) or "00").zfill(2)[-2:])
+    _put_cp932(buf, 21, _code_or_none(_pick(row, _KAiji_COLUMNS), 2) or "01")
+    _put_cp932(buf, 23, _code_or_none(_pick(row, _NICHiji_COLUMNS), 2) or "01")
+    _put_cp932(buf, 25, _code_or_none(_pick(row, _RACE_NO_COLUMNS), 2) or "00")
     _put_cp932(buf, 27, "00")
     _put_cp932(buf, 29, "0000")
     _put_cp932(buf, 33, race_name, 60)
@@ -527,9 +546,9 @@ def _build_se_record(row: dict[str, Any]) -> str:
     _put_cp932(buf, 3, dt.date.today().strftime("%Y%m%d"))
     _put_cp932(buf, 11, f"{nen}{month_day}")
     _put_cp932(buf, 19, _jyo_cd_from_row(row))
-    _put_cp932(buf, 21, (_str_or_none(_pick(row, _KAiji_COLUMNS)) or "01").zfill(2)[-2:])
-    _put_cp932(buf, 23, (_str_or_none(_pick(row, _NICHiji_COLUMNS)) or "01").zfill(2)[-2:])
-    _put_cp932(buf, 25, (_str_or_none(_pick(row, _RACE_NO_COLUMNS)) or "00").zfill(2)[-2:])
+    _put_cp932(buf, 21, _code_or_none(_pick(row, _KAiji_COLUMNS), 2) or "01")
+    _put_cp932(buf, 23, _code_or_none(_pick(row, _NICHiji_COLUMNS), 2) or "01")
+    _put_cp932(buf, 25, _code_or_none(_pick(row, _RACE_NO_COLUMNS), 2) or "00")
     _put_cp932(buf, 27, str(_int_or_none(_pick(row, _FRAME_NO_COLUMNS)) or 0)[-1:])
     _put_cp932(buf, 28, f"{(_int_or_none(_pick(row, _ENTRY_HORSE_NO_COLUMNS)) or 0):02d}"[-2:])
     _put_cp932(buf, 30, (_str_or_none(_pick(row, _KETTO_COLUMNS)) or "").zfill(10)[-10:])
@@ -678,6 +697,26 @@ def _str_or_none(value: Any) -> str | None:
         return None
     s = str(value).strip()
     return s or None
+
+
+def _code_or_none(value: Any, width: int) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return f"{value:0{width}d}"[-width:]
+    if isinstance(value, float) and value.is_integer():
+        return f"{int(value):0{width}d}"[-width:]
+    s = _str_or_none(value)
+    if not s:
+        return None
+    try:
+        as_float = float(s.replace(",", ""))
+    except ValueError:
+        as_float = None
+    if as_float is not None and as_float.is_integer():
+        return f"{int(as_float):0{width}d}"[-width:]
+    digits = "".join(ch for ch in s if ch.isdigit())
+    return digits.zfill(width)[-width:] if digits else None
 
 
 def _int_or_none(value: Any) -> int | None:

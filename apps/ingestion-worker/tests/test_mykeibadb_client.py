@@ -9,6 +9,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ingestion.client.mykeibadb_client import MyKeibaDbClient
+from ingestion.parser.ra_parser import parse_ra
 
 
 class _Cursor:
@@ -213,6 +214,35 @@ def test_iter_ra_records_builds_jv_record_from_mysql_row() -> None:
     assert len(records) == 1
     assert records[0].startswith("RA")
     assert "3歳未勝利" in records[0]
+
+
+def test_iter_ra_records_accepts_wmykeibadb_race_shosai_columns() -> None:
+    class _WMyKeibaDbConnection(_Connection):
+        ra = [
+            {
+                "DATA_KUBUN": "7",
+                "KAISAI_NEN": 2026,
+                "KAISAI_GAPPI": "0621",
+                "KEIBAJO_CODE": 5,
+                "KAISAI_KAI": 3,
+                "KAISAI_NICHIME": 4,
+                "RACE_BANGO": 11,
+                "KYOSOMEI_HONDAI": "@",
+                "KYOSO_JOKEN_MEISHO": "3歳未勝利",
+                "KYORI": 1600,
+                "TRACK_CODE": 17,
+                "ZENHAN_3F": 35.2,
+                "KOHAN_3F": 35.8,
+            }
+        ]
+
+    client = MyKeibaDbClient(connection=_WMyKeibaDbConnection())
+
+    records = list(client.iter_ra_records("20260621", "20260621"))
+    parsed = parse_ra(records[0])
+
+    assert parsed.race_key == "2026062105030411"
+    assert parsed.distance_m == 1600
 
 
 def test_iter_se_records_builds_result_record_from_mysql_row() -> None:
