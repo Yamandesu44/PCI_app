@@ -63,6 +63,10 @@ def _build_client(mode: str, race_option: int = 1) -> JvLinkClient:
         if not sid:
             raise RuntimeError("JV_LINK_SID 環境変数が未設定です。.env に追記してください。")
         return WindowsJvLinkClient(sid=sid, race_option=race_option)
+    if mode == "mykeibadb":
+        from ingestion.client.mykeibadb_client import MyKeibaDbClient
+
+        return MyKeibaDbClient()
     raise ValueError(f"未知のモード: {mode!r}。'fixture' または 'jvlink' を指定してください。")
 
 
@@ -319,7 +323,7 @@ def main() -> None:
         default="fixture",
         help=(
             "データソース（fixture=開発用JSON / jvlink=本番Windows COM / "
-            "mykeibadb=MySQL特別登録）"
+            "mykeibadb=mykeibadb MySQL）"
         ),
     )
     parser.add_argument(
@@ -377,14 +381,11 @@ def main() -> None:
 
     try:
         if args.mode == "mykeibadb":
-            if args.step not in ("all", "special-entries"):
-                raise RuntimeError(
-                    "mykeibadb モードでは --step special-entries を指定してください。"
-                )
-            _log.info("--- mykeibadb 特別登録取り込み ---")
-            ingest_mykeibadb_special_entries(api, date_from, date_to)
-            _log.info("=== ingestion-worker 完了 ===")
-            return
+            if args.step == "special-entries":
+                _log.info("--- mykeibadb 特別登録取り込み ---")
+                ingest_mykeibadb_special_entries(api, date_from, date_to)
+                _log.info("=== ingestion-worker 完了 ===")
+                return
 
         client = _build_client(args.mode, race_option=args.race_option)
 

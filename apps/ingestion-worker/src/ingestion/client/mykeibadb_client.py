@@ -1,20 +1,27 @@
-"""mykeibadb MySQL から特別登録データを読むクライアント。"""
+"""mykeibadb MySQL から JRA-VAN データを読むクライアント。"""
 
 from __future__ import annotations
 
 import datetime as dt
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
 from ingestion.models import EntryRecord, HorseRecord, RaceEntriesRecord
+from ingestion.parser.jv_spec import RA_RECORD_BYTES, SE_RECORD_BYTES
 
 _RACE_TABLE_CANDIDATES = ("TOKUBETSU_TOROKUBA", "tokubetsu_torokuba")
 _ENTRY_TABLE_CANDIDATES = (
     "TOKUBETSU_TOROKUBAGOTO_JOHO",
     "tokubetsu_torokubagoto_joho",
 )
+_RA_TABLE_CANDIDATES = ("RA", "JV_RA", "JVRA", "RACE", "RACE_DETAIL", "レース詳細")
+_SE_TABLE_CANDIDATES = ("SE", "JV_SE", "JVSE", "UMA_RACE", "HORSE_RACE", "馬毎レース情報")
+_UM_TABLE_CANDIDATES = ("UM", "JV_UM", "JVUM", "HORSE_MASTER", "競走馬マスタ")
+_KS_TABLE_CANDIDATES = ("KS", "JV_KS", "JVKS", "JOCKEY_MASTER", "騎手マスタ")
+_CH_TABLE_CANDIDATES = ("CH", "JV_CH", "JVCH", "TRAINER_MASTER", "調教師マスタ")
 
 _DEFAULT_EXCLUDED_RACE_KEYS = {
     # 2026/06/28 は TARGET の特別登録上、阪神開催がないため除外する。
@@ -81,7 +88,12 @@ class MyKeibaDbConfig:
 
 
 class MyKeibaDbClient:
-    """mykeibadb の特別登録テーブルを PCI_app の取り込みモデルへ変換する。"""
+    """mykeibadb の MySQL テーブルを PCI_app の取り込みモデルへ変換する。
+
+    wmykeibadb の出力は環境により「固定長レコードそのもの」または
+    「列分解済みテーブル」になり得るため、raw レコード列があればそのまま返し、
+    なければ既存の JV-Data パーサが読める固定長レコードを合成する。
+    """
 
     def __init__(
         self,
@@ -141,6 +153,45 @@ class MyKeibaDbClient:
             sex = _str_or_none(_pick(row, _SEX_COLUMNS))
             horses[ketto] = HorseRecord(ketto_num=ketto.zfill(10), name=name, sex=sex)
         return list(horses.values())
+
+    def iter_ra_records(self, date_from: str, date_to: str) -> Iterator[str]:
+        """mykeibadb の RA テーブルから指定期間のレース詳細レコードを返す。"""
+        connection = self._connection or self._connect()
+        table = self._find_table(connection, _RA_TABLE_CANDIDATES)
+        for row in self._fetch_table(connection, table):
+            if not _row_in_date_range(row, date_from, date_to):
+                continue
+            yield _raw_record(row) or _build_ra_record(row)
+
+    def iter_se_records(self, date_from: str, date_to: str) -> Iterator[str]:
+        """mykeibadb の SE テーブルから指定期間の馬毎レース情報レコードを返す。"""
+        connection = self._connection or self._connect()
+        table = self._find_table(connection, _SE_TABLE_CANDIDATES)
+        for row in self._fetch_table(connection, table):
+            if not _row_in_date_range(row, date_from, date_to):
+                continue
+            yield _raw_record(row) or _build_se_record(row)
+
+    def iter_um_records(self) -> Iterator[str]:
+        """mykeibadb の UM テーブルから競走馬マスタレコードを返す。"""
+        connection = self._connection or self._connect()
+        table = self._find_table(connection, _UM_TABLE_CANDIDATES)
+        for row in self._fetch_table(connection, table):
+            yield _raw_record(row) or _build_um_record(row)
+
+    def iter_ks_records(self) -> Iterator[str]:
+        """mykeibadb の KS テーブルから騎手マスタレコードを返す。"""
+        connection = self._connection or self._connect()
+        table = self._find_table(connection, _KS_TABLE_CANDIDATES)
+        for row in self._fetch_table(connection, table):
+            yield _raw_record(row) or _build_ks_record(row)
+
+    def iter_ch_records(self) -> Iterator[str]:
+        """mykeibadb の CH テーブルから調教師マスタレコードを返す。"""
+        connection = self._connection or self._connect()
+        table = self._find_table(connection, _CH_TABLE_CANDIDATES)
+        for row in self._fetch_table(connection, table):
+            yield _raw_record(row) or _build_ch_record(row)
 
     def _connect(self) -> Any:
         try:
@@ -203,13 +254,31 @@ _DISTANCE_COLUMNS = ("distance_m", "kyori", "距離")
 _TRACK_COLUMNS = ("track_type", "track_code", "track_cd", "トラックコード", "芝ダ")
 _RACE_NAME_COLUMNS = ("race_name", "kyosomei_hondai", "レース名", "競走名", "名称")
 _GRADE_COLUMNS = ("grade", "grade_code", "グレード", "重賞区分")
+_CONDITION_NAME_COLUMNS = ("condition_name", "jyoken_name", "条件名", "競走条件名称", "クラス")
+_RAW_RECORD_COLUMNS = ("raw_record", "jv_record", "record", "line", "data", "レコード", "固定長")
+_DATA_KUBUN_COLUMNS = ("data_kubun", "datakubun", "データ区分")
+_RACE_S3F_COLUMNS = ("race_s3f", "haron_s3", "harontimes3", "前半3f", "前3f")
+_RACE_L3F_COLUMNS = ("race_l3f", "haron_l3", "harontimel3", "後半3f", "後3f")
 
 _ENTRY_RACE_DATE_COLUMNS = _RACE_DATE_COLUMNS
+_FRAME_NO_COLUMNS = ("frame_no", "wakuban", "枠番")
 _ENTRY_HORSE_NO_COLUMNS = ("horse_no", "umaban", "馬番")
 _KETTO_COLUMNS = ("ketto_num", "ketto_toroku_bango", "血統登録番号", "kettobango")
 _HORSE_NAME_COLUMNS = ("horse_name", "bamei", "馬名")
 _SEX_COLUMNS = ("sex", "seibetsu", "性別")
+_BIRTH_YEAR_COLUMNS = ("birth_year", "seinengappi", "birth", "生年", "生年月日")
+_WEIGHT_COLUMNS = ("weight", "bataijyu", "馬体重")
+_JOCKEY_COLUMNS = ("jockey_code", "kisyu_code", "騎手コード")
 _TRAINER_COLUMNS = ("trainer_code", "chokyoshi_code", "調教師コード")
+_FINISH_POS_COLUMNS = ("finish_pos", "kakutei_jyuni", "chakujun", "着順", "確定着順")
+_RACE_TIME_COLUMNS = ("race_time_s", "time", "走破タイム", "タイム")
+_AGARI_3F_COLUMNS = ("agari_3f_s", "harontimel3", "上り3f", "上がり3f", "後3f")
+_CORNER_1_COLUMNS = ("corner_1", "jyuni1c", "1角", "第1コーナー")
+_CORNER_2_COLUMNS = ("corner_2", "jyuni2c", "2角", "第2コーナー")
+_CORNER_3_COLUMNS = ("corner_3", "jyuni3c", "3角", "第3コーナー")
+_CORNER_4_COLUMNS = ("corner_4", "jyuni4c", "4角", "第4コーナー")
+_MASTER_CODE_COLUMNS = ("code", "master_code", "騎手コード", "調教師コード")
+_MASTER_NAME_COLUMNS = ("name", "master_name", "氏名", "名前", "騎手名", "調教師名")
 
 
 def _race_from_row(row: dict[str, Any]) -> RaceEntriesRecord:
@@ -297,6 +366,199 @@ def _track_type(value: Any) -> str:
     return _TRACK_TYPES.get(s, _TRACK_TYPES.get(s[:1], s or "芝"))
 
 
+def _track_code(value: Any) -> str:
+    track_type = _track_type(value)
+    if track_type == "ダート":
+        return "24"
+    if track_type == "障害":
+        return "30"
+    return "17"
+
+
+def _row_in_date_range(row: dict[str, Any], date_from: str, date_to: str) -> bool:
+    try:
+        ymd = _date_from_row(row).strftime("%Y%m%d")
+    except RuntimeError:
+        return True
+    return date_from <= ymd <= date_to
+
+
+def _raw_record(row: dict[str, Any]) -> str | None:
+    raw = _str_or_none(_pick(row, _RAW_RECORD_COLUMNS))
+    if not raw:
+        return None
+    return raw.rstrip("\r\n")
+
+
+def _build_ra_record(row: dict[str, Any]) -> str:
+    race_date = _date_from_row(row)
+    nen = f"{race_date.year:04d}"
+    month_day = f"{race_date.month:02d}{race_date.day:02d}"
+    data_kubun = (_str_or_none(_pick(row, _DATA_KUBUN_COLUMNS)) or "1")[:1]
+    race_name = _str_or_none(_pick(row, _RACE_NAME_COLUMNS)) or "@"
+    condition_name = _str_or_none(_pick(row, _CONDITION_NAME_COLUMNS)) or ""
+
+    buf = bytearray(b" " * RA_RECORD_BYTES)
+    _put_cp932(buf, 0, "RA")
+    _put_cp932(buf, 2, data_kubun)
+    _put_cp932(buf, 3, dt.date.today().strftime("%Y%m%d"))
+    _put_cp932(buf, 11, f"{nen}{month_day}")
+    _put_cp932(buf, 19, _jyo_cd_from_row(row))
+    _put_cp932(buf, 21, (_str_or_none(_pick(row, _KAiji_COLUMNS)) or "01").zfill(2)[-2:])
+    _put_cp932(buf, 23, (_str_or_none(_pick(row, _NICHiji_COLUMNS)) or "01").zfill(2)[-2:])
+    _put_cp932(buf, 25, (_str_or_none(_pick(row, _RACE_NO_COLUMNS)) or "00").zfill(2)[-2:])
+    _put_cp932(buf, 27, "00")
+    _put_cp932(buf, 29, "0000")
+    _put_cp932(buf, 33, race_name, 60)
+    _put_cp932(buf, 623, condition_name, 60)
+    _put_cp932(buf, 697, f"{(_int_or_none(_pick(row, _DISTANCE_COLUMNS)) or 0):04d}")
+    _put_cp932(buf, 705, _track_code(_pick(row, _TRACK_COLUMNS)))
+    _put_tenths(buf, 969, _float_or_none(_pick(row, _RACE_S3F_COLUMNS)))
+    _put_tenths(buf, 975, _float_or_none(_pick(row, _RACE_L3F_COLUMNS)))
+    return buf.decode("cp932")
+
+
+def _build_se_record(row: dict[str, Any]) -> str:
+    race_date = _date_from_row(row)
+    nen = f"{race_date.year:04d}"
+    month_day = f"{race_date.month:02d}{race_date.day:02d}"
+    finish_pos = _int_or_none(_pick(row, _FINISH_POS_COLUMNS))
+    race_time = _race_time_to_mssf(_pick(row, _RACE_TIME_COLUMNS))
+    agari = _float_or_none(_pick(row, _AGARI_3F_COLUMNS))
+    data_kubun = _str_or_none(_pick(row, _DATA_KUBUN_COLUMNS))
+    if not data_kubun:
+        data_kubun = "7" if finish_pos and race_time and agari else "1"
+
+    buf = bytearray(b" " * SE_RECORD_BYTES)
+    _put_cp932(buf, 0, "SE")
+    _put_cp932(buf, 2, data_kubun[:1])
+    _put_cp932(buf, 3, dt.date.today().strftime("%Y%m%d"))
+    _put_cp932(buf, 11, f"{nen}{month_day}")
+    _put_cp932(buf, 19, _jyo_cd_from_row(row))
+    _put_cp932(buf, 21, (_str_or_none(_pick(row, _KAiji_COLUMNS)) or "01").zfill(2)[-2:])
+    _put_cp932(buf, 23, (_str_or_none(_pick(row, _NICHiji_COLUMNS)) or "01").zfill(2)[-2:])
+    _put_cp932(buf, 25, (_str_or_none(_pick(row, _RACE_NO_COLUMNS)) or "00").zfill(2)[-2:])
+    _put_cp932(buf, 27, str(_int_or_none(_pick(row, _FRAME_NO_COLUMNS)) or 0)[-1:])
+    _put_cp932(buf, 28, f"{(_int_or_none(_pick(row, _ENTRY_HORSE_NO_COLUMNS)) or 0):02d}"[-2:])
+    _put_cp932(buf, 30, (_str_or_none(_pick(row, _KETTO_COLUMNS)) or "").zfill(10)[-10:])
+    _put_cp932(buf, 40, _str_or_none(_pick(row, _HORSE_NAME_COLUMNS)) or "", 36)
+    _put_cp932(buf, 78, _sex_code(_pick(row, _SEX_COLUMNS)))
+    _put_cp932(buf, 85, (_str_or_none(_pick(row, _TRAINER_COLUMNS)) or "").zfill(5)[-5:])
+    _put_cp932(buf, 296, (_str_or_none(_pick(row, _JOCKEY_COLUMNS)) or "").zfill(5)[-5:])
+    _put_cp932(buf, 324, f"{(_int_or_none(_pick(row, _WEIGHT_COLUMNS)) or 0):03d}"[-3:])
+    if finish_pos:
+        _put_cp932(buf, 334, f"{finish_pos:02d}"[-2:])
+    if race_time:
+        _put_cp932(buf, 338, race_time)
+    _put_corner(buf, 356, _int_or_none(_pick(row, _CORNER_1_COLUMNS)))
+    _put_corner(buf, 358, _int_or_none(_pick(row, _CORNER_2_COLUMNS)))
+    _put_corner(buf, 360, _int_or_none(_pick(row, _CORNER_3_COLUMNS)))
+    _put_corner(buf, 362, _int_or_none(_pick(row, _CORNER_4_COLUMNS)))
+    _put_tenths(buf, 390, agari)
+    return buf.decode("cp932")
+
+
+def _build_um_record(row: dict[str, Any]) -> str:
+    buf = bytearray(b" " * 200)
+    _put_cp932(buf, 0, "UM")
+    _put_cp932(buf, 2, (_str_or_none(_pick(row, _DATA_KUBUN_COLUMNS)) or "1")[:1])
+    _put_cp932(buf, 3, dt.date.today().strftime("%Y%m%d"))
+    _put_cp932(buf, 12, (_str_or_none(_pick(row, _KETTO_COLUMNS)) or "").zfill(10)[-10:])
+    birth_year = _int_or_none(_pick(row, _BIRTH_YEAR_COLUMNS)) or 0
+    if birth_year > 10000:
+        birth_year = int(str(birth_year)[:4])
+    _put_cp932(buf, 38, f"{birth_year:04d}0101" if birth_year else "00000000")
+    _put_cp932(buf, 46, _str_or_none(_pick(row, _HORSE_NAME_COLUMNS)) or "", 36)
+    _put_cp932(buf, 182, _sex_code(_pick(row, _SEX_COLUMNS)))
+    return buf.decode("cp932")
+
+
+def _build_ks_record(row: dict[str, Any]) -> str:
+    return _build_person_record(
+        row,
+        "KS",
+        ("jockey_code", "kisyu_code", "騎手コード"),
+        ("jockey_name", "kisyu_name", "騎手名"),
+    )
+
+
+def _build_ch_record(row: dict[str, Any]) -> str:
+    return _build_person_record(
+        row,
+        "CH",
+        ("trainer_code", "chokyoshi_code", "調教師コード"),
+        ("trainer_name", "chokyoshi_name", "調教師名"),
+    )
+
+
+def _build_person_record(
+    row: dict[str, Any],
+    spec: str,
+    code_columns: tuple[str, ...],
+    name_columns: tuple[str, ...],
+) -> str:
+    buf = bytearray(b" " * 100)
+    _put_cp932(buf, 0, spec)
+    _put_cp932(buf, 2, (_str_or_none(_pick(row, _DATA_KUBUN_COLUMNS)) or "1")[:1])
+    _put_cp932(buf, 3, dt.date.today().strftime("%Y%m%d"))
+    code = _str_or_none(_pick(row, code_columns + _MASTER_CODE_COLUMNS)) or ""
+    name = _str_or_none(_pick(row, name_columns + _MASTER_NAME_COLUMNS)) or code
+    _put_cp932(buf, 11, code.zfill(5)[-5:])
+    _put_cp932(buf, 41, name[:17])
+    return buf.decode("cp932")
+
+
+def _put_cp932(buf: bytearray, offset: int, value: str, length: int | None = None) -> None:
+    raw = value.encode("cp932", errors="replace")
+    if length is not None:
+        raw = raw[:length].ljust(length, b" ")
+    end = offset + len(raw)
+    buf[offset:end] = raw
+
+
+def _put_tenths(buf: bytearray, offset: int, value: float | None) -> None:
+    if value is None:
+        return
+    _put_cp932(buf, offset, f"{round(value * 10):03d}"[-3:])
+
+
+def _put_corner(buf: bytearray, offset: int, value: int | None) -> None:
+    if value is None:
+        return
+    _put_cp932(buf, offset, f"{value:02d}"[-2:])
+
+
+def _sex_code(value: Any) -> str:
+    sex = _str_or_none(value) or ""
+    if sex in {"1", "牡"}:
+        return "1"
+    if sex in {"2", "牝"}:
+        return "2"
+    if sex in {"3", "騸", "セ"}:
+        return "3"
+    return ""
+
+
+def _race_time_to_mssf(value: Any) -> str | None:
+    s = _str_or_none(value)
+    if not s:
+        return None
+    if ":" in s:
+        minute, rest = s.split(":", 1)
+        sec = float(rest)
+        return f"{int(minute)}{int(sec):02d}{round((sec - int(sec)) * 10)}"
+    digits = "".join(ch for ch in s if ch.isdigit())
+    if len(digits) == 4 and float(s) >= 1000:
+        return digits
+    seconds = _float_or_none(value)
+    if seconds is None:
+        return None
+    minute = int(seconds // 60)
+    sec = int(seconds % 60)
+    tenth = round((seconds - int(seconds)) * 10)
+    return f"{minute}{sec:02d}{tenth}"
+
+
 def _pick(row: dict[str, Any], candidates: tuple[str, ...]) -> Any:
     normalized = {_normalize_name(k): v for k, v in row.items()}
     for candidate in candidates:
@@ -332,3 +594,13 @@ def _int_or_none(value: Any) -> int | None:
         return None
     digits = "".join(ch for ch in s if ch.isdigit())
     return int(digits) if digits else None
+
+
+def _float_or_none(value: Any) -> float | None:
+    s = _str_or_none(value)
+    if not s:
+        return None
+    try:
+        return float(s.replace(",", ""))
+    except ValueError:
+        return None

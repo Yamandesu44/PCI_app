@@ -27,7 +27,28 @@ class _Cursor:
             self._result = [
                 {"Tables_in_mykeibadb": "TOKUBETSU_TOROKUBA"},
                 {"Tables_in_mykeibadb": "TOKUBETSU_TOROKUBAGOTO_JOHO"},
+                {"Tables_in_mykeibadb": "RA"},
+                {"Tables_in_mykeibadb": "SE"},
+                {"Tables_in_mykeibadb": "UM"},
+                {"Tables_in_mykeibadb": "KS"},
+                {"Tables_in_mykeibadb": "CH"},
             ]
+            return
+        table = sql.split("`")[1]
+        if table == "RA":
+            self._result = self._connection.ra
+            return
+        if table == "SE":
+            self._result = self._connection.se
+            return
+        if table == "UM":
+            self._result = self._connection.um
+            return
+        if table == "KS":
+            self._result = self._connection.ks
+            return
+        if table == "CH":
+            self._result = self._connection.ch
             return
         if "TOKUBETSU_TOROKUBAGOTO_JOHO" in sql:
             self._result = self._connection.entries
@@ -42,6 +63,48 @@ class _Cursor:
 
 
 class _Connection:
+    ra = [
+        {
+            "開催年月日": "20260621",
+            "競馬場コード": "09",
+            "開催回": "01",
+            "開催日次": "03",
+            "レース番号": "11",
+            "距離": "1600",
+            "芝ダ": "芝",
+            "レース名": "@",
+            "競走条件名称": "3歳未勝利",
+            "前半3F": "35.2",
+            "後半3F": "35.8",
+        }
+    ]
+    se = [
+        {
+            "開催年月日": "20260621",
+            "競馬場コード": "09",
+            "開催回": "01",
+            "開催日次": "03",
+            "レース番号": "11",
+            "枠番": "1",
+            "馬番": "1",
+            "血統登録番号": "2021100001",
+            "馬名": "テストホース",
+            "性別": "牡",
+            "調教師コード": "01001",
+            "騎手コード": "02001",
+            "馬体重": "480",
+            "着順": "1",
+            "タイム": "94.4",
+            "上がり3F": "34.5",
+            "1角": "2",
+            "2角": "2",
+            "3角": "2",
+            "4角": "2",
+        }
+    ]
+    um = [{"血統登録番号": "2021100001", "馬名": "テストホース", "性別": "牡", "生年": "2021"}]
+    ks = [{"騎手コード": "02001", "騎手名": "テスト騎手"}]
+    ch = [{"調教師コード": "01001", "調教師名": "テスト調教師"}]
     races = [
         {
             "開催年月日": "20260628",
@@ -135,3 +198,31 @@ def test_fetch_special_entries_excludes_known_stale_hanshin_race() -> None:
     client = MyKeibaDbClient(connection=_StaleConnection())
 
     assert client.fetch_special_entries("20260627", "20260628") == []
+
+
+def test_iter_ra_records_builds_jv_record_from_mysql_row() -> None:
+    client = MyKeibaDbClient(connection=_Connection())
+
+    records = list(client.iter_ra_records("20260621", "20260621"))
+
+    assert len(records) == 1
+    assert records[0].startswith("RA")
+    assert "3歳未勝利" in records[0]
+
+
+def test_iter_se_records_builds_result_record_from_mysql_row() -> None:
+    client = MyKeibaDbClient(connection=_Connection())
+
+    records = list(client.iter_se_records("20260621", "20260621"))
+
+    assert len(records) == 1
+    assert records[0].startswith("SE7")
+    assert "テストホース" in records[0]
+
+
+def test_iter_master_records_build_from_mysql_rows() -> None:
+    client = MyKeibaDbClient(connection=_Connection())
+
+    assert "テストホース" in next(client.iter_um_records())
+    assert "テスト騎手" in next(client.iter_ks_records())
+    assert "テスト調教師" in next(client.iter_ch_records())
