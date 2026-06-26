@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ingestion.client.mykeibadb_client import MyKeibaDbClient
 from ingestion.parser.ra_parser import parse_ra
+from ingestion.parser.se_parser import parse_se_entry, parse_se_result
 
 
 class _Cursor:
@@ -253,6 +254,71 @@ def test_iter_se_records_builds_result_record_from_mysql_row() -> None:
     assert len(records) == 1
     assert records[0].startswith("SE7")
     assert "テストホース" in records[0]
+
+
+def test_iter_se_records_parses_results_from_wmykeibadb_columns() -> None:
+    """実 mykeibadb の大文字ローマ字列（SOHA_TIME 等）から確定成績がパースできる。
+
+    回帰: 列名が候補リストと一致せず agari/time/着順が空欄になり、
+    parse_se_result が全件 None を返して成績0件になっていた問題を防ぐ。
+    """
+
+    class _WMyKeibaDbConnection(_Connection):
+        se = [
+            {
+                "DATA_KUBUN": "7",
+                "KAISAI_NEN": "2026",
+                "KAISAI_GAPPI": "0621",
+                "KEIBAJO_CODE": "09",
+                "KAISAI_KAIJI": "01",
+                "KAISAI_NICHIJI": "03",
+                "RACE_BANGO": "11",
+                "WAKUBAN": "1",
+                "UMABAN": "01",
+                "KETTO_TOROKU_BANGO": "2021100001",
+                "BAMEI": "テストホース",
+                "SEIBETSU_CODE": "1",
+                "CHOKYOSHI_CODE": "01001",
+                "KISHU_CODE": "02001",
+                "BATAIJU": "480",
+                "KAKUTEI_CHAKUJUN": "01",
+                "SOHA_TIME": "1344",  # 1:34.4
+                "KOHAN_3F": "345",    # 34.5秒（1/10秒の生値）
+                "CORNER1_JUNI": "02",
+                "CORNER2_JUNI": "02",
+                "CORNER3_JUNI": "03",
+                "CORNER4_JUNI": "02",
+            }
+        ]
+
+    client = MyKeibaDbClient(connection=_WMyKeibaDbConnection())
+    record = next(client.iter_se_records("20260621", "20260621"))
+
+    # 出走表（枠番・馬番・血統・馬体重）
+    entry = parse_se_entry(record)
+    assert entry is not None
+    assert entry.horse_no == 1
+    assert entry.frame_no == 1
+    assert entry.ketto_num == "2021100001"
+    assert entry.weight == 480.0
+
+    # 確定成績（着順・タイム・上り3F・コーナー通過順位）
+    result = parse_se_result(record)
+    assert result is not None
+    assert result.finish_pos == 1
+    assert result.race_time_s == 94.4
+    assert result.agari_3f_s == 34.5
+    assert result.corner_4 == 2
+
+
+def test_race_time_mssf_handles_sub_minute_time() -> None:
+    """SOHA_TIME '0594'（0:59.4）が MSSf として正しく扱われる。"""
+    from ingestion.client.mykeibadb_client import _race_time_to_mssf
+
+    assert _race_time_to_mssf("0594") == "0594"
+    assert _race_time_to_mssf("1344") == "1344"
+    # 秒・小数表記は従来どおり MSSf へ変換する。
+    assert _race_time_to_mssf("94.4") == "1344"
 
 
 def test_iter_master_records_build_from_mysql_rows() -> None:

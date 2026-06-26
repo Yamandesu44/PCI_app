@@ -423,17 +423,36 @@ _KETTO_COLUMNS = (
 _HORSE_NAME_COLUMNS = ("horse_name", "bamei", "馬名")
 _SEX_COLUMNS = ("sex", "seibetsu", "seibetsu_code", "性別")
 _BIRTH_YEAR_COLUMNS = ("birth_year", "seinengappi", "birth", "birth_date", "生年", "生年月日")
-_WEIGHT_COLUMNS = ("weight", "bataijyu", "馬体重")
+# wmykeibadb の umagoto_race_joho は成績列を JV-Data 英字名（大文字）で持つ。
+# _normalize_name で小文字化されるため、実列名を各候補へ追加する。
+_WEIGHT_COLUMNS = ("BATAIJU", "weight", "bataijyu", "馬体重")
 _JOCKEY_COLUMNS = ("jockey_code", "kisyu_code", "kishu_code", "騎手コード")
 _TRAINER_COLUMNS = ("trainer_code", "chokyoshi_code", "chokyosi_code", "調教師コード")
-_FINISH_POS_COLUMNS = ("finish_pos", "kakutei_jyuni", "chakujun", "着順", "確定着順")
-_RACE_TIME_COLUMNS = ("race_time_s", "time", "走破タイム", "タイム")
+_FINISH_POS_COLUMNS = (
+    "KAKUTEI_CHAKUJUN",
+    "finish_pos",
+    "kakutei_jyuni",
+    "chakujun",
+    "着順",
+    "確定着順",
+)
+_RACE_TIME_COLUMNS = ("SOHA_TIME", "race_time_s", "time", "走破タイム", "タイム")
+# 秒単位の上り3F列（"34.5"=34.5秒）。_put_tenths で 1/10 秒へ変換する。
 _AGARI_3F_COLUMNS = ("agari_3f_s", "harontimel3", "上り3f", "上がり3f", "後3f")
-_CORNER_1_COLUMNS = ("corner_1", "jyuni1c", "1角", "第1コーナー")
-_CORNER_2_COLUMNS = ("corner_2", "jyuni2c", "2角", "第2コーナー")
-_CORNER_3_COLUMNS = ("corner_3", "jyuni3c", "3角", "第3コーナー")
-_CORNER_4_COLUMNS = ("corner_4", "jyuni4c", "4角", "第4コーナー")
-_MASTER_CODE_COLUMNS = ("code", "master_code", "kishu_code", "chokyoshi_code", "騎手コード", "調教師コード")
+# 生値の上り3F列（KOHAN_3F は 1/10 秒単位の3桁 "345"=34.5秒）。出力と同形式のため直接書く。
+_AGARI_3F_RAW_COLUMNS = ("KOHAN_3F", "kohan_3f")
+_CORNER_1_COLUMNS = ("CORNER1_JUNI", "corner_1", "jyuni1c", "1角", "第1コーナー")
+_CORNER_2_COLUMNS = ("CORNER2_JUNI", "corner_2", "jyuni2c", "2角", "第2コーナー")
+_CORNER_3_COLUMNS = ("CORNER3_JUNI", "corner_3", "jyuni3c", "3角", "第3コーナー")
+_CORNER_4_COLUMNS = ("CORNER4_JUNI", "corner_4", "jyuni4c", "4角", "第4コーナー")
+_MASTER_CODE_COLUMNS = (
+    "code",
+    "master_code",
+    "kishu_code",
+    "chokyoshi_code",
+    "騎手コード",
+    "調教師コード",
+)
 _MASTER_NAME_COLUMNS = (
     "name",
     "master_name",
@@ -591,10 +610,13 @@ def _build_se_record(row: dict[str, Any]) -> str:
     month_day = f"{race_date.month:02d}{race_date.day:02d}"
     finish_pos = _int_or_none(_pick(row, _FINISH_POS_COLUMNS))
     race_time = _race_time_to_mssf(_pick(row, _RACE_TIME_COLUMNS))
-    agari = _float_or_none(_pick(row, _AGARI_3F_COLUMNS))
+    # 上り3F は2系統: KOHAN_3F(1/10秒の生値) と "上がり3F"(秒)。前者を優先する。
+    agari_raw = _str_or_none(_pick(row, _AGARI_3F_RAW_COLUMNS))
+    agari_seconds = _float_or_none(_pick(row, _AGARI_3F_COLUMNS))
+    has_agari = bool(agari_raw and agari_raw.isdigit()) or bool(agari_seconds)
     data_kubun = _str_or_none(_pick(row, _DATA_KUBUN_COLUMNS))
     if not data_kubun:
-        data_kubun = "7" if finish_pos and race_time and agari else "1"
+        data_kubun = "7" if finish_pos and race_time and has_agari else "1"
 
     buf = bytearray(b" " * SE_RECORD_BYTES)
     _put_cp932(buf, 0, "SE")
@@ -621,7 +643,11 @@ def _build_se_record(row: dict[str, Any]) -> str:
     _put_corner(buf, 358, _int_or_none(_pick(row, _CORNER_2_COLUMNS)))
     _put_corner(buf, 360, _int_or_none(_pick(row, _CORNER_3_COLUMNS)))
     _put_corner(buf, 362, _int_or_none(_pick(row, _CORNER_4_COLUMNS)))
-    _put_tenths(buf, 390, agari)
+    # KOHAN_3F(1/10秒3桁)は出力[390:393]と同形式のため直接書く。秒単位列は _put_tenths で変換。
+    if agari_raw and agari_raw.isdigit():
+        _put_cp932(buf, 390, agari_raw.zfill(3)[-3:])
+    else:
+        _put_tenths(buf, 390, agari_seconds)
     return buf.decode("cp932")
 
 
@@ -715,7 +741,9 @@ def _race_time_to_mssf(value: Any) -> str | None:
         sec = float(rest)
         return f"{int(minute)}{int(sec):02d}{round((sec - int(sec)) * 10)}"
     digits = "".join(ch for ch in s if ch.isdigit())
-    if len(digits) == 4 and float(s) >= 1000:
+    # SOHA_TIME(char4)は MSSf 形式（分1+秒2+1/10秒1）。小数を含まない4桁はそのまま返す。
+    # "0594"(0:59.4)のように分が0でも MSSf として扱う（>=1000 判定では取りこぼすため）。
+    if "." not in s and len(digits) == 4 and digits != "0000":
         return digits
     seconds = _float_or_none(value)
     if seconds is None:
