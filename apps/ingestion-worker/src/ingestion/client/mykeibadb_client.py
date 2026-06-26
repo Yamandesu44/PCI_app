@@ -398,10 +398,13 @@ _DATA_KUBUN_COLUMNS = ("data_kubun", "datakubun", "データ区分")
 _RACE_S3F_COLUMNS = ("race_s3f", "haron_s3", "harontimes3", "前半3f", "前3f")
 _RACE_L3F_COLUMNS = ("race_l3f", "haron_l3", "harontimel3", "後半3f", "後3f")
 
-# wmykeibadb が作成する MySQL テーブルは JV-Data の英字列名を大文字で持つ。
+# wmykeibadb が作成する MySQL テーブルは JV-Data の英字列名（大文字）で列を持つ。
+# race_shosai: KAISAI_KAI / KAISAI_NICHIME
+# umagoto_race_joho: KAISAI_KAIJI / KAISAI_NICHIJI（末尾 I が余分に付く）
+# → 両方を候補に入れることで共通の _build_xx_record / _race_key_from_row が使える。
 _RACE_YEAR_COLUMNS = ("KAISAI_NEN",) + _RACE_YEAR_COLUMNS
-_KAiji_COLUMNS = ("KAISAI_KAI",) + _KAiji_COLUMNS
-_NICHiji_COLUMNS = ("KAISAI_NICHIME",) + _NICHiji_COLUMNS
+_KAiji_COLUMNS = ("KAISAI_KAI", "KAISAI_KAIJI") + _KAiji_COLUMNS
+_NICHiji_COLUMNS = ("KAISAI_NICHIME", "KAISAI_NICHIJI") + _NICHiji_COLUMNS
 _RACE_NO_COLUMNS = ("RACE_BANGO",) + _RACE_NO_COLUMNS
 _DISTANCE_COLUMNS = ("KYORI",) + _DISTANCE_COLUMNS
 _TRACK_COLUMNS = ("TRACK_CODE",) + _TRACK_COLUMNS
@@ -502,6 +505,11 @@ def _entry_from_row(row: dict[str, Any], horse_no: int) -> EntryRecord:
 
 
 def _race_key_from_row(row: dict[str, Any]) -> str:
+    # umagoto_race_joho の RACE_CODE (char16) はレースキーそのもの。
+    # 列があれば部品組み立てより正確なためこちらを優先する。
+    race_code = _str_or_none(_pick(row, ("RACE_CODE",)))
+    if race_code and len(race_code) == 16 and race_code.isdigit():
+        return race_code
     date = _date_from_row(row).strftime("%Y%m%d")
     jyo = _jyo_cd_from_row(row)
     kaiji = _code_or_none(_pick(row, _KAiji_COLUMNS), 2) or "01"
@@ -618,14 +626,24 @@ def _build_se_record(row: dict[str, Any]) -> str:
     if not data_kubun:
         data_kubun = "7" if finish_pos and race_time and has_agari else "1"
 
+    # RACE_CODE (16桁) からレース識別子を直接取り出す。
+    # kaiji/nichiji の列名が KAISAI_KAIJI のように変形していても正確に書ける。
+    race_code = _str_or_none(_pick(row, ("RACE_CODE",)))
+    if race_code and len(race_code) == 16 and race_code.isdigit():
+        kaiji_str = race_code[10:12]
+        nichiji_str = race_code[12:14]
+    else:
+        kaiji_str = _code_or_none(_pick(row, _KAiji_COLUMNS), 2) or "01"
+        nichiji_str = _code_or_none(_pick(row, _NICHiji_COLUMNS), 2) or "01"
+
     buf = bytearray(b" " * SE_RECORD_BYTES)
     _put_cp932(buf, 0, "SE")
     _put_cp932(buf, 2, data_kubun[:1])
     _put_cp932(buf, 3, dt.date.today().strftime("%Y%m%d"))
     _put_cp932(buf, 11, f"{nen}{month_day}")
     _put_cp932(buf, 19, _jyo_cd_from_row(row))
-    _put_cp932(buf, 21, _code_or_none(_pick(row, _KAiji_COLUMNS), 2) or "01")
-    _put_cp932(buf, 23, _code_or_none(_pick(row, _NICHiji_COLUMNS), 2) or "01")
+    _put_cp932(buf, 21, kaiji_str)
+    _put_cp932(buf, 23, nichiji_str)
     _put_cp932(buf, 25, _code_or_none(_pick(row, _RACE_NO_COLUMNS), 2) or "00")
     _put_cp932(buf, 27, str(_int_or_none(_pick(row, _FRAME_NO_COLUMNS)) or 0)[-1:])
     _put_cp932(buf, 28, f"{(_int_or_none(_pick(row, _ENTRY_HORSE_NO_COLUMNS)) or 0):02d}"[-2:])

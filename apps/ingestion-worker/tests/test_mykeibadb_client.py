@@ -311,6 +311,53 @@ def test_iter_se_records_parses_results_from_wmykeibadb_columns() -> None:
     assert result.corner_4 == 2
 
 
+def test_iter_se_records_uses_race_code_for_kaiji_nichiji() -> None:
+    """RACE_CODE (16桁) から kaiji/nichiji を取り出し、正しい race_key が合成される。
+
+    回帰: KAISAI_KAIJI/KAISAI_NICHIJI 列が候補リストに無く kaiji/nichiji が "01"
+    に固定され、PostgreSQL の race_key と一致しなくなる問題を防ぐ。
+    """
+    from ingestion.parser.se_parser import parse_race_key_from_se
+
+    class _RaceCodeConnection(_Connection):
+        se = [
+            {
+                "DATA_KUBUN": "7",
+                # RACE_CODE が 16桁の場合、kaiji=03/nichiji=02 を正確に取れる
+                "RACE_CODE": "2025072707030205",
+                "KAISAI_NEN": "2025",
+                "KAISAI_GAPPI": "0727",
+                "KEIBAJO_CODE": "07",
+                # KAISAI_KAIJI / KAISAI_NICHIJI（候補リスト外の列名）
+                "KAISAI_KAIJI": "03",
+                "KAISAI_NICHIJI": "02",
+                "RACE_BANGO": "05",
+                "WAKUBAN": "1",
+                "UMABAN": "01",
+                "KETTO_TOROKU_BANGO": "2021100001",
+                "BAMEI": "テストホース",
+                "SEIBETSU_CODE": "1",
+                "CHOKYOSHI_CODE": "01001",
+                "KISHU_CODE": "02001",
+                "BATAIJU": "480",
+                "KAKUTEI_CHAKUJUN": "01",
+                "SOHA_TIME": "1344",
+                "KOHAN_3F": "345",
+                "CORNER1_JUNI": "02",
+                "CORNER2_JUNI": "02",
+                "CORNER3_JUNI": "03",
+                "CORNER4_JUNI": "02",
+            }
+        ]
+
+    client = MyKeibaDbClient(connection=_RaceCodeConnection())
+    record = next(client.iter_se_records("20250727", "20250727"))
+
+    # RACE_CODE から kaiji=03, nichiji=02 が正しく反映されること
+    race_key = parse_race_key_from_se(record)
+    assert race_key == "2025072707030205", f"想定外の race_key: {race_key}"
+
+
 def test_race_time_mssf_handles_sub_minute_time() -> None:
     """SOHA_TIME '0594'（0:59.4）が MSSf として正しく扱われる。"""
     from ingestion.client.mykeibadb_client import _race_time_to_mssf
