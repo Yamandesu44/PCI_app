@@ -137,7 +137,7 @@ class TestForecastRaceUseCase:
         output = ForecastRaceUseCase(repo).execute(UPCOMING)
 
         assert output.race_key == UPCOMING
-        assert output.model_version == "rule-v2"
+        assert output.model_version == "rule-v3"
         assert 35.0 <= output.predicted_rpci <= 65.0
         assert output.pace_label in ("ハイ", "平均", "スロー")
         assert output.scenario_headline
@@ -228,7 +228,7 @@ class TestForecastRaceUseCase:
 
         ForecastRaceUseCase(repo, mart_repo=mart_repo).execute(UPCOMING)
 
-        assert (UPCOMING, "rule-v2") in mart_repo.predicted_pace
+        assert (UPCOMING, "rule-v3") in mart_repo.predicted_pace
         assert len(mart_repo.pace_fit) == 4
         assert all(key[2] == "pai-v1" for key in mart_repo.pace_fit)
 

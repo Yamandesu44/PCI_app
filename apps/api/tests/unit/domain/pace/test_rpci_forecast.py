@@ -53,8 +53,12 @@ class TestRuleBasedForecast:
         assert result.value > DEFAULT_WEIGHTS.slow_threshold
 
     def test_balanced_field_gives_average(self) -> None:
+        # 芝補正(+3.5)込みで均衡するフィールド: 逃げ2・先行4・差追4
+        # escape_pressure=-0.8 が turf_base_adjust の excess を打ち消し平均域に収まる
         forecaster = RuleBasedRpciForecaster()
-        result = forecaster.forecast(_ctx((FRONT,) * 5 + (STALKER,) * 5))
+        result = forecaster.forecast(
+            _ctx((ESCAPE,) * 2 + (FRONT,) * 4 + (STALKER,) * 2 + (CLOSER,) * 2)
+        )
         assert result.label == PaceLabel.AVERAGE
 
     def test_multiple_escape_lowers_rpci(self) -> None:
@@ -82,24 +86,53 @@ class TestRuleBasedForecast:
         result = forecaster.forecast(_ctx((FRONT,) * 10, cond="重"))
         assert any(r.code == "track_condition" for r in result.reasons)
 
-    def test_model_version_is_rule_v2(self) -> None:
+    def test_model_version_is_rule_v3(self) -> None:
         result = RuleBasedRpciForecaster().forecast(_ctx((FRONT,) * 10))
-        assert result.model_version == "rule-v2"
+        assert result.model_version == "rule-v3"
 
     def test_empty_field_raises(self) -> None:
         with pytest.raises(ValueError, match="脚質情報がありません"):
             RuleBasedRpciForecaster().forecast(_ctx(()))
 
     def test_custom_weights_applied(self) -> None:
-        weak = RuleWeights(style_balance_weight=0.0, escape_pressure_weight=0.0)
+        # 全補正を無効化 → 距離基準のみ（1800m pivot で base=50）
+        weak = RuleWeights(
+            style_balance_weight=0.0,
+            escape_pressure_weight=0.0,
+            turf_base_adjust=0.0,
+            dirt_base_adjust=0.0,
+        )
         forecaster = RuleBasedRpciForecaster(weak)
-        # バランス無効化 → 距離基準のみ（1800m pivot で base=50）
         result = forecaster.forecast(_ctx((CLOSER,) * 10, distance_m=1800))
         assert result.value == pytest.approx(50.0, abs=0.05)
 
     def test_satisfies_protocol(self) -> None:
         forecaster: RpciForecaster = RuleBasedRpciForecaster()
         assert forecaster.forecast(_ctx((FRONT,) * 10)) is not None
+
+    def test_turf_higher_rpci_than_dirt(self) -> None:
+        """芝はダートより基準 RPCI が高い（実績平均: 芝 53 / ダート 43）。"""
+        styles = (FRONT,) * 5 + (STALKER,) * 5
+        forecaster = RuleBasedRpciForecaster()
+        turf = forecaster.forecast(
+            RaceContext(distance_m=1600, track_type="芝", running_styles=styles)
+        )
+        dirt = forecaster.forecast(
+            RaceContext(distance_m=1600, track_type="ダート", running_styles=styles)
+        )
+        assert turf.value > dirt.value
+
+    def test_track_type_base_reason_added(self) -> None:
+        """コース種別補正の reason が付与される（芝・ダート両方）。"""
+        styles = (FRONT,) * 5 + (STALKER,) * 5
+        forecaster = RuleBasedRpciForecaster()
+        for tt in ("芝", "ダート"):
+            result = forecaster.forecast(
+                RaceContext(distance_m=1600, track_type=tt, running_styles=styles)
+            )
+            assert any(r.code == "track_type_base" for r in result.reasons), (
+                f"{tt} で track_type_base reason が見つかりません"
+            )
 
 
 class TestFrontPaceEvidence:
@@ -125,7 +158,8 @@ class TestFrontPaceEvidence:
         forecaster = RuleBasedRpciForecaster()
         styles = (ESCAPE,) + (STALKER,) * 9
         base = forecaster.forecast(_ctx(styles))
-        slow = forecaster.forecast(_ctx(styles, front_pace_samples=(self._sample(58.0),)))
+        # 芝補正後の structural (~59.6) より明らかに高い値を evidence にする
+        slow = forecaster.forecast(_ctx(styles, front_pace_samples=(self._sample(65.0),)))
         assert slow.value > base.value
         assert any(r.code == "front_pace_evidence" for r in slow.reasons)
 

@@ -30,7 +30,7 @@ from typing import Protocol
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "rule-v2"
+MODEL_VERSION = "rule-v3"
 
 
 class PaceLabel(StrEnum):
@@ -97,6 +97,10 @@ class RuleWeights:
     distance_slope_per_200m: float = 0.25
     style_balance_weight: float = 8.0
     escape_pressure_weight: float = 0.8
+    # コース種別基準ペース補正（rule-v3: 実績 rpci_actual 平均から較正）
+    # 芝: 実績平均 53.1 / ダート: 実績平均 43.0（DB 2022〜2026 約 15,440 レース集計）
+    turf_base_adjust: float = 3.5
+    dirt_base_adjust: float = -7.0
     # 馬場補正（道悪は前傾化しやすい傾向の暫定値。検証で調整）
     track_good_adjust: float = 0.0
     track_slightly_heavy_adjust: float = -0.3
@@ -153,16 +157,35 @@ class RuleBasedRpciForecaster:
         reasons: list[Reason] = []
 
         # 1. 距離基準ペース
-        base = w.base_rpci + ((context.distance_m - w.distance_pivot_m) / 200.0) * (
-            w.distance_slope_per_200m
+        dist_adj = (
+            (context.distance_m - w.distance_pivot_m) / 200.0 * w.distance_slope_per_200m
         )
+        base = w.base_rpci + dist_adj
         reasons.append(
             Reason(
                 code="distance_base",
                 description=f"距離{context.distance_m}m の基準ペース → RPCI基準 {base:.2f}",
-                contribution=round(base - w.base_rpci, 2),
+                contribution=round(dist_adj, 2),
             )
         )
+
+        # 1b. コース種別基準補正（rule-v3: 芝/ダートで実績 RPCI 平均が大きく異なる）
+        track_type_adj = (
+            w.turf_base_adjust if context.track_type == "芝"
+            else w.dirt_base_adjust if context.track_type == "ダート"
+            else 0.0
+        )
+        if track_type_adj != 0.0:
+            reasons.append(
+                Reason(
+                    code="track_type_base",
+                    description=(
+                        f"コース「{context.track_type}」基準補正 {track_type_adj:+.2f}"
+                    ),
+                    contribution=round(track_type_adj, 2),
+                )
+            )
+        base += track_type_adj
 
         # 2. 脚質構成バランス
         front = sum(1 for s in styles if s in _FRONT_STYLES)
