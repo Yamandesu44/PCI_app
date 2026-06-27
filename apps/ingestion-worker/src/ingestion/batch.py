@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime
 import logging
 import os
@@ -189,6 +190,8 @@ def ingest_entries(
     # SE エントリを RA に紐付け
     # SE から馬マスタを補完するため horse_supplement を収集
     horse_supplements: list[HorseRecord] = []
+    # UMABAN=0（特別登録前段階・番号未確定）のとき ketto_num → 連番を管理する。
+    race_ketto_to_no: dict[str, dict[str, int]] = {}
 
     for rec in client.iter_se_records(date_from, date_to):
         try:
@@ -201,6 +204,14 @@ def ingest_entries(
             if race_key not in races:
                 _log.debug("SE に対応する RA がありません: %s", race_key)
                 continue
+
+            # UMABAN=0 は特別登録段階で馬番未確定。ketto_num で重複排除し連番を付与する。
+            # 抽選済み（DATA_KUBUN='2'）の UMABAN 実値を上書きしないよう 0 のときだけ適用。
+            if entry.horse_no == 0 and entry.ketto_num:
+                ketto_map = race_ketto_to_no.setdefault(race_key, {})
+                if entry.ketto_num not in ketto_map:
+                    ketto_map[entry.ketto_num] = len(ketto_map) + 1
+                entry = dataclasses.replace(entry, horse_no=ketto_map[entry.ketto_num])
 
             # 同一馬番の重複を後勝ちで排除する。出走前('1'/'2')→確定('7')の順で
             # 両方届く場合（フィクスチャや週跨ぎ取得）、確定レコードは実馬体重を
