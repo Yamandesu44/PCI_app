@@ -93,6 +93,7 @@ class ForecastRaceUseCase:
             track_type=race.track_type,
             running_styles=tuple(p.running_style for p in profiles),
             track_condition=race.track_condition,
+            venue_code=race.jyo_cd,
             front_pace_samples=tuple(front_pace_samples),
         )
         forecast = self._forecaster.forecast(context)
