@@ -10,9 +10,18 @@ pci.application.backtest に集約。本スクリプトは DB 配線と対象選
     python -m scripts.backtest_forecast --date-from 2024-01-01 --date-to 2024-12-31
     python -m scripts.backtest_forecast --limit 2000 --sample-every 5
 
+    # 外れ値を除いた正常 rpci_actual のみで評価（データ品質診断後に使用）
+    python -m scripts.backtest_forecast --limit 200 --rpci-min 20 --rpci-max 90
+
 対象は status="result" かつ rpci_actual を持つレース。1レースの予測は
 数百クエリを伴うため、既定は新しい順 200 レースに絞る（--limit で調整）。
 lookahead は backtest 側でレース当日カットオフして防止する。
+
+rpci_actual の有効範囲について:
+    予測器の出力は [35, 65] にクランプされる。しかし取り込みバグや S3F/L3F
+    バイト位置の誤読により rpci_actual に数百〜数千の異常値が混入する場合がある。
+    --rpci-min / --rpci-max でこれらを除外すると、正常データでの精度が得られる。
+    異常値の割合は scripts/diagnose_rpci.py で確認できる。
 """
 
 from __future__ import annotations
@@ -49,6 +58,18 @@ def _parse_args() -> argparse.Namespace:
         default=1,
         help="新しい順に N 件ごとに1件サンプリング（期間全体へ薄く広げる）",
     )
+    p.add_argument(
+        "--rpci-min",
+        type=float,
+        default=None,
+        help="rpci_actual の下限フィルター（異常値除外用。例: 20）",
+    )
+    p.add_argument(
+        "--rpci-max",
+        type=float,
+        default=None,
+        help="rpci_actual の上限フィルター（異常値除外用。例: 90）",
+    )
     return p.parse_args()
 
 
@@ -61,6 +82,10 @@ def _select_targets(session, args: argparse.Namespace) -> list[Race]:
         stmt = stmt.where(RaceModel.race_date >= args.date_from)
     if args.date_to is not None:
         stmt = stmt.where(RaceModel.race_date <= args.date_to)
+    if args.rpci_min is not None:
+        stmt = stmt.where(RaceModel.rpci_actual >= args.rpci_min)
+    if args.rpci_max is not None:
+        stmt = stmt.where(RaceModel.rpci_actual <= args.rpci_max)
     stmt = stmt.order_by(RaceModel.race_date.desc(), RaceModel.race_key.desc())
 
     keys = list(session.scalars(stmt).all())
@@ -83,7 +108,12 @@ def main() -> None:
     if not targets:
         print("対象レースがありません（status=result かつ rpci_actual を持つレース）。")
         return
-    print(f"対象 {len(targets)} レースでバックテストを実行します…\n")
+    filter_note = ""
+    if args.rpci_min is not None or args.rpci_max is not None:
+        lo = args.rpci_min or "-∞"
+        hi = args.rpci_max or "+∞"
+        filter_note = f" （rpci_actual フィルター: {lo}〜{hi}）"
+    print(f"対象 {len(targets)} レースでバックテストを実行します{filter_note}…\n")
 
     repo = SqlAlchemyRaceRepository(session)
     report = ForecastBacktester(repo).run(targets)
