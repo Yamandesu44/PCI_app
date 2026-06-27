@@ -1,7 +1,7 @@
 """想定RPCI 予測モジュール（本プロダクトの中核機能・ADR-0005）。
 
 戦略インターフェース `RpciForecaster` を定義し、MVP ではルールベース実装
-`RuleBasedRpciForecaster`（model_version = "rule-v2"）を提供する。
+`RuleBasedRpciForecaster`（model_version = "rule-v4"）を提供する。
 将来の LightGBM 実装は同一インターフェースを満たすことで差し替え可能。
 
 想定RPCI の方向性（pci.py と統一）:
@@ -9,7 +9,7 @@
     RPCI < high_threshold : ハイ（前傾ラップ → 逃げ・先行有利）
     その間               : 平均
 
-ルール要因（rule-v2・すべて reasons に出力）:
+ルール要因（rule-v4・すべて reasons に出力）:
     1. 距離基準ペース      : 長距離ほど緩む傾向（RPCI高）
     2. 脚質構成バランス    : 差し追込比率が高い→スロー / 逃げ先行比率が高い→ハイ
     3. 逃げ馬頭数の競合    : 逃げ不在→スロー / 逃げ複数→先行争いでハイ
@@ -19,6 +19,8 @@
        を作ったかを集計し、頭数ベースの 1〜3 を実データで補正する。
        これにより「単騎で緩める逃げ馬」と「ハナを切ると毎回飛ばす逃げ馬」を区別する。
        履歴が無ければ自動的に 1〜4 のみ（rule-v1 相当）へフォールバックする。
+    rule-v3: コース種別基準 RPCI 補正（芝+5.0 / ダート-9.75）を追加。
+    rule-v4: ダートの展開3分類閾値を実績分布に合わせて個別設定（ハイ<40/スロー>46）。
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ from typing import Protocol
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "rule-v3"
+MODEL_VERSION = "rule-v4"
 
 
 class PaceLabel(StrEnum):
@@ -97,18 +99,22 @@ class RuleWeights:
     distance_slope_per_200m: float = 0.25
     style_balance_weight: float = 8.0
     escape_pressure_weight: float = 0.8
-    # コース種別基準ペース補正（rule-v3: 実績 rpci_actual 平均から較正）
+    # コース種別基準ペース補正（rule-v3〜: 実績 rpci_actual 平均から較正）
     # 芝: 実績平均 53.1 / ダート: 実績平均 43.0（DB 2022〜2026 約 15,440 レース集計）
-    turf_base_adjust: float = 3.5
-    dirt_base_adjust: float = -7.0
+    turf_base_adjust: float = 5.0
+    dirt_base_adjust: float = -9.75
     # 馬場補正（道悪は前傾化しやすい傾向の暫定値。検証で調整）
     track_good_adjust: float = 0.0
     track_slightly_heavy_adjust: float = -0.3
     track_heavy_adjust: float = -0.5
     track_bad_adjust: float = -0.8
-    # 展開3分類の閾値
+    # 展開3分類の閾値（芝）
     high_threshold: float = 49.0
     slow_threshold: float = 51.0
+    # 展開3分類の閾値（ダート・rule-v4）
+    # 芝平均 53.1 と異なりダート平均 43.0 → ハイ中心のため専用閾値で3分類を均等化
+    dirt_high_threshold: float = 40.0
+    dirt_slow_threshold: float = 46.0
     # RPCI の現実的なクランプ範囲（安全弁）
     rpci_min: float = 35.0
     rpci_max: float = 65.0
@@ -125,15 +131,26 @@ _FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
 _CLOSER_STYLES = (RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER)
 
 
-def classify_pace(rpci: float, weights: RuleWeights = DEFAULT_WEIGHTS) -> PaceLabel:
+def classify_pace(
+    rpci: float,
+    track_type: str = "芝",
+    weights: RuleWeights = DEFAULT_WEIGHTS,
+) -> PaceLabel:
     """RPCI 値を展開3分類へ写す（予測・実績で共通利用する唯一の判定）。
 
     実績RPCI を同じ閾値でラベル化することで、バックテストが予測ラベルと
     実績ラベルを公平に比較できる（rpci_forecast がラベル判定の真実の場所）。
+
+    rule-v4: ダートは実績分布（平均 43.0）が芝（53.1）と大きく異なるため、
+    コース種別別の閾値を使用する。
     """
-    if rpci < weights.high_threshold:
+    if track_type == "ダート":
+        hi, sl = weights.dirt_high_threshold, weights.dirt_slow_threshold
+    else:
+        hi, sl = weights.high_threshold, weights.slow_threshold
+    if rpci < hi:
         return PaceLabel.HIGH
-    if rpci > weights.slow_threshold:
+    if rpci > sl:
         return PaceLabel.SLOW
     return PaceLabel.AVERAGE
 
@@ -253,7 +270,7 @@ class RuleBasedRpciForecaster:
         raw = blended + track_adjust
         rpci = round(min(max(raw, w.rpci_min), w.rpci_max), 1)
 
-        label = self._classify(rpci)
+        label = self._classify(rpci, context.track_type)
         confidence = self._confidence(balance, escape_pressure, evidence_samples)
         reasons.append(
             Reason(
@@ -279,8 +296,8 @@ class RuleBasedRpciForecaster:
             "不良": w.track_bad_adjust,
         }.get(condition or "良", 0.0)
 
-    def _classify(self, rpci: float) -> PaceLabel:
-        return classify_pace(rpci, self._w)
+    def _classify(self, rpci: float, track_type: str = "芝") -> PaceLabel:
+        return classify_pace(rpci, track_type, self._w)
 
     def _confidence(
         self, balance: float, escape_pressure: float, evidence_samples: int = 0

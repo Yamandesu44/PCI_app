@@ -14,6 +14,7 @@ from pci.domain.pace.rpci_forecast import (
     RpciForecaster,
     RuleBasedRpciForecaster,
     RuleWeights,
+    classify_pace,
 )
 from pci.domain.pace.running_style import RunningStyleLabel
 
@@ -53,11 +54,11 @@ class TestRuleBasedForecast:
         assert result.value > DEFAULT_WEIGHTS.slow_threshold
 
     def test_balanced_field_gives_average(self) -> None:
-        # 芝補正(+3.5)込みで均衡するフィールド: 逃げ2・先行4・差追4
-        # escape_pressure=-0.8 が turf_base_adjust の excess を打ち消し平均域に収まる
+        # 芝補正(+5.0)込みで均衡するフィールド:
+        # base=54.75, balance=-3.2, escape_pressure=-0.8 → structural=50.75 (平均域)
         forecaster = RuleBasedRpciForecaster()
         result = forecaster.forecast(
-            _ctx((ESCAPE,) * 2 + (FRONT,) * 4 + (STALKER,) * 2 + (CLOSER,) * 2)
+            _ctx((ESCAPE,) * 2 + (FRONT,) * 5 + (STALKER,) * 2 + (CLOSER,) * 1)
         )
         assert result.label == PaceLabel.AVERAGE
 
@@ -86,9 +87,9 @@ class TestRuleBasedForecast:
         result = forecaster.forecast(_ctx((FRONT,) * 10, cond="重"))
         assert any(r.code == "track_condition" for r in result.reasons)
 
-    def test_model_version_is_rule_v3(self) -> None:
+    def test_model_version_is_rule_v4(self) -> None:
         result = RuleBasedRpciForecaster().forecast(_ctx((FRONT,) * 10))
-        assert result.model_version == "rule-v3"
+        assert result.model_version == "rule-v4"
 
     def test_empty_field_raises(self) -> None:
         with pytest.raises(ValueError, match="脚質情報がありません"):
@@ -133,6 +134,28 @@ class TestRuleBasedForecast:
             assert any(r.code == "track_type_base" for r in result.reasons), (
                 f"{tt} で track_type_base reason が見つかりません"
             )
+
+    def test_dirt_uses_dirt_thresholds(self) -> None:
+        """ダートは専用閾値（ハイ<40/スロー>46）を使い、スロー判定ができる（rule-v4）。"""
+        # ダート実績平均 43 は芝閾値 49 では全員ハイになるが、
+        # ダート専用閾値では平均帯（40〜46）に収まる
+        assert classify_pace(43.0, "ダート") == PaceLabel.AVERAGE
+        # RPCI=48 は芝だとハイ・ダートだとスロー
+        assert classify_pace(48.0, "ダート") == PaceLabel.SLOW
+        assert classify_pace(48.0, "芝") == PaceLabel.HIGH
+
+    def test_dirt_all_closers_can_give_slow_label(self) -> None:
+        """ダート差し追込フィールドで専用閾値によりスロー判定が取れる（rule-v4）。"""
+        forecaster = RuleBasedRpciForecaster()
+        result = forecaster.forecast(
+            RaceContext(
+                distance_m=1600,
+                track_type="ダート",
+                running_styles=(CLOSER,) * 6 + (STALKER,) * 4,
+            )
+        )
+        # ダート補正 -9.75 + 差し追込フィールド → スロー(>46)になるはず
+        assert result.label == PaceLabel.SLOW
 
 
 class TestFrontPaceEvidence:

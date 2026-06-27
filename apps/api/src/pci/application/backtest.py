@@ -338,8 +338,8 @@ class ForecastBacktester:
                     race_key=key,
                     predicted=out.predicted_rpci,
                     actual=race.rpci_actual,
-                    predicted_label=classify_pace(out.predicted_rpci),
-                    actual_label=classify_pace(race.rpci_actual),
+                    predicted_label=classify_pace(out.predicted_rpci, race.track_type),
+                    actual_label=classify_pace(race.rpci_actual, race.track_type),
                 )
             )
 
