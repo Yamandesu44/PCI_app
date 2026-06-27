@@ -96,7 +96,10 @@ RA_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("SyubetuCD", 617, 2, "code", _T, "競走種別コード"),
     FieldSpec("KigoCD", 619, 3, "code", _T, "競走記号コード"),
     FieldSpec("JyuryoCD", 622, 1, "code", _T, "重量種別コード"),
-    FieldSpec("JyokenName", 623, 60, "text", _T, "競走条件名称（例: 3歳未勝利）。Hondai が空の一般戦名補完に使用"),
+    FieldSpec(
+        "JyokenName", 623, 60, "text", _T,
+        "競走条件名称（例: 3歳未勝利）。Hondai が空の一般戦名補完に使用",
+    ),
     # 683〜696 は JyokenCD 配列等。未マップ（byte ルーラーで調査）。
     # 実測確定: 2026-06-13 函館1R(JyoCD=02 Kyori=1200 TrackCD=17)
     FieldSpec("Kyori", 697, 4, "num", _C, "距離(m)。実測確定"),
@@ -112,13 +115,22 @@ RA_FIELDS: tuple[FieldSpec, ...] = (
     # locate_haron ツールで LapTime 配列(890) と HaronTime ブロック(969) を特定。
     # LapTime[890:965] = 各ハロン 3桁×25本=75byte（1200mは6本, 残り 000）
     # HaronTimeS3[969:972] 前半3F / HaronTimeS4[972:975] 前半4F
-    FieldSpec("HaronTimeS3", 969, 3, "num", _C, "前半3ハロンタイム合計（1/10秒3桁）。実測確定"),
-    FieldSpec("HaronTimeS4", 972, 3, "num", _C, "前半4ハロンタイム合計（1/10秒3桁）。実測確定"),
+    FieldSpec(
+        "HaronTimeS3", 969, 3, "num", _C,
+        "前半3ハロンタイム合計（1/10秒3桁）。芝レースで実測確定。ダートは別位置の可能性あり",
+    ),
+    FieldSpec(
+        "HaronTimeS4", 972, 3, "num", _C,
+        "前半4ハロンタイム合計（1/10秒3桁）。芝レースで実測確定",
+    ),
     FieldSpec(
         "HaronTimeL3", 975, 3, "num", _C,
-        "後半3ハロンタイム合計（1/10秒3桁）= RPCI 算出に使用。実測確定",
+        "後半3Fタイム合計（1/10秒3桁）= RPCI 算出に使用。芝で実測確定。ダートは別位置の可能性あり",
     ),
-    FieldSpec("HaronTimeL4", 978, 3, "num", _C, "後半4ハロンタイム合計（1/10秒3桁）。実測確定"),
+    FieldSpec(
+        "HaronTimeL4", 978, 3, "num", _C,
+        "後半4ハロンタイム合計（1/10秒3桁）。芝レースで実測確定",
+    ),
 )
 
 

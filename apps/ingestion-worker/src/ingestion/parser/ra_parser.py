@@ -13,6 +13,7 @@ byte オフセット（実測確定分）:
   JyokenName     [623:683] 競走条件名称（Hondai が空の一般戦名補完に使用）
   Kyori          [697:701] CONFIRMED 2026-06-13 函館1R = 1200
   TrackCD        [705:707] CONFIRMED 実測 '17'=芝内回り
+  HaronTime      [969:981] 芝レースで確定（locate_haron 使用）。ダートは別位置の可能性あり
 
 未確定（実バイト位置未特定）→ 暫定デフォルト:
   SyussoTosu / TenkoCD / SibaBabaCD / DirtBabaCD → field_size=0, weather=None, track_condition=None
@@ -77,12 +78,15 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
     track_cd = _bs(raw, 705, 707)
     track_type = decode_track(track_cd)
 
-    # HaronTime ブロック [969:981] — 実測確定（2026-06-13 函館1R / locate_haron 使用）
+    # HaronTime ブロック [969:981] — 芝レースで実測確定（2026-06-13 函館1R / locate_haron）
     # DataKubun=7(確定後)のみ値あり。出走前レコードでは '000' になる場合がある。
+    # ダートでは [975:978] が別フィールドを指す可能性があり '010'(=1.0s) 等の異常値が混入する。
+    # 3F(600m) 走破タイムは物理的に 25〜50秒（raw 250〜500）の範囲。
+    # 範囲外は None として RPCI フォールバックを使用する。
     haron_s3_raw = _bi(raw, 969, 972)  # HaronTimeS3: 前半3F合計
     haron_l3_raw = _bi(raw, 975, 978)  # HaronTimeL3: 後半3F合計
-    race_s3f = haron_s3_raw / 10.0 if haron_s3_raw > 0 else None
-    race_l3f = haron_l3_raw / 10.0 if haron_l3_raw > 0 else None
+    race_s3f = haron_s3_raw / 10.0 if 250 <= haron_s3_raw <= 500 else None
+    race_l3f = haron_l3_raw / 10.0 if 250 <= haron_l3_raw <= 500 else None
 
     # 以下は実バイト位置が未確定のため暫定デフォルト。
     # RA の --map 結果から SyussoTosu/TenkoCD/BabaCd の正しい位置を特定すること。

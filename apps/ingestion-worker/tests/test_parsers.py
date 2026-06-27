@@ -48,11 +48,14 @@ def _ra(
     kyori: int = 1600,
     race_name: str = "3歳未勝利",
     condition_name: str | None = None,
+    haron_s3: int | None = None,
+    haron_l3: int | None = None,
 ) -> str:
     """RA レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
 
     実測 byte: Hondai[33:93], Kyori[697:701], TrackCD[705:707]='17'(芝内回り)。
     field_size/weather/track_condition の byte 位置は未確定のため省略（0/None を返す）。
+    haron_s3/haron_l3: HaronTime の生整数値（例: 339 = 33.9s）。None の場合は '   '（空白）。
     """
     buf = bytearray(b" " * RA_RECORD_BYTES)
     _put_field(buf, 0, "RA")
@@ -70,6 +73,10 @@ def _ra(
         _put_field(buf, 623, condition_name)      # JyokenName（競走条件名称）
     _put_field(buf, 697, f"{kyori:04d}")          # Kyori CONFIRMED
     _put_field(buf, 705, "17")                    # TrackCD='17'(芝内回り) CONFIRMED
+    if haron_s3 is not None:
+        _put_field(buf, 969, f"{haron_s3:03d}")  # HaronTimeS3 [969:972]
+    if haron_l3 is not None:
+        _put_field(buf, 975, f"{haron_l3:03d}")  # HaronTimeL3 [975:978]
     return buf.decode("cp932")
 
 
@@ -345,6 +352,40 @@ class TestRaParser:
         result = parse_ra(_ra(jyo_cd="05"))
         assert result is not None
         assert result.jyo_cd == "05"
+
+    def test_harontime_valid_values_parsed(self) -> None:
+        # 芝レースの典型値: S3=33.9s(339), L3=34.6s(346)
+        result = parse_ra(_ra(haron_s3=339, haron_l3=346))
+        assert result is not None
+        assert result.race_s3f == pytest.approx(33.9, abs=0.05)
+        assert result.race_l3f == pytest.approx(34.6, abs=0.05)
+
+    def test_harontime_l3_too_small_returns_none(self) -> None:
+        # ダートの誤読典型値 '010'(=1.0s) は 25s 未満 → None
+        result = parse_ra(_ra(haron_s3=339, haron_l3=10))
+        assert result is not None
+        assert result.race_s3f == pytest.approx(33.9, abs=0.05)
+        assert result.race_l3f is None
+
+    def test_harontime_too_large_returns_none(self) -> None:
+        # '999'(=99.9s) は 50s 超 → None
+        result = parse_ra(_ra(haron_s3=339, haron_l3=999))
+        assert result is not None
+        assert result.race_l3f is None
+
+    def test_harontime_zero_returns_none(self) -> None:
+        # '000' (未取得 or 出走前) → None
+        result = parse_ra(_ra(haron_s3=0, haron_l3=0))
+        assert result is not None
+        assert result.race_s3f is None
+        assert result.race_l3f is None
+
+    def test_harontime_absent_returns_none(self) -> None:
+        # HaronTime を設定しない（空白）→ None
+        result = parse_ra(_ra())
+        assert result is not None
+        assert result.race_s3f is None
+        assert result.race_l3f is None
 
     def test_delete_record_returns_none(self) -> None:
         rec = _ra().replace("RA1", "RA0", 1)
