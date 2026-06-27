@@ -27,6 +27,7 @@ from ingestion.client.mykeibadb_client import (  # noqa: E402
     _build_ra_record,
     _build_se_record,
     _raw_record,
+    _row_in_date_range,
     _pick,
     _str_or_none,
 )
@@ -53,7 +54,7 @@ def main() -> None:
     print(f"{'race_key':20s}  {'KAISAI_KAI':12s}  {'KAISAI_NICHIME':14s}  {'RACE_BANGO':10s}")
 
     for row in client._iter_table_by_date_range(conn, ra_table, DATE, DATE):
-        if not client._row_in_date_range(row, DATE, DATE):
+        if not _row_in_date_range(row, DATE, DATE):
             continue
         jyo = _str_or_none(_pick(row, _JYO_COLUMNS)) or ""
         if jyo != JYO_FILTER:
@@ -86,7 +87,7 @@ def main() -> None:
     skip_count = 0
 
     for row in client._iter_table_by_date_range(conn, se_table, DATE, DATE):
-        if not client._row_in_date_range(row, DATE, DATE):
+        if not _row_in_date_range(row, DATE, DATE):
             continue
         jyo = _str_or_none(_pick(row, _JYO_COLUMNS)) or ""
         if jyo != JYO_FILTER:
