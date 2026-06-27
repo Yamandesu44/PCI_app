@@ -1092,7 +1092,7 @@
   "paths": {
     "/api/v1/races": {
       "get": {
-        "description": "新しい順にレース一覧を返す（トップ画面のレース選択用）。",
+        "description": "新しい順にレース一覧を返す。date 指定時はその日のレースのみ返す。",
         "operationId": "list_races_api_v1_races_get",
         "parameters": [
           {
@@ -1103,10 +1103,29 @@
             "schema": {
               "default": 50,
               "description": "取得件数の上限",
-              "maximum": 100,
+              "maximum": 1000,
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "絞り込む開催日（YYYY-MM-DD）",
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "絞り込む開催日（YYYY-MM-DD）",
+              "title": "Date"
             }
           }
         ],
@@ -1137,6 +1156,32 @@
           }
         },
         "summary": "List Races",
+        "tags": [
+          "races"
+        ]
+      }
+    },
+    "/api/v1/races/dates": {
+      "get": {
+        "description": "全開催日を昇順で返す（カレンダー表示用）。",
+        "operationId": "list_race_dates_api_v1_races_dates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Race Dates Api V1 Races Dates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Race Dates",
         "tags": [
           "races"
         ]
@@ -1484,6 +1529,65 @@
           }
         },
         "summary": "Ingest Jockeys",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/races/{race_key}": {
+      "delete": {
+        "description": "取り込み対象外になったレースを、関連する予想データごと削除する。",
+        "operationId": "delete_ingested_race_internal_ingest_races__race_key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "race_key",
+            "required": true,
+            "schema": {
+              "title": "Race Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Ingested Race",
         "tags": [
           "ingest"
         ]

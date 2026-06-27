@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Iterable
 from typing import Protocol
 
@@ -20,6 +21,10 @@ class RaceRepository(Protocol):
     def find_entries(self, key: RaceKey) -> list[RaceEntry]: ...
 
     def list_recent_races(self, limit: int = 50) -> list[Race]: ...
+
+    def list_race_dates(self) -> list[datetime.date]: ...
+
+    def list_races_by_date(self, date: datetime.date) -> list[Race]: ...
 
     def save_race(self, race: Race) -> None: ...
 

@@ -57,13 +57,24 @@ interface HomePageProps {
   searchParams?: Promise<{ date?: string }>;
 }
 
-async function loadRaces(): Promise<{ races: RaceSummary[]; error: string | null }> {
+async function loadRaces(date?: string): Promise<{ races: RaceSummary[]; error: string | null }> {
   try {
-    return { races: await api.listRaces(1000), error: null };
+    const races = date != null
+      ? await api.listRaces(undefined, date)
+      : await api.listRaces(1000);
+    return { races, error: null };
   } catch (err) {
     const detail =
       err instanceof ApiError ? `APIエラー (${err.status})` : "APIに接続できませんでした";
     return { races: [], error: detail };
+  }
+}
+
+async function loadAllRaceDates(): Promise<string[]> {
+  try {
+    return await api.listRaceDates();
+  } catch {
+    return [];
   }
 }
 
@@ -328,15 +339,18 @@ function RaceGroupedSection({
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
-  const { races, error } = await loadRaces();
-  const sortedRaces = [...races].sort(compareRaceSummary);
   const weekend = weekendRange();
   const today = todayKey();
-  const dates = raceDates(sortedRaces);
-  const selectedDate = selectRaceDate(dates, params?.date, weekend);
-  const visibleRaces = selectedDate
-    ? sortedRaces.filter((race) => race.race_date === selectedDate)
-    : sortedRaces;
+
+  // カレンダー用の全開催日と、選択日の決定は並列で取得する。
+  const [allDates] = await Promise.all([loadAllRaceDates()]);
+  const selectedDate = selectRaceDate(allDates, params?.date, weekend);
+
+  // 選択日のレースを取得（過去日付でも正確に取得できるよう日付指定フェッチを使う）。
+  const { races, error } = await loadRaces(selectedDate ?? undefined);
+  const sortedRaces = [...races].sort(compareRaceSummary);
+  const dates = allDates.length > 0 ? allDates : raceDates(sortedRaces);
+  const visibleRaces = sortedRaces;
   const visibleItems = error
     ? []
     : await enrichForecasts(

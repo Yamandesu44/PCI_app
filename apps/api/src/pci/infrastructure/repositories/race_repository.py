@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
 from collections.abc import Iterable
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
@@ -48,6 +49,20 @@ class SqlAlchemyRaceRepository:
             select(RaceModel)
             .order_by(RaceModel.race_date.desc(), RaceModel.race_key.desc())
             .limit(limit)
+        )
+        return [self._to_race(m) for m in self._s.scalars(stmt).all()]
+
+    def list_race_dates(self) -> list[datetime.date]:
+        """全開催日を昇順で返す（カレンダー表示用）。"""
+        stmt = select(func.distinct(RaceModel.race_date)).order_by(RaceModel.race_date)
+        return list(self._s.scalars(stmt).all())
+
+    def list_races_by_date(self, date: datetime.date) -> list[Race]:
+        """指定日のレース一覧を返す。"""
+        stmt = (
+            select(RaceModel)
+            .where(RaceModel.race_date == date)
+            .order_by(RaceModel.race_key)
         )
         return [self._to_race(m) for m in self._s.scalars(stmt).all()]
 

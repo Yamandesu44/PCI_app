@@ -40,7 +40,8 @@ export interface ApiClientOptions {
 }
 
 export interface ApiClient {
-  listRaces(limit?: number): Promise<RaceSummary[]>;
+  listRaces(limit?: number, date?: string): Promise<RaceSummary[]>;
+  listRaceDates(): Promise<string[]>;
   getForecast(raceKey: string): Promise<Forecast>;
   getRaceDetail(raceKey: string): Promise<RaceDetail>;
   getPaceAnalysis(raceKey: string): Promise<PaceAnalysis>;
@@ -59,10 +60,14 @@ export function createClient(options: ApiClientOptions): ApiClient {
   }
 
   return {
-    listRaces: (limit) =>
-      getJson<RaceSummary[]>(
-        `/api/v1/races${limit != null ? `?limit=${encodeURIComponent(limit)}` : ""}`,
-      ),
+    listRaces: (limit, date) => {
+      const params = new URLSearchParams();
+      if (limit != null) params.set("limit", String(limit));
+      if (date != null) params.set("date", date);
+      const qs = params.toString();
+      return getJson<RaceSummary[]>(`/api/v1/races${qs ? `?${qs}` : ""}`);
+    },
+    listRaceDates: () => getJson<string[]>("/api/v1/races/dates"),
     getForecast: (raceKey) =>
       getJson<Forecast>(`/api/v1/races/${encodeURIComponent(raceKey)}/forecast`),
     getRaceDetail: (raceKey) =>

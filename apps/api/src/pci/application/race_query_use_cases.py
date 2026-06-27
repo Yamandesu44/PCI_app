@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+
 from pci.application.dto import (
     CommentOutput,
     EntryDetailOutput,
@@ -56,10 +58,15 @@ class ListRacesUseCase:
     def __init__(self, repo: RaceRepository) -> None:
         self._repo = repo
 
-    def execute(self, limit: int = 50) -> list[RaceSummaryOutput]:
-        # 上限を超える要求はクランプし、過大なクエリを防ぐ。
-        capped = max(1, min(limit, self._MAX_LIMIT))
-        races = self._repo.list_recent_races(capped)
+    def execute(
+        self, limit: int = 50, date: datetime.date | None = None
+    ) -> list[RaceSummaryOutput]:
+        if date is not None:
+            races = self._repo.list_races_by_date(date)
+        else:
+            # 上限を超える要求はクランプし、過大なクエリを防ぐ。
+            capped = max(1, min(limit, self._MAX_LIMIT))
+            races = self._repo.list_recent_races(capped)
         return [
             RaceSummaryOutput(
                 race_key=str(r.race_key),
@@ -74,6 +81,16 @@ class ListRacesUseCase:
             )
             for r in races
         ]
+
+
+class ListRaceDatesUseCase:
+    """全開催日一覧を取得する（カレンダー表示用）。"""
+
+    def __init__(self, repo: RaceRepository) -> None:
+        self._repo = repo
+
+    def execute(self) -> list[str]:
+        return [d.isoformat() for d in self._repo.list_race_dates()]
 
 
 class GetRaceDetailUseCase:

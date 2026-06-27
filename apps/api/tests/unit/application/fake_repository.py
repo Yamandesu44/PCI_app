@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from collections.abc import Iterable
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
@@ -36,6 +37,15 @@ class FakeRaceRepository:
             reverse=True,
         )
         return races[:limit]
+
+    def list_race_dates(self) -> list[datetime.date]:
+        return sorted({r.race_date for r in self._races.values()})
+
+    def list_races_by_date(self, date: datetime.date) -> list[Race]:
+        return sorted(
+            [r for r in self._races.values() if r.race_date == date],
+            key=lambda r: str(r.race_key),
+        )
 
     def find_horse_recent_entries(self, ketto_num: str, limit: int = 5) -> list[RaceEntry]:
         from pci.domain.racing.race import RaceStatus

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
 from pci.presentation.dependencies import (
     ForecastUseCaseDep,
+    ListRaceDatesUseCaseDep,
     ListRacesUseCaseDep,
     PaceAnalysisUseCaseDep,
     RaceDetailUseCaseDep,
@@ -24,12 +26,23 @@ router = APIRouter(prefix="/api/v1/races", tags=["races"])
 # レースキーは16桁数字。境界で検証し、不正値は 422 を返す（use case へ到達させない）。
 RaceKeyPath = Annotated[str, Path(pattern=r"^\d{16}$", description="16桁のレースキー")]
 LimitQuery = Annotated[int, Query(ge=1, le=1000, description="取得件数の上限")]
+DateQuery = Annotated[datetime.date | None, Query(description="絞り込む開催日（YYYY-MM-DD）")]
+
+
+@router.get("/dates", response_model=list[str])
+def list_race_dates(use_case: ListRaceDatesUseCaseDep) -> list[str]:
+    """全開催日を昇順で返す（カレンダー表示用）。"""
+    return use_case.execute()
 
 
 @router.get("", response_model=list[RaceSummarySchema])
-def list_races(use_case: ListRacesUseCaseDep, limit: LimitQuery = 50) -> list[RaceSummarySchema]:
-    """新しい順にレース一覧を返す（トップ画面のレース選択用）。"""
-    return [RaceSummarySchema.from_dto(r) for r in use_case.execute(limit)]
+def list_races(
+    use_case: ListRacesUseCaseDep,
+    limit: LimitQuery = 50,
+    date: DateQuery = None,
+) -> list[RaceSummarySchema]:
+    """新しい順にレース一覧を返す。date 指定時はその日のレースのみ返す。"""
+    return [RaceSummarySchema.from_dto(r) for r in use_case.execute(limit, date)]
 
 
 @router.get("/{race_key}/forecast", response_model=ForecastSchema)
