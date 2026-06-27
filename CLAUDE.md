@@ -171,6 +171,9 @@ cd apps/api && alembic upgrade head
 
 # OpenAPI → TS 型生成
 cd packages/api-client && npm run generate
+
+# 予測精度バックテスト（想定RPCI 誤差 + PAI リフト）
+cd apps/api && python -m scripts.backtest_forecast --limit 200
 ```
 
 ---

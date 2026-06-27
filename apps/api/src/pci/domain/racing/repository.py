@@ -32,7 +32,15 @@ class RaceRepository(Protocol):
 
     def delete_race(self, key: RaceKey) -> bool: ...
 
-    def find_horse_recent_entries(self, ketto_num: str, limit: int = 5) -> list[RaceEntry]: ...
+    def find_horse_recent_entries(
+        self, ketto_num: str, limit: int = 5, before: datetime.date | None = None
+    ) -> list[RaceEntry]:
+        """馬の直近確定成績を新しい順に返す。
+
+        before を指定すると、その日より前のレースだけを対象にする
+        （バックテストで予測時点より未来のデータを参照しないため）。
+        """
+        ...
 
     def find_horse_names(self, ketto_nums: Iterable[str]) -> dict[str, str]:
         """ketto_num → 馬名 のマッピングを返す（一括取得）。存在しないキーは含まない。"""

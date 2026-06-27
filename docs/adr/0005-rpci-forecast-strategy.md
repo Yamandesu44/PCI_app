@@ -88,10 +88,27 @@ application層・presentation層は `RpciForecaster` インターフェースに
 
 ### 4. 受入基準と検証
 
-- 検証ハーネス（バックテスト）で過去5年データに対し以下を計測:
-  - **MAE ≤ 1.5**（想定RPCI vs 実RPCI）
-  - **展開3分類一致率 ≥ 60%**
-- ベースライン（過去同条件の単純平均）と比較し、改善を確認する
+検証ハーネス（バックテスト）で過去データに対し以下を計測する:
+- **MAE ≤ 1.5**（想定RPCI vs 実RPCI）
+- **展開3分類一致率 ≥ 60%**
+- **PAI リフト**: PAI 帯が高いほど好走率（3着内 / 重賞5着内）が上がること
+
+#### 4.1 バックテスト実装（2026-06-27）
+
+- 実装: `apps/api/src/pci/application/backtest.py`（純粋集計 + `ForecastBacktester`）
+- 実行: `cd apps/api && python -m scripts.backtest_forecast --limit 200`
+- **本番の `ForecastRaceUseCase` をそのまま再現**して評価する（評価専用経路を作らず、
+  出荷ロジックそのものを測る）。mart へは保存しない。
+- **lookahead 防止**: `_AsOfRaceRepository` が `find_horse_recent_entries` に
+  「レース当日」カットオフ（`before`）を注入し、予測時点より未来の馬履歴を遮断する。
+- **指標**: 想定RPCI の MAE / RMSE / バイアス / ラベル的中率、および PAI 帯別好走率・
+  point-biserial 相関・最上位帯リフト。
+- 「好走」「展開3分類」の判定は学習側と**同一の真実の場所**を再利用する
+  （`affinity.is_good_run` / `rpci_forecast.classify_pace`）。定義の二重実装を作らない。
+- ベースライン（全体好走率）と比較し、PAI のリフトを確認する。
+
+> 注意: 重み（`evidence_weight_*` 等）を調整したら本バックテストで MAE / 一致率 /
+> PAI リフトの回帰がないことを必ず確認する。`model_version` 別に比較できる。
 
 ### 5. 将来: LightGBM（`model_version = "lgbm-v*"`）
 

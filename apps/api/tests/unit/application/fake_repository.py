@@ -47,7 +47,9 @@ class FakeRaceRepository:
             key=lambda r: str(r.race_key),
         )
 
-    def find_horse_recent_entries(self, ketto_num: str, limit: int = 5) -> list[RaceEntry]:
+    def find_horse_recent_entries(
+        self, ketto_num: str, limit: int = 5, before: datetime.date | None = None
+    ) -> list[RaceEntry]:
         from pci.domain.racing.race import RaceStatus
 
         result = [
@@ -56,6 +58,7 @@ class FakeRaceRepository:
             if e.ketto_num == ketto_num
             and self._races.get(str(e.race_key), None) is not None
             and self._races[str(e.race_key)].status == RaceStatus.RESULT
+            and (before is None or self._races[str(e.race_key)].race_date < before)
         ]
         result.sort(
             key=lambda e: self._races[str(e.race_key)].race_date,

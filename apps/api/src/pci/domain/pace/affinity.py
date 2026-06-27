@@ -75,9 +75,9 @@ def build_horse_pace_affinity_profile(
     for result in results:
         if not _is_good_run(result):
             continue
-        evidence = _evidence_from_result(result, as_of)
-        if evidence is not None:
-            evidence_items.append(evidence)
+        item = _evidence_from_result(result, as_of)
+        if item is not None:
+            evidence_items.append(item)
     evidence = tuple(evidence_items)
     if not evidence:
         return _fallback_profile(horse_id, running_style)
@@ -149,12 +149,21 @@ def _pace_index_value(result: PaceAffinityRaceResult) -> float | None:
     return result.pci_actual
 
 
-def _is_good_run(result: PaceAffinityRaceResult) -> bool:
-    if result.finish_pos is None:
+def is_good_run(finish_pos: int | None, grade: str | None) -> bool:
+    """「好走」の唯一の定義: 3着以内、または重賞での5着以内。
+
+    展開合致の学習（affinity）とバックテストの正解ラベルが同じ基準を使うための
+    公開関数（定義の二重実装を防ぐ）。
+    """
+    if finish_pos is None:
         return False
-    if result.finish_pos <= 3:
+    if finish_pos <= 3:
         return True
-    return _is_graded(result.grade) and result.finish_pos <= 5
+    return _is_graded(grade) and finish_pos <= 5
+
+
+def _is_good_run(result: PaceAffinityRaceResult) -> bool:
+    return is_good_run(result.finish_pos, result.grade)
 
 
 def _is_graded(grade: str | None) -> bool:

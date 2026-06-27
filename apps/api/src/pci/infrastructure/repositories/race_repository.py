@@ -66,8 +66,14 @@ class SqlAlchemyRaceRepository:
         )
         return [self._to_race(m) for m in self._s.scalars(stmt).all()]
 
-    def find_horse_recent_entries(self, ketto_num: str, limit: int = 5) -> list[RaceEntry]:
-        """馬の直近レース成績を確定レースから取得する（脚質判定・PAI算出の入力）。"""
+    def find_horse_recent_entries(
+        self, ketto_num: str, limit: int = 5, before: datetime.date | None = None
+    ) -> list[RaceEntry]:
+        """馬の直近レース成績を確定レースから取得する（脚質判定・PAI算出の入力）。
+
+        before 指定時はその日より前のレースだけを対象にする（バックテストの
+        lookahead 防止）。日付フィルタを SQL 側で行うため limit が正しく効く。
+        """
         stmt = (
             select(RaceEntryModel)
             .join(RaceModel, RaceEntryModel.race_key == RaceModel.race_key)
@@ -78,6 +84,8 @@ class SqlAlchemyRaceRepository:
             .order_by(RaceModel.race_date.desc())
             .limit(limit)
         )
+        if before is not None:
+            stmt = stmt.where(RaceModel.race_date < before)
         return [self._to_entry(m) for m in self._s.scalars(stmt).all()]
 
     def find_horse_names(self, ketto_nums: Iterable[str]) -> dict[str, str]:

@@ -121,6 +121,19 @@ _FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
 _CLOSER_STYLES = (RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER)
 
 
+def classify_pace(rpci: float, weights: RuleWeights = DEFAULT_WEIGHTS) -> PaceLabel:
+    """RPCI 値を展開3分類へ写す（予測・実績で共通利用する唯一の判定）。
+
+    実績RPCI を同じ閾値でラベル化することで、バックテストが予測ラベルと
+    実績ラベルを公平に比較できる（rpci_forecast がラベル判定の真実の場所）。
+    """
+    if rpci < weights.high_threshold:
+        return PaceLabel.HIGH
+    if rpci > weights.slow_threshold:
+        return PaceLabel.SLOW
+    return PaceLabel.AVERAGE
+
+
 class RuleBasedRpciForecaster:
     """ルールベース想定RPCI 予測器（rule-v2）。
 
@@ -244,11 +257,7 @@ class RuleBasedRpciForecaster:
         }.get(condition or "良", 0.0)
 
     def _classify(self, rpci: float) -> PaceLabel:
-        if rpci < self._w.high_threshold:
-            return PaceLabel.HIGH
-        if rpci > self._w.slow_threshold:
-            return PaceLabel.SLOW
-        return PaceLabel.AVERAGE
+        return classify_pace(rpci, self._w)
 
     def _confidence(
         self, balance: float, escape_pressure: float, evidence_samples: int = 0
