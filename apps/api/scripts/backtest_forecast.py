@@ -70,6 +70,12 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="rpci_actual の上限フィルター（異常値除外用。例: 90）",
     )
+    p.add_argument(
+        "--track-type",
+        choices=["芝", "ダート", "障害"],
+        default=None,
+        help="コース種別フィルター（芝/ダート/障害）。未指定=全種別",
+    )
     return p.parse_args()
 
 
@@ -86,6 +92,8 @@ def _select_targets(session, args: argparse.Namespace) -> list[Race]:
         stmt = stmt.where(RaceModel.rpci_actual >= args.rpci_min)
     if args.rpci_max is not None:
         stmt = stmt.where(RaceModel.rpci_actual <= args.rpci_max)
+    if args.track_type is not None:
+        stmt = stmt.where(RaceModel.track_type == args.track_type)
     stmt = stmt.order_by(RaceModel.race_date.desc(), RaceModel.race_key.desc())
 
     keys = list(session.scalars(stmt).all())
@@ -109,10 +117,15 @@ def main() -> None:
         print("対象レースがありません（status=result かつ rpci_actual を持つレース）。")
         return
     filter_note = ""
+    notes: list[str] = []
     if args.rpci_min is not None or args.rpci_max is not None:
         lo = args.rpci_min or "-∞"
         hi = args.rpci_max or "+∞"
-        filter_note = f" （rpci_actual フィルター: {lo}〜{hi}）"
+        notes.append(f"rpci_actual: {lo}〜{hi}")
+    if args.track_type is not None:
+        notes.append(f"コース種別: {args.track_type}")
+    if notes:
+        filter_note = f" （{' / '.join(notes)}）"
     print(f"対象 {len(targets)} レースでバックテストを実行します{filter_note}…\n")
 
     repo = SqlAlchemyRaceRepository(session)

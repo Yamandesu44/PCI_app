@@ -129,7 +129,43 @@ def main() -> None:
     except Exception as exc:
         print(f"    年別集計エラー: {exc}")
 
-    # ── 2. race_entries.pci_actual の分布 ────────────────────────────
+    # ── 2. コース種別別の rpci_actual 分布 ──────────────────────────────
+    print("\n  ── コース種別別 rpci_actual 分布")
+    track_stmt = text(
+        """
+        SELECT
+            track_type,
+            COUNT(*)                                                AS cnt,
+            ROUND(MIN(rpci_actual)::numeric, 1)                    AS mn,
+            ROUND(MAX(rpci_actual)::numeric, 1)                    AS mx,
+            ROUND(AVG(rpci_actual)::numeric, 1)                    AS avg,
+            ROUND(percentile_cont(0.50)
+                  WITHIN GROUP (ORDER BY rpci_actual)::numeric, 1) AS p50,
+            SUM(CASE
+                WHEN rpci_actual < :lo OR rpci_actual > :hi
+                THEN 1 ELSE 0 END)                                 AS outliers
+        FROM races
+        WHERE status = 'result'
+          AND rpci_actual IS NOT NULL
+        GROUP BY track_type
+        ORDER BY track_type
+        """
+    )
+    try:
+        hdr = f"  {'種別':6s} {'件数':>7s} {'最小':>7s} {'最大':>7s}"
+        hdr += f" {'平均':>7s} {'中央':>7s} {'外れ値':>8s}"
+        print(hdr)
+        for row in session.execute(track_stmt, {"lo": args.rpci_min, "hi": args.rpci_max}):
+            tt, cnt, mn_t, mx_t, avg_t, p50_t, out_t = row
+            out_pct = out_t / cnt * 100 if cnt else 0
+            print(
+                f"  {tt:6s} {cnt:7,d} {mn_t:7.1f} {mx_t:7.1f} "
+                f"{avg_t:7.1f} {p50_t:7.1f} {out_t:5,d}({out_pct:4.1f}%)"
+            )
+    except Exception as exc:
+        print(f"    種別集計エラー: {exc}")
+
+    # ── 4. race_entries.pci_actual の分布 ────────────────────────────
     print("\n" + "=" * 60)
     print("■ race_entries.pci_actual の分布")
     print("=" * 60)
@@ -167,7 +203,7 @@ def main() -> None:
         except Exception as exc:
             print(f"  分位数取得エラー: {exc}")
 
-    # ── 3. 外れ値レース詳細 ──────────────────────────────────────────
+    # ── 5. 外れ値レース詳細 ──────────────────────────────────────────
     if args.show_outliers:
         print("\n" + "=" * 60)
         print(f"■ rpci_actual が {args.rpci_min} 未満 / {args.rpci_max} 超のレース（上位 50 件）")
@@ -195,7 +231,7 @@ def main() -> None:
             for rk, rd, dist, tt, rv in rows:
                 print(f"  {rk:18s} {str(rd):12s} {dist:6d} {tt:6s} {rv:12.2f}")
 
-    # ── 4. バックテスト有効サンプル数の推定 ───────────────────────────
+    # ── 6. バックテスト有効サンプル数の推定 ───────────────────────────
     print("\n" + "=" * 60)
     print(f"■ バックテスト有効範囲（{args.rpci_min}〜{args.rpci_max}）のみで推定精度")
     print("=" * 60)
