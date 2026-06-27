@@ -131,7 +131,7 @@ class TestForecastEndpoint:
         body = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast").json()
         assert set(body.keys()) == FORECAST_KEYS
         assert body["race_key"] == UPCOMING_KEY
-        assert body["model_version"] == "rule-v1"
+        assert body["model_version"] == "rule-v2"
         assert body["pace_label"] in ("ハイ", "平均", "スロー")
         assert 35.0 <= body["predicted_rpci"] <= 65.0
 

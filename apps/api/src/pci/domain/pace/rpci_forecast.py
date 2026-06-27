@@ -1,7 +1,7 @@
 """想定RPCI 予測モジュール（本プロダクトの中核機能・ADR-0005）。
 
 戦略インターフェース `RpciForecaster` を定義し、MVP ではルールベース実装
-`RuleBasedRpciForecaster`（model_version = "rule-v1"）を提供する。
+`RuleBasedRpciForecaster`（model_version = "rule-v2"）を提供する。
 将来の LightGBM 実装は同一インターフェースを満たすことで差し替え可能。
 
 想定RPCI の方向性（pci.py と統一）:
@@ -9,11 +9,16 @@
     RPCI < high_threshold : ハイ（前傾ラップ → 逃げ・先行有利）
     その間               : 平均
 
-ルール要因（rule-v1・すべて reasons に出力）:
+ルール要因（rule-v2・すべて reasons に出力）:
     1. 距離基準ペース      : 長距離ほど緩む傾向（RPCI高）
     2. 脚質構成バランス    : 差し追込比率が高い→スロー / 逃げ先行比率が高い→ハイ
     3. 逃げ馬頭数の競合    : 逃げ不在→スロー / 逃げ複数→先行争いでハイ
     4. 馬場状態補正        : 道悪での補正（調整可能なプレースホルダ）
+    5. 前付け馬の実績ペース傾向（rule-v2 で追加・本質的改善）:
+       逃げ・先行候補が近走で「前で運んだとき」に実際どんなペース（個馬PCI平均）
+       を作ったかを集計し、頭数ベースの 1〜3 を実データで補正する。
+       これにより「単騎で緩める逃げ馬」と「ハナを切ると毎回飛ばす逃げ馬」を区別する。
+       履歴が無ければ自動的に 1〜4 のみ（rule-v1 相当）へフォールバックする。
 """
 
 from __future__ import annotations
@@ -25,7 +30,7 @@ from typing import Protocol
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "rule-v1"
+MODEL_VERSION = "rule-v2"
 
 
 class PaceLabel(StrEnum):
@@ -37,6 +42,20 @@ class PaceLabel(StrEnum):
 
 
 @dataclass(frozen=True)
+class FrontRunnerPaceSample:
+    """逃げ・先行候補の「前で運んだときのペース」傾向（rule-v2）。
+
+    application 層が各馬の近走から、実際に前付けした過去走の個馬PCI（欠損時は
+    実績RPCIで補完）を平均して構築する。sample_size はその集計に使った走数。
+    """
+
+    horse_no: int
+    style: RunningStyleLabel
+    avg_pci: float
+    sample_size: int
+
+
+@dataclass(frozen=True)
 class RaceContext:
     """想定RPCI 予測の入力コンテキスト。"""
 
@@ -44,6 +63,8 @@ class RaceContext:
     track_type: str
     running_styles: tuple[RunningStyleLabel, ...]
     track_condition: str | None = None
+    # rule-v2: 逃げ・先行候補の実績ペース傾向。空なら頭数ベース（rule-v1相当）。
+    front_pace_samples: tuple[FrontRunnerPaceSample, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -87,6 +108,11 @@ class RuleWeights:
     # RPCI の現実的なクランプ範囲（安全弁）
     rpci_min: float = 35.0
     rpci_max: float = 65.0
+    # rule-v2: 前付け馬の実績ペース傾向（個馬PCI平均）の混合度。
+    # サンプル数（前付け走数の合計）に比例して実績側を信頼し、上限で頭打ち。
+    # 上限を 1 未満に保つことで、距離・脚質ベースの prior を常に残す。
+    evidence_weight_per_sample: float = 0.1
+    evidence_weight_cap: float = 0.7
 
 
 DEFAULT_WEIGHTS = RuleWeights()
@@ -96,7 +122,7 @@ _CLOSER_STYLES = (RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER)
 
 
 class RuleBasedRpciForecaster:
-    """ルールベース想定RPCI 予測器（rule-v1）。
+    """ルールベース想定RPCI 予測器（rule-v2）。
 
     説明可能性を最優先し、各要因の寄与を reasons として出力する（ADR-0005）。
     """
@@ -166,11 +192,33 @@ class RuleBasedRpciForecaster:
                 )
             )
 
-        raw = base + balance + escape_pressure + track_adjust
+        structural = base + balance + escape_pressure
+        evidence_pace, evidence_samples = _aggregate_front_pace(context.front_pace_samples)
+        if evidence_samples > 0:
+            # 前付け馬が近走で実際に作ったペース（個馬PCI平均）を競合補正込みで反映。
+            # 逃げ複数なら escape_pressure が負＝先行争いで速い方向、を実績平均にも効かせる。
+            evidence_raw = evidence_pace + escape_pressure
+            ew = min(evidence_samples * w.evidence_weight_per_sample, w.evidence_weight_cap)
+            blended = ew * evidence_raw + (1.0 - ew) * structural
+            reasons.append(
+                Reason(
+                    code="front_pace_evidence",
+                    description=(
+                        f"逃げ・先行{len(context.front_pace_samples)}頭の近走ペース傾向"
+                        f"（平均PCI {evidence_pace:.1f}・実績{evidence_samples}走）を"
+                        f"{ew:.0%}反映 → {blended:.2f}"
+                    ),
+                    contribution=round(blended - structural, 2),
+                )
+            )
+        else:
+            blended = structural
+
+        raw = blended + track_adjust
         rpci = round(min(max(raw, w.rpci_min), w.rpci_max), 1)
 
         label = self._classify(rpci)
-        confidence = self._confidence(balance, escape_pressure)
+        confidence = self._confidence(balance, escape_pressure, evidence_samples)
         reasons.append(
             Reason(
                 code="forecast",
@@ -202,6 +250,25 @@ class RuleBasedRpciForecaster:
             return PaceLabel.SLOW
         return PaceLabel.AVERAGE
 
-    def _confidence(self, balance: float, escape_pressure: float) -> float:
-        signal = abs(balance) + abs(escape_pressure)
+    def _confidence(
+        self, balance: float, escape_pressure: float, evidence_samples: int = 0
+    ) -> float:
+        # 実績ペース傾向のサンプルが多いほど予測の確からしさを上げる（上限 6 走で頭打ち）。
+        signal = abs(balance) + abs(escape_pressure) + min(evidence_samples, 6) * 0.5
         return round(min(max(0.4 + signal / 20.0, 0.3), 0.9), 2)
+
+
+def _aggregate_front_pace(
+    samples: tuple[FrontRunnerPaceSample, ...],
+) -> tuple[float, int]:
+    """前付け候補の実績ペース傾向を「馬単位の平均」と「総サンプル数」へ集約する。
+
+    ユーザ意図どおり各馬の傾向を等加重で平均する（頭数で割る）。総サンプル数は
+    実績への信頼度（混合比 evidence_weight）の決定に使う。
+    """
+    valid = [s for s in samples if s.sample_size > 0]
+    if not valid:
+        return 0.0, 0
+    avg_pace = sum(s.avg_pci for s in valid) / len(valid)
+    total_samples = sum(s.sample_size for s in valid)
+    return avg_pace, total_samples

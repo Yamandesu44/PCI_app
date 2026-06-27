@@ -1,7 +1,7 @@
 """展開予想ユースケース（想定RPCI + PAI + 展開シナリオ）。
 
 ADR-0005 に従い、予測ロジックは戦略インターフェース `RpciForecaster` 経由で注入する。
-MVP は RuleBasedRpciForecaster（rule-v1）を既定値とし、ML 実装へ無変更で差し替え可能。
+MVP は RuleBasedRpciForecaster（rule-v2）を既定値とし、ML 実装へ無変更で差し替え可能。
 mart 層への永続化は MartRepository を注入して本ユースケース内で実行する（ADR-0006）。
 """
 
@@ -13,12 +13,12 @@ from pci.application.dto import (
     HorseFitOutput,
     ReasonOutput,
 )
+from pci.domain.pace.adaptability import HorsePaceProfile, PaceAdaptabilityScorer, PaiResult
 from pci.domain.pace.affinity import (
     HorsePaceAffinityProfile,
     PaceAffinityRaceResult,
     build_horse_pace_affinity_profile,
 )
-from pci.domain.pace.adaptability import HorsePaceProfile, PaceAdaptabilityScorer, PaiResult
 from pci.domain.pace.commentary import (
     BeneficiaryRef,
     Commentary,
@@ -28,6 +28,7 @@ from pci.domain.pace.commentary import (
 )
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import (
+    FrontRunnerPaceSample,
     RaceContext,
     RpciForecaster,
     RuleBasedRpciForecaster,
@@ -35,6 +36,7 @@ from pci.domain.pace.rpci_forecast import (
 from pci.domain.pace.running_style import RunningStyleLabel, classify_running_style
 from pci.domain.pace.scenario import build_pace_scenario
 from pci.domain.racing.race import Race
+from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.racing.repository import RaceRepository
 from pci.domain.shared.race_key import RaceKey
 from pci.domain.shared.reason import Reason
@@ -71,21 +73,27 @@ class ForecastRaceUseCase:
         if not entries:
             raise ValueError(f"出走馬が登録されていません: {race_key_str}")
 
-        profiles = [
-            HorsePaceProfile(
-                horse_no=e.horse_no,
-                running_style=style,
-                pace_affinity=self._build_affinity_profile(e.ketto_num, style, race),
+        profiles: list[HorsePaceProfile] = []
+        front_pace_samples: list[FrontRunnerPaceSample] = []
+        for e in entries:
+            style = self._resolve_style(e.ketto_num)
+            profiles.append(
+                HorsePaceProfile(
+                    horse_no=e.horse_no,
+                    running_style=style,
+                    pace_affinity=self._build_affinity_profile(e.ketto_num, style, race),
+                )
             )
-            for e in entries
-            for style in (self._resolve_style(e.ketto_num),)
-        ]
+            sample = self._build_front_pace_sample(e.horse_no, e.ketto_num, style)
+            if sample is not None:
+                front_pace_samples.append(sample)
 
         context = RaceContext(
             distance_m=race.distance_m,
             track_type=race.track_type,
             running_styles=tuple(p.running_style for p in profiles),
             track_condition=race.track_condition,
+            front_pace_samples=tuple(front_pace_samples),
         )
         forecast = self._forecaster.forecast(context)
 
@@ -152,6 +160,37 @@ class ForecastRaceUseCase:
         c4 = tuple(e.corner_4 for e in recent if e.corner_4 is not None)
         return classify_running_style(c4).label
 
+    def _build_front_pace_sample(
+        self, horse_no: int, ketto_num: str, style: RunningStyleLabel
+    ) -> FrontRunnerPaceSample | None:
+        """逃げ・先行候補が近10走で「前で運んだとき」に作ったペース傾向を集計する（rule-v2）。
+
+        前付け（1角通過≤2、無ければ4角通過≤2）の過去走だけを対象に、その馬自身の
+        PCI（欠損時は当該レースの実績RPCIで補完）を平均する。前付け実績が無ければ
+        None を返し、想定RPCI 予測は頭数ベース（rule-v1 相当）にフォールバックする。
+        """
+        if not ketto_num or style not in _FRONT_STYLES:
+            return None
+        recent = self._repo.find_horse_recent_entries(ketto_num, limit=10)
+        paces: list[float] = []
+        for entry in recent:
+            if not _led_from_front(entry):
+                continue
+            pace = entry.pci_actual
+            if pace is None:
+                past = self._repo.find_by_key(entry.race_key)
+                pace = past.rpci_actual if past is not None else None
+            if pace is not None:
+                paces.append(pace)
+        if not paces:
+            return None
+        return FrontRunnerPaceSample(
+            horse_no=horse_no,
+            style=style,
+            avg_pci=round(sum(paces) / len(paces), 1),
+            sample_size=len(paces),
+        )
+
     def _build_affinity_profile(
         self, ketto_num: str, style: RunningStyleLabel, target_race: Race
     ) -> HorsePaceAffinityProfile:
@@ -179,6 +218,18 @@ class ForecastRaceUseCase:
             tuple(results),
             as_of=target_race.race_date,
         )
+
+
+_FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
+
+
+def _led_from_front(entry: RaceEntry) -> bool:
+    """その過去走で前（逃げ・番手）にいたか。1角通過≤2、無ければ4角通過≤2で判定。"""
+    if entry.corner_1 is not None:
+        return entry.corner_1 <= 2
+    if entry.corner_4 is not None:
+        return entry.corner_4 <= 2
+    return False
 
 
 def _to_reason_outputs(reasons: tuple[Reason, ...]) -> list[ReasonOutput]:

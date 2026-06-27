@@ -1,7 +1,7 @@
 """FastAPI 依存性注入（DI）。
 
 リクエストごとに DB セッションを払い出し、Repository → UseCase を組み立てる。
-予測戦略（RpciForecaster）は ADR-0005 に従い既定で rule-v1 を注入する。
+予測戦略（RpciForecaster）は ADR-0005 に従い既定で rule-v2 を注入する。
 Annotated 形式で定義し、ruff B008（デフォルト引数での関数呼び出し）を回避する。
 """
 

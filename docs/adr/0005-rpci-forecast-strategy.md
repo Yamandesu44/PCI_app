@@ -32,14 +32,14 @@ RpciForecaster (Protocol / ABC)
       RpciForecast = { value, label, confidence, reasons }
 
 実装:
-  RuleBasedRpciForecaster   # MVP（rule-v1）
+  RuleBasedRpciForecaster   # MVP（rule-v2）
   LgbmRpciForecaster        # 将来（lgbm-v*） ※同一IFを満たす
 ```
 
 application層・presentation層は `RpciForecaster` インターフェースにのみ依存し、
 具体実装はDIで注入する。**MLモデルへの差し替えがアプリ側コード変更ゼロで可能**。
 
-### 2. MVP: ルールベース（`model_version = "rule-v1"`）
+### 2. MVP: ルールベース（`model_version = "rule-v2"`）
 
 説明可能性を最優先し、以下の要因から想定RPCIを算出する透明なルール:
 
@@ -50,9 +50,36 @@ application層・presentation層は `RpciForecaster` インターフェースに
 | 距離 | 距離帯ごとの基準ペース |
 | コース（競馬場・芝/ダ） | コース別の傾向補正 |
 | 馬場状態 | 重馬場等の補正 |
+| **前付け馬の実績ペース傾向（rule-v2 追加）** | 逃げ・先行候補が近走で前に行ったときの個馬PCI平均を反映 |
 | 過去同条件レースの実RPCI傾向 | ベースライン |
 
 各要因の寄与を `reasons` として必ず出力する（例: 「逃げ2・先行5で前半緩み傾向」）。
+
+#### 2.1 rule-v2 改訂: 前付け馬の実績ペース傾向（2026-06-27）
+
+**動機:** rule-v1 は逃げ・先行馬の「頭数」しか見ず、「単騎なら緩める逃げ馬」と
+「ハナを切ると毎回飛ばす逃げ馬」を区別できなかった。
+
+**変更:** 逃げ・先行と判定された各馬について、近10走のうち実際に前で運んだ過去走
+（1角通過≤2、無ければ4角通過≤2）を抽出し、その馬自身の PCI（欠損時のみ当該レースの
+実績 RPCI で補完）を平均して「その馬が前にいると作りやすいペース」を推定する。
+出走する前付け候補ぶんを**等加重で平均**し、**先行争いの競合補正**（逃げ複数→速い方向）
+を加えて想定 RPCI に混合する。
+
+```
+想定RPCI = ew × (前付け候補ペース傾向の平均 + 競合補正)
+         + (1 − ew) × 頭数ベース構造値(距離・脚質)
+         + 馬場補正
+  ew = min(総前付け走数 × evidence_weight_per_sample, evidence_weight_cap)  # 上限<1
+```
+
+- **混合比 `ew`** は前付け実績の総走数に比例し、上限（既定 0.7）で頭打ち。
+  距離・脚質ベースの prior を常に 30% 以上残すことで少数サンプルへの過適合を防ぐ。
+- **前付け実績ゼロ**（新馬・差し追込のみ等）の場合は `ew=0` で **rule-v1 相当へ自動フォールバック**。
+- ペース指標は **個馬PCI主体**（前で運んだその馬の前後半ラップを重視）。
+- 重み（`evidence_weight_per_sample` / `evidence_weight_cap`）は `RuleWeights` で調整可能。
+
+ゴールデン／既存テストは `front_pace_samples` 空のとき rule-v1 と完全一致するため不変。
 
 ### 3. 展開分類（label）
 

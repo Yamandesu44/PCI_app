@@ -56,8 +56,14 @@ def _seed_history(
     rpci_actual: float | None = None,
     finish_pos: int = 3,
     grade: str | None = None,
+    corner1: int | None = None,
+    pci_actual: float | None = None,
 ) -> None:
     """指定馬に、確定済みの過去走（4角通過順位 corner4）を count 走分与える。"""
+    # FakeRepository は (race_key, horse_no) でエントリを保持するため、複数馬を
+    # 同一 race_key・同一 horse_no で seed すると相互に上書きされてしまう。
+    # 馬ごとに血統番号末尾から異なる horse_no を割り当てて衝突を防ぐ。
+    hist_horse_no = int(ketto_num[-2:]) if ketto_num[-2:].isdigit() else 1
     for i in range(count):
         rk = f"202605{i + 1:02d}05010101"
         repo.save_race(
@@ -76,14 +82,16 @@ def _seed_history(
         repo.save_entry(
             RaceEntry(
                 race_key=RaceKey(rk),
-                horse_no=1,
-                frame_no=1,
+                horse_no=hist_horse_no,
+                frame_no=hist_horse_no,
                 ketto_num=ketto_num,
                 weight=480.0,
                 jockey_code="J001",
                 trainer_code="T001",
                 finish_pos=finish_pos,
+                corner_1=corner1,
                 corner_4=corner4,
+                pci_actual=pci_actual,
             )
         )
 
@@ -129,7 +137,7 @@ class TestForecastRaceUseCase:
         output = ForecastRaceUseCase(repo).execute(UPCOMING)
 
         assert output.race_key == UPCOMING
-        assert output.model_version == "rule-v1"
+        assert output.model_version == "rule-v2"
         assert 35.0 <= output.predicted_rpci <= 65.0
         assert output.pace_label in ("ハイ", "平均", "スロー")
         assert output.scenario_headline
@@ -174,6 +182,37 @@ class TestForecastRaceUseCase:
         output = ForecastRaceUseCase(repo).execute(UPCOMING)
         assert output.pace_label == "スロー"
 
+    def test_front_pace_history_shifts_prediction(self) -> None:
+        """rule-v2: 同じ脚質構成でも、前付け時の実績ペースで想定RPCIが動く。
+
+        全馬を逃げ（4角1番手）に仕立てた2レースで、前で運んだ過去走の個馬PCIだけを
+        変える。緩める履歴（高PCI）の方が、飛ばす履歴（低PCI）よりスロー寄りになる。
+        """
+        repo_slow = FakeRaceRepository()
+        repo_fast = FakeRaceRepository()
+        _register_upcoming(repo_slow, n=4)
+        _register_upcoming(repo_fast, n=4)
+        for i in range(1, 5):
+            ketto = f"202010000{i}"
+            _seed_history(repo_slow, ketto, corner4=1, corner1=1, pci_actual=58.0, count=5)
+            _seed_history(repo_fast, ketto, corner4=1, corner1=1, pci_actual=43.0, count=5)
+
+        slow = ForecastRaceUseCase(repo_slow).execute(UPCOMING)
+        fast = ForecastRaceUseCase(repo_fast).execute(UPCOMING)
+
+        assert slow.predicted_rpci > fast.predicted_rpci
+        assert any(r.code == "front_pace_evidence" for r in slow.forecast_reasons)
+
+    def test_closer_history_does_not_build_front_evidence(self) -> None:
+        """差し・追込馬の履歴は前付け証拠に使われない（rule-v1 相当へフォールバック）。"""
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=4)
+        for i in range(1, 5):
+            # 4角12番手（追込）→ 前付けではない → front_pace_evidence は出ない
+            _seed_history(repo, f"202010000{i}", corner4=12, pci_actual=44.0, count=5)
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+        assert not any(r.code == "front_pace_evidence" for r in output.forecast_reasons)
+
     def test_no_history_defaults_to_flexible(self) -> None:
         """履歴がない馬は自在扱いでもエラーにならない。"""
         repo = FakeRaceRepository()
@@ -189,7 +228,7 @@ class TestForecastRaceUseCase:
 
         ForecastRaceUseCase(repo, mart_repo=mart_repo).execute(UPCOMING)
 
-        assert (UPCOMING, "rule-v1") in mart_repo.predicted_pace
+        assert (UPCOMING, "rule-v2") in mart_repo.predicted_pace
         assert len(mart_repo.pace_fit) == 4
         assert all(key[2] == "pai-v1" for key in mart_repo.pace_fit)
 

@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 
 from pci.domain.pace.rpci_forecast import (
     DEFAULT_WEIGHTS,
+    FrontRunnerPaceSample,
     PaceLabel,
     RaceContext,
     RpciForecaster,
@@ -27,12 +28,14 @@ def _ctx(
     styles: tuple[RunningStyleLabel, ...],
     distance_m: int = 1600,
     cond: str | None = None,
+    front_pace_samples: tuple[FrontRunnerPaceSample, ...] = (),
 ) -> RaceContext:
     return RaceContext(
         distance_m=distance_m,
         track_type="芝",
         running_styles=styles,
         track_condition=cond,
+        front_pace_samples=front_pace_samples,
     )
 
 
@@ -79,9 +82,9 @@ class TestRuleBasedForecast:
         result = forecaster.forecast(_ctx((FRONT,) * 10, cond="重"))
         assert any(r.code == "track_condition" for r in result.reasons)
 
-    def test_model_version_is_rule_v1(self) -> None:
+    def test_model_version_is_rule_v2(self) -> None:
         result = RuleBasedRpciForecaster().forecast(_ctx((FRONT,) * 10))
-        assert result.model_version == "rule-v1"
+        assert result.model_version == "rule-v2"
 
     def test_empty_field_raises(self) -> None:
         with pytest.raises(ValueError, match="脚質情報がありません"):
@@ -97,6 +100,71 @@ class TestRuleBasedForecast:
     def test_satisfies_protocol(self) -> None:
         forecaster: RpciForecaster = RuleBasedRpciForecaster()
         assert forecaster.forecast(_ctx((FRONT,) * 10)) is not None
+
+
+class TestFrontPaceEvidence:
+    """rule-v2: 前付け馬の実績ペース傾向の反映。"""
+
+    @staticmethod
+    def _sample(avg_pci: float, size: int = 5, style: RunningStyleLabel = ESCAPE) -> (
+        FrontRunnerPaceSample
+    ):
+        return FrontRunnerPaceSample(horse_no=1, style=style, avg_pci=avg_pci, sample_size=size)
+
+    def test_no_samples_matches_rule_v1_path(self) -> None:
+        """サンプル空なら頭数ベース（rule-v1相当）と完全一致する。"""
+        forecaster = RuleBasedRpciForecaster()
+        styles = (ESCAPE,) + (STALKER,) * 9
+        without = forecaster.forecast(_ctx(styles))
+        with_empty = forecaster.forecast(_ctx(styles, front_pace_samples=()))
+        assert without.value == with_empty.value
+        assert not any(r.code == "front_pace_evidence" for r in without.reasons)
+
+    def test_slow_front_history_pulls_rpci_up(self) -> None:
+        """前で緩める傾向（高PCI）の逃げ馬がいるとスロー方向へ動く。"""
+        forecaster = RuleBasedRpciForecaster()
+        styles = (ESCAPE,) + (STALKER,) * 9
+        base = forecaster.forecast(_ctx(styles))
+        slow = forecaster.forecast(_ctx(styles, front_pace_samples=(self._sample(58.0),)))
+        assert slow.value > base.value
+        assert any(r.code == "front_pace_evidence" for r in slow.reasons)
+
+    def test_fast_front_history_pulls_rpci_down(self) -> None:
+        """前で飛ばす傾向（低PCI）の逃げ馬がいるとハイ方向へ動く。"""
+        forecaster = RuleBasedRpciForecaster()
+        styles = (ESCAPE,) + (STALKER,) * 9
+        base = forecaster.forecast(_ctx(styles))
+        fast = forecaster.forecast(_ctx(styles, front_pace_samples=(self._sample(42.0),)))
+        assert fast.value < base.value
+
+    def test_more_samples_increase_evidence_weight(self) -> None:
+        """同じ平均でもサンプルが多いほど実績側に強く寄る。"""
+        forecaster = RuleBasedRpciForecaster()
+        styles = (ESCAPE,) + (STALKER,) * 9
+        base = forecaster.forecast(_ctx(styles)).value
+        few = forecaster.forecast(_ctx(styles, front_pace_samples=(self._sample(60.0, size=1),)))
+        many = forecaster.forecast(_ctx(styles, front_pace_samples=(self._sample(60.0, size=8),)))
+        assert abs(many.value - base) > abs(few.value - base)
+
+    def test_zero_size_sample_ignored(self) -> None:
+        """sample_size=0 は集計から除外され、頭数ベースのままになる。"""
+        forecaster = RuleBasedRpciForecaster()
+        styles = (ESCAPE,) + (STALKER,) * 9
+        base = forecaster.forecast(_ctx(styles))
+        with_empty = forecaster.forecast(
+            _ctx(styles, front_pace_samples=(self._sample(58.0, size=0),))
+        )
+        assert with_empty.value == base.value
+        assert not any(r.code == "front_pace_evidence" for r in with_empty.reasons)
+
+    def test_evidence_path_stays_within_clamp(self) -> None:
+        """極端なサンプルでもクランプ範囲を逸脱しない。"""
+        forecaster = RuleBasedRpciForecaster()
+        styles = (ESCAPE,) * 3 + (STALKER,) * 7
+        result = forecaster.forecast(
+            _ctx(styles, front_pace_samples=(self._sample(99.0, size=10),))
+        )
+        assert DEFAULT_WEIGHTS.rpci_min <= result.value <= DEFAULT_WEIGHTS.rpci_max
 
 
 class TestForecastProperties:

@@ -173,7 +173,7 @@ def test_forecast_persists_to_mart(client: TestClient, db_session: Session) -> N
         select(PredictedPaceModel).where(PredictedPaceModel.race_key == UPCOMING_RACE_KEY)
     ).all()
     assert len(pp_rows) == 1
-    assert pp_rows[0].model_version == "rule-v1"
+    assert pp_rows[0].model_version == "rule-v2"
     assert 35.0 <= pp_rows[0].predicted_rpci <= 65.0
     assert pp_rows[0].pace_label in ("ハイ", "平均", "スロー")
     assert isinstance(pp_rows[0].factors, list)
