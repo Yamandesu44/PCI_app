@@ -8,6 +8,7 @@ import {
   ListFilter,
   Search,
 } from "lucide-react";
+import { RaceDateCalendar } from "@/components/RaceDateCalendar";
 
 import { api } from "@/lib/api";
 import {
@@ -252,35 +253,6 @@ function StatTile({
   );
 }
 
-function RaceDateTabs({ dates, selectedDate }: { dates: string[]; selectedDate: string | null }) {
-  if (dates.length === 0) return null;
-
-  return (
-    <nav
-      className="mb-8 flex gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm"
-      aria-label="開催日を選択"
-    >
-      {dates.map((date) => {
-        const selected = date === selectedDate;
-        return (
-          <Link
-            key={date}
-            href={`/?date=${date}`}
-            className={[
-              "shrink-0 rounded-md border px-4 py-2 text-sm font-semibold transition",
-              selected
-                ? "border-slate-950 bg-slate-950 text-white"
-                : "border-slate-200 bg-white text-slate-700 hover:border-slate-400",
-            ].join(" ")}
-            aria-current={selected ? "page" : undefined}
-          >
-            {formatRaceDate(date)}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
 
 function RaceGroupedSection({
   id,
@@ -382,6 +354,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       !weekendItems.some((item) => item.race.race_key === race.race_key),
   );
   const confirmedItems = visibleItems.filter(({ race }) => statusTone(race.status) === "confirmed");
+  // 過去日付で status="entries" のまま（成績未取込）のレース。確定後・出走前いずれにも非表示になるため第4セクションで救済。
+  const pastEntryItems = visibleItems.filter(
+    ({ race }) =>
+      race.race_date < today &&
+      statusTone(race.status) !== "confirmed" &&
+      !weekendItems.some((i) => i.race.race_key === race.race_key) &&
+      !upcomingItems.some((i) => i.race.race_key === race.race_key),
+  );
   const venueCount = new Set(visibleItems.map(({ race }) => race.jyo_cd)).size;
 
   return (
@@ -405,6 +385,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <a className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold" href="#confirmed">
               確定後 {confirmedItems.length}
             </a>
+            {pastEntryItems.length > 0 && (
+              <a className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700" href="#past-entries">
+                成績未取込 {pastEntryItems.length}
+              </a>
+            )}
           </nav>
         </div>
       </section>
@@ -424,7 +409,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <StatTile icon={<ListFilter className="h-4 w-4" />} label="開催場" value={venueCount} />
       </section>
 
-      <RaceDateTabs dates={dates} selectedDate={selectedDate} />
+      <RaceDateCalendar dates={dates} selectedDate={selectedDate} />
 
       <div className="space-y-9">
         <RaceGroupedSection
@@ -448,6 +433,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           description="ペース分析と回顧コメントを確認できるレース"
           items={confirmedItems}
         />
+
+        {pastEntryItems.length > 0 && (
+          <RaceGroupedSection
+            id="past-entries"
+            title="成績未取込レース"
+            description="出走表データあり・成績未取込。--step results を実行すると確定後に移動します"
+            items={pastEntryItems}
+          />
+        )}
       </div>
 
       <div className="mt-8 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
