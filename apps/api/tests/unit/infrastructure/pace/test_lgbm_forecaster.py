@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,6 +17,7 @@ from pci.infrastructure.pace.lgbm_forecaster import (
     LightGBMRpciForecaster,
     SplitLightGBMRpciForecaster,
     build_features,
+    load_best_forecaster,
 )
 
 FRONT = RunningStyleLabel.FRONT
@@ -214,3 +216,129 @@ class TestSplitLightGBMRpciForecaster:
         forecaster = self._make_split_forecaster()
         with pytest.raises(ValueError, match="脚質情報がありません"):
             forecaster.forecast(_ctx((), track_type="芝"))
+
+
+class TestLoadBestForecaster:
+    """load_best_forecaster() のモデル選択優先度を検証する。"""
+
+    def test_no_models_returns_rule_based(self, tmp_path: Path) -> None:
+        """モデルファイルが 1 つも無い場合は RuleBasedRpciForecaster を返す。"""
+        from pci.domain.pace.rpci_forecast import RuleBasedRpciForecaster
+
+        result = load_best_forecaster(
+            model_path=tmp_path / "none.txt",
+            turf_model_path=tmp_path / "turf_none.txt",
+            dirt_model_path=tmp_path / "dirt_none.txt",
+        )
+        assert isinstance(result, RuleBasedRpciForecaster)
+
+    def test_split_models_take_priority_over_unified(self, tmp_path: Path) -> None:
+        """芝・ダート別モデルが揃っていれば統合モデルより優先される。"""
+        turf = tmp_path / "turf.txt"
+        dirt = tmp_path / "dirt.txt"
+        unified = tmp_path / "unified.txt"
+        turf.write_text("dummy")
+        dirt.write_text("dummy")
+        unified.write_text("dummy")
+
+        mock_booster = MagicMock()
+        mock_booster.predict.return_value = [52.0]
+
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            return_value=mock_booster,
+        ):
+            result = load_best_forecaster(
+                model_path=unified,
+                turf_model_path=turf,
+                dirt_model_path=dirt,
+            )
+        assert isinstance(result, SplitLightGBMRpciForecaster)
+
+    def test_unified_model_used_when_split_absent(self, tmp_path: Path) -> None:
+        """芝・ダート別モデルが無く統合モデルがあれば LightGBMRpciForecaster を返す。"""
+        unified = tmp_path / "unified.txt"
+        unified.write_text("dummy")
+
+        mock_booster = MagicMock()
+        mock_booster.predict.return_value = [50.0]
+
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            return_value=mock_booster,
+        ):
+            result = load_best_forecaster(
+                model_path=unified,
+                turf_model_path=tmp_path / "turf_none.txt",
+                dirt_model_path=tmp_path / "dirt_none.txt",
+            )
+        assert isinstance(result, LightGBMRpciForecaster)
+
+    def test_split_load_failure_falls_back_to_unified(self, tmp_path: Path) -> None:
+        """芝モデルのロード失敗（SplitForecaster 初期化失敗）時に統合モデルへフォールバックする。
+
+        SplitLightGBMRpciForecaster は turf を先にロードするため、
+        turf のロード失敗時点で例外が発生し dirt は呼ばれない。
+        その後 load_best_forecaster の except ブロックで統合モデルへ進む。
+        """
+        turf = tmp_path / "turf.txt"
+        dirt = tmp_path / "dirt.txt"
+        unified = tmp_path / "unified.txt"
+        turf.write_text("dummy")
+        dirt.write_text("dummy")
+        unified.write_text("dummy")
+
+        call_count = 0
+
+        def raise_on_turf(path: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:  # turf ロードだけ失敗 → SplitForecaster 初期化失敗
+                raise RuntimeError("corrupt turf model")
+            m = MagicMock()
+            m.predict.return_value = [50.0]
+            return m
+
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            side_effect=raise_on_turf,
+        ):
+            result = load_best_forecaster(
+                model_path=unified,
+                turf_model_path=turf,
+                dirt_model_path=dirt,
+            )
+        assert isinstance(result, LightGBMRpciForecaster)
+
+    def test_all_load_failures_fall_back_to_rule_based(self, tmp_path: Path) -> None:
+        """全モデルのロードに失敗しても RuleBasedRpciForecaster で安全に動作する。"""
+        from pci.domain.pace.rpci_forecast import RuleBasedRpciForecaster
+
+        turf = tmp_path / "turf.txt"
+        dirt = tmp_path / "dirt.txt"
+        unified = tmp_path / "unified.txt"
+        for p in (turf, dirt, unified):
+            p.write_text("dummy")
+
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            side_effect=RuntimeError("always fail"),
+        ):
+            result = load_best_forecaster(
+                model_path=unified,
+                turf_model_path=turf,
+                dirt_model_path=dirt,
+            )
+        assert isinstance(result, RuleBasedRpciForecaster)
+
+    def test_rule_based_fallback_is_functional(self, tmp_path: Path) -> None:
+        """フォールバック先の RuleBasedRpciForecaster が正常に予測できる。"""
+        forecaster = load_best_forecaster(
+            model_path=tmp_path / "none.txt",
+            turf_model_path=tmp_path / "none_turf.txt",
+            dirt_model_path=tmp_path / "none_dirt.txt",
+        )
+        ctx = _ctx((FRONT,) * 5 + (STALKER,) * 5, track_type="芝")
+        result = forecaster.forecast(ctx)
+        assert result.model_version == "rule-v4"
+        assert result.value >= 35.0
