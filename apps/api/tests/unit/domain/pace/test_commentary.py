@@ -97,9 +97,21 @@ class TestForecastComment:
     def test_front_runner_count_reflected(self) -> None:
         gen = RuleBasedCommentGenerator()
         none_front = "".join(gen.forecast_comment(_forecast_input(front=())).body)
+        one_front = "".join(gen.forecast_comment(_forecast_input(front=(1,))).body)
         many_front = "".join(gen.forecast_comment(_forecast_input(front=(1, 2, 3))).body)
         assert "見当たらず" in none_front
+        assert "1頭だけで" in one_front
         assert "3頭そろい" in many_front
+
+    def test_multiple_beneficiaries_mentions_others(self) -> None:
+        """注目馬が2頭以上のとき「複数います」の文言が入る。"""
+        out = RuleBasedCommentGenerator().forecast_comment(
+            _forecast_input(beneficiaries=(BeneficiaryRef(3, 82.0), BeneficiaryRef(6, 75.0)))
+        )
+        joined = "".join(out.body)
+        assert "3番" in joined
+        assert "複数" in joined
+        _assert_beginner_safe(out)
 
 
 class TestReviewComment:
