@@ -5,7 +5,9 @@ import datetime
 from pci.domain.pace.affinity import (
     PaceAffinityRaceResult,
     PaceSpeedLevel,
+    affinity_label,
     build_horse_pace_affinity_profile,
+    is_good_run,
     pace_level_from_index,
 )
 from pci.domain.pace.running_style import RunningStyleLabel
@@ -82,3 +84,173 @@ class TestHorsePaceAffinityProfile:
         assert profile.is_fallback is True
         assert profile.preferred_level == PaceSpeedLevel.VERY_SLOW
         assert profile.scores[PaceSpeedLevel.SLOW] == 55
+
+    def test_uses_pci3_when_rpci_is_none(self) -> None:
+        """rpci_actual が None のとき pci3_actual を代替ペース指標として使う。"""
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (_result("2026010105010101", 1, None, pci3=46.0),),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.sample_size == 1
+        assert profile.preferred_level == PaceSpeedLevel.VERY_HIGH
+
+    def test_recency_weight_medium_old(self) -> None:
+        """181〜365 日前の好走は weight 0.9 でサンプルに含まれる。"""
+        as_of = datetime.date(2026, 6, 28)
+        race_date = as_of - datetime.timedelta(days=200)
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (_result("2026010105010101", 1, 48.0, race_date=race_date),),
+            as_of=as_of,
+        )
+        assert profile.sample_size == 1
+        assert profile.preferred_level == PaceSpeedLevel.HIGH
+
+    def test_recency_weight_old(self) -> None:
+        """366〜730 日前の好走は weight 0.75 でサンプルに含まれる。"""
+        as_of = datetime.date(2026, 6, 28)
+        race_date = as_of - datetime.timedelta(days=500)
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (_result("2026010105010101", 1, 54.0, race_date=race_date),),
+            as_of=as_of,
+        )
+        assert profile.sample_size == 1
+        assert profile.preferred_level == PaceSpeedLevel.SLOW
+
+    def test_recency_weight_very_old(self) -> None:
+        """730 日超の好走は weight 0.6 でサンプルに含まれる。"""
+        as_of = datetime.date(2026, 6, 28)
+        race_date = as_of - datetime.timedelta(days=800)
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (_result("2026010105010101", 1, 48.0, race_date=race_date),),
+            as_of=as_of,
+        )
+        assert profile.sample_size == 1
+        assert profile.preferred_level == PaceSpeedLevel.HIGH
+
+    def test_front_fallback_scores(self) -> None:
+        """FRONT 脚質のフォールバックスコアが平均・スローに強い。"""
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.FRONT,
+            (_result("2026010105010101", 8, 48.0),),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.is_fallback is True
+        assert profile.scores[PaceSpeedLevel.SLOW] == 55
+        assert profile.scores[PaceSpeedLevel.AVERAGE] == 55
+        assert profile.scores[PaceSpeedLevel.VERY_HIGH] == 30
+
+    def test_stalker_fallback_scores(self) -> None:
+        """STALKER 脚質のフォールバックスコアが速い流れに強い。"""
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.STALKER,
+            (_result("2026010105010101", 8, 48.0),),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.is_fallback is True
+        assert profile.scores[PaceSpeedLevel.HIGH] == 55
+        assert profile.preferred_level == PaceSpeedLevel.HIGH
+
+
+class TestAffinityLabel:
+    def test_all_levels(self) -> None:
+        assert affinity_label(75) == "高相性"
+        assert affinity_label(100) == "高相性"
+        assert affinity_label(74) == "合致"
+        assert affinity_label(55) == "合致"
+        assert affinity_label(54) == "中立"
+        assert affinity_label(40) == "中立"
+        assert affinity_label(39) == "不安"
+        assert affinity_label(0) == "不安"
+
+
+class TestIsGoodRun:
+    def test_none_finish_pos_returns_false(self) -> None:
+        assert is_good_run(None, None) is False
+        assert is_good_run(None, "G1") is False
+
+
+class TestEvidenceEdgeCases:
+    def test_good_run_with_no_pace_index_is_excluded(self) -> None:
+        """好走でも rpci/pci3/pci_actual が全て None なら evidence に含まれない。"""
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (
+                _result("2026010105010101", 1, None),  # 好走だが pace index なし
+                _result("2026010205010101", 1, 48.0),  # 通常の好走
+            ),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.sample_size == 1  # None のエントリは除外される
+
+    def test_pci_actual_used_when_rpci_and_pci3_none(self) -> None:
+        """rpci_actual / pci3_actual が共に None のとき pci_actual を代替として使う。"""
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (_result("2026010105010101", 1, None, pci3=None, pci=48.0),),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.sample_size == 1
+        assert profile.preferred_level == PaceSpeedLevel.HIGH
+
+
+class TestConfidenceThresholds:
+    def test_confidence_high_with_three_samples(self) -> None:
+        """3 サンプルのとき confidence = 0.8。"""
+        results = tuple(
+            _result(f"202601{i:02d}05010101", 1, 48.0) for i in range(1, 4)
+        )
+        profile = build_horse_pace_affinity_profile(
+            "H001", RunningStyleLabel.CLOSER, results, as_of=datetime.date(2026, 6, 1)
+        )
+        assert profile.sample_size == 3
+        assert profile.confidence == 0.8
+
+    def test_confidence_max_with_five_samples(self) -> None:
+        """5 サンプル以上のとき confidence = 1.0。"""
+        results = tuple(
+            _result(f"202601{i:02d}05010101", 1, 48.0) for i in range(1, 6)
+        )
+        profile = build_horse_pace_affinity_profile(
+            "H001", RunningStyleLabel.CLOSER, results, as_of=datetime.date(2026, 6, 1)
+        )
+        assert profile.sample_size == 5
+        assert profile.confidence == 1.0
+
+
+class TestFallbackStylesCoverage:
+    """CLOSER / FLEXIBLE 脚質のフォールバックスコアを検証する。"""
+
+    def test_closer_fallback_scores(self) -> None:
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (_result("2026010105010101", 8, 48.0),),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.is_fallback is True
+        assert profile.scores[PaceSpeedLevel.VERY_HIGH] == 60
+        assert profile.scores[PaceSpeedLevel.HIGH] == 55
+        assert profile.preferred_level == PaceSpeedLevel.VERY_HIGH
+
+    def test_flexible_fallback_uses_default_scores(self) -> None:
+        """FLEXIBLE 脚質はデフォルトフォールバック（全レベル 40）になる。"""
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.FLEXIBLE,
+            (_result("2026010105010101", 8, 48.0),),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.is_fallback is True
+        assert all(v == 40 for v in profile.scores.values())

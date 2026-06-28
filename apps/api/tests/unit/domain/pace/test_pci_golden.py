@@ -174,3 +174,23 @@ def test_aggregate_rpci_falls_back_to_average_without_lap() -> None:
     result = aggregate_rpci([40.0, 45.0, 50.0], [1, 2, 3])
     assert result.rpci == pytest.approx(45.0)
     assert any(r.code == "rpci_sample" for r in result.reasons)
+
+
+def test_aggregate_rpci_raises_on_empty_pci_values() -> None:
+    """pci_values が空の場合は ValueError。"""
+    with pytest.raises(ValueError, match="空"):
+        aggregate_rpci([], [])
+
+
+def test_aggregate_rpci_raises_on_length_mismatch() -> None:
+    """pci_values と finish_positions の長さが違う場合は ValueError。"""
+    with pytest.raises(ValueError, match="一致"):
+        aggregate_rpci([50.0], [1, 2])
+
+
+def test_aggregate_rpci_pci3_unavailable_when_no_top3_finishers() -> None:
+    """上位3着馬が含まれない場合 pci3=None・pci3_unavailable reason を付与する。"""
+    result = aggregate_rpci([48.0, 52.0], [4, 5])
+    assert result.pci3 is None
+    codes = {r.code for r in result.reasons}
+    assert "pci3_unavailable" in codes
