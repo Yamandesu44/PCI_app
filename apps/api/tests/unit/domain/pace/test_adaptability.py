@@ -12,6 +12,7 @@ from pci.domain.pace.adaptability import (
     PaceAdaptabilityScorer,
     PaiWeights,
 )
+from pci.domain.pace.affinity import HorsePaceAffinityProfile, PaceSpeedLevel
 from pci.domain.pace.rpci_forecast import PaceLabel, RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 
@@ -131,3 +132,54 @@ class TestPaiProperties:
             assert result.fit_label == FitLabel.UNFAVORABLE
         else:
             assert result.fit_label == FitLabel.NEUTRAL
+
+
+def _make_affinity(is_fallback: bool = False) -> HorsePaceAffinityProfile:
+    """テスト用の HorsePaceAffinityProfile を生成する。"""
+    scores = {level: 50 for level in PaceSpeedLevel}
+    scores[PaceSpeedLevel.HIGH] = 80
+    return HorsePaceAffinityProfile(
+        horse_id="H001",
+        sample_size=0 if is_fallback else 3,
+        preferred_level=PaceSpeedLevel.HIGH,
+        scores=scores,
+        evidence=(),
+        confidence=0.4 if is_fallback else 0.8,
+        is_fallback=is_fallback,
+    )
+
+
+class TestPaiPaceAffinityBlend:
+    """pace_affinity を渡した場合の _blend_pace_affinity ブランチを検証する。"""
+
+    def test_pace_affinity_reason_added(self) -> None:
+        """pace_affinity 指定時に pace_affinity reason が出力される。"""
+        profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity())
+        result = PaceAdaptabilityScorer().score(profile, AVERAGE, 1600)
+        assert any(r.code == "pace_affinity" for r in result.reasons)
+
+    def test_non_fallback_description_references_past_runs(self) -> None:
+        """好走データあり（is_fallback=False）の説明文は「過去の好走は」を含む。"""
+        profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity(is_fallback=False))
+        result = PaceAdaptabilityScorer().score(profile, AVERAGE, 1600)
+        reason = next(r for r in result.reasons if r.code == "pace_affinity")
+        assert "過去の好走は" in reason.description
+
+    def test_fallback_description_notes_insufficient_data(self) -> None:
+        """好走データ不足（is_fallback=True）の説明文は補完を示すメッセージを含む。"""
+        profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity(is_fallback=True))
+        result = PaceAdaptabilityScorer().score(profile, AVERAGE, 1600)
+        reason = next(r for r in result.reasons if r.code == "pace_affinity")
+        assert "過去好走データが少ない" in reason.description
+
+    def test_pai_is_blended_50_50_with_affinity_score(self) -> None:
+        """PAI = (base_pai × 0.5) + (affinity_score × 0.5) のブレンドを検証する。
+
+        ESCAPE + AVERAGE(50.0): preferred=55, gap=5 → rpci_penalty=25
+        base_pai = 100 - 25 = 75.0
+        predicted_level=AVERAGE → affinity_score=50
+        blended = (75 × 0.5) + (50 × 0.5) = 62.5
+        """
+        profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity())
+        result = PaceAdaptabilityScorer().score(profile, AVERAGE, 1600)
+        assert result.pai == pytest.approx(62.5, abs=0.1)
