@@ -318,7 +318,7 @@ class ForecastBacktester:
         horse_samples: list[HorseSample] = []
         n_races = 0
         skipped = 0
-        model_version = ""
+        model_versions: set[str] = set()
 
         for race in targets:
             if race.rpci_actual is None:
@@ -332,7 +332,7 @@ class ForecastBacktester:
                 skipped += 1
                 continue
 
-            model_version = model_version or out.model_version
+            model_versions.add(out.model_version)
             rpci_samples.append(
                 RpciSample(
                     race_key=key,
@@ -357,6 +357,7 @@ class ForecastBacktester:
                 )
             n_races += 1
 
+        model_version = " / ".join(sorted(model_versions)) if model_versions else ""
         return BacktestReport(
             model_version=model_version,
             n_races=n_races,
