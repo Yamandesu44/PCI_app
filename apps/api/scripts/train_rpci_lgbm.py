@@ -23,6 +23,8 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, "src")
 
 try:
@@ -117,15 +119,18 @@ def main() -> None:
 
     print(f"取得: {len(rows):,} レース")
 
-    # 特徴量と目的変数に分割
-    x_all = [[float(v) for v in row[:-1]] for row in rows]
-    y = [float(row[-1]) for row in rows]
+    # 特徴量と目的変数を numpy 配列に変換（LightGBM 4.x は ndarray 必須）
+    x_np = np.array(
+        [[float(v) if v is not None else 0.0 for v in row[:-1]] for row in rows],
+        dtype=np.float64,
+    )
+    y_np = np.array([float(row[-1]) for row in rows], dtype=np.float64)
 
     # 80/20 分割（時系列順のため先頭を訓練、後続をテストとしない）
     # ランダムシャッフルなし → 直近 20% をテストに使う（将来データ漏洩に注意）
-    split = int(len(x_all) * 0.8)
-    x_train, x_test = x_all[:split], x_all[split:]
-    y_train, y_test = y[:split], y[split:]
+    split = int(len(x_np) * 0.8)
+    x_train, x_test = x_np[:split], x_np[split:]
+    y_train, y_test = y_np[:split], y_np[split:]
 
     print(f"訓練: {len(x_train):,} / テスト: {len(x_test):,}")
 
