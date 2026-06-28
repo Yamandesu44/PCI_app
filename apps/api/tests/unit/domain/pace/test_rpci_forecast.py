@@ -87,9 +87,9 @@ class TestRuleBasedForecast:
         result = forecaster.forecast(_ctx((FRONT,) * 10, cond="重"))
         assert any(r.code == "track_condition" for r in result.reasons)
 
-    def test_model_version_is_rule_v5(self) -> None:
+    def test_model_version_is_rule_v4(self) -> None:
         result = RuleBasedRpciForecaster().forecast(_ctx((FRONT,) * 10))
-        assert result.model_version == "rule-v5"
+        assert result.model_version == "rule-v4"
 
     def test_empty_field_raises(self) -> None:
         with pytest.raises(ValueError, match="脚質情報がありません"):
@@ -136,14 +136,13 @@ class TestRuleBasedForecast:
             )
 
     def test_dirt_uses_dirt_thresholds(self) -> None:
-        """ダートは専用閾値（ハイ<40/スロー>46）・芝は緩和閾値（ハイ<48/スロー>52）を使う。"""
-        # ダート実績平均 43 はダート専用閾値では平均帯（40〜46）に収まる
+        """ダートは専用閾値（ハイ<40/スロー>46）を使い、スロー判定ができる（rule-v4）。"""
+        # ダート実績平均 43 は芝閾値 49 では全員ハイになるが、
+        # ダート専用閾値では平均帯（40〜46）に収まる
         assert classify_pace(43.0, "ダート") == PaceLabel.AVERAGE
-        # RPCI=48 はダートではスロー・芝 rule-v5 では平均帯下端（48 以上 → 平均）
+        # RPCI=48 は芝だとハイ（<49）・ダートだとスロー（>46）
         assert classify_pace(48.0, "ダート") == PaceLabel.SLOW
-        assert classify_pace(48.0, "芝") == PaceLabel.AVERAGE   # rule-v5: 48 は平均帯
-        assert classify_pace(47.9, "芝") == PaceLabel.HIGH       # 48 未満 → ハイ
-        assert classify_pace(52.1, "芝") == PaceLabel.SLOW       # 52 超 → スロー
+        assert classify_pace(48.0, "芝") == PaceLabel.HIGH
 
     def test_dirt_all_closers_can_give_slow_label(self) -> None:
         """ダート差し追込フィールドで専用閾値によりスロー判定が取れる（rule-v4）。"""
