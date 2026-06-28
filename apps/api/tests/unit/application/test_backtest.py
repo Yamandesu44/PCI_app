@@ -9,14 +9,20 @@ from __future__ import annotations
 import datetime
 
 from pci.application.backtest import (
+    BacktestReport,
     ForecastBacktester,
     HorseSample,
+    PaiBand,
+    PaiLift,
+    RpciAccuracy,
     RpciSample,
     _AsOfRaceRepository,
+    format_report,
     summarize_pai_lift,
     summarize_rpci,
 )
 from pci.domain.pace.rpci_forecast import PaceLabel
+from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
@@ -143,6 +149,65 @@ def _seed_result_race(
     return race
 
 
+class TestAsOfRepositoryPassthroughs:
+    """_AsOfRaceRepository の素通しメソッドが inner に委譲することを確認する。"""
+
+    def _make(self) -> tuple[FakeRaceRepository, _AsOfRaceRepository]:
+        inner = FakeRaceRepository()
+        return inner, _AsOfRaceRepository(inner, datetime.date(2026, 6, 28))
+
+    def test_read_passthroughs(self) -> None:
+        _, as_of = self._make()
+        assert as_of.list_recent_races(5) == []
+        assert as_of.list_race_dates() == []
+        assert as_of.list_races_by_date(datetime.date(2026, 6, 28)) == []
+
+    def test_race_write_passthroughs(self) -> None:
+        inner, as_of = self._make()
+        key = RaceKey("2026062805010101")
+        race = Race(
+            race_key=key,
+            race_date=datetime.date(2026, 6, 28),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=1,
+            status=RaceStatus.RESULT,
+        )
+        as_of.save_race(race)
+        assert inner.find_by_key(key) is not None
+
+        entry = RaceEntry(
+            race_key=key,
+            horse_no=1,
+            frame_no=1,
+            ketto_num="H001",
+            weight=480.0,
+            jockey_code="J001",
+            trainer_code="T001",
+        )
+        as_of.save_entry(entry)
+        assert len(inner.find_entries(key)) == 1
+
+        assert as_of.delete_race(key) is True
+        assert inner.find_by_key(key) is None
+
+    def test_master_write_passthroughs(self) -> None:
+        inner, as_of = self._make()
+        as_of.save_horse(Horse(ketto_num="H001", name="テスト"))
+        as_of.save_jockey(Jockey(code="J001", name="騎手"))
+        as_of.save_trainer(Trainer(code="T001", name="調教師"))
+        as_of.ensure_horses(["H002"])
+        as_of.ensure_jockeys(["J002"])
+        as_of.ensure_trainers(["T002"])
+        assert "H001" in inner._horses
+        assert "J001" in inner._jockeys
+        assert "T001" in inner._trainers
+        assert "H002" in inner._horses
+        assert "J002" in inner._jockeys
+        assert "T002" in inner._trainers
+
+
 class TestAsOfRepository:
     def test_excludes_races_on_or_after_cutoff(self) -> None:
         repo = FakeRaceRepository()
@@ -188,3 +253,67 @@ class TestForecastBacktesterEndToEnd:
         assert report.n_races == 0
         assert report.skipped == 1
         assert report.rpci is None
+
+    def test_exception_in_predict_increments_skipped(self) -> None:
+        """_predict_as_of で例外が起きたレースは skipped カウントされる。"""
+        repo = FakeRaceRepository()
+        # リポジトリに保存せず targets に渡す → predict 時に ValueError
+        phantom = Race(
+            race_key=RaceKey("2026062805010101"),
+            race_date=datetime.date(2026, 6, 28),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=0,
+            status=RaceStatus.RESULT,
+            rpci_actual=50.0,
+        )
+        report = ForecastBacktester(repo).run([phantom])
+        assert report.n_races == 0
+        assert report.skipped == 1
+
+
+class TestFormatReport:
+    def test_full_report_contains_all_sections(self) -> None:
+        """rpci + pai が両方ある場合、全セクションが出力される。"""
+        report = BacktestReport(
+            model_version="rule-v1",
+            n_races=10,
+            n_horses=80,
+            skipped=2,
+            rpci=RpciAccuracy(
+                n=10,
+                mae=2.5,
+                rmse=3.1,
+                bias=0.5,
+                label_accuracy=0.7,
+                per_label_accuracy={"PaceLabel.SLOW": 0.8},
+            ),
+            pai=PaiLift(
+                n=80,
+                baseline_rate=0.3,
+                bands=[PaiBand(0, 50, 40, 10), PaiBand(50, 100, 40, 20)],
+                point_biserial=0.25,
+                top_band_lift=1.67,
+            ),
+        )
+        text = format_report(report)
+        assert "バックテスト結果" in text
+        assert "rule-v1" in text
+        assert "MAE" in text
+        assert "point-biserial" in text
+        assert "リフト" in text
+
+    def test_no_samples_shows_fallback_sections(self) -> None:
+        """rpci = None / pai = None のとき「有効サンプルなし」が出力される。"""
+        report = BacktestReport(
+            model_version="",
+            n_races=0,
+            n_horses=0,
+            skipped=5,
+            rpci=None,
+            pai=None,
+        )
+        text = format_report(report)
+        assert "(不明)" in text
+        assert "有効サンプルなし" in text
