@@ -212,6 +212,7 @@ cd apps/api && python -m scripts.backtest_forecast --limit 200
 - 0006: DB 3層化（raw/core/mart）
 - 0007: フロントエンド構成（Next.js App Router + OpenAPI 型共有）
 - 0008: 展開コメント生成方式（ルールベースNLG + LLM疎結合IF）
+- 0009: ペース指標カラムの配置（core 層 confirmed PCI 埋め込み + mart 層版管理分離）
 
 ---
 
