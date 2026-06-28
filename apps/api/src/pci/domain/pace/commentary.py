@@ -121,7 +121,9 @@ _PACE_WORD: dict[PaceLabel, str] = {
 }
 
 _BETTING_HINT: dict[PaceLabel, str] = {
-    PaceLabel.HIGH: "馬券では、最後まで脚を使える馬や、少し後ろから運べる馬を相手に入れておきたいです。",
+    PaceLabel.HIGH: (
+        "馬券では、最後まで脚を使える馬や、少し後ろから運べる馬を相手に入れておきたいです。"
+    ),
     PaceLabel.AVERAGE: "馬券では、展開だけで決めつけず、近走内容やコース相性も合わせて見たいです。",
     PaceLabel.SLOW: "馬券では、前めの位置を取れそうな馬や、直線で素早く動ける馬を重視したいです。",
 }
@@ -218,7 +220,10 @@ def _beneficiary_sentence(beneficiaries: tuple[BeneficiaryRef, ...]) -> str:
         return "突出して展開が向く馬は少なく、力関係どおりに決まりそうです。"
     top = beneficiaries[0]
     if len(beneficiaries) == 1:
-        return f"この流れで注目したいのは{top.horse_no}番です。展開がかみ合えば力を出しやすい一頭です。"
+        return (
+            f"この流れで注目したいのは{top.horse_no}番です。"
+            "展開がかみ合えば力を出しやすい一頭です。"
+        )
     return (
         f"この流れで特に注目したいのが{top.horse_no}番です。"
         f"同じように流れが向きそうな馬も複数います。"

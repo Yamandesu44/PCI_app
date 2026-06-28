@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Iterable
+from typing import Any, cast
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
@@ -113,8 +115,11 @@ class SqlAlchemyRaceRepository:
         self._s.execute(delete(PaceFitModel).where(PaceFitModel.race_key == race_key))
         self._s.execute(delete(PredictedPaceModel).where(PredictedPaceModel.race_key == race_key))
         self._s.execute(delete(RaceEntryModel).where(RaceEntryModel.race_key == race_key))
-        result = self._s.execute(delete(RaceModel).where(RaceModel.race_key == race_key))
-        return bool(result.rowcount)
+        cursor = cast(
+            CursorResult[Any],
+            self._s.execute(delete(RaceModel).where(RaceModel.race_key == race_key)),
+        )
+        return bool(cursor.rowcount)
 
     # ----- 変換（domain ↔ ORM） -----
 

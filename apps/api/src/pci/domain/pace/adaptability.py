@@ -147,7 +147,10 @@ class PaceAdaptabilityScorer:
     ) -> float:
         if profile.distance_aptitude_m is None:
             reasons.append(
-                Reason(code="distance_no_data", description="距離面は大きな不安材料を見ていません。")
+                Reason(
+                    code="distance_no_data",
+                    description="距離面は大きな不安材料を見ていません。",
+                )
             )
             return 0.0
         gap_m = abs(race_distance_m - profile.distance_aptitude_m)
@@ -172,7 +175,9 @@ class PaceAdaptabilityScorer:
                 )
             )
             return penalty
-        reasons.append(Reason(code="track_ok", description="馬場面は大きな不安材料を見ていません。"))
+        reasons.append(
+            Reason(code="track_ok", description="馬場面は大きな不安材料を見ていません。")
+        )
         return 0.0
 
     def _blend_pace_affinity(
