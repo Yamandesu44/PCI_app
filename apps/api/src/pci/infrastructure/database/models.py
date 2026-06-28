@@ -8,7 +8,7 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
-from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import BigInteger, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -89,6 +89,22 @@ class RaceEntryModel(Base):
     corner_4: Mapped[int | None] = mapped_column(Integer)
     pci_actual: Mapped[float | None] = mapped_column(Float)
     running_style: Mapped[str | None] = mapped_column(String(10))
+
+
+class IngestLogModel(Base):
+    """バッチ取り込みの実行ログ（監査証跡・再実行判定用）。"""
+
+    __tablename__ = "ingest_log"
+    __table_args__ = (Index("ix_ingest_log_batch_date", "batch_date"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True)
+    batch_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    step: Mapped[str] = mapped_column(String(30), nullable=False)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    started_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str | None] = mapped_column(String(10))
+    error_msg: Mapped[str | None] = mapped_column(Text)
 
 
 class PredictedPaceModel(Base):

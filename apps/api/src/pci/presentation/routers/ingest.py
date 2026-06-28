@@ -120,6 +120,22 @@ class ResultResponse(BaseModel):
     entry_pcis: dict[int, float] = {}
 
 
+class IngestLogBody(BaseModel):
+    """バッチ実行ログの記録リクエスト。"""
+
+    batch_date: datetime.date
+    step: str
+    mode: str
+    started_at: datetime.datetime
+    finished_at: datetime.datetime | None = None
+    status: str | None = None  # 'running' | 'ok' | 'error'
+    error_msg: str | None = None
+
+
+class IngestLogResponse(BaseModel):
+    id: int
+
+
 # ----- エンドポイント -----
 
 @router.post("/horses", response_model=IngestResponse, status_code=status.HTTP_200_OK)
@@ -239,6 +255,30 @@ def ingest_results(
         formula_version=out.formula_version,
         entry_pcis=out.entry_pcis,
     )
+
+
+@router.post("/log", response_model=IngestLogResponse, status_code=status.HTTP_200_OK)
+def write_ingest_log(
+    body: IngestLogBody,
+    session: SessionDep,
+    _auth: AuthDep,
+) -> IngestLogResponse:
+    """バッチ取り込みの実行ログを記録する（監査証跡・再実行判定用）。"""
+    from pci.infrastructure.database.models import IngestLogModel
+
+    log = IngestLogModel(
+        batch_date=body.batch_date,
+        step=body.step,
+        mode=body.mode,
+        started_at=body.started_at,
+        finished_at=body.finished_at,
+        status=body.status,
+        error_msg=body.error_msg,
+    )
+    session.add(log)
+    session.commit()
+    session.refresh(log)
+    return IngestLogResponse(id=log.id)
 
 
 @router.delete("/races/{race_key}", response_model=IngestResponse, status_code=status.HTTP_200_OK)

@@ -47,6 +47,26 @@ _log = logging.getLogger(__name__)
 _MASTER_FLUSH_SIZE = 1000
 
 
+def _notify_failure(step: str, date_from: str, error: str) -> None:
+    """NOTIFY_WEBHOOK_URL が設定されていれば Slack 互換 Webhook に失敗通知を送る。"""
+    url = os.environ.get("NOTIFY_WEBHOOK_URL", "")
+    if not url:
+        return
+    try:
+        import httpx
+
+        msg = (
+            f":x: *ingestion-worker 失敗*\n"
+            f"• step: `{step}`\n"
+            f"• 日付: `{date_from}`\n"
+            f"• エラー: ```{error[:500]}```"
+        )
+        httpx.post(url, json={"text": msg}, timeout=10.0)
+        _log.info("失敗通知を送信しました")
+    except Exception as exc:
+        _log.warning("失敗通知の送信に失敗しました: %s", exc)
+
+
 def _setup_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -400,12 +420,22 @@ def main() -> None:
         args.race_option,
     )
 
+    started_at = datetime.datetime.now(datetime.timezone.utc)
+
     try:
         if args.mode == "mykeibadb":
             if args.step == "special-entries":
                 _log.info("--- mykeibadb 特別登録取り込み ---")
                 ingest_mykeibadb_special_entries(api, date_from, date_to)
                 _log.info("=== ingestion-worker 完了 ===")
+                api.log_batch(
+                    batch_date=date_from,
+                    step=args.step,
+                    mode=args.mode,
+                    started_at=started_at.isoformat(),
+                    finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    status="ok",
+                )
                 return
 
         client = _build_client(args.mode, race_option=args.race_option)
@@ -431,9 +461,28 @@ def main() -> None:
                 ingest_results(client, api, chunk_from, chunk_to)
 
         _log.info("=== ingestion-worker 完了 ===")
+        api.log_batch(
+            batch_date=date_from,
+            step=args.step,
+            mode=args.mode,
+            started_at=started_at.isoformat(),
+            finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            status="ok",
+        )
 
     except Exception as exc:
         _log.error("致命的エラー: %s", exc, exc_info=True)
+        err_str = str(exc)
+        api.log_batch(
+            batch_date=date_from,
+            step=args.step,
+            mode=args.mode,
+            started_at=started_at.isoformat(),
+            finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            status="error",
+            error_msg=err_str[:2000],
+        )
+        _notify_failure(args.step, date_from, err_str)
         sys.exit(1)
 
 

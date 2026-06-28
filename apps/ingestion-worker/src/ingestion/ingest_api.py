@@ -181,3 +181,33 @@ class IngestApiClient:
         accepted = int(result.get("accepted", 0))
         _log.info("レース削除 %s: %d 件", race_key, accepted)
         return accepted
+
+    def log_batch(
+        self,
+        *,
+        batch_date: str,
+        step: str,
+        mode: str,
+        started_at: str,
+        finished_at: str | None,
+        status: str,
+        error_msg: str | None = None,
+    ) -> int:
+        """バッチ実行ログを API に記録し、ログ ID を返す。失敗は警告のみでバッチを止めない。"""
+        payload = {
+            "batch_date": batch_date,
+            "step": step,
+            "mode": mode,
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "status": status,
+            "error_msg": error_msg,
+        }
+        try:
+            result = self._post("/internal/ingest/log", payload)
+            log_id = int(result.get("id", 0))
+            _log.info("取り込みログ記録: id=%d step=%s status=%s", log_id, step, status)
+            return log_id
+        except Exception as exc:
+            _log.warning("取り込みログ記録失敗（バッチは継続）: %s", exc)
+            return 0

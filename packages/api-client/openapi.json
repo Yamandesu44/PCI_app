@@ -505,6 +505,84 @@
         "title": "HorsePaceAnalysisSchema",
         "type": "object"
       },
+      "IngestLogBody": {
+        "description": "バッチ実行ログの記録リクエスト。",
+        "properties": {
+          "batch_date": {
+            "format": "date",
+            "title": "Batch Date",
+            "type": "string"
+          },
+          "error_msg": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Msg"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_date",
+          "step",
+          "mode",
+          "started_at"
+        ],
+        "title": "IngestLogBody",
+        "type": "object"
+      },
+      "IngestLogResponse": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "IngestLogResponse",
+        "type": "object"
+      },
       "IngestResponse": {
         "properties": {
           "accepted": {
@@ -1529,6 +1607,66 @@
           }
         },
         "summary": "Ingest Jockeys",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/log": {
+      "post": {
+        "description": "バッチ取り込みの実行ログを記録する（監査証跡・再実行判定用）。",
+        "operationId": "write_ingest_log_internal_ingest_log_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestLogBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestLogResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Ingest Log",
         "tags": [
           "ingest"
         ]
