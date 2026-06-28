@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from functools import lru_cache
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends
@@ -28,40 +27,22 @@ from pci.application.race_query_use_cases import (
 from pci.config.settings import get_settings
 from pci.domain.pace.commentary import CommentGenerator, RuleBasedCommentGenerator
 from pci.domain.pace.mart_repository import MartRepository
-from pci.domain.pace.rpci_forecast import RpciForecaster, RuleBasedRpciForecaster
+from pci.domain.pace.rpci_forecast import RpciForecaster
 from pci.domain.racing.repository import RaceRepository
 from pci.infrastructure.database.session import build_engine, build_session_maker
+from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster
 from pci.infrastructure.repositories.mart_repository import SqlAlchemyMartRepository
 from pci.infrastructure.repositories.race_repository import SqlAlchemyRaceRepository
 
 _logger = logging.getLogger(__name__)
 
-# apps/api/models/rpci_lgbm_v1.txt
-# Path(__file__) = src/pci/presentation/dependencies.py
-# .parent × 4  = apps/api/
-_LGBM_MODEL_PATH = Path(__file__).parent.parent.parent.parent / "models" / "rpci_lgbm_v1.txt"
-
 
 @lru_cache
 def _get_forecaster() -> RpciForecaster:
-    """モデルファイルの有無に応じて予測器を選択する。
-
-    lgbm-v1 モデルが存在すれば LightGBM、なければ rule-v4 にフォールバックする。
-    lru_cache でプロセス起動時に1回だけ評価される。
-    """
-    if _LGBM_MODEL_PATH.exists():
-        try:
-            from pci.infrastructure.pace.lgbm_forecaster import LightGBMRpciForecaster
-
-            forecaster: RpciForecaster = LightGBMRpciForecaster(_LGBM_MODEL_PATH)
-            _logger.info("LightGBM 予測器をロードしました: %s", _LGBM_MODEL_PATH)
-            return forecaster
-        except Exception as exc:
-            _logger.warning(
-                "LightGBM 予測器の初期化失敗 → rule-v4 にフォールバック: %s", exc
-            )
-    _logger.info("LightGBM モデルなし → RuleBasedRpciForecaster (rule-v4) を使用します")
-    return RuleBasedRpciForecaster()
+    """モデルファイルの有無に応じて予測器を選択する（lru_cache でプロセス起動時に1回評価）。"""
+    forecaster = load_best_forecaster()
+    _logger.info("予測器: %s", forecaster.__class__.__name__)
+    return forecaster
 
 
 @lru_cache

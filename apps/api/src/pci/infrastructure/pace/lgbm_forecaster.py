@@ -12,12 +12,20 @@ from pathlib import Path
 from pci.domain.pace.rpci_forecast import (
     RaceContext,
     RpciForecast,
+    RpciForecaster,
     classify_pace,
 )
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
 MODEL_VERSION = "lgbm-v1"
+
+# apps/api/models/rpci_lgbm_v1.txt
+# Path(__file__) = src/pci/infrastructure/pace/lgbm_forecaster.py
+# .parent × 5   = apps/api/
+_DEFAULT_MODEL_PATH = (
+    Path(__file__).parent.parent.parent.parent.parent / "models" / "rpci_lgbm_v1.txt"
+)
 
 # 特徴量名（学習スクリプトと inference で順序を完全に一致させること）
 FEATURE_NAMES = [
@@ -93,6 +101,24 @@ class LightGBMRpciForecaster:
             model_version=MODEL_VERSION,
             reasons=tuple(reasons),
         )
+
+
+def load_best_forecaster(model_path: Path | None = None) -> RpciForecaster:
+    """モデルファイルの有無に応じて最良の予測器を返す共通ファクトリ。
+
+    scripts/backtest_forecast.py や dependencies.py から呼ぶことで、
+    モデルファイルが存在すれば lgbm-v1、なければ rule-v4 に自動切替する。
+    """
+    from pci.domain.pace.rpci_forecast import RuleBasedRpciForecaster
+
+    path = model_path or _DEFAULT_MODEL_PATH
+    if path.exists():
+        try:
+            forecaster: RpciForecaster = LightGBMRpciForecaster(path)
+            return forecaster
+        except Exception:
+            pass
+    return RuleBasedRpciForecaster()
 
 
 def build_features(context: RaceContext) -> list[float]:

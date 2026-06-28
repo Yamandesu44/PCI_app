@@ -40,6 +40,7 @@ from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import RaceModel
 from pci.infrastructure.database.session import build_engine, build_session_maker
+from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster
 from pci.infrastructure.repositories.race_repository import SqlAlchemyRaceRepository
 
 
@@ -129,7 +130,8 @@ def main() -> None:
     print(f"対象 {len(targets)} レースでバックテストを実行します{filter_note}…\n")
 
     repo = SqlAlchemyRaceRepository(session)
-    report = ForecastBacktester(repo).run(targets)
+    forecaster = load_best_forecaster()
+    report = ForecastBacktester(repo, forecaster=forecaster).run(targets)
     print(format_report(report))
 
 
