@@ -13,9 +13,29 @@ export interface paths {
         };
         /**
          * List Races
-         * @description 新しい順にレース一覧を返す（トップ画面のレース選択用）。
+         * @description 新しい順にレース一覧を返す。date 指定時はその日のレースのみ返す。
          */
         get: operations["list_races_api_v1_races_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/races/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Race Dates
+         * @description 全開催日を昇順で返す（カレンダー表示用）。
+         */
+        get: operations["list_race_dates_api_v1_races_dates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -156,6 +176,26 @@ export interface paths {
          */
         post: operations["ingest_jockeys_internal_ingest_jockeys_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/ingest/races/{race_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Ingested Race
+         * @description 取り込み対象外になったレースを、関連する予想データごと削除する。
+         */
+        delete: operations["delete_ingested_race_internal_ingest_races__race_key__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -520,6 +560,10 @@ export interface components {
         ResultBody: {
             /** Race Key */
             race_key: string;
+            /** Race L3F */
+            race_l3f?: number | null;
+            /** Race S3F */
+            race_s3f?: number | null;
             /** Results */
             results: components["schemas"]["ResultItem"][];
             /** Track Condition */
@@ -598,6 +642,8 @@ export interface operations {
             query?: {
                 /** @description 取得件数の上限 */
                 limit?: number;
+                /** @description 絞り込む開催日（YYYY-MM-DD） */
+                date?: string | null;
             };
             header?: never;
             path?: never;
@@ -621,6 +667,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_race_dates_api_v1_races_dates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
         };
@@ -825,6 +891,39 @@ export interface operations {
                 "application/json": components["schemas"]["JockeyBody"][];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_ingested_race_internal_ingest_races__race_key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path: {
+                race_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
