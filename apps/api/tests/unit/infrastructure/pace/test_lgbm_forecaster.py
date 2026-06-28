@@ -1,4 +1,4 @@
-"""LightGBMRpciForecaster ユニットテスト（モデルなし環境でも動作）。"""
+"""LightGBMRpciForecaster / SplitLightGBMRpciForecaster ユニットテスト。モデル不要で動作する。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,10 @@ from pci.domain.pace.running_style import RunningStyleLabel
 from pci.infrastructure.pace.lgbm_forecaster import (
     FEATURE_NAMES,
     MODEL_VERSION,
+    MODEL_VERSION_DIRT,
+    MODEL_VERSION_TURF,
     LightGBMRpciForecaster,
+    SplitLightGBMRpciForecaster,
     build_features,
 )
 
@@ -75,15 +78,18 @@ class TestBuildFeatures:
         assert feats[6] == pytest.approx(-1.0)  # style_balance
 
 
+def _mock_predict(value: float):  # type: ignore[return]
+    """fixed value を返す predict 関数を生成する。"""
+    m = MagicMock()
+    m.predict.return_value = [value]
+    return m.predict
+
+
 class TestLightGBMRpciForecaster:
-    """モデルをモックして予測器の動作を検証する。"""
+    """統合モデル（後方互換）の動作検証。"""
 
     @staticmethod
     def _make_forecaster(predict_value: float = 52.0) -> LightGBMRpciForecaster:
-        """lightgbm をモックして Booster.predict が固定値を返す予測器を生成する。"""
-        mock_booster = MagicMock()
-        mock_booster.predict.return_value = [predict_value]
-
         with (
             patch.dict("sys.modules", {"lightgbm": MagicMock()}),
             patch(
@@ -92,10 +98,10 @@ class TestLightGBMRpciForecaster:
             ),
         ):
             forecaster = LightGBMRpciForecaster.__new__(LightGBMRpciForecaster)
-            forecaster._predict = mock_booster.predict  # type: ignore[attr-defined]
+            forecaster._predict = _mock_predict(predict_value)  # type: ignore[attr-defined]
         return forecaster
 
-    def test_model_version(self) -> None:
+    def test_model_version_constant(self) -> None:
         assert MODEL_VERSION == "lgbm-v1"
 
     def test_returns_rpci_forecast(self) -> None:
@@ -107,12 +113,11 @@ class TestLightGBMRpciForecaster:
     def test_label_correct_for_turf(self) -> None:
         forecaster = self._make_forecaster(53.0)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="芝"))
-        assert result.label == PaceLabel.SLOW  # 芝 > 51 → スロー
+        assert result.label == PaceLabel.SLOW
 
     def test_label_correct_for_dirt(self) -> None:
         forecaster = self._make_forecaster(43.0)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
-        # ダート: ハイ<40, 平均40-46, スロー>46
         assert result.label == PaceLabel.AVERAGE
 
     def test_rpci_clamped_at_max(self) -> None:
@@ -150,3 +155,62 @@ class TestLightGBMRpciForecaster:
                 sys.modules.pop("lightgbm", None)
             else:
                 sys.modules["lightgbm"] = original
+
+
+class TestSplitLightGBMRpciForecaster:
+    """芝/ダート別モデルの動作検証。"""
+
+    @staticmethod
+    def _make_split_forecaster(
+        turf_value: float = 52.0,
+        dirt_value: float = 43.0,
+    ) -> SplitLightGBMRpciForecaster:
+        with (
+            patch.dict("sys.modules", {"lightgbm": MagicMock()}),
+            patch(
+                "pci.infrastructure.pace.lgbm_forecaster.SplitLightGBMRpciForecaster.__init__",
+                return_value=None,
+            ),
+        ):
+            forecaster = SplitLightGBMRpciForecaster.__new__(SplitLightGBMRpciForecaster)
+            forecaster._turf_predict = _mock_predict(turf_value)  # type: ignore[attr-defined]
+            forecaster._dirt_predict = _mock_predict(dirt_value)  # type: ignore[attr-defined]
+        return forecaster
+
+    def test_turf_version(self) -> None:
+        assert MODEL_VERSION_TURF == "lgbm-turf-v1"
+
+    def test_dirt_version(self) -> None:
+        assert MODEL_VERSION_DIRT == "lgbm-dirt-v1"
+
+    def test_turf_uses_turf_model(self) -> None:
+        forecaster = self._make_split_forecaster(turf_value=54.0, dirt_value=41.0)
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="芝"))
+        assert result.value == 54.0
+        assert result.model_version == MODEL_VERSION_TURF
+
+    def test_dirt_uses_dirt_model(self) -> None:
+        forecaster = self._make_split_forecaster(turf_value=54.0, dirt_value=41.0)
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.value == 41.0
+        assert result.model_version == MODEL_VERSION_DIRT
+
+    def test_turf_label(self) -> None:
+        forecaster = self._make_split_forecaster(turf_value=53.0)
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="芝"))
+        assert result.label == PaceLabel.SLOW
+
+    def test_dirt_label_average(self) -> None:
+        forecaster = self._make_split_forecaster(dirt_value=43.0)
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.label == PaceLabel.AVERAGE
+
+    def test_dirt_label_high(self) -> None:
+        forecaster = self._make_split_forecaster(dirt_value=38.0)
+        result = forecaster.forecast(_ctx((ESCAPE,) * 10, track_type="ダート"))
+        assert result.label == PaceLabel.HIGH
+
+    def test_empty_field_raises(self) -> None:
+        forecaster = self._make_split_forecaster()
+        with pytest.raises(ValueError, match="脚質情報がありません"):
+            forecaster.forecast(_ctx((), track_type="芝"))
