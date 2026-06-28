@@ -21,6 +21,9 @@
        履歴が無ければ自動的に 1〜4 のみ（rule-v1 相当）へフォールバックする。
     rule-v3: コース種別基準 RPCI 補正（芝+5.0 / ダート-9.75）を追加。
     rule-v4: ダートの展開3分類閾値を実績分布に合わせて個別設定（ハイ<40/スロー>46）。
+    rule-v5: 芝の展開3分類閾値を緩和（ハイ<48/スロー>52）。
+             lgbm-turf-v1 バックテストで「平均」再現率 0% が観測。
+             芝 RPCI 実績平均 53.1 に対して旧 49–51 の 2pt 帯が狭すぎたため修正。
 """
 
 from __future__ import annotations
@@ -32,7 +35,7 @@ from typing import Protocol
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "rule-v4"
+MODEL_VERSION = "rule-v5"
 
 
 class PaceLabel(StrEnum):
@@ -109,9 +112,11 @@ class RuleWeights:
     track_slightly_heavy_adjust: float = -0.3
     track_heavy_adjust: float = -0.5
     track_bad_adjust: float = -0.8
-    # 展開3分類の閾値（芝）
-    high_threshold: float = 49.0
-    slow_threshold: float = 51.0
+    # 展開3分類の閾値（芝・rule-v5）
+    # 旧 49–51 (2pt 幅) は芝 RPCI 実績平均 53.1 に対して狭すぎ、「平均」再現率 0% が発生。
+    # 48–52 (4pt 幅) に緩和することで中間帯のレースを正しく「平均」に分類できる。
+    high_threshold: float = 48.0
+    slow_threshold: float = 52.0
     # 展開3分類の閾値（ダート・rule-v4）
     # 芝平均 53.1 と異なりダート平均 43.0 → ハイ中心のため専用閾値で3分類を均等化
     dirt_high_threshold: float = 40.0

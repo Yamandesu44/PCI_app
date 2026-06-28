@@ -172,7 +172,7 @@ class TestForecastBacktesterEndToEnd:
         assert report.n_races == 1
         assert report.n_horses == 3
         assert report.skipped == 0
-        assert report.model_version == "rule-v4"
+        assert report.model_version == "rule-v5"
         assert report.rpci is not None
         # 好走馬は1着(H1)と2着(H3)の2頭。
         assert report.pai is not None
