@@ -4,6 +4,7 @@ import { Activity, BarChart3, Gauge, ListChecks, TrendingUp } from "lucide-react
 import { HorseFitTable } from "@/components/HorseFitTable";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { PaceProfileChart } from "@/components/PaceProfileChart";
+import { ReasonList } from "@/components/ReasonList";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -15,6 +16,7 @@ import {
   forecastDecisionChecklist,
   paceSpeedFromIndex,
   paiBarWidth,
+  sanitizeBeginnerComment,
   sortDiscountCandidates,
   sortByPai,
 } from "@/lib/pace";
@@ -189,6 +191,27 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
           ))}
         </div>
       </section>
+
+      {forecast.comment ? (
+        <section className="rounded-lg border border-blue-100 bg-blue-50 p-5 shadow-sm" style={{ borderLeftWidth: "6px", borderLeftColor: "#2563eb" }}>
+          <h2 className="m-0 text-base font-semibold text-slate-950">この展開をやさしく解説</h2>
+          <p className="mt-3 text-sm font-bold leading-6 text-slate-950">
+            {sanitizeBeginnerComment(forecast.comment.headline)}
+          </p>
+          {(forecast.comment.body ?? []).map((para, i) => (
+            <p key={i} className="mt-2 text-sm leading-6 text-slate-700">
+              {sanitizeBeginnerComment(para)}
+            </p>
+          ))}
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-800">
+              コメントの根拠
+            </summary>
+            <p className="mt-2 text-xs text-slate-500">生成方式: {forecast.comment.model_version}</p>
+            <ReasonList reasons={forecast.comment.reasons ?? []} />
+          </details>
+        </section>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <Card>
