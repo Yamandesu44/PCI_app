@@ -114,3 +114,39 @@ class TestGetPaceAnalysisUseCase:
         assert out.comment.body
         assert out.comment.model_version == "comment-v1"
         assert out.comment.reasons
+
+    def test_no_pci_data_returns_insufficient_reason(self) -> None:
+        """全馬の pci_actual が None の場合 insufficient reason を返し rpci=None になる。"""
+        from pci.domain.racing.race_entry import RaceEntry
+
+        repo = FakeRaceRepository()
+        key = "2026062005010101"
+        repo.save_race(
+            Race(
+                race_key=RaceKey(key),
+                race_date=datetime.date(2026, 6, 20),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=2,
+                status=RaceStatus.RESULT,
+            )
+        )
+        for no in (1, 2):
+            repo.save_entry(
+                RaceEntry(
+                    race_key=RaceKey(key),
+                    horse_no=no,
+                    frame_no=no,
+                    ketto_num=f"H00{no}",
+                    weight=480.0,
+                    jockey_code=f"J00{no}",
+                    trainer_code=f"T00{no}",
+                    finish_pos=no,
+                    pci_actual=None,  # PCI 未算出
+                )
+            )
+        out = GetPaceAnalysisUseCase(repo).execute(key)
+        assert out.rpci_actual is None
+        assert out.sample_size == 0
+        assert any(r.code == "insufficient" for r in out.reasons)

@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import datetime
 
-from pci.application.race_query_use_cases import ListRacesUseCase
+import pytest
+
+from pci.application.race_query_use_cases import (
+    GetRaceDetailUseCase,
+    ListRaceDatesUseCase,
+    ListRacesUseCase,
+)
 from pci.domain.racing.race import Race, RaceStatus
+from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 from tests.unit.application.fake_repository import FakeRaceRepository
 
@@ -114,3 +121,51 @@ class TestListRacesUseCase:
         # 上限 100 を超える指定でも例外にならず全件（10件）返る
         out = ListRacesUseCase(repo).execute(limit=9999)
         assert len(out) == 10
+
+    def test_list_by_date_returns_only_that_day(self) -> None:
+        """date 指定時は list_races_by_date が呼ばれ当日分だけ返る。"""
+        repo = FakeRaceRepository()
+        repo.save_race(_race("2026062005010101", day=20))
+        repo.save_race(_race("2026061705010101", day=17))
+        out = ListRacesUseCase(repo).execute(date=datetime.date(2026, 6, 20))
+        assert len(out) == 1
+        assert out[0].race_date == "2026-06-20"
+
+
+class TestListRaceDatesUseCase:
+    def test_returns_sorted_iso_strings(self) -> None:
+        repo = FakeRaceRepository()
+        repo.save_race(_race("2026062005010101", day=20))
+        repo.save_race(_race("2026061705010101", day=17))
+        dates = ListRaceDatesUseCase(repo).execute()
+        assert dates == ["2026-06-17", "2026-06-20"]
+
+    def test_empty_repo_returns_empty_list(self) -> None:
+        assert ListRaceDatesUseCase(FakeRaceRepository()).execute() == []
+
+
+class TestGetRaceDetailUseCase:
+    def test_returns_detail_with_entries(self) -> None:
+        repo = FakeRaceRepository()
+        key = "2026062005010101"
+        repo.save_race(_race(key, day=20, status=RaceStatus.RESULT))
+        repo.save_entry(
+            RaceEntry(
+                race_key=RaceKey(key),
+                horse_no=1,
+                frame_no=1,
+                ketto_num="H001",
+                weight=480.0,
+                jockey_code="J001",
+                trainer_code="T001",
+            )
+        )
+        out = GetRaceDetailUseCase(repo).execute(key)
+        assert out.race_key == key
+        assert out.status == "result"
+        assert len(out.entries) == 1
+        assert out.entries[0].horse_no == 1
+
+    def test_raises_on_missing_race(self) -> None:
+        with pytest.raises(ValueError, match="見つかりません"):
+            GetRaceDetailUseCase(FakeRaceRepository()).execute("9999999999999999")

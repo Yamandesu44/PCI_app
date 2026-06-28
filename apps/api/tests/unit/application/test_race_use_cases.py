@@ -9,7 +9,8 @@ import pytest
 from pci.application.dto import EntryInput, RaceInfo, ResultInput
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
 from pci.domain.racing.master import Horse
-from pci.domain.racing.race import RaceStatus
+from pci.domain.racing.race import Race, RaceStatus
+from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 from tests.unit.application.fake_repository import FakeRaceRepository
 
@@ -199,6 +200,70 @@ class TestRecordRaceResultUseCase:
         assert race is not None
         assert race.track_condition == "良"
         assert race.weather == "晴"
+
+    def test_rpci_from_lap_when_s3f_l3f_provided(self) -> None:
+        """race_s3f / race_l3f が与えられたとき、ラップ由来 RPCI を採用する。
+
+        S3=35s / L3=36s → calculate_rpci_from_lap → ≈47.2（前半がやや速い）。
+        全馬 PCI 平均（イーブン≒50）とは値が異なることで、ラップ由来採用を確認する。
+        """
+        repo = self._setup_repo()
+        output = RecordRaceResultUseCase(repo).execute(
+            RACE_KEY, RESULTS, race_s3f=35.0, race_l3f=36.0
+        )
+        # S3/L3 由来: (35/36)*100-50 ≈ 47.2 がそのまま rpci になる
+        assert output.rpci is not None
+        assert output.rpci == pytest.approx(35.0 / 36.0 * 100 - 50, abs=0.15)
+
+    def test_running_style_skipped_for_empty_ketto_num(self) -> None:
+        """ketto_num="" の馬（出走表未登録）は脚質判定をスキップし None になる。"""
+        repo = FakeRaceRepository()
+        # 出走表を登録せずにレース情報だけ登録
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, [])
+        # horse_no=1 は出走表にないため ketto_num="" になる
+        single_result = [
+            ResultInput(horse_no=1, finish_pos=1, race_time_s=94.4, agari_3f_s=34.0)
+        ]
+        RecordRaceResultUseCase(repo).execute(RACE_KEY, single_result)
+        entries = repo.find_entries(RaceKey(RACE_KEY))
+        assert entries[0].running_style is None
+
+    def test_running_style_derived_from_prior_history(self) -> None:
+        """過去走の4角通過順位データがある馬は脚質が算出される。"""
+        repo = self._setup_repo()
+        # horse_no=1 (ketto_num="2020100001") に過去3走（corner_4=1 → ESCAPE）を追加
+        for i in range(3):
+            prev_key = f"202604{i + 1:02d}05010101"
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(prev_key),
+                    race_date=datetime.date(2026, 4, i + 1),
+                    jyo_cd="05",
+                    distance_m=1600,
+                    track_type="芝",
+                    field_size=12,
+                    status=RaceStatus.RESULT,
+                )
+            )
+            repo.save_entry(
+                RaceEntry(
+                    race_key=RaceKey(prev_key),
+                    horse_no=99,
+                    frame_no=1,
+                    ketto_num="2020100001",
+                    weight=480.0,
+                    jockey_code="J001",
+                    trainer_code="T001",
+                    finish_pos=2,
+                    corner_4=1,
+                )
+            )
+
+        RecordRaceResultUseCase(repo).execute(RACE_KEY, RESULTS)
+
+        entries = repo.find_entries(RaceKey(RACE_KEY))
+        horse1 = next(e for e in entries if e.horse_no == 1)
+        assert horse1.running_style == "逃げ"  # corner_4=1 × 3走 → ESCAPE
 
     def test_even_pace_pci_near_50(self) -> None:
         """均等ペース条件で PCI ≈ 50 になること（ドメインルール保証）。"""

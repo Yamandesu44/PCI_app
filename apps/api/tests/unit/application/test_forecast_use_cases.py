@@ -19,6 +19,23 @@ from pci.domain.shared.reason import Reason
 from tests.unit.application.fake_mart_repository import FakeMartRepository
 from tests.unit.application.fake_repository import FakeRaceRepository
 
+
+class _RepoWithSuppressedPastRace(FakeRaceRepository):
+    """_build_affinity_profile の past_race is None ブランチを叩くための偽実装。
+
+    find_horse_recent_entries は過去走を返すが、find_by_key がその race_key に対して
+    None を返すシナリオをシミュレートする（削除済みレースなど）。
+    """
+
+    def __init__(self, suppress_key: str) -> None:
+        super().__init__()
+        self._suppress_key = suppress_key
+
+    def find_by_key(self, key: RaceKey) -> Race | None:
+        if str(key) == self._suppress_key:
+            return None
+        return super().find_by_key(key)
+
 UPCOMING = "2026062005010101"
 RACE_DATE = datetime.date(2026, 6, 20)
 
@@ -265,6 +282,118 @@ class TestForecastRaceUseCase:
         by_no = {horse.horse_no: horse for horse in output.horses}
         assert by_no[1].pai > by_no[2].pai
         assert any("過去の好走" in reason.description for reason in by_no[1].reasons)
+
+    def test_empty_ketto_num_resolves_to_flexible(self) -> None:
+        """ketto_num が空の出走馬は脚質「自在」として扱われる。"""
+        repo = FakeRaceRepository()
+        repo.save_race(
+            Race(
+                race_key=RaceKey(UPCOMING),
+                race_date=RACE_DATE,
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=1,
+                status=RaceStatus.ENTRIES,
+            )
+        )
+        repo.save_entry(
+            RaceEntry(
+                race_key=RaceKey(UPCOMING),
+                horse_no=1,
+                frame_no=1,
+                ketto_num="",  # ← 空 ketto_num
+                weight=480.0,
+                jockey_code="J001",
+                trainer_code="T001",
+            )
+        )
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+        assert output.horses[0].running_style == "自在"
+
+    def test_front_style_entry_not_led_is_excluded_from_pace_sample(self) -> None:
+        """逃げ・先行馬でも corner_1 が高い（前付けなし）エントリは pace sample に使わない。"""
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=1)
+        # 3 走 corner_1=1（前付け）→ ESCAPE 脚質確定 + front_pace_sample あり
+        _seed_history(repo, "2020100001", corner4=1, corner1=1, pci_actual=52.0, count=3)
+        # 1 走 corner_1=5（前付けなし）→ _led_from_front returns False → line 179 continue
+        rk = "2026040105010101"
+        repo.save_race(
+            Race(
+                race_key=RaceKey(rk),
+                race_date=datetime.date(2026, 4, 1),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=12,
+                status=RaceStatus.RESULT,
+            )
+        )
+        repo.save_entry(
+            RaceEntry(
+                race_key=RaceKey(rk),
+                horse_no=1,
+                frame_no=1,
+                ketto_num="2020100001",
+                weight=480.0,
+                jockey_code="J001",
+                trainer_code="T001",
+                finish_pos=4,
+                corner_1=5,  # 前付けなし
+                corner_4=3,
+                pci_actual=44.0,
+            )
+        )
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+        # front_pace_sample は corner_1=1 の3走のみが採用される
+        assert any(r.code == "front_pace_evidence" for r in output.forecast_reasons)
+
+    def test_no_corner_data_not_counted_as_front_led(self) -> None:
+        """corner_1 / corner_4 が共に None のエントリは前付けとみなさない。"""
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=1)
+        _seed_history(repo, "2020100001", corner4=1, corner1=1, pci_actual=52.0, count=3)
+        # corner なし → _led_from_front returns False at line 233
+        rk = "2026040205010101"
+        repo.save_race(
+            Race(
+                race_key=RaceKey(rk),
+                race_date=datetime.date(2026, 4, 2),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=12,
+                status=RaceStatus.RESULT,
+            )
+        )
+        repo.save_entry(
+            RaceEntry(
+                race_key=RaceKey(rk),
+                horse_no=1,
+                frame_no=1,
+                ketto_num="2020100001",
+                weight=480.0,
+                jockey_code="J001",
+                trainer_code="T001",
+                finish_pos=1,
+                corner_1=None,
+                corner_4=None,
+            )
+        )
+        # エラーなく予測が返ること
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+        assert output.race_key == UPCOMING
+
+    def test_affinity_profile_skips_entry_when_past_race_missing(self) -> None:
+        """_build_affinity_profile: find_by_key が None を返す過去走はスキップする。"""
+        suppressed_key = "2026050105010101"  # _seed_history が i=0 に使う race_key
+        repo = _RepoWithSuppressedPastRace(suppress_key=suppressed_key)
+        _register_upcoming(repo, n=1)
+        _seed_history(repo, "2020100001", corner4=1, count=1, finish_pos=1, rpci_actual=48.0)
+        # suppressed_key のレースは find_by_key が None → past_race is None → continue
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+        assert output.race_key == UPCOMING
 
     def test_horse_reasons_hide_raw_pci_values(self) -> None:
         repo = FakeRaceRepository()
