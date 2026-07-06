@@ -10,9 +10,10 @@
     2. batch.py --mode mykeibadb --step entries   -> pushes entries to PostgreSQL.
     3. batch.py --mode mykeibadb --step results   -> pushes confirmed results.
 
-    Intended to be run from Windows Task Scheduler multiple times a day
-    (e.g. 09:00 / 13:00 / 18:00 / 21:00). mykeibadb.exe only fetches the
-    delta since its last FROMTIME watermark, so frequent re-runs are cheap.
+    Intended to be run from Windows Task Scheduler on a JRA-calendar-aware
+    schedule (Fri/Sat/Sun 18:00 -- see setup_task_scheduler.ps1).
+    mykeibadb.exe only fetches the delta since its last FROMTIME watermark,
+    so re-runs are cheap even if triggered more often.
 
     Entries for upcoming races (special/final registration) are published
     ahead of race day, so the date window is not just "today" -- it queries
