@@ -1,32 +1,34 @@
 <#
 .SYNOPSIS
-    mykeibadb 経由の一気通貫同期（mykeibadb.exe → batch.py）。
+    Full mykeibadb sync (mykeibadb.exe -> batch.py).
 
 .DESCRIPTION
-    1. mykeibadb.exe を実行し、JV-Link 経由でローカル MySQL(mykeibadb) を最新化する
-       （wmykeibadb.exe で設定済みの mykeibadb.ini を使用）。
-       タイムアウト付きで待機する — 「終了時一時停止」が有効なまま無人実行されても
-       ハングし続けないようにするための安全策。
-    2. batch.py --mode mykeibadb --step entries でPostgreSQLへ出走表を反映する。
-    3. batch.py --mode mykeibadb --step results  で確定成績を反映する。
+    1. Run mykeibadb.exe to refresh the local MySQL (mykeibadb) via JV-Link,
+       using the mykeibadb.ini already configured through wmykeibadb.exe.
+       Waits with a timeout so an unattended run doesn't hang forever if
+       "pause on exit" is left enabled in wmykeibadb.exe.
+    2. batch.py --mode mykeibadb --step entries   -> pushes entries to PostgreSQL.
+    3. batch.py --mode mykeibadb --step results   -> pushes confirmed results.
 
-    Windows タスクスケジューラから1日複数回（例: 9/13/18/21時）呼ばれる想定。
-    mykeibadb.exe は FROMTIME ウォーターマークで前回からの差分のみ取得するため、
-    頻繁に実行しても無駄打ちにならない。
+    Intended to be run from Windows Task Scheduler multiple times a day
+    (e.g. 09:00 / 13:00 / 18:00 / 21:00). mykeibadb.exe only fetches the
+    delta since its last FROMTIME watermark, so frequent re-runs are cheap.
 
-    出走表・特別登録は「今日」時点のレースだけでなく将来レースの分が公開されるため、
-    date_from/date_to は「過去7日〜未来14日」の固定ウィンドウで問い合わせる
-    （batch.py の既定 --date は「今日1日」のみのため、レンジ指定が必須）。
+    Entries for upcoming races (special/final registration) are published
+    ahead of race day, so the date window is not just "today" -- it queries
+    a fixed range of "N days back" through "M days forward" (batch.py's
+    default --date is a single day, so an explicit range must be passed).
 
 .PARAMETER TimeoutSeconds
-    mykeibadb.exe の最大実行待機秒数（デフォルト 600 = 10分）。
-    「終了時一時停止」が有効なままだとここでタイムアウトし強制終了する。
+    Max seconds to wait for mykeibadb.exe (default 600 = 10 min).
+    If "pause on exit" is left enabled in wmykeibadb.exe, this will time out
+    and the process gets killed.
 
 .PARAMETER DaysBack
-    取得開始日（今日からの遡り日数。デフォルト 7）。
+    Start of the query window, days before today (default 7).
 
 .PARAMETER DaysForward
-    取得終了日（今日からの先送り日数。デフォルト 14）。
+    End of the query window, days after today (default 14).
 
 .EXAMPLE
     .\run_mykeibadb_full_sync.ps1
@@ -54,7 +56,7 @@ function Write-Log {
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
 }
 
-# --- .env 読み込み（MYKEIBADB_EXE_PATH 等を環境変数に展開） ---
+# --- Load .env (expands MYKEIBADB_EXE_PATH etc. into process env vars) ---
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
         if ($_ -match "^\s*([^#=]+)=(.*)$") {
@@ -67,46 +69,46 @@ if (Test-Path $EnvFile) {
 
 $MykeibadbExe = [System.Environment]::GetEnvironmentVariable("MYKEIBADB_EXE_PATH", "Process")
 
-Write-Log "=== run_mykeibadb_full_sync.ps1 開始 ==="
+Write-Log "=== run_mykeibadb_full_sync.ps1 start ==="
 
 if (-not $MykeibadbExe -or -not (Test-Path $MykeibadbExe)) {
-    Write-Log "ERROR: MYKEIBADB_EXE_PATH が未設定、または mykeibadb.exe が見つかりません: $MykeibadbExe"
-    Write-Log "対処: .env に MYKEIBADB_EXE_PATH=C:\...\mykeibadb.exe を設定してください。"
+    Write-Log "ERROR: MYKEIBADB_EXE_PATH is not set, or mykeibadb.exe was not found: $MykeibadbExe"
+    Write-Log "Fix: set MYKEIBADB_EXE_PATH=C:\...\mykeibadb.exe in .env"
     exit 1
 }
 $MykeibadbDir = Split-Path $MykeibadbExe -Parent
 
-# --- Step 1: mykeibadb.exe（JV-Link → ローカルMySQL） ---
-Write-Log "mykeibadb.exe を起動します（最大 ${TimeoutSeconds}秒待機）: $MykeibadbExe"
+# --- Step 1: mykeibadb.exe (JV-Link -> local MySQL) ---
+Write-Log "Starting mykeibadb.exe (waiting up to ${TimeoutSeconds}s): $MykeibadbExe"
 $proc = Start-Process -FilePath $MykeibadbExe -WorkingDirectory $MykeibadbDir -WindowStyle Minimized -PassThru
 $completed = $proc.WaitForExit($TimeoutSeconds * 1000)
 
 if (-not $completed) {
-    Write-Log "ERROR: mykeibadb.exe がタイムアウトしました。強制終了します。"
-    Write-Log "対処: wmykeibadb.exe を開き「終了時一時停止」のチェックを外してください。"
+    Write-Log "ERROR: mykeibadb.exe timed out. Killing the process."
+    Write-Log "Fix: open wmykeibadb.exe and uncheck 'pause on exit' (shuuryouji ichiji teishi)."
     try { $proc.Kill() } catch {}
     exit 1
 }
 if ($proc.ExitCode -ne 0) {
-    Write-Log "WARNING: mykeibadb.exe の終了コードが 0 ではありません: $($proc.ExitCode)"
+    Write-Log "WARNING: mykeibadb.exe exited with a non-zero code: $($proc.ExitCode)"
 } else {
-    Write-Log "mykeibadb.exe 完了（終了コード 0）"
+    Write-Log "mykeibadb.exe finished (exit code 0)"
 }
 
-# --- Step 2/3: batch.py（ローカルMySQL → PostgreSQL） ---
+# --- Step 2/3: batch.py (local MySQL -> PostgreSQL) ---
 $RunBatch = Join-Path $PSScriptRoot "run_batch.ps1"
 $DateFrom = (Get-Date).AddDays(-$DaysBack).ToString("yyyyMMdd")
 $DateTo   = (Get-Date).AddDays($DaysForward).ToString("yyyyMMdd")
 
-Write-Log "--- 出走表取り込み (batch.py --mode mykeibadb --step entries, $DateFrom→$DateTo) ---"
+Write-Log "--- entries sync (batch.py --mode mykeibadb --step entries, $DateFrom to $DateTo) ---"
 & $RunBatch -Step entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
 $entriesExit = $LASTEXITCODE
 
-Write-Log "--- 確定成績取り込み (batch.py --mode mykeibadb --step results, $DateFrom→$DateTo) ---"
+Write-Log "--- results sync (batch.py --mode mykeibadb --step results, $DateFrom to $DateTo) ---"
 & $RunBatch -Step results -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
 $resultsExit = $LASTEXITCODE
 
-Write-Log "=== run_mykeibadb_full_sync.ps1 終了 (entries=$entriesExit results=$resultsExit) ==="
+Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit results=$resultsExit) ==="
 
 if ($entriesExit -ne 0 -or $resultsExit -ne 0) {
     exit 1

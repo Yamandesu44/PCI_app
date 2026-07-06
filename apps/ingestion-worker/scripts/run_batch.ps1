@@ -1,26 +1,27 @@
 <#
 .SYNOPSIS
-    JV-Link 取り込みバッチの実行ラッパー（リトライ + 失敗通知）。
+    Ingestion batch runner wrapper (retry + failure notification).
 
 .DESCRIPTION
-    Windows タスクスケジューラから呼ばれる。
-    指定ステップを最大 $MaxRetries 回試行し、失敗時は NOTIFY_WEBHOOK_URL へ通知する。
-    ログは logs\ ディレクトリに日付別ファイルで保存される。
+    Invoked from Windows Task Scheduler.
+    Retries the given step up to $MaxRetries times; notifies NOTIFY_WEBHOOK_URL on
+    final failure. Logs are written per-date under logs\.
 
 .PARAMETER Step
-    実行ステップ: all | masters | entries | results | special-entries
+    Step to run: all | masters | entries | results | special-entries
 
 .PARAMETER Mode
-    データソース: jvlink | fixture | mykeibadb（デフォルト: jvlink）
+    Data source: jvlink | fixture | mykeibadb (default: jvlink)
 
 .PARAMETER Date
-    取得日付 YYYYMMDD（デフォルト: 今日）
+    Start date YYYYMMDD (default: today)
 
 .PARAMETER DateTo
-    取得終了日付 YYYYMMDD（省略時は --date-to を渡さず、batch.py 側で Date と同じ扱いになる）
+    End date YYYYMMDD (optional). When omitted, --date-to is not passed and
+    batch.py treats it as the same as Date.
 
 .PARAMETER MaxRetries
-    最大リトライ回数（デフォルト: 3）
+    Max retry attempts (default: 3)
 
 .EXAMPLE
     .\run_batch.ps1 -Step entries
@@ -38,7 +39,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# --- パス解決 ---
+# --- Path resolution ---
 $WorkerDir = Split-Path $PSScriptRoot -Parent
 $LogDir    = Join-Path $WorkerDir "logs"
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
@@ -46,11 +47,11 @@ if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out
 $LogFile = Join-Path $LogDir "$Date-$Step.log"
 $EnvFile = Join-Path $WorkerDir ".env"
 
-# --- Python 解決（仮想環境優先） ---
+# --- Resolve Python (prefer venv) ---
 $Venv = Join-Path $WorkerDir ".venv\Scripts\python.exe"
 $Python = if (Test-Path $Venv) { $Venv } else { "python" }
 
-# --- .env 読み込み（NOTIFY_WEBHOOK_URL を環境変数に展開） ---
+# --- Load .env (expands NOTIFY_WEBHOOK_URL etc. into process env vars) ---
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
         if ($_ -match "^\s*([^#=]+)=(.*)$") {
@@ -69,8 +70,8 @@ function Write-Log {
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
 }
 
-$rangeLabel = if ($DateTo) { "$Date→$DateTo" } else { $Date }
-Write-Log "=== run_batch.ps1 開始: step=$Step mode=$Mode date=$rangeLabel ==="
+$rangeLabel = if ($DateTo) { "$Date to $DateTo" } else { $Date }
+Write-Log "=== run_batch.ps1 start: step=$Step mode=$Mode date=$rangeLabel ==="
 
 $batchArgs = @("-m", "ingestion.batch", "--mode", $Mode, "--step", $Step, "--date", $Date)
 if ($DateTo) { $batchArgs += @("--date-to", $DateTo) }
@@ -80,47 +81,47 @@ $success = $false
 
 while ($attempt -lt $MaxRetries -and -not $success) {
     $attempt++
-    Write-Log "試行 $attempt/$MaxRetries"
+    Write-Log "attempt $attempt/$MaxRetries"
 
     try {
         & $Python @batchArgs 2>&1 |
             Tee-Object -FilePath $LogFile -Append
         if ($LASTEXITCODE -eq 0) {
             $success = $true
-            Write-Log "完了 (試行 $attempt 回目)"
+            Write-Log "done (attempt $attempt)"
         } else {
-            Write-Log "失敗 exit=$LASTEXITCODE"
+            Write-Log "failed exit=$LASTEXITCODE"
         }
     } catch {
-        Write-Log "例外: $_"
+        Write-Log "exception: $_"
     }
 
     if (-not $success -and $attempt -lt $MaxRetries) {
         $wait = 30 * $attempt
-        Write-Log "${wait}秒待機後にリトライします..."
+        Write-Log "waiting ${wait}s before retry..."
         Start-Sleep -Seconds $wait
     }
 }
 
 if (-not $success) {
-    $errMsg = "$Step バッチが $MaxRetries 回失敗しました (date=$Date)"
+    $errMsg = "$Step batch failed after $MaxRetries attempts (date=$Date)"
     Write-Log "ERROR: $errMsg"
 
-    # Slack 互換 Webhook 通知
+    # Slack-compatible webhook notification
     $webhookUrl = [System.Environment]::GetEnvironmentVariable("NOTIFY_WEBHOOK_URL", "Process")
     if ($webhookUrl) {
         try {
-            $body = @{ text = ":x: *ingestion-worker 失敗*`n• step: ``$Step```n• 日付: ``$Date```n• 詳細はログを確認: $LogFile" } |
+            $body = @{ text = ":x: *ingestion-worker failed*`n- step: ``$Step```n- date: ``$Date```n- see log: $LogFile" } |
                 ConvertTo-Json -Compress
             Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType "application/json"
-            Write-Log "失敗通知を送信しました"
+            Write-Log "failure notification sent"
         } catch {
-            Write-Log "通知送信失敗: $_"
+            Write-Log "failed to send notification: $_"
         }
     }
 
     exit 1
 }
 
-Write-Log "=== run_batch.ps1 終了 ==="
+Write-Log "=== run_batch.ps1 end ==="
 exit 0

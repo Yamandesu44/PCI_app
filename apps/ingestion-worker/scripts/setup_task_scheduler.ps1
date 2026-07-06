@@ -1,23 +1,24 @@
 <#
 .SYNOPSIS
-    Windows タスクスケジューラに mykeibadb 同期タスクを登録する。
+    Register the mykeibadb sync task in Windows Task Scheduler.
 
 .DESCRIPTION
-    管理者権限で実行してください。
-    既存の同名タスクは上書き登録されます。
+    Run this as Administrator.
+    Re-running overwrites any existing task with the same name.
 
-    登録されるタスク:
-      PCI_Sync_Mykeibadb  毎日 09:00 / 13:00 / 18:00 / 21:00 JST
-        mykeibadb.exe（JV-Link→ローカルMySQL） → batch.py（MySQL→PostgreSQL
-        出走表・確定成績）を一気通貫で実行する（scripts\sync_mykeibadb.bat）。
+    Registers:
+      PCI_Sync_Mykeibadb  daily at 09:00 / 13:00 / 18:00 / 21:00 JST
+        Runs mykeibadb.exe (JV-Link -> local MySQL) then batch.py
+        (MySQL -> PostgreSQL entries + results) end to end, via
+        scripts\sync_mykeibadb.bat.
 
-    前提:
-      .env に MYKEIBADB_EXE_PATH（mykeibadb.exe のフルパス）が設定済みであること。
-      wmykeibadb.exe の「終了時一時停止」チェックが外れていること
-      （無人実行時にここでハングするため）。
+    Prerequisites:
+      MYKEIBADB_EXE_PATH (full path to mykeibadb.exe) is set in .env.
+      "Pause on exit" is unchecked in wmykeibadb.exe (otherwise an
+      unattended run will hang waiting for a keypress).
 
 .EXAMPLE
-    # 管理者として PowerShell を開いて実行
+    # Open PowerShell as Administrator and run:
     .\scripts\setup_task_scheduler.ps1
 #>
 
@@ -28,11 +29,12 @@ $WorkerDir = Split-Path $PSScriptRoot -Parent
 $SyncBat = Join-Path $WorkerDir "scripts\sync_mykeibadb.bat"
 
 if (-not (Test-Path $SyncBat)) {
-    throw "バッチファイルが見つかりません: $SyncBat"
+    throw "Batch file not found: $SyncBat"
 }
 
-# 現在のログインユーザーでタスクを実行する（パスワード不要・ログオン時のみ動作）
-# 無人実行が必要な場合は -RunLevel Highest -User "SYSTEM" に変更する
+# Run the task as the current logged-in user (no password needed, but only
+# runs while that user is logged on). For a headless server, switch to
+# -RunLevel Highest -User "SYSTEM" instead.
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
 
 $Times = @("09:00", "13:00", "18:00", "21:00")
@@ -50,10 +52,10 @@ Register-ScheduledTask `
     -Trigger $Triggers `
     -Principal $Principal `
     -Settings $settings `
-    -Description "PCI App 自動取り込み: mykeibadb.exe → batch.py（1日4回）" `
+    -Description "PCI App auto-ingest: mykeibadb.exe -> batch.py (4x daily)" `
     -Force | Out-Null
 
-Write-Host "登録完了: PCI_Sync_Mykeibadb (毎日 $($Times -join ' / '))"
+Write-Host "Registered: PCI_Sync_Mykeibadb (daily at $($Times -join ' / '))"
 Write-Host ""
-Write-Host "確認: Get-ScheduledTask -TaskName 'PCI_Sync_Mykeibadb' | Select-Object TaskName, State"
-Write-Host "手動テスト起動: Start-ScheduledTask -TaskName 'PCI_Sync_Mykeibadb'"
+Write-Host "Check: Get-ScheduledTask -TaskName 'PCI_Sync_Mykeibadb' | Select-Object TaskName, State"
+Write-Host "Manual test run: Start-ScheduledTask -TaskName 'PCI_Sync_Mykeibadb'"
