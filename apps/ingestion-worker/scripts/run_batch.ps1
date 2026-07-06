@@ -16,17 +16,22 @@
 .PARAMETER Date
     取得日付 YYYYMMDD（デフォルト: 今日）
 
+.PARAMETER DateTo
+    取得終了日付 YYYYMMDD（省略時は --date-to を渡さず、batch.py 側で Date と同じ扱いになる）
+
 .PARAMETER MaxRetries
     最大リトライ回数（デフォルト: 3）
 
 .EXAMPLE
     .\run_batch.ps1 -Step entries
     .\run_batch.ps1 -Step results -Date 20260628
+    .\run_batch.ps1 -Step entries -Mode mykeibadb -Date 20260629 -DateTo 20260720
 #>
 param(
     [Parameter(Mandatory)][string]$Step,
     [string]$Mode = "jvlink",
     [string]$Date = (Get-Date -Format "yyyyMMdd"),
+    [string]$DateTo = "",
     [int]$MaxRetries = 3
 )
 
@@ -64,7 +69,11 @@ function Write-Log {
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
 }
 
-Write-Log "=== run_batch.ps1 開始: step=$Step mode=$Mode date=$Date ==="
+$rangeLabel = if ($DateTo) { "$Date→$DateTo" } else { $Date }
+Write-Log "=== run_batch.ps1 開始: step=$Step mode=$Mode date=$rangeLabel ==="
+
+$batchArgs = @("-m", "ingestion.batch", "--mode", $Mode, "--step", $Step, "--date", $Date)
+if ($DateTo) { $batchArgs += @("--date-to", $DateTo) }
 
 $attempt = 0
 $success = $false
@@ -74,7 +83,7 @@ while ($attempt -lt $MaxRetries -and -not $success) {
     Write-Log "試行 $attempt/$MaxRetries"
 
     try {
-        & $Python -m ingestion.batch --mode $Mode --step $Step --date $Date 2>&1 |
+        & $Python @batchArgs 2>&1 |
             Tee-Object -FilePath $LogFile -Append
         if ($LASTEXITCODE -eq 0) {
             $success = $true
