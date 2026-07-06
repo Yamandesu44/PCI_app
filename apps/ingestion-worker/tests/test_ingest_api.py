@@ -179,3 +179,41 @@ class TestDeleteRace:
         assert result == 1
         url = http.delete.call_args.args[0]
         assert "/internal/ingest/races/2026062809011111" in url
+
+
+class TestLogBatch:
+    def test_sends_to_log_endpoint(self) -> None:
+        http = _make_http_client({"id": 42})
+        api = IngestApiClient("http://api", http_client=http)
+
+        log_id = api.log_batch(
+            batch_date="2026-07-06",
+            step="all",
+            mode="fixture",
+            started_at="2026-07-06T13:31:35+00:00",
+            finished_at="2026-07-06T13:31:37+00:00",
+            status="ok",
+        )
+
+        assert log_id == 42
+        url = http.post.call_args.args[0]
+        assert "/internal/ingest/log" in url
+        payload = http.post.call_args.kwargs["json"]
+        assert payload["batch_date"] == "2026-07-06"
+        assert payload["status"] == "ok"
+
+    def test_failure_is_swallowed_and_returns_zero(self) -> None:
+        """API 側エラー（422 等）でもバッチ本体を止めないよう、例外を握りつぶし 0 を返す。"""
+        http = _make_http_client({"detail": "invalid"}, status_code=422)
+        api = IngestApiClient("http://api", http_client=http)
+
+        log_id = api.log_batch(
+            batch_date="2026-07-06",
+            step="all",
+            mode="fixture",
+            started_at="2026-07-06T13:31:35+00:00",
+            finished_at=None,
+            status="running",
+        )
+
+        assert log_id == 0

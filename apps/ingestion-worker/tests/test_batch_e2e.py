@@ -14,7 +14,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from ingestion.batch import ingest_entries, ingest_masters, ingest_results, iter_date_chunks
+from ingestion.batch import (
+    _to_iso_date,
+    ingest_entries,
+    ingest_masters,
+    ingest_results,
+    iter_date_chunks,
+)
 from ingestion.client.fixture_client import (
     FixtureJvLinkClient,
     _json_result_to_se,
@@ -60,6 +66,16 @@ class TestDateChunks:
     def test_rejects_reversed_range(self) -> None:
         with pytest.raises(ValueError):
             iter_date_chunks("20000110", "20000101", 4)
+
+
+class TestToIsoDate:
+    def test_converts_yyyymmdd_to_iso(self) -> None:
+        """ingest_log API 送信用に YYYYMMDD → ISO 8601 (date_from_datetime_inexact 対策)。"""
+        assert _to_iso_date("20260706") == "2026-07-06"
+
+    def test_rejects_malformed_input(self) -> None:
+        with pytest.raises(ValueError):
+            _to_iso_date("2026-07-06")
 
 
 # ---------------------------------------------------------------------------

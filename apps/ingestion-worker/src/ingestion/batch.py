@@ -325,6 +325,11 @@ def ingest_results(
             _log.error("成績送信エラー %s: %s", race_key, exc)
 
 
+def _to_iso_date(yyyymmdd: str) -> str:
+    """YYYYMMDD 形式を ISO 8601 (YYYY-MM-DD) へ変換する（ingest_log API 送信用）。"""
+    return datetime.datetime.strptime(yyyymmdd, "%Y%m%d").date().isoformat()
+
+
 def iter_date_chunks(date_from: str, date_to: str, chunk_days: int) -> list[tuple[str, str]]:
     """長期取り込みを、指定日数ごとの範囲に分割する。"""
     if chunk_days <= 0:
@@ -420,7 +425,7 @@ def main() -> None:
         args.race_option,
     )
 
-    started_at = datetime.datetime.now(datetime.timezone.utc)
+    started_at = datetime.datetime.now(datetime.UTC)
 
     try:
         if args.mode == "mykeibadb":
@@ -429,11 +434,11 @@ def main() -> None:
                 ingest_mykeibadb_special_entries(api, date_from, date_to)
                 _log.info("=== ingestion-worker 完了 ===")
                 api.log_batch(
-                    batch_date=date_from,
+                    batch_date=_to_iso_date(date_from),
                     step=args.step,
                     mode=args.mode,
                     started_at=started_at.isoformat(),
-                    finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    finished_at=datetime.datetime.now(datetime.UTC).isoformat(),
                     status="ok",
                 )
                 return
@@ -462,11 +467,11 @@ def main() -> None:
 
         _log.info("=== ingestion-worker 完了 ===")
         api.log_batch(
-            batch_date=date_from,
+            batch_date=_to_iso_date(date_from),
             step=args.step,
             mode=args.mode,
             started_at=started_at.isoformat(),
-            finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            finished_at=datetime.datetime.now(datetime.UTC).isoformat(),
             status="ok",
         )
 
@@ -474,11 +479,11 @@ def main() -> None:
         _log.error("致命的エラー: %s", exc, exc_info=True)
         err_str = str(exc)
         api.log_batch(
-            batch_date=date_from,
+            batch_date=_to_iso_date(date_from),
             step=args.step,
             mode=args.mode,
             started_at=started_at.isoformat(),
-            finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            finished_at=datetime.datetime.now(datetime.UTC).isoformat(),
             status="error",
             error_msg=err_str[:2000],
         )
