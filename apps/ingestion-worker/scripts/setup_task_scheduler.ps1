@@ -7,17 +7,17 @@
     Re-running overwrites any existing task with the same name.
 
     Registers:
-      PCI_Sync_Mykeibadb  Fri/Sat/Sun at 18:00 JST
+      PCI_Sync_Mykeibadb  Fri/Sat 10:00, Sun 18:00 JST
         Runs mykeibadb.exe (JV-Link -> local MySQL) then batch.py
         (MySQL -> PostgreSQL entries + results) end to end, via
         scripts\sync_mykeibadb.bat.
 
         Schedule rationale (JRA weekly cycle):
-          Sunday  18:00 - Sat+Sun results, and next week's special
-                           (graded stakes) entry announcements
-          Friday  18:00 - Saturday's regular races + this weekend's
-                           special races post-position draw
-          Saturday 18:00 - Sunday's regular races post-position draw
+          Friday    10:00 - Saturday's regular races + this weekend's
+                             special races post-position draw
+          Saturday  10:00 - Sunday's regular races post-position draw
+          Sunday    18:00 - Sat+Sun results, and next week's special
+                             (graded stakes) entry announcements
 
     Prerequisites:
       MYKEIBADB_EXE_PATH (full path to mykeibadb.exe) is set in .env.
@@ -44,9 +44,9 @@ if (-not (Test-Path $SyncBat)) {
 # -RunLevel Highest -User "SYSTEM" instead.
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
 
-$DaysOfWeek = @("Friday", "Saturday", "Sunday")
-$TriggerTime = "18:00"
-$Trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DaysOfWeek -At $TriggerTime
+$FriSatTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday, Saturday -At "10:00"
+$SunTrigger    = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "18:00"
+$Triggers = @($FriSatTrigger, $SunTrigger)
 
 $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$SyncBat`""
 $settings = New-ScheduledTaskSettingsSet `
@@ -57,13 +57,13 @@ $settings = New-ScheduledTaskSettingsSet `
 Register-ScheduledTask `
     -TaskName "PCI_Sync_Mykeibadb" `
     -Action $action `
-    -Trigger $Trigger `
+    -Trigger $Triggers `
     -Principal $Principal `
     -Settings $settings `
-    -Description "PCI App auto-ingest: mykeibadb.exe -> batch.py (Fri/Sat/Sun 18:00)" `
+    -Description "PCI App auto-ingest: mykeibadb.exe -> batch.py (Fri/Sat 10:00, Sun 18:00)" `
     -Force | Out-Null
 
-Write-Host "Registered: PCI_Sync_Mykeibadb ($($DaysOfWeek -join '/') at $TriggerTime)"
+Write-Host "Registered: PCI_Sync_Mykeibadb (Fri/Sat at 10:00, Sun at 18:00)"
 Write-Host ""
 Write-Host "Check: Get-ScheduledTask -TaskName 'PCI_Sync_Mykeibadb' | Select-Object TaskName, State"
 Write-Host "Manual test run: Start-ScheduledTask -TaskName 'PCI_Sync_Mykeibadb'"

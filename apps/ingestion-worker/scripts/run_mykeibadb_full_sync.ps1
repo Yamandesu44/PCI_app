@@ -11,7 +11,7 @@
     3. batch.py --mode mykeibadb --step results   -> pushes confirmed results.
 
     Intended to be run from Windows Task Scheduler on a JRA-calendar-aware
-    schedule (Fri/Sat/Sun 18:00 -- see setup_task_scheduler.ps1).
+    schedule (Fri/Sat 10:00, Sun 18:00 -- see setup_task_scheduler.ps1).
     mykeibadb.exe only fetches the delta since its last FROMTIME watermark,
     so re-runs are cheap even if triggered more often.
 

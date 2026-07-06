@@ -1,5 +1,5 @@
 @echo off
-REM mykeibadb sync - run from Windows Task Scheduler Fri/Sat/Sun at 18:00.
+REM mykeibadb sync - run from Windows Task Scheduler Fri/Sat 10:00, Sun 18:00.
 REM Task name: PCI_Sync_Mykeibadb
 REM
 REM What it does: mykeibadb.exe (JV-Link -> MySQL) then batch.py (MySQL -> PostgreSQL,
