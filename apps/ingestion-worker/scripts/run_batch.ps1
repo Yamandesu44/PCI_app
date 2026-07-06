@@ -84,8 +84,18 @@ while ($attempt -lt $MaxRetries -and -not $success) {
     Write-Log "attempt $attempt/$MaxRetries"
 
     try {
-        & $Python @batchArgs 2>&1 |
-            Tee-Object -FilePath $LogFile -Append
+        # Python's logging module writes to stderr by default. With 2>&1
+        # merging stderr into the pipeline, $ErrorActionPreference=Stop
+        # would otherwise treat every log line as a terminating error
+        # before the process ever gets a chance to exit normally.
+        # Relax it to Continue just for this native call, then restore it.
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & $Python @batchArgs 2>&1 | Tee-Object -FilePath $LogFile -Append
+        } finally {
+            $ErrorActionPreference = $prevEAP
+        }
         if ($LASTEXITCODE -eq 0) {
             $success = $true
             Write-Log "done (attempt $attempt)"
@@ -113,7 +123,7 @@ if (-not $success) {
         try {
             $body = @{ text = ":x: *ingestion-worker failed*`n- step: ``$Step```n- date: ``$Date```n- see log: $LogFile" } |
                 ConvertTo-Json -Compress
-            Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType "application/json"
+            Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType "application/json" | Out-Null
             Write-Log "failure notification sent"
         } catch {
             Write-Log "failed to send notification: $_"
