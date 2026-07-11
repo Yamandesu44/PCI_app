@@ -190,6 +190,18 @@ class HorsePaceAnalysisSchema(BaseModel):
     is_pci3_contributor: bool = False
 
 
+class ForecastAccuracySchema(BaseModel):
+    """出走前の想定RPCIと実績RPCIの答え合わせ結果。"""
+
+    predicted_rpci: float
+    predicted_label: str
+    actual_rpci: float
+    actual_label: str
+    error: float
+    label_hit: bool
+    model_version: str
+
+
 class PaceAnalysisSchema(BaseModel):
     """確定後ペース分析（各馬PCI・実績RPCI・PCI3）。PCI 系は formula_version を返す。"""
 
@@ -202,6 +214,7 @@ class PaceAnalysisSchema(BaseModel):
     horses: list[HorsePaceAnalysisSchema] = []
     reasons: list[ReasonSchema] = []
     comment: CommentSchema | None = None
+    forecast_accuracy: ForecastAccuracySchema | None = None
 
     @classmethod
     def from_dto(cls, dto: PaceAnalysisOutput) -> PaceAnalysisSchema:
@@ -226,6 +239,11 @@ class PaceAnalysisSchema(BaseModel):
             ],
             reasons=[ReasonSchema(**vars(r)) for r in dto.reasons],
             comment=CommentSchema.from_dto(dto.comment) if dto.comment else None,
+            forecast_accuracy=(
+                ForecastAccuracySchema(**vars(dto.forecast_accuracy))
+                if dto.forecast_accuracy
+                else None
+            ),
         )
 
 

@@ -52,6 +52,7 @@ PACE_ANALYSIS_KEYS = {
     "horses",
     "reasons",
     "comment",
+    "forecast_accuracy",
 }
 
 PACE_ANALYSIS_HORSE_KEYS = {

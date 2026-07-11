@@ -229,6 +229,50 @@
         "title": "EntryItem",
         "type": "object"
       },
+      "ForecastAccuracySchema": {
+        "description": "出走前の想定RPCIと実績RPCIの答え合わせ結果。",
+        "properties": {
+          "actual_label": {
+            "title": "Actual Label",
+            "type": "string"
+          },
+          "actual_rpci": {
+            "title": "Actual Rpci",
+            "type": "number"
+          },
+          "error": {
+            "title": "Error",
+            "type": "number"
+          },
+          "label_hit": {
+            "title": "Label Hit",
+            "type": "boolean"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "predicted_label": {
+            "title": "Predicted Label",
+            "type": "string"
+          },
+          "predicted_rpci": {
+            "title": "Predicted Rpci",
+            "type": "number"
+          }
+        },
+        "required": [
+          "predicted_rpci",
+          "predicted_label",
+          "actual_rpci",
+          "actual_label",
+          "error",
+          "label_hit",
+          "model_version"
+        ],
+        "title": "ForecastAccuracySchema",
+        "type": "object"
+      },
       "ForecastSchema": {
         "description": "レース展開予想（想定RPCI + 展開シナリオ + 各馬 PAI）。",
         "properties": {
@@ -635,6 +679,16 @@
           "field_size": {
             "title": "Field Size",
             "type": "integer"
+          },
+          "forecast_accuracy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastAccuracySchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "formula_version": {
             "title": "Formula Version",

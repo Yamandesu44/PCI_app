@@ -7,6 +7,7 @@ import datetime
 from pci.application.dto import (
     CommentOutput,
     EntryDetailOutput,
+    ForecastAccuracyOutput,
     HorsePaceAnalysisOutput,
     PaceAnalysisOutput,
     RaceDetailOutput,
@@ -20,8 +21,10 @@ from pci.domain.pace.commentary import (
     ReviewHorseRef,
     RuleBasedCommentGenerator,
 )
+from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.pci import FORMULA_VERSION, aggregate_rpci
-from pci.domain.racing.race import RaceStatus
+from pci.domain.pace.rpci_forecast import PaceLabel, classify_pace
+from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.racing.repository import RaceRepository
 from pci.domain.shared.race_key import RaceKey
@@ -140,13 +143,19 @@ class GetPaceAnalysisUseCase:
     RPCI/PCI3 は唯一の真実の場所 `aggregate_rpci`（ADR-0004）で再集計し、
     formula_version と説明可能性 reasons を付して返す。
     自然文の回顧コメントは CommentGenerator（既定 comment-v1）で生成する。
+    mart_repo を指定すると、出走前に保存された想定RPCIとの答え合わせ
+    （forecast_accuracy）を合わせて返す（未指定・未保存時は None）。
     """
 
     def __init__(
-        self, repo: RaceRepository, comment_generator: CommentGenerator | None = None
+        self,
+        repo: RaceRepository,
+        comment_generator: CommentGenerator | None = None,
+        mart_repo: MartRepository | None = None,
     ) -> None:
         self._repo = repo
         self._commenter = comment_generator or RuleBasedCommentGenerator()
+        self._mart_repo = mart_repo
 
     def execute(self, race_key_str: str) -> PaceAnalysisOutput:
         key = RaceKey(race_key_str)
@@ -173,6 +182,8 @@ class GetPaceAnalysisUseCase:
             for e in sorted(entries, key=_result_order)
         ]
 
+        predicted_label, actual_label, accuracy_output = self._forecast_accuracy(race, rpci)
+
         review_input = ReviewCommentInput(
             rpci_actual=rpci,
             pci3_actual=pci3,
@@ -188,6 +199,9 @@ class GetPaceAnalysisUseCase:
                 )
                 for h in horses
             ),
+            predicted_rpci=accuracy_output.predicted_rpci if accuracy_output else None,
+            predicted_label=predicted_label,
+            actual_label=actual_label,
         )
         commentary = self._commenter.review_comment(review_input)
         comment = CommentOutput(
@@ -209,7 +223,31 @@ class GetPaceAnalysisUseCase:
             horses=horses,
             reasons=[ReasonOutput(r.code, r.description, r.contribution) for r in reasons],
             comment=comment,
+            forecast_accuracy=accuracy_output,
         )
+
+    def _forecast_accuracy(
+        self, race: Race, rpci: float | None
+    ) -> tuple[PaceLabel | None, PaceLabel | None, ForecastAccuracyOutput | None]:
+        """出走前の想定RPCIを取得し、実績と答え合わせする（未保存・未確定時は None）。"""
+        if self._mart_repo is None or rpci is None:
+            return None, None, None
+        predicted = self._mart_repo.find_predicted_pace(str(race.race_key))
+        if predicted is None:
+            return None, None, None
+
+        predicted_label = PaceLabel(predicted.pace_label)
+        actual_label = classify_pace(rpci, race.track_type)
+        accuracy_output = ForecastAccuracyOutput(
+            predicted_rpci=predicted.predicted_rpci,
+            predicted_label=str(predicted_label),
+            actual_rpci=rpci,
+            actual_label=str(actual_label),
+            error=round(rpci - predicted.predicted_rpci, 1),
+            label_hit=predicted_label == actual_label,
+            model_version=predicted.model_version,
+        )
+        return predicted_label, actual_label, accuracy_output
 
     def _aggregate(
         self, entries: list[RaceEntry]

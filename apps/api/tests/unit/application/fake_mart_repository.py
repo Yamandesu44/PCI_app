@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pci.domain.pace.adaptability import PaiResult
+from pci.domain.pace.mart_repository import PredictedPaceRecord
 from pci.domain.pace.rpci_forecast import RpciForecast
 
 
@@ -18,3 +19,15 @@ class FakeMartRepository:
 
     def save_pace_fit(self, race_key: str, horse_no: int, result: PaiResult) -> None:
         self.pace_fit[(race_key, horse_no, result.model_version)] = result
+
+    def find_predicted_pace(self, race_key: str) -> PredictedPaceRecord | None:
+        for (key, _model_version), forecast in self.predicted_pace.items():
+            if key == race_key:
+                return PredictedPaceRecord(
+                    race_key=race_key,
+                    model_version=forecast.model_version,
+                    predicted_rpci=forecast.value,
+                    pace_label=str(forecast.label),
+                    confidence=forecast.confidence,
+                )
+        return None

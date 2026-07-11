@@ -121,8 +121,12 @@ def get_race_detail_use_case(repo: RepositoryDep) -> GetRaceDetailUseCase:
     return GetRaceDetailUseCase(repo)
 
 
-def get_pace_analysis_use_case(repo: RepositoryDep) -> GetPaceAnalysisUseCase:
-    return GetPaceAnalysisUseCase(repo, comment_generator=_get_comment_generator())
+def get_pace_analysis_use_case(
+    repo: RepositoryDep, mart_repo: MartRepositoryDep
+) -> GetPaceAnalysisUseCase:
+    return GetPaceAnalysisUseCase(
+        repo, comment_generator=_get_comment_generator(), mart_repo=mart_repo
+    )
 
 
 ForecastUseCaseDep = Annotated[ForecastRaceUseCase, Depends(get_forecast_use_case)]

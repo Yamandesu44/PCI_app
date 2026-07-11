@@ -139,6 +139,41 @@ _FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
 _CLOSER_STYLES = (RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER)
 
 
+@dataclass(frozen=True)
+class ForecastAccuracy:
+    """想定RPCIと実績RPCIの答え合わせ結果（確定後の回顧で使う）。"""
+
+    predicted_rpci: float
+    predicted_label: PaceLabel
+    actual_rpci: float
+    actual_label: PaceLabel
+    error: float
+    label_hit: bool
+
+
+def evaluate_forecast_accuracy(
+    predicted_rpci: float,
+    predicted_label: PaceLabel,
+    actual_rpci: float,
+    track_type: str = "芝",
+    weights: RuleWeights = DEFAULT_WEIGHTS,
+) -> ForecastAccuracy:
+    """想定RPCIが実績とどれだけ合っていたかを評価する（唯一の答え合わせロジック）。
+
+    ラベル的中判定は classify_pace（予測・実績で共通利用する唯一の判定）を
+    実績RPCIに適用して求める。バックテストと同じ基準で公平に判定する。
+    """
+    actual_label = classify_pace(actual_rpci, track_type, weights)
+    return ForecastAccuracy(
+        predicted_rpci=predicted_rpci,
+        predicted_label=predicted_label,
+        actual_rpci=actual_rpci,
+        actual_label=actual_label,
+        error=round(actual_rpci - predicted_rpci, 1),
+        label_hit=predicted_label == actual_label,
+    )
+
+
 def classify_pace(
     rpci: float,
     track_type: str = "芝",

@@ -10,8 +10,10 @@ from pci.application.dto import EntryInput, RaceInfo, ResultInput
 from pci.application.errors import RaceNotConfirmedError
 from pci.application.race_query_use_cases import GetPaceAnalysisUseCase
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
+from pci.domain.pace.rpci_forecast import PaceLabel, RpciForecast
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
+from tests.unit.application.fake_mart_repository import FakeMartRepository
 from tests.unit.application.fake_repository import FakeRaceRepository
 
 CONFIRMED = "2026061705010101"
@@ -150,3 +152,59 @@ class TestGetPaceAnalysisUseCase:
         assert out.rpci_actual is None
         assert out.sample_size == 0
         assert any(r.code == "insufficient" for r in out.reasons)
+
+
+class TestForecastAccuracyFeedback:
+    """出走前の想定RPCIとの答え合わせ（予測フィードバックループ）。"""
+
+    def _forecast(self, label: PaceLabel, value: float = 53.0) -> RpciForecast:
+        return RpciForecast(
+            value=value, label=label, confidence=0.7, model_version="rule-v4", reasons=()
+        )
+
+    def test_no_mart_repo_returns_none_accuracy(self) -> None:
+        """mart_repo 未指定（後方互換）なら forecast_accuracy は None。"""
+        repo = FakeRaceRepository()
+        _seed_confirmed(repo)
+        out = GetPaceAnalysisUseCase(repo).execute(CONFIRMED)
+        assert out.forecast_accuracy is None
+
+    def test_no_saved_prediction_returns_none_accuracy(self) -> None:
+        """mart_repo はあるが該当レースの予測が未保存なら None。"""
+        repo = FakeRaceRepository()
+        _seed_confirmed(repo)
+        mart_repo = FakeMartRepository()
+        out = GetPaceAnalysisUseCase(repo, mart_repo=mart_repo).execute(CONFIRMED)
+        assert out.forecast_accuracy is None
+
+    def test_label_hit(self) -> None:
+        """実績RPCI(約55.9・芝→SLOW)と一致する予測を保存すると的中と判定される。"""
+        repo = FakeRaceRepository()
+        _seed_confirmed(repo)
+        mart_repo = FakeMartRepository()
+        mart_repo.save_predicted_pace(CONFIRMED, self._forecast(PaceLabel.SLOW))
+
+        out = GetPaceAnalysisUseCase(repo, mart_repo=mart_repo).execute(CONFIRMED)
+
+        assert out.forecast_accuracy is not None
+        assert out.forecast_accuracy.label_hit is True
+        assert out.forecast_accuracy.predicted_label == str(PaceLabel.SLOW)
+        assert out.forecast_accuracy.actual_label == str(PaceLabel.SLOW)
+        assert out.forecast_accuracy.model_version == "rule-v4"
+        # 回顧コメントにも答え合わせ文言が反映される
+        assert any("的中しました" in para for para in out.comment.body)  # type: ignore[union-attr]
+
+    def test_label_miss(self) -> None:
+        """実績と異なるラベルを予測していた場合は外れと判定される。"""
+        repo = FakeRaceRepository()
+        _seed_confirmed(repo)
+        mart_repo = FakeMartRepository()
+        mart_repo.save_predicted_pace(CONFIRMED, self._forecast(PaceLabel.HIGH, value=45.0))
+
+        out = GetPaceAnalysisUseCase(repo, mart_repo=mart_repo).execute(CONFIRMED)
+
+        assert out.forecast_accuracy is not None
+        assert out.forecast_accuracy.label_hit is False
+        assert out.forecast_accuracy.predicted_label == str(PaceLabel.HIGH)
+        assert out.forecast_accuracy.actual_label == str(PaceLabel.SLOW)
+        assert any("という結果でした" in para for para in out.comment.body)  # type: ignore[union-attr]

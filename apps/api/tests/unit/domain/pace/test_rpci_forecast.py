@@ -15,6 +15,7 @@ from pci.domain.pace.rpci_forecast import (
     RuleBasedRpciForecaster,
     RuleWeights,
     classify_pace,
+    evaluate_forecast_accuracy,
 )
 from pci.domain.pace.running_style import RunningStyleLabel
 
@@ -156,6 +157,38 @@ class TestRuleBasedForecast:
         )
         # ダート補正 -9.75 + 差し追込フィールド → スロー(>46)になるはず
         assert result.label == PaceLabel.SLOW
+
+
+class TestEvaluateForecastAccuracy:
+    """想定RPCIと実績RPCIの答え合わせ（回顧フィードバックループの中核）。"""
+
+    def test_label_hit_when_labels_match(self) -> None:
+        result = evaluate_forecast_accuracy(
+            predicted_rpci=53.0, predicted_label=PaceLabel.SLOW, actual_rpci=54.0
+        )
+        assert result.actual_label == PaceLabel.SLOW
+        assert result.label_hit is True
+        assert result.error == pytest.approx(1.0)
+
+    def test_label_miss_when_labels_differ(self) -> None:
+        result = evaluate_forecast_accuracy(
+            predicted_rpci=53.0, predicted_label=PaceLabel.SLOW, actual_rpci=45.0
+        )
+        assert result.actual_label == PaceLabel.HIGH
+        assert result.label_hit is False
+        assert result.error == pytest.approx(-8.0)
+
+    def test_uses_track_type_specific_thresholds(self) -> None:
+        """ダートは芝と異なる閾値（classify_pace と同じ基準）で判定する。"""
+        # 43.0 は芝なら HIGH(<49) だが、ダートは高閾値40のため AVERAGE
+        result = evaluate_forecast_accuracy(
+            predicted_rpci=43.0,
+            predicted_label=PaceLabel.AVERAGE,
+            actual_rpci=43.0,
+            track_type="ダート",
+        )
+        assert result.actual_label == PaceLabel.AVERAGE
+        assert result.label_hit is True
 
 
 class TestFrontPaceEvidence:

@@ -232,3 +232,59 @@ class TestReviewComment:
         )
         assert out.body  # 概況の段落は出る
         assert not any("勝ったのは" in para for para in out.body)
+
+
+class TestForecastAccuracyInReview:
+    """出走前の想定RPCIとの答え合わせ文言（回顧フィードバックループ）。"""
+
+    def _input(self, predicted_label: PaceLabel | None, actual_label: PaceLabel | None) -> (
+        ReviewCommentInput
+    ):
+        return ReviewCommentInput(
+            rpci_actual=52.0,
+            pci3_actual=52.0,
+            formula_version="pci-v2",
+            field_size=8,
+            sample_size=8,
+            horses=(ReviewHorseRef(1, 1, "先行", 52.0),),
+            predicted_rpci=53.0,
+            predicted_label=predicted_label,
+            actual_label=actual_label,
+        )
+
+    def test_no_prediction_data_omits_accuracy_sentence(self) -> None:
+        """predicted_label が None（予測未保存）なら答え合わせ文言は出ない（後方互換）。"""
+        out = RuleBasedCommentGenerator().review_comment(
+            ReviewCommentInput(
+                rpci_actual=52.0,
+                pci3_actual=52.0,
+                formula_version="pci-v2",
+                field_size=8,
+                sample_size=8,
+                horses=(ReviewHorseRef(1, 1, "先行", 52.0),),
+            )
+        )
+        assert not any("事前の想定" in para for para in out.body)
+
+    def test_label_hit_mentions_correct_forecast(self) -> None:
+        out = RuleBasedCommentGenerator().review_comment(
+            self._input(PaceLabel.SLOW, PaceLabel.SLOW)
+        )
+        joined = "".join(out.body)
+        assert "事前の想定「やや落ち着いた流れ」が的中しました。" in joined
+
+    def test_label_miss_mentions_both_predicted_and_actual(self) -> None:
+        out = RuleBasedCommentGenerator().review_comment(
+            self._input(PaceLabel.SLOW, PaceLabel.HIGH)
+        )
+        joined = "".join(out.body)
+        assert "事前の想定は「やや落ち着いた流れ」でしたが" in joined
+        assert "実際は「やや速い流れ」という結果でした。" in joined
+
+    def test_accuracy_reason_included(self) -> None:
+        """reasons に forecast_accuracy コードで的中/外れの根拠が出力される。"""
+        out = RuleBasedCommentGenerator().review_comment(
+            self._input(PaceLabel.SLOW, PaceLabel.HIGH)
+        )
+        reason = next(r for r in out.reasons if r.code == "forecast_accuracy")
+        assert "外れ" in reason.description

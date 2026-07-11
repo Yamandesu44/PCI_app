@@ -66,7 +66,13 @@ class ReviewHorseRef:
 
 @dataclass(frozen=True)
 class ReviewCommentInput:
-    """確定後ペース回顧コメントの入力。"""
+    """確定後ペース回顧コメントの入力。
+
+    predicted_rpci/predicted_label は出走前に保存された想定RPCI（mart層
+    predicted_pace）。actual_label は実績RPCIに classify_pace を適用した
+    ラベル（呼び出し側で track_type を踏まえて計算する）。
+    predicted_label が None の場合は従来通り実績のみの回顧文になる（後方互換）。
+    """
 
     rpci_actual: float | None
     pci3_actual: float | None
@@ -74,6 +80,9 @@ class ReviewCommentInput:
     field_size: int
     sample_size: int
     horses: tuple[ReviewHorseRef, ...]
+    predicted_rpci: float | None = None
+    predicted_label: PaceLabel | None = None
+    actual_label: PaceLabel | None = None
 
 
 class CommentGenerator(Protocol):
@@ -187,6 +196,10 @@ class RuleBasedCommentGenerator:
         body: list[str] = []
         body.append(f"実際は{pace_clause}。")
 
+        accuracy_sentence = _forecast_accuracy_sentence(data)
+        if accuracy_sentence is not None:
+            body.append(accuracy_sentence)
+
         winner = _winner(data.horses)
         if winner is not None and winner.pci is not None:
             style = f"（{winner.running_style}）" if winner.running_style else ""
@@ -239,6 +252,17 @@ def _actual_pace(rpci: float) -> tuple[str, str]:
     return "平均的な流れ", "大きな偏りのない平均的な流れでした"
 
 
+def _forecast_accuracy_sentence(data: ReviewCommentInput) -> str | None:
+    """事前の想定と実績を答え合わせする一文を返す（予測データがなければ None）。"""
+    if data.predicted_label is None or data.actual_label is None:
+        return None
+    predicted_word = _PACE_WORD[data.predicted_label]
+    if data.predicted_label == data.actual_label:
+        return f"事前の想定「{predicted_word}」が的中しました。"
+    actual_word = _PACE_WORD[data.actual_label]
+    return f"事前の想定は「{predicted_word}」でしたが、実際は「{actual_word}」という結果でした。"
+
+
 def _winner(horses: tuple[ReviewHorseRef, ...]) -> ReviewHorseRef | None:
     confirmed = [h for h in horses if h.finish_pos is not None]
     if not confirmed:
@@ -258,7 +282,7 @@ def _horse_pace_phrase(horse_pci: float, rpci: float) -> str:
 def _review_reasons(data: ReviewCommentInput) -> tuple[Reason, ...]:
     rpci = data.rpci_actual if data.rpci_actual is not None else "—"
     pci3 = data.pci3_actual if data.pci3_actual is not None else "—"
-    return (
+    reasons_list = [
         Reason(
             code="comment_basis",
             description=(
@@ -266,8 +290,23 @@ def _review_reasons(data: ReviewCommentInput) -> tuple[Reason, ...]:
                 f"（{data.formula_version}）を要約"
             ),
         ),
+    ]
+    if data.predicted_rpci is not None and data.predicted_label is not None:
+        hit = data.predicted_label == data.actual_label
+        reasons_list.append(
+            Reason(
+                code="forecast_accuracy",
+                description=(
+                    f"想定RPCI {data.predicted_rpci}（{data.predicted_label}）vs "
+                    f"実績RPCI {rpci}（{data.actual_label}）→ "
+                    f"{'的中' if hit else '外れ'}"
+                ),
+            )
+        )
+    reasons_list.append(
         Reason(
             code="comment_model",
             description=f"ルールベース生成（{COMMENTARY_VERSION}）",
         ),
     )
+    return tuple(reasons_list)

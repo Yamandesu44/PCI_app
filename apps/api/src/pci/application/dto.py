@@ -175,10 +175,24 @@ class HorsePaceAnalysisOutput:
 
 
 @dataclass
+class ForecastAccuracyOutput:
+    """出走前の想定RPCIと実績RPCIの答え合わせ結果（GetPaceAnalysisUseCase の出力）。"""
+
+    predicted_rpci: float
+    predicted_label: str
+    actual_rpci: float
+    actual_label: str
+    error: float
+    label_hit: bool
+    model_version: str
+
+
+@dataclass
 class PaceAnalysisOutput:
     """GetPaceAnalysisUseCase の出力（確定後: 各馬PCI・実績RPCI・PCI3）。
 
     PCI 系指標のため `formula_version` を必ず付す（設計書 04 §3）。
+    forecast_accuracy は出走前予測が保存されている場合のみ付与される（答え合わせ）。
     """
 
     race_key: str
@@ -190,3 +204,4 @@ class PaceAnalysisOutput:
     horses: list[HorsePaceAnalysisOutput] = field(default_factory=list)
     reasons: list[ReasonOutput] = field(default_factory=list)
     comment: CommentOutput | None = None
+    forecast_accuracy: ForecastAccuracyOutput | None = None
