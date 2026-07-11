@@ -200,6 +200,19 @@ class PaceAdaptabilityScorer:
                 "過去好走データが少ないため脚質傾向から補完しています。"
                 f"得意な流れは{preferred}寄りで、今回との相性は「{label}」です。"
             )
+        elif profile.pace_affinity.preferred_level != predicted_level and label in (
+            "高相性",
+            "合致",
+        ):
+            # ピーク(preferred_level)は別レベルだが、今回のレベル自体にも
+            # 隣接にじみでは届かない高スコア＝直接の好走実績がある。
+            # 「ピークにしか実績がない」という誤解を避けるため、今回レベルでの
+            # 実績にも言及する（さもないと同じ preferred_level を持つ馬でも
+            # 今回レベルでの実際の強さが説明文に反映されない）。
+            description = (
+                f"過去の好走は{preferred}を中心に、今回の{current}でも好走実績があり、"
+                f"相性は「{label}」です。"
+            )
         else:
             description = (
                 f"過去の好走は{preferred}に集まっており、"

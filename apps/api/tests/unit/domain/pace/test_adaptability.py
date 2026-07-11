@@ -221,3 +221,39 @@ class TestPaiPaceAffinityBlend:
         reason = next(r for r in result.reasons if r.code == "pace_affinity")
         assert "不安" not in reason.description
         assert result.fit_label != FitLabel.UNFAVORABLE
+
+    def test_direct_evidence_at_non_preferred_level_is_mentioned(self) -> None:
+        """ピーク(preferred_level)とは別レベルでも直接の好走実績があるとき、
+        「ピークに集まっており」だけで済ませず、そのレベルでの実績にも触れる。
+
+        実際に観測された事象: 好走がVERY_SLOWに集中する馬と、VERY_SLOWを
+        ピークにしつつSLOWでも直接好走している馬の両方が、同一の説明文
+        （「過去の好走はかなり落ち着いた流れに集まっており」）で始まりながら
+        相性ラベルだけが異なっていた。後者は今回レベルでの実績自体が
+        言及されず、読み手に「ピークだけで判定された」という誤解を与える。
+        """
+        results = tuple(
+            PaceAffinityRaceResult(
+                race_key=RaceKey(f"202601{d:02d}05010101"),
+                race_date=datetime.date(2026, 1, d),
+                finish_pos=1,
+                grade=None,
+                rpci_actual=rpci,
+                pci3_actual=None,
+                pci_actual=None,
+            )
+            for d, rpci in enumerate((57.0, 57.0, 57.0, 53.0, 53.0), start=1)
+        )
+        affinity = build_horse_pace_affinity_profile(
+            "H001", CLOSER, results, as_of=datetime.date(2026, 6, 1)
+        )
+        assert affinity.preferred_level == PaceSpeedLevel.VERY_SLOW  # ピークは VERY_SLOW
+        assert affinity.scores[PaceSpeedLevel.SLOW] >= 75  # SLOW 自体にも直接実績あり
+
+        forecast_slow = _forecast(53.0, PaceLabel.SLOW)  # PaceSpeedLevel.SLOW 相当
+        profile = HorsePaceProfile(1, CLOSER, pace_affinity=affinity)
+        result = PaceAdaptabilityScorer().score(profile, forecast_slow, 1600)
+
+        reason = next(r for r in result.reasons if r.code == "pace_affinity")
+        assert "でも好走実績があり" in reason.description
+        assert "落ち着いた流れでも好走実績があり" in reason.description
