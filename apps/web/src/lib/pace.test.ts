@@ -5,6 +5,7 @@ import {
   confidenceInsight,
   discountRecommendation,
   fitTone,
+  forecastAccuracyMeta,
   forecastDecisionChecklist,
   paceMeta,
   paceSpeedFromIndex,
@@ -274,5 +275,41 @@ describe("pciTone", () => {
     expect(pciToneLabel(pciTone(53))).toBe("スロー");
     expect(pciToneLabel(pciTone(47))).toBe("ハイ");
     expect(pciToneLabel(pciTone(null))).toBe("—");
+  });
+});
+
+describe("forecastAccuracyMeta", () => {
+  it("的中時は hit トーンと肯定的な文言を返す", () => {
+    const meta = forecastAccuracyMeta({
+      label_hit: true,
+      predicted_label: "スロー",
+      actual_label: "スロー",
+    });
+    expect(meta.tone).toBe("hit");
+    expect(meta.label).toBe("想定的中");
+    expect(meta.summary).toContain("スロー");
+    expect(meta.summary).toContain("一致しました");
+  });
+
+  it("外れ時は miss トーンで想定と実際の両方に言及する", () => {
+    const meta = forecastAccuracyMeta({
+      label_hit: false,
+      predicted_label: "スロー",
+      actual_label: "ハイ",
+    });
+    expect(meta.tone).toBe("miss");
+    expect(meta.label).toBe("想定と相違");
+    expect(meta.summary).toContain("スロー");
+    expect(meta.summary).toContain("ハイ");
+  });
+
+  it("実数値（RPCI・誤差）を summary/label に含めない", () => {
+    const meta = forecastAccuracyMeta({
+      label_hit: false,
+      predicted_label: "スロー",
+      actual_label: "ハイ",
+    });
+    expect(meta.summary).not.toMatch(/\d+\.\d+/);
+    expect(meta.label).not.toMatch(/\d/);
   });
 });

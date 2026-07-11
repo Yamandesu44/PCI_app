@@ -376,6 +376,37 @@ h1 {
   margin-bottom: 20px;
 }
 
+/* ----- 予測フィードバックループ（想定と実績の答え合わせ） ----- */
+.forecast-accuracy-badge {
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  border: 1px solid var(--legacy-border);
+}
+
+.forecast-accuracy-badge--hit {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.forecast-accuracy-badge--miss {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.forecast-accuracy-badge__label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.forecast-accuracy-badge__summary {
+  margin: 0;
+  color: #1e293b;
+  font-size: 0.92rem;
+}
+
 /* ----- 展開コメント（やさしい解説） ----- */
 .comment-card {
   border-left: 6px solid #2563eb;

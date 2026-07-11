@@ -9,51 +9,57 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-11 |
+| 更新日時 | 2026-07-11（更新2回目） |
 | 作業担当AI | Claude Code |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `9712fd2` feat(api): close the forecast feedback loop with predicted-vs-actual review |
-| 作業ツリー | クリーン（このコミット時点。引き継ぎ基盤ファイルは本更新で追加） |
+| 最新コミット | 本更新をコミットする直前は `004aead` docs: add Claude Code / Codex handoff foundation |
+| 作業ツリー | 本更新時点で `forecast_accuracy` UI 表示一式が未コミット（下記「変更対象ファイル」参照） |
 
 ---
 
 ## 現在の目的
 
-AI 間（Claude Code / Codex）の引き継ぎ基盤を整備し、会話履歴に依存せず作業状態を復元できるようにする。
-（＝この HANDOFF.md を含む一連のドキュメント整備そのものが直近の作業）
+`tasks/current.md` の「次に着手する候補」に沿って、`forecast_accuracy`（予測 vs 実績の答え合わせ）
+をフロントエンドに表示する。
 
 ---
 
 ## 完了した作業（直近セッション）
 
+- **`forecast_accuracy` の UI 表示**（本セッション・未コミット）: pace-analysis 画面に想定的中/相違を
+  言葉と色で表示するバッジを追加。実数値（RPCI・誤差）は出さない。予測未保存レースは非表示。
+  ついでに `packages/api-client/src/schema.d.ts` の再生成漏れ（前回セッションの ingest_log 追加分含む）も解消。
+- **AI 引き継ぎ基盤整備**（`004aead`）: PROJECT_RULES / ARCHITECTURE / SPEC / DECISIONS / HANDOFF /
+  AGENTS.md / tasks/current.md / tasks/backlog.md / CLAUDE.md 追記。
 - **予測フィードバックループ**（`9712fd2`）: 確定後の pace-analysis で、出走前の想定RPCI を
-  引き当てて的中/外れを `forecast_accuracy` と回顧コメントに表示。後方互換（未保存なら null）。
-- **展開コメントの相性説明の明確化**（`b6a4a97`）: ピークと今回レベルが異なるが今回レベルにも
-  実績がある馬の説明文を分岐。
-- **好走実績の隣接レベルにじみ**（`c45143d`）: 隣接ペースレベルを誤って「不安(0点)」にしない補正。
-- **取り込み自動化 & データ品質**（`e00333d`〜`d23cd96` 周辺）: mykeibadb 経路の Task Scheduler 自動化、
-  上がり3F 異常値の除外、`ingest_log` 記録、手動同期 runbook（`apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`）。
-- **テストカバレッジ整備**（`3a9346d`〜）: domain/pace ほぼ 100%、application 高水準。
+  引き当てて的中/外れを `forecast_accuracy` と回顧コメントに表示するAPI側の実装（後方互換）。
+- **展開コメントの相性説明の明確化**（`b6a4a97`）、**好走実績の隣接レベルにじみ**（`c45143d`）、
+  **取り込み自動化 & データ品質**（`e00333d`〜`d23cd96` 周辺）、**テストカバレッジ整備**（`3a9346d`〜）。
 
 ## 作業中の内容
 
-- **引き継ぎ基盤ドキュメントの新規作成**（このコミットで完了予定）:
-  `docs/PROJECT_RULES.md`, `docs/ARCHITECTURE.md`, `docs/SPEC.md`, `docs/DECISIONS.md`,
-  `docs/HANDOFF.md`, `AGENTS.md`, `tasks/current.md`, `tasks/backlog.md`、および `CLAUDE.md` への追記。
+なし（`forecast_accuracy` UI 表示は実装・検証済み。次にコミットする）。
 
 ## 次に実施する作業（候補）
 
-1. フロントで `forecast_accuracy` を表示する UI（的中/外れバッジ）。表示は言葉/色で（実数値を出さない）。
-2. 蓄積データで想定RPCI 精度（MAE/一致率）を確認し、rule-v4 の受入基準達成度を検証。
-3. `tasks/current.md` / `tasks/backlog.md` を参照して優先タスクを選ぶ。
+1. 本セッションの変更をコミット・プッシュする（下記「変更対象ファイル」参照）。
+2. 蓄積データで想定RPCI 精度（MAE/一致率）を確認し、rule-v4 の受入基準達成度を検証
+   （`tasks/current.md` 次候補）。
+3. `tasks/backlog.md` の改善候補（暫定定数の検証等）から選ぶ。
 
 ---
 
-## 変更対象ファイル（本引き継ぎ整備で追加/更新）
+## 変更対象ファイル（本セッション・コミット前）
 
-- 追加: `docs/PROJECT_RULES.md`, `docs/ARCHITECTURE.md`, `docs/SPEC.md`, `docs/DECISIONS.md`,
-  `docs/HANDOFF.md`, `AGENTS.md`, `tasks/current.md`, `tasks/backlog.md`
-- 更新: `CLAUDE.md`（AI 協働運用セクションを追記）
+- 追加: `apps/web/src/components/ForecastAccuracyBadge.tsx`
+- 更新: `packages/api-client/src/index.ts`（`ForecastAccuracy` 型エイリアス追加）,
+  `packages/api-client/src/schema.d.ts`（再生成。`ForecastAccuracySchema` + 前回漏れの `IngestLogBody`/
+  `IngestLogResponse`/`/internal/ingest/log` を反映）,
+  `apps/web/src/lib/pace.ts`（`forecastAccuracyMeta` 追加）,
+  `apps/web/src/lib/pace.test.ts`（テスト3件追加）,
+  `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`（バッジ組み込み）,
+  `apps/web/src/app/globals.css`（`.forecast-accuracy-badge*` スタイル追加）,
+  `tasks/current.md`（本タスクを完了に更新）
 
 ---
 
@@ -69,18 +75,17 @@ AI 間（Claude Code / Codex）の引き継ぎ基盤を整備し、会話履歴�
 
 ---
 
-## テスト実行状況（2026-07-11 時点・コミット 9712fd2）
+## テスト実行状況（2026-07-11 時点・本セッション）
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
-| API 単体+契約 | `cd apps/api && pytest tests/unit/ tests/contract/ -q` | 362 passed |
-| API Lint | `cd apps/api && ruff check src/ tests/` | clean |
-| 依存方向 | `cd apps/api && lint-imports` | 2 contracts kept |
-| 型（domain+application） | `cd apps/api && mypy src/pci/domain/ src/pci/application/ --strict` | clean |
-| Web 単体 | `cd apps/web && npm run test` | 52 passed |
+| API 単体+契約 | `cd apps/api && pytest tests/unit/ tests/contract/ -q` | 362 passed（本セッションでAPI変更なし） |
+| Web 単体 | `cd apps/web && npm run test` | **55 passed**（+3: forecastAccuracyMeta） |
 | Web 型 | `cd apps/web && npm run typecheck` | clean |
+| api-client 型 | `cd packages/api-client && npm run typecheck` | clean |
+| api-client 生成ドリフト | `cd packages/api-client && npm run generate && git diff` | 再生成実行済み・差分は今回のコミット対象 |
 
-（統合テスト `tests/integration/` は testcontainers-postgres が必要。ローカル DB / Docker 前提）
+（統合テスト `tests/integration/` は testcontainers-postgres が必要。ローカル DB / Docker 前提。今回未実行）
 
 ---
 

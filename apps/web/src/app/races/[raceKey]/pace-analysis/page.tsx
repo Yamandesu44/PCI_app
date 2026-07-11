@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CommentCard } from "@/components/CommentCard";
+import { ForecastAccuracyBadge } from "@/components/ForecastAccuracyBadge";
 import { PaceAnalysisTable } from "@/components/PaceAnalysisTable";
 import { RaceHero } from "@/components/RaceHero";
 import { ReasonList } from "@/components/ReasonList";
@@ -79,6 +80,10 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
           <ReasonList reasons={analysis.reasons ?? []} />
         </details>
       </section>
+
+      {analysis.forecast_accuracy ? (
+        <ForecastAccuracyBadge accuracy={analysis.forecast_accuracy} />
+      ) : null}
 
       {analysis.comment ? <CommentCard comment={analysis.comment} /> : null}
 

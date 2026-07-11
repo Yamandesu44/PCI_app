@@ -5,7 +5,7 @@
  * 体現する層。専門用語（RPCI・PAI）を非専門家向けの言葉・色・並びへ変換する。
  * 副作用なし・決定的なので vitest で単体テストする。
  */
-import type { HorseFit } from "@pci/api-client";
+import type { ForecastAccuracy, HorseFit } from "@pci/api-client";
 
 export type PaceTone = "high" | "average" | "slow";
 
@@ -466,4 +466,37 @@ export function pciToneLabel(tone: PciTone): string {
 
 export function pciToneColor(tone: PciTone): string {
   return PCI_TONE_COLOR[tone];
+}
+
+export type ForecastAccuracyTone = "hit" | "miss";
+
+export interface ForecastAccuracyMeta {
+  tone: ForecastAccuracyTone;
+  label: string;
+  summary: string;
+  color: string;
+}
+
+/**
+ * 出走前の想定と実績の答え合わせを、非専門家向けの言葉・色に変換する。
+ * predicted_rpci/actual_rpci/error（実数値）は表示に使わない
+ * （PROJECT_RULES §5: UI に PCI/RPCI 実数値を出さない）。
+ */
+export function forecastAccuracyMeta(
+  accuracy: Pick<ForecastAccuracy, "label_hit" | "predicted_label" | "actual_label">,
+): ForecastAccuracyMeta {
+  if (accuracy.label_hit) {
+    return {
+      tone: "hit",
+      label: "想定的中",
+      summary: `事前の想定「${accuracy.predicted_label}」が実際の流れと一致しました。`,
+      color: "#16a34a",
+    };
+  }
+  return {
+    tone: "miss",
+    label: "想定と相違",
+    summary: `事前の想定は「${accuracy.predicted_label}」でしたが、実際は「${accuracy.actual_label}」という流れでした。`,
+    color: "#d97706",
+  };
 }

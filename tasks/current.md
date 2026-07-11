@@ -11,24 +11,29 @@
 ## 進行中
 
 - [x] 🔄→✅ **P1 AI 引き継ぎ基盤の整備**
-  - 状態: ✅ 完了（このコミット）
+  - 状態: ✅ 完了
   - 対象: `docs/PROJECT_RULES.md`, `docs/ARCHITECTURE.md`, `docs/SPEC.md`, `docs/DECISIONS.md`,
     `docs/HANDOFF.md`, `AGENTS.md`, `tasks/current.md`, `tasks/backlog.md`, `CLAUDE.md`(追記)
   - 完了条件: 8ファイル作成 + CLAUDE.md 追記、実コードと矛盾なし、テスト/型/Lint green
   - 関連テスト: なし（ドキュメントのみ）。既存の API 362 / Web 52 が green のままであること
   - 依存: なし
 
+- [x] 🔄→✅ **P1 `forecast_accuracy` の UI 表示**
+  - 状態: ✅ 完了
+  - 対象: `packages/api-client/src/index.ts`(型追加) + `schema.d.ts`(再生成),
+    `apps/web/src/lib/pace.ts`(`forecastAccuracyMeta`), `apps/web/src/lib/pace.test.ts`,
+    `apps/web/src/components/ForecastAccuracyBadge.tsx`(新規),
+    `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`, `apps/web/src/app/globals.css`
+  - 完了条件: pace-analysis 画面に「想定が的中/外れ」を**言葉・色**で表示（実数値を出さない）。
+    予測未保存レースではバッジ非表示。vitest 追加。 → 達成
+  - 関連テスト: `apps/web/src/lib/pace.test.ts`（`forecastAccuracyMeta` 3件追加、web計55件 green）
+  - 副次対応: `schema.d.ts` 再生成で、前回セッション（ingest_log 追加時）に反映漏れだった
+    `IngestLogBody`/`IngestLogResponse`/`/internal/ingest/log` の型ドリフトも解消
+  - 依存: `9712fd2`（API 側 `forecast_accuracy` 実装済み）— 解消
+
 ---
 
 ## 次に着手する候補（今スプリントの当面）
-
-- [ ] **P1 `forecast_accuracy` の UI 表示**
-  - 状態: ⬜未着手
-  - 対象: `apps/web/src/components/`（回顧画面）, `apps/web/src/lib/pace.ts`, `packages/api-client`
-  - 完了条件: pace-analysis 画面に「想定が的中/外れ」を**言葉・色**で表示（実数値を出さない）。
-    予測未保存レースではバッジ非表示。vitest 追加。
-  - 関連テスト: `apps/web/src/lib/*.test.ts`
-  - 依存: `9712fd2`（API 側 `forecast_accuracy` 実装済み）
 
 - [ ] **P1 想定RPCI 精度の検証（受入基準の達成度確認）**
   - 状態: ⬜未着手

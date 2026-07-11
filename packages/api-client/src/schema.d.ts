@@ -181,6 +181,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/ingest/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write Ingest Log
+         * @description バッチ取り込みの実行ログを記録する（監査証跡・再実行判定用）。
+         */
+        post: operations["write_ingest_log_internal_ingest_log_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/ingest/races/{race_key}": {
         parameters: {
             query?: never;
@@ -327,6 +347,26 @@ export interface components {
             weight: number;
         };
         /**
+         * ForecastAccuracySchema
+         * @description 出走前の想定RPCIと実績RPCIの答え合わせ結果。
+         */
+        ForecastAccuracySchema: {
+            /** Actual Label */
+            actual_label: string;
+            /** Actual Rpci */
+            actual_rpci: number;
+            /** Error */
+            error: number;
+            /** Label Hit */
+            label_hit: boolean;
+            /** Model Version */
+            model_version: string;
+            /** Predicted Label */
+            predicted_label: string;
+            /** Predicted Rpci */
+            predicted_rpci: number;
+        };
+        /**
          * ForecastSchema
          * @description レース展開予想（想定RPCI + 展開シナリオ + 各馬 PAI）。
          */
@@ -435,6 +475,37 @@ export interface components {
             /** Running Style */
             running_style?: string | null;
         };
+        /**
+         * IngestLogBody
+         * @description バッチ実行ログの記録リクエスト。
+         */
+        IngestLogBody: {
+            /**
+             * Batch Date
+             * Format: date
+             */
+            batch_date: string;
+            /** Error Msg */
+            error_msg?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Mode */
+            mode: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Status */
+            status?: string | null;
+            /** Step */
+            step: string;
+        };
+        /** IngestLogResponse */
+        IngestLogResponse: {
+            /** Id */
+            id: number;
+        };
         /** IngestResponse */
         IngestResponse: {
             /** Accepted */
@@ -460,6 +531,7 @@ export interface components {
             comment?: components["schemas"]["CommentSchema"] | null;
             /** Field Size */
             field_size: number;
+            forecast_accuracy?: components["schemas"]["ForecastAccuracySchema"] | null;
             /** Formula Version */
             formula_version: string;
             /**
@@ -899,6 +971,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IngestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_ingest_log_internal_ingest_log_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngestLogBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestLogResponse"];
                 };
             };
             /** @description Validation Error */
