@@ -556,6 +556,26 @@ class TestSeResultParser:
         result = parse_se_result(rec)
         assert result is None
 
+    def test_implausibly_fast_agari_returns_none(self) -> None:
+        """上がり3Fが物理的にありえない速さ（600mを13.7秒）→ データ異常として None。
+
+        2026-07-04 小倉1R (mykeibadb KOHAN_3F='137') で実際に観測された異常値の再現。
+        """
+        rec = _se_result(agari_3f_s=13.7)
+        result = parse_se_result(rec)
+        assert result is None
+
+    def test_implausibly_slow_agari_returns_none(self) -> None:
+        """上がり3Fが異常に遅い（60秒）→ データ異常として None。"""
+        rec = _se_result(agari_3f_s=60.0)
+        result = parse_se_result(rec)
+        assert result is None
+
+    def test_agari_at_plausible_bounds_accepted(self) -> None:
+        """妥当範囲の境界値（25秒・55秒）は正常に採用される。"""
+        assert parse_se_result(_se_result(agari_3f_s=25.0)) is not None
+        assert parse_se_result(_se_result(agari_3f_s=55.0)) is not None
+
 
 # ---------------------------------------------------------------------------
 # TestMasterParsers

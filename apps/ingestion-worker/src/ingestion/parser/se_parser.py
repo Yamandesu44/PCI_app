@@ -50,6 +50,12 @@ def _corner_pos(raw: bytes, start: int, end: int) -> int | None:
     return n if 1 <= n <= _CORNER_MAX else None
 
 
+# 上がり3F（600m）の妥当範囲(秒)。障害戦や不良馬場を考慮し余裕を持たせるが、
+# これを外れる値は測定・データ不整合とみなし当該成績を採用しない（外部データ由来の
+# 異常値が PCI 計算式を通じて桁違いの値を生む事故を防ぐ）。
+_AGARI_3F_MIN_S = 25.0
+_AGARI_3F_MAX_S = 55.0
+
 _KUBUN_ENTRY = frozenset({"1", "2"})     # 出走前・出馬表
 _KUBUN_RESULT = frozenset({"4", "7"})    # 確定後（'4' 旧仕様 / '7' 実測確認）
 _KUBUN_CANCEL = frozenset({"3"})         # 取消/除外
@@ -159,6 +165,8 @@ def parse_se_result(record: str) -> ResultRecord | None:
     agari_3f_s = int(agari_raw) / 10.0
 
     if race_time_s <= 0 or agari_3f_s <= 0:
+        return None
+    if not (_AGARI_3F_MIN_S <= agari_3f_s <= _AGARI_3F_MAX_S):
         return None
 
     # コーナー通過順位 [356:364]: Jyuni1c-4c 各2byte。
