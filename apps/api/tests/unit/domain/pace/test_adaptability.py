@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -12,9 +14,15 @@ from pci.domain.pace.adaptability import (
     PaceAdaptabilityScorer,
     PaiWeights,
 )
-from pci.domain.pace.affinity import HorsePaceAffinityProfile, PaceSpeedLevel
+from pci.domain.pace.affinity import (
+    HorsePaceAffinityProfile,
+    PaceAffinityRaceResult,
+    PaceSpeedLevel,
+    build_horse_pace_affinity_profile,
+)
 from pci.domain.pace.rpci_forecast import PaceLabel, RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
+from pci.domain.shared.race_key import RaceKey
 
 ESCAPE = RunningStyleLabel.ESCAPE
 CLOSER = RunningStyleLabel.CLOSER
@@ -183,3 +191,33 @@ class TestPaiPaceAffinityBlend:
         profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity())
         result = PaceAdaptabilityScorer().score(profile, AVERAGE, 1600)
         assert result.pai == pytest.approx(62.5, abs=0.1)
+
+    def test_very_slow_specialist_not_unfavorable_when_forecast_is_slow(self) -> None:
+        """好走が全て「かなり落ち着いた流れ」の馬は、想定が隣接する「落ち着いた
+        流れ」でも「不利」判定にならない（隣接レベルへのにじみの回帰テスト）。
+
+        実際に観測された事象: この組み合わせで「相性は不安」と表示され続けた
+        馬が、実際のレースでは好走することが再三あった。
+        """
+        results = tuple(
+            PaceAffinityRaceResult(
+                race_key=RaceKey(f"202601{d:02d}05010101"),
+                race_date=datetime.date(2026, 1, d),
+                finish_pos=1,
+                grade=None,
+                rpci_actual=57.0,
+                pci3_actual=None,
+                pci_actual=None,
+            )
+            for d in (1, 2, 3)
+        )
+        affinity = build_horse_pace_affinity_profile(
+            "H001", CLOSER, results, as_of=datetime.date(2026, 6, 1)
+        )
+        forecast_slow = _forecast(53.0, PaceLabel.SLOW)  # PaceSpeedLevel.SLOW 相当
+        profile = HorsePaceProfile(1, CLOSER, pace_affinity=affinity)
+        result = PaceAdaptabilityScorer().score(profile, forecast_slow, 1600)
+
+        reason = next(r for r in result.reasons if r.code == "pace_affinity")
+        assert "不安" not in reason.description
+        assert result.fit_label != FitLabel.UNFAVORABLE

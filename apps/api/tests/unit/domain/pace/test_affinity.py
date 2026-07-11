@@ -44,6 +44,53 @@ class TestPaceLevelFromIndex:
         assert pace_level_from_index(55.1) == PaceSpeedLevel.VERY_SLOW
 
 
+class TestNeighborBleed:
+    """隣接ペースレベルへの適性のにじみ（誤って「不安」判定されないための回帰テスト）。"""
+
+    def test_very_slow_specialist_is_not_unfavorable_for_slow(self) -> None:
+        """過去の好走が全て「かなり落ち着いた流れ」でも、「落ち着いた流れ」を
+        直接の好走実績ゼロ＝スコア0（＝不安）と誤判定しない。
+
+        実際に観測された事象: 好走がVERY_SLOWに集中する馬について、想定ペースが
+        隣接するSLOWのとき「相性は『不安』」と表示され、その馬が実際には好走する
+        ことが再三あった。VERY_SLOWとSLOWは連続的なペース値の隣接区分であり、
+        直接の実績がないだけで0点にするのは不適切。
+        """
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (
+                _result("2026010105010101", 1, 56.0),
+                _result("2026020105010101", 1, 57.0),
+                _result("2026030105010101", 1, 58.0),
+            ),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.preferred_level == PaceSpeedLevel.VERY_SLOW
+        assert profile.scores[PaceSpeedLevel.VERY_SLOW] == 100
+        # 隣接(SLOW)は「にじみ」で中立圏(40)まで持ち上がり、「不安」(<40)を回避する
+        assert profile.scores[PaceSpeedLevel.SLOW] >= 40
+        assert affinity_label(profile.scores[PaceSpeedLevel.SLOW]) != "不安"
+        # 2ホップ離れたレベルにはにじまない
+        assert profile.scores[PaceSpeedLevel.AVERAGE] == 0
+        assert profile.scores[PaceSpeedLevel.HIGH] == 0
+        assert profile.scores[PaceSpeedLevel.VERY_HIGH] == 0
+
+    def test_bleed_does_not_reach_two_hops_away(self) -> None:
+        """にじみは直接隣接するレベルのみ。2ホップ以上先には広がらない。"""
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.CLOSER,
+            (_result("2026010105010101", 1, 45.0),),  # VERY_HIGH
+            as_of=datetime.date(2026, 6, 1),
+        )
+        assert profile.scores[PaceSpeedLevel.VERY_HIGH] == 100
+        assert profile.scores[PaceSpeedLevel.HIGH] > 0       # 隣接
+        assert profile.scores[PaceSpeedLevel.AVERAGE] == 0   # 2ホップ
+        assert profile.scores[PaceSpeedLevel.SLOW] == 0
+        assert profile.scores[PaceSpeedLevel.VERY_SLOW] == 0
+
+
 class TestHorsePaceAffinityProfile:
     def test_uses_only_good_runs(self) -> None:
         profile = build_horse_pace_affinity_profile(

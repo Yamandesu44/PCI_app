@@ -20,6 +20,36 @@ class PaceSpeedLevel(StrEnum):
     VERY_SLOW = "verySlow"
 
 
+# VERY_HIGH→VERY_SLOW は連続的なペース値を5段階に区切っただけの離散化であり、
+# 隣接レベルは「近い」性質を持つ。ある好走がレベル L で観測された場合、
+# 実際の適性は L 周辺に緩やかに広がっていると考えるのが自然（例:
+# 「かなり落ち着いた流れ」での好走実績しかない馬も、「落ち着いた流れ」への
+# 適性はゼロではない）。これを表現せず該当レベルのみで評価すると、たまたま
+# 直接の好走実績がないだけの隣接レベルが「不安」(スコア0)と誤判定される。
+_LEVEL_ORDER: tuple[PaceSpeedLevel, ...] = (
+    PaceSpeedLevel.VERY_HIGH,
+    PaceSpeedLevel.HIGH,
+    PaceSpeedLevel.AVERAGE,
+    PaceSpeedLevel.SLOW,
+    PaceSpeedLevel.VERY_SLOW,
+)
+_LEVEL_INDEX: dict[PaceSpeedLevel, int] = {level: i for i, level in enumerate(_LEVEL_ORDER)}
+_NEIGHBOR_BLEED_RATIO = 0.4  # 隣接レベルへ広がる好走実績の割合
+
+
+def _spread_to_neighbors(level: PaceSpeedLevel, weight: float) -> dict[PaceSpeedLevel, float]:
+    """1件の好走実績（重み）を、そのレベルと直接隣接するレベルへ配分する。"""
+    idx = _LEVEL_INDEX[level]
+    spread = {level: weight}
+    if idx > 0:
+        lower = _LEVEL_ORDER[idx - 1]
+        spread[lower] = spread.get(lower, 0.0) + weight * _NEIGHBOR_BLEED_RATIO
+    if idx < len(_LEVEL_ORDER) - 1:
+        upper = _LEVEL_ORDER[idx + 1]
+        spread[upper] = spread.get(upper, 0.0) + weight * _NEIGHBOR_BLEED_RATIO
+    return spread
+
+
 @dataclass(frozen=True)
 class PaceAffinityEvidence:
     race_key: RaceKey
@@ -84,7 +114,8 @@ def build_horse_pace_affinity_profile(
 
     weighted_count = {level: 0.0 for level in PaceSpeedLevel}
     for item in evidence:
-        weighted_count[item.pace_level] += item.weight
+        for level, w in _spread_to_neighbors(item.pace_level, item.weight).items():
+            weighted_count[level] += w
 
     max_weight = max(weighted_count.values())
     scores = {
