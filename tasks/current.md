@@ -16,6 +16,23 @@
 
 ## 最近完了したタスク
 
+- [x] ✅ **P1 想定RPCI 受入基準の判定方針を決める（製品判断）**（`docs/DECISIONS.md` 2026-07-11）
+  - 判断: 現行モデル（lgbm-turf-v1/lgbm-dirt-v1）のまま運用継続。MAE≤1.5 を追う追加投資は今は行わない。
+  - 理由: MAEの未達幅は2回の独立計測で一貫した構造差。UIは実数値非表示のため、製品価値に直結する
+    ラベル一致率(33%ランダムを上回る)とPAIリフト(track別1.18〜1.32x)は実効性ありと判断。
+  - 見直し条件: `forecast_accuracy` 蓄積増加、またはダートの外れに偏りが見えた場合に再検討。
+  - 注記: 受入基準の文言自体（blended/track別のどちらで判定するか）は基準を定めた側の確認が必要な
+    別問題として `docs/SPEC.md §9`-3 に残置（この決定の範囲外）。
+
+- [x] ✅ **P2 `backtest_forecast.py` の既定出力に track 別内訳を追加**
+  - 対象: `apps/api/src/pci/application/backtest.py`(`group_races_by_track`追加),
+    `apps/api/scripts/backtest_forecast.py`(`_print_track_breakdown`追加),
+    `apps/api/tests/unit/application/test_backtest.py`(テスト2件追加)
+  - 結果: `--track-type` 未指定時、混合集計に加え芝/ダート別内訳も自動表示。再予測はせず、
+    既存の `ForecastBacktester.run()` を track 別サブセットで再実行するのみ（application層は
+    グルーピングのみ純粋関数化しテスト、DB配線はスクリプト層のまま）。
+  - 検証: `python -m pytest tests/unit/ tests/contract/ -q` 364 passed（+2）、ruff/mypy/lint-imports clean。
+
 - [x] ✅ **P1 想定RPCI 精度の検証（受入基準の達成度確認）**（コード変更なし、ドキュメント更新のみ）
   - 対象: `docs/SPEC.md §8/§9`, `docs/adr/0005-rpci-forecast-strategy.md §5.4`
   - 実行: ユーザーが本番相当DB（mykeibadb蓄積データ）で `python -m scripts.backtest_forecast --limit 200`
@@ -49,19 +66,7 @@
 
 ## 次に着手する候補（今スプリントの当面）
 
-- [ ] **P1 想定RPCI 受入基準の判定方針を決める（製品判断）**
-  - 状態: ⬜未着手（ユーザー判断待ち）
-  - 背景: 上記検証により MAE は構造的未達、ラベル一致率はダートのみ未達と判明。
-    「このまま運用継続」か「追加投資（特徴量・学習データ拡張）」かの方針が必要。
-  - 対象: `docs/SPEC.md §9`-2/3, `docs/adr/0005` の Consequences/緩和策
-  - 依存: なし（いつでも着手可能。ユーザーへの確認が先）
-
-- [ ] **P2 `backtest_forecast.py` の既定出力に track 別内訳を追加**
-  - 状態: ⬜未着手
-  - 背景: 混合集計だと PAI point-biserial が希釈されて見える落とし穴が判明（本セッション）。
-  - 対象: `apps/api/scripts/backtest_forecast.py`, `apps/api/src/pci/application/backtest.py`
-  - 完了条件: `--track-type` 未指定時に芝/ダート別の内訳も併記する、またはドキュメントで
-    track別実行を必須化する注意書きを追加。
+（現在なし。`tasks/backlog.md` の B/C/D 節から次を選ぶか、ユーザー指示待ち）
 
 ---
 

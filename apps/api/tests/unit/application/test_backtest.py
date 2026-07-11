@@ -18,6 +18,7 @@ from pci.application.backtest import (
     RpciSample,
     _AsOfRaceRepository,
     format_report,
+    group_races_by_track,
     summarize_pai_lift,
     summarize_rpci,
 )
@@ -108,6 +109,34 @@ class TestSummarizePaiLift:
         lift = summarize_pai_lift(samples)
         assert lift is not None
         assert lift.point_biserial > 0
+
+
+class TestGroupRacesByTrack:
+    @staticmethod
+    def _race(key: str, track_type: str) -> Race:
+        return Race(
+            race_key=RaceKey(key),
+            race_date=datetime.date(2026, 6, 28),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type=track_type,
+            field_size=1,
+            status=RaceStatus.RESULT,
+        )
+
+    def test_groups_by_track_type(self) -> None:
+        turf = self._race("2026062805010101", "芝")
+        dirt1 = self._race("2026062805010102", "ダート")
+        dirt2 = self._race("2026062805010103", "ダート")
+
+        grouped = group_races_by_track([turf, dirt1, dirt2])
+
+        assert set(grouped) == {"芝", "ダート"}
+        assert grouped["芝"] == [turf]
+        assert grouped["ダート"] == [dirt1, dirt2]
+
+    def test_empty_input_returns_empty_dict(self) -> None:
+        assert group_races_by_track([]) == {}
 
 
 def _seed_result_race(

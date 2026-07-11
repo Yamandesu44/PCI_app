@@ -242,6 +242,20 @@ def summarize_pai_lift(
     )
 
 
+def group_races_by_track(races: Iterable[Race]) -> dict[str, list[Race]]:
+    """レース群をコース種別ごとにグルーピングする。
+
+    コース混合のまま `ForecastBacktester.run()` すると PAI の point-biserial 相関が
+    希釈されて見える（芝とダートでスコア分布・好走率ベースラインが異なるため。
+    docs/adr/0005-rpci-forecast-strategy.md §5.4）。呼び出し側で track 別にも
+    run() を回せるよう、レースを分割するだけの純粋関数として提供する。
+    """
+    grouped: dict[str, list[Race]] = {}
+    for race in races:
+        grouped.setdefault(race.track_type, []).append(race)
+    return grouped
+
+
 def format_report(report: BacktestReport) -> str:
     """バックテスト結果を人間可読のテキストへ整形する（CLI 出力用）。"""
     lines: list[str] = []

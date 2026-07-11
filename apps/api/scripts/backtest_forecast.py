@@ -17,6 +17,10 @@ pci.application.backtest に集約。本スクリプトは DB 配線と対象選
 数百クエリを伴うため、既定は新しい順 200 レースに絞る（--limit で調整）。
 lookahead は backtest 側でレース当日カットオフして防止する。
 
+--track-type 未指定時は、混合集計に加えて芝/ダート別の内訳も自動で追加表示する。
+混合のみだと PAI の point-biserial 相関が希釈されて見える落とし穴があるため
+（docs/adr/0005-rpci-forecast-strategy.md §5.4）、常に track 別の数値も確認できるようにしている。
+
 rpci_actual の有効範囲について:
     予測器の出力は [35, 65] にクランプされる。しかし取り込みバグや S3F/L3F
     バイト位置の誤読により rpci_actual に数百〜数千の異常値が混入する場合がある。
@@ -34,7 +38,7 @@ sys.path.insert(0, "src")
 
 from sqlalchemy import select
 
-from pci.application.backtest import ForecastBacktester, format_report
+from pci.application.backtest import ForecastBacktester, format_report, group_races_by_track
 from pci.config.settings import get_settings
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
@@ -131,8 +135,26 @@ def main() -> None:
 
     repo = SqlAlchemyRaceRepository(session)
     forecaster = load_best_forecaster()
-    report = ForecastBacktester(repo, forecaster=forecaster).run(targets)
-    print(format_report(report))
+    backtester = ForecastBacktester(repo, forecaster=forecaster)
+    print(format_report(backtester.run(targets)))
+
+    if args.track_type is None:
+        _print_track_breakdown(backtester, targets)
+
+
+def _print_track_breakdown(backtester: ForecastBacktester, targets: list[Race]) -> None:
+    """--track-type 未指定時、芝/ダート別の内訳も追加表示する。
+
+    コース混合のみの集計だと PAI の point-biserial 相関が希釈されて見える落とし穴があるため
+    （docs/adr/0005-rpci-forecast-strategy.md §5.4）、常に track 別内訳も併記して誤読を防ぐ。
+    """
+    by_track = group_races_by_track(targets)
+    if len(by_track) <= 1:
+        return
+    for track_type in sorted(by_track):
+        races = by_track[track_type]
+        print(f"\n{'#' * 60}\nコース別内訳: {track_type}（{len(races)}レース）\n{'#' * 60}")
+        print(format_report(backtester.run(races)))
 
 
 if __name__ == "__main__":
