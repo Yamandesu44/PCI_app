@@ -16,6 +16,21 @@
 
 ## 最近完了したタスク
 
+- [x] ✅ **P1 想定RPCI 精度の検証（受入基準の達成度確認）**（コード変更なし、ドキュメント更新のみ）
+  - 対象: `docs/SPEC.md §8/§9`, `docs/adr/0005-rpci-forecast-strategy.md §5.4`
+  - 実行: ユーザーが本番相当DB（mykeibadb蓄積データ）で `python -m scripts.backtest_forecast --limit 200`
+    を実行（混合／芝のみ／ダートのみ）。結果をこちらで分析・記録。
+  - 結果概要:
+    - MAE≤1.5 は **未達（構造的）**。混合7.848 / 芝8.861 / ダート8.332 — 15,440レースの過去
+      バックテストと整合する安定した値で、単発の外れ値ではない。
+    - 展開ラベル一致率≥60% は **芝(73.5%)・混合(61.0%)は達成、ダート(42.5%)は未達**。
+      受入基準文言が track 区別を明記していないため、判定基準（blended/track別）は未確定事項化。
+    - **新知見:** 混合サンプルで PAI point-biserial を見ると +0.009（無相関）に見えるが、
+      track別に分けると +0.084(芝)/+0.032(ダート) と過去記録どおりの正相関に戻る
+      （母集団混在による希釈）。今後 PAI 検証は必ず `--track-type` を使うこと。
+  - 未解決: 上記2件を `tasks/backlog.md` に追記（受入基準の判定方針決定、backtest ツールの
+    track別内訳表示）。
+
 - [x] ✅ **P1 AI 引き継ぎ基盤の整備**（コミット `004aead`）
   - 対象: `docs/PROJECT_RULES.md`, `docs/ARCHITECTURE.md`, `docs/SPEC.md`, `docs/DECISIONS.md`,
     `docs/HANDOFF.md`, `AGENTS.md`, `tasks/current.md`, `tasks/backlog.md`, `CLAUDE.md`(追記)
@@ -34,13 +49,19 @@
 
 ## 次に着手する候補（今スプリントの当面）
 
-- [ ] **P1 想定RPCI 精度の検証（受入基準の達成度確認）**
+- [ ] **P1 想定RPCI 受入基準の判定方針を決める（製品判断）**
+  - 状態: ⬜未着手（ユーザー判断待ち）
+  - 背景: 上記検証により MAE は構造的未達、ラベル一致率はダートのみ未達と判明。
+    「このまま運用継続」か「追加投資（特徴量・学習データ拡張）」かの方針が必要。
+  - 対象: `docs/SPEC.md §9`-2/3, `docs/adr/0005` の Consequences/緩和策
+  - 依存: なし（いつでも着手可能。ユーザーへの確認が先）
+
+- [ ] **P2 `backtest_forecast.py` の既定出力に track 別内訳を追加**
   - 状態: ⬜未着手
+  - 背景: 混合集計だと PAI point-biserial が希釈されて見える落とし穴が判明（本セッション）。
   - 対象: `apps/api/scripts/backtest_forecast.py`, `apps/api/src/pci/application/backtest.py`
-  - 完了条件: 蓄積データで MAE / 展開ラベル一致率を集計し、design/07 の基準（MAE≤1.5・一致率≥60%）に
-    対する現状を `docs/SPEC.md §8` へ反映。未達要因を記録。
-  - 関連テスト: `tests/unit/application/test_backtest.py`
-  - 依存: 実データの蓄積量（mykeibadb 取り込み継続）
+  - 完了条件: `--track-type` 未指定時に芝/ダート別の内訳も併記する、またはドキュメントで
+    track別実行を必須化する注意書きを追加。
 
 ---
 
