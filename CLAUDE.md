@@ -225,3 +225,60 @@ cd apps/api && python -m scripts.backtest_forecast --limit 200
 - [ ] 算出結果に `reasons` 付き（説明可能性）
 - [ ] mart 層の結果に `model_version` または `formula_version` を記録
 - [ ] 生データ・認証情報がコミットに含まれていない
+- [ ] 中断/終了時に `docs/HANDOFF.md` と `tasks/current.md` を更新した
+
+---
+
+## AI 協働開発の運用（Claude Code / Codex 交互開発）
+
+このプロジェクトは **Claude Code と OpenAI Codex を交互に使う**。会話履歴に依存せず、
+Git 履歴・現在のブランチ・`docs/` の資料・`tasks/` の進捗・テスト結果・未解決事項から
+作業状態を復元できるようにする。
+
+**共通ルールの正は `docs/PROJECT_RULES.md`。** この CLAUDE.md には Claude Code 固有の指示を書く
+（Codex 固有指示は `AGENTS.md`）。両者が食い違ったら PROJECT_RULES を優先する。
+
+### 作業開始前に必ず読むファイル（この順）
+
+1. `docs/HANDOFF.md` — 現在の作業状態・最新コミット・次にやること・テスト状況
+2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（**最重要**）
+3. `tasks/current.md` — 進行中タスク
+4. `docs/SPEC.md` — 確定仕様と未確定事項の区別
+5. `docs/ARCHITECTURE.md` — システム構成
+6. 必要に応じて `docs/adr/`, `docs/design/`, `docs/DECISIONS.md`
+
+### 実装時に守ること（要点・詳細は PROJECT_RULES）
+
+- **未確認の仕様・式・係数を推測で確定しない。** 不明点は `docs/SPEC.md` の「未確定事項」に記録し、
+  実装は暫定であることを明示する。独断で正式仕様化しない。
+- **既存コードの設計方針に従う**（レイヤードDDD・式の隔離・解析/表示の分離）。周辺コードと読み口を揃える。
+- **UI に PCI/RPCI 実数値を出さない**（言葉・段階評価へ翻訳）。
+- **JV-Data/CP932 のバイト位置変更は根拠と検証結果を残す**。
+
+### テスト・型・Lint の実行方針
+
+```bash
+cd apps/api
+pytest tests/unit/ tests/contract/ -q
+ruff check src/ tests/
+lint-imports
+mypy src/pci/domain/ src/pci/application/ --strict   # domain+application は 0 エラー基準
+cd ../web && npm run test && npm run typecheck
+```
+`mypy src/ --strict` を全体にかけると infrastructure/presentation で SQLAlchemy/Pydantic/FastAPI の
+スタブ未導入エラーが多数出る（環境要因・コード欠陥ではない）。API スキーマ変更時は
+`python scripts/export_openapi.py` で `packages/api-client/openapi.json` を再生成し契約テストを通す。
+
+### 作業中断・終了時の手順（次の担当＝Codex へ渡す）
+
+1. `docs/HANDOFF.md` を更新（更新日時 / 担当AI / 最新コミット / 完了・作業中・次の作業 /
+   変更対象ファイル / 未解決事項 / テスト状況 / 再開コマンド）。
+2. `tasks/current.md` の状態を更新。新規発見の未着手事項は `tasks/backlog.md` へ。
+3. 設計判断は `docs/DECISIONS.md`（重い決定は `docs/adr/`）、仕様の確定/未確定変化は `docs/SPEC.md` に反映。
+4. テスト・型・Lint を実行し、結果を HANDOFF に記録。
+
+### コミット方針
+
+- Conventional Commits 準拠・スコープ付き・1コミット1論点。式変更時は根拠を本文に残す（ADR-0004）。
+- 指定がなければ現行の作業ブランチ（`docs/HANDOFF.md` の「ブランチ」）で作業する。勝手に別ブランチへ push しない。
+- 破壊的・外部影響のある操作（force push・PR 作成・外部送信）は明示指示があるまで行わない。
