@@ -11,8 +11,8 @@ export function PaceAnalysisTable({ horses }: { horses: HorsePaceAnalysis[] }) {
           <th>馬番</th>
           <th>馬名</th>
           <th>脚質</th>
-          <th>PCI判定</th>
-          <th>記号</th>
+          <th>ペース傾向</th>
+          <th aria-label="傾向記号">傾向</th>
           <th>上がり3F</th>
         </tr>
       </thead>

@@ -1,6 +1,7 @@
 import { ReasonList } from "@/components/ReasonList";
 import { sanitizeBeginnerComment } from "@/lib/pace";
 import type { Comment } from "@pci/api-client";
+import { Sparkles } from "lucide-react";
 
 /**
  * 展開コメント（自然文の解説）。
@@ -14,17 +15,22 @@ export function CommentCard({ comment }: { comment: Comment }) {
   const reasons = comment.reasons ?? [];
 
   return (
-    <section className="panel comment-card">
-      <h3>この展開をやさしく解説</h3>
-      <p className="comment-lead">{headline}</p>
+    <section className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-emerald-700" aria-hidden />
+        <h2 className="m-0 text-base font-semibold text-slate-950">このレースをやさしく解説</h2>
+      </div>
+      <p className="m-0 mt-3 text-sm font-semibold leading-6 text-slate-950">{headline}</p>
       {body.map((para, i) => (
-        <p key={i} className="comment-para">
+        <p key={i} className="m-0 mt-2 text-sm leading-6 text-slate-700">
           {para}
         </p>
       ))}
-      <details className="rationale">
-        <summary>コメントの根拠</summary>
-        <p className="comment-model">生成方式: {comment.model_version}</p>
+      <details className="mt-4">
+        <summary className="cursor-pointer text-xs font-semibold text-emerald-700">
+          コメントの根拠
+        </summary>
+        <p className="mb-0 mt-2 text-xs text-slate-500">生成方式: {comment.model_version}</p>
         <ReasonList reasons={reasons} />
       </details>
     </section>

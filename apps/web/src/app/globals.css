@@ -3,21 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --background: 210 40% 98%;
-  --foreground: 222 47% 11%;
+  --background: 210 20% 97%;
+  --foreground: 215 28% 12%;
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
   --accent: 210 40% 96%;
   --accent-foreground: 222 47% 11%;
-  --primary: 222 47% 11%;
+  --primary: 158 64% 28%;
   --primary-foreground: 210 40% 98%;
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: 222 47% 11%;
+  --ring: 158 64% 28%;
   --radius: 8px;
-  --bg: #f8fafc;
+  --bg: #f4f6f7;
   --legacy-card: #ffffff;
   --text: #0f172a;
   --legacy-muted: #64748b;
@@ -40,6 +40,31 @@ body {
   font-family:
     system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
   line-height: 1.6;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #bbf7d0;
+  color: #052e16;
+}
+
+a,
+button,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 2px;
 }
 
 .container {
@@ -141,6 +166,16 @@ h1 {
   font-size: 0.75rem;
   color: var(--legacy-muted);
   font-weight: 600;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+
+.pci-table tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.pci-table tbody tr:hover {
+  background: #f8fafc;
 }
 
 .pci-table td.num {
@@ -149,7 +184,7 @@ h1 {
 }
 
 .pci-table tr.pci3 {
-  background: #f0fdf4;
+  background: #ecfdf5;
 }
 
 .horse-no.sm {

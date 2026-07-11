@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { Activity, BarChart3, Gauge, ListChecks, TrendingUp } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  BarChart3,
+  Gauge,
+  ListChecks,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 
 import { HorseFitTable } from "@/components/HorseFitTable";
 import { PaceHeadline } from "@/components/PaceHeadline";
@@ -71,11 +79,11 @@ function horseDisplayName(horse: HorseFit): string {
 
 function toneClass(index: number): string {
   const tones = [
-    "border-slate-900 bg-slate-950 text-white",
+    "border-[#111816] bg-[#111816] text-white",
     "border-emerald-200 bg-emerald-50 text-emerald-950",
     "border-sky-200 bg-sky-50 text-sky-950",
     "border-amber-200 bg-amber-50 text-amber-950",
-    "border-rose-200 bg-rose-50 text-rose-950",
+    "border-violet-200 bg-violet-50 text-violet-950",
   ];
   return tones[index] ?? "border-border bg-card text-card-foreground";
 }
@@ -125,63 +133,75 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
   });
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-6 md:px-8 md:py-8">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-7 px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
       <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
-        <Link href="/" className="font-medium text-foreground hover:underline">
-          ← トップ
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 font-semibold text-slate-600 transition hover:text-slate-950"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          レース一覧
         </Link>
-        <span className="font-mono text-xs">{race.race_key}</span>
+        <span className="hidden font-mono text-xs sm:inline">{race.race_key}</span>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+      <section className="relative overflow-hidden rounded-lg border border-[#20312b] bg-[#111816] p-6 text-white shadow-lg md:p-8">
+        <span className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
           <div>
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+              <span className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
                 {formatRaceDate(race.race_date)}
               </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+              <span className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
                 {course}
               </span>
             </div>
-            <h1 className="text-3xl font-semibold tracking-normal text-slate-950 md:text-4xl">
+            <p className="mb-2 text-xs font-semibold uppercase text-emerald-400">Race forecast</p>
+            <h1 className="text-3xl font-semibold tracking-normal text-white md:text-4xl">
               {jyoName(race.jyo_cd)} {raceNumber(race.race_key)}
             </h1>
-            <p className="mt-3 text-sm font-medium text-slate-500">
+            <p className="mt-3 text-sm font-medium text-slate-400">
               {race.grade ? `${race.grade} ・ ` : ""}
               {race.race_class ? `${race.race_class} ・ ` : ""}
               {race.field_size}頭立て
             </p>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+          <div className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
               <Activity className="h-4 w-4" />
               想定展開
             </div>
-            <p className="mt-2 text-2xl font-semibold text-slate-950">{forecast.pace_label}</p>
-            <p className="mt-1 text-sm text-slate-600">{forecast.scenario_headline}</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{forecast.pace_label}</p>
+            <p className="mt-1 text-sm leading-6 text-slate-300">{forecast.scenario_headline}</p>
             <div className="mt-4 flex items-center justify-between text-sm">
-              <span className="text-slate-500">展開信頼度</span>
-              <span className="font-semibold text-slate-950">
+              <span className="text-slate-400">展開信頼度</span>
+              <span className="font-semibold text-white">
                 {confidenceMeta.label} ・ {confidence}%
               </span>
             </div>
-            <Progress value={confidence} className="mt-2 bg-slate-200" />
+            <Progress
+              value={confidence}
+              className="mt-2 bg-white/10"
+              indicatorClassName="bg-emerald-400"
+            />
           </div>
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section>
         <div className="mb-4 flex items-center gap-2">
-          <ListChecks className="h-4 w-4 text-slate-500" />
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+            <ListChecks className="h-4 w-4" />
+          </span>
           <h2 className="m-0 text-lg font-semibold tracking-normal text-slate-950">
             今回の検討サマリー
           </h2>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {decisionChecklist.map((item) => (
-            <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div key={item.label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
               <p className="m-0 text-xs font-semibold text-slate-500">{item.label}</p>
               <p className="m-0 mt-2 text-lg font-semibold tracking-normal text-slate-950">
                 {item.value}
@@ -193,8 +213,11 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
       </section>
 
       {forecast.comment ? (
-        <section className="rounded-lg border border-blue-100 bg-blue-50 p-5 shadow-sm" style={{ borderLeftWidth: "6px", borderLeftColor: "#2563eb" }}>
-          <h2 className="m-0 text-base font-semibold text-slate-950">この展開をやさしく解説</h2>
+        <section className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-emerald-700" aria-hidden />
+            <h2 className="m-0 text-base font-semibold text-slate-950">この展開をやさしく解説</h2>
+          </div>
           <p className="mt-3 text-sm font-bold leading-6 text-slate-950">
             {sanitizeBeginnerComment(forecast.comment.headline)}
           </p>
@@ -204,7 +227,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
             </p>
           ))}
           <details className="mt-4">
-            <summary className="cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-800">
+            <summary className="cursor-pointer text-xs font-medium text-emerald-700 hover:text-emerald-900">
               コメントの根拠
             </summary>
             <p className="mt-2 text-xs text-slate-500">生成方式: {forecast.comment.model_version}</p>

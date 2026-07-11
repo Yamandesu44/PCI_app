@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
+  ArrowUpRight,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -142,9 +143,9 @@ function todayKey(): string {
 function spotlightClass(tone: RaceSpotlightTone): string {
   const classes: Record<RaceSpotlightTone, string> = {
     focus: "border-rose-200 bg-rose-50 text-rose-700",
-    value: "border-amber-200 bg-amber-50 text-amber-700",
-    caution: "border-slate-300 bg-slate-100 text-slate-700",
-    normal: "border-slate-200 bg-white text-slate-500",
+    value: "border-amber-200 bg-amber-50 text-amber-800",
+    caution: "border-violet-200 bg-violet-50 text-violet-700",
+    normal: "border-slate-200 bg-slate-50 text-slate-500",
   };
   return classes[tone];
 }
@@ -168,16 +169,16 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
   return (
     <Link
       className={[
-        "group grid grid-cols-[42px_1fr] gap-3 rounded-md border bg-white p-3 text-slate-950 shadow-sm transition",
-        "hover:border-slate-400 hover:bg-slate-50",
-        featured ? "border-slate-300" : "border-slate-200",
+        "group grid grid-cols-[44px_minmax(0,1fr)_20px] gap-3 rounded-md border bg-white p-3.5 text-slate-950 transition-all",
+        "hover:-translate-y-px hover:border-slate-400 hover:shadow-md",
+        featured ? "border-emerald-200 shadow-sm" : "border-slate-200 shadow-sm",
       ].join(" ")}
       href={raceHref(race)}
     >
       <span
         className={[
           "flex h-10 w-10 items-center justify-center rounded-md text-sm font-bold text-white",
-          tone === "confirmed" ? "bg-emerald-600" : "bg-blue-600",
+          tone === "confirmed" ? "bg-emerald-700" : "bg-blue-600",
         ].join(" ")}
       >
         {raceNumber(race.race_key)}
@@ -240,6 +241,10 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
           </p>
         )}
       </div>
+      <ArrowUpRight
+        className="mt-1 h-4 w-4 text-slate-300 transition group-hover:text-slate-700"
+        aria-hidden
+      />
     </Link>
   );
 }
@@ -248,18 +253,29 @@ function StatTile({
   icon,
   label,
   value,
+  tone,
 }: {
   icon: ReactNode;
   label: string;
   value: string | number;
+  tone: "emerald" | "blue" | "violet" | "amber";
 }) {
+  const toneClass = {
+    emerald: "bg-emerald-50 text-emerald-700",
+    blue: "bg-blue-50 text-blue-700",
+    violet: "bg-violet-50 text-violet-700",
+    amber: "bg-amber-50 text-amber-700",
+  }[tone];
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <p className="m-0 text-sm font-medium text-slate-500">{label}</p>
-        <span className="text-slate-400">{icon}</span>
+        <p className="m-0 text-xs font-semibold text-slate-500">{label}</p>
+        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${toneClass}`}>
+          {icon}
+        </span>
       </div>
-      <p className="m-0 mt-2 text-2xl font-semibold tracking-normal text-slate-950">{value}</p>
+      <p className="m-0 mt-3 text-3xl font-semibold tracking-normal text-slate-950">{value}</p>
     </div>
   );
 }
@@ -299,9 +315,9 @@ function RaceGroupedSection({
           {dateGroups.map((dateGroup) => (
             <section
               key={dateGroup.raceDate}
-              className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+              className="border-t border-slate-300 pt-4"
             >
-              <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="m-0 text-base font-semibold tracking-normal text-slate-950">
                   {formatRaceDate(dateGroup.raceDate)}
                 </h3>
@@ -312,7 +328,7 @@ function RaceGroupedSection({
 
               <div className="grid gap-3 lg:grid-cols-3">
                 {dateGroup.venues.map((venueGroup) => (
-                  <div key={venueGroup.jyoCd} className="min-w-0 rounded-lg bg-slate-50 p-3">
+                  <div key={venueGroup.jyoCd} className="min-w-0">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <h4 className="m-0 text-sm font-semibold text-slate-900">
                         {venueGroup.venueName}
@@ -379,28 +395,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const venueCount = new Set(visibleItems.map(({ race }) => race.jyo_cd)).size;
 
   return (
-    <main className="mx-auto max-w-6xl px-5 py-6 text-slate-950">
-      <section className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <main className="mx-auto w-full max-w-7xl px-4 py-7 text-slate-950 sm:px-6 lg:px-8 lg:py-9">
+      <section className="mb-7 border-b border-slate-200 pb-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="m-0 text-sm font-semibold text-slate-500">Race Board</p>
-            <h1 className="m-0 mt-2 text-2xl font-semibold tracking-normal">レース一覧</h1>
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase text-emerald-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Race intelligence
+            </div>
+            <h1 className="m-0 text-3xl font-semibold tracking-normal">レースボード</h1>
             <p className="m-0 mt-2 text-sm leading-6 text-slate-600">
-              開催日を選んで、競馬場ごとにレースを確認できます。
+              開催日と競馬場から、展開予想と確定後の振り返りへ移動できます。
             </p>
           </div>
-          <nav className="flex flex-wrap gap-2" aria-label="レース一覧フィルター">
-            <a className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold" href="#weekend">
+          <nav className="inline-flex w-fit max-w-full flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-sm" aria-label="レース一覧フィルター">
+            <a className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" href="#weekend">
               今週末 {weekendItems.length}
             </a>
-            <a className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold" href="#upcoming">
+            <a className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" href="#upcoming">
               出走前 {upcomingItems.length}
             </a>
-            <a className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold" href="#confirmed">
+            <a className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" href="#confirmed">
               確定後 {confirmedItems.length}
             </a>
             {pastEntryItems.length > 0 && (
-              <a className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700" href="#past-entries">
+              <a className="rounded bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700" href="#past-entries">
                 成績未取込 {pastEntryItems.length}
               </a>
             )}
@@ -417,15 +436,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       ) : null}
 
       <section className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile icon={<CalendarDays className="h-4 w-4" />} label="今週末の予想対象" value={weekendItems.length} />
-        <StatTile icon={<Search className="h-4 w-4" />} label="出走前" value={weekendItems.length + upcomingItems.length} />
-        <StatTile icon={<CheckCircle2 className="h-4 w-4" />} label="確定後" value={confirmedItems.length} />
-        <StatTile icon={<ListFilter className="h-4 w-4" />} label="開催場" value={venueCount} />
+        <StatTile tone="emerald" icon={<CalendarDays className="h-4 w-4" />} label="今週末の予想対象" value={weekendItems.length} />
+        <StatTile tone="blue" icon={<Search className="h-4 w-4" />} label="出走前" value={weekendItems.length + upcomingItems.length} />
+        <StatTile tone="violet" icon={<CheckCircle2 className="h-4 w-4" />} label="確定後" value={confirmedItems.length} />
+        <StatTile tone="amber" icon={<ListFilter className="h-4 w-4" />} label="開催場" value={venueCount} />
       </section>
 
-      <RaceDateCalendar dates={dates} selectedDate={selectedDate} />
-
-      <div className="space-y-9">
+      <div className="grid items-start gap-7 lg:grid-cols-[272px_minmax(0,1fr)]">
+        <aside className="lg:sticky lg:top-24">
+          <RaceDateCalendar dates={dates} selectedDate={selectedDate} />
+        </aside>
+        <div className="min-w-0 space-y-9">
         <RaceGroupedSection
           id="weekend"
           title="今週末の予想対象"
@@ -456,6 +477,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             items={pastEntryItems}
           />
         )}
+        </div>
       </div>
 
       <div className="mt-8 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">

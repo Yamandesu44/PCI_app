@@ -20,42 +20,46 @@ export function RaceHero({ race, mode }: RaceHeroProps) {
     mode === "forecast"
       ? { label: "出走頭数", value: `${race.field_size}頭` }
       : { label: "実績ペース", value: `${resultSpeed.symbol} ${resultSpeed.label}` };
+  const statusClass = tone === "confirmed"
+    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+    : "border-sky-400/30 bg-sky-400/10 text-sky-300";
 
   return (
-    <section className={`race-hero race-hero-${tone}`}>
-      <div className="race-hero-main">
-        <span className={`race-status ${tone}`}>{statusLabel(race.status)}</span>
-        <h1>
+    <section className="relative overflow-hidden rounded-lg border border-[#20312b] bg-[#111816] p-6 text-white shadow-lg md:p-8">
+      <span className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
+      <div className="grid gap-7 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] lg:items-center">
+        <div className="min-w-0">
+          <span className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${statusClass}`}>
+            {statusLabel(race.status)}
+          </span>
+          <p className="mb-2 mt-5 text-xs font-semibold uppercase text-emerald-400">
+            Race review
+          </p>
+          <h1 className="m-0 text-3xl font-semibold leading-tight tracking-normal md:text-4xl">
           {jyoName(race.jyo_cd)} {raceNumber(race.race_key)}
-        </h1>
-        <p className="race-hero-sub">
+          </h1>
+          <p className="m-0 mt-3 text-sm font-medium text-slate-400">
           {formatRaceDate(race.race_date)} ・ {race.track_type}
           {race.distance_m}m
           {race.grade ? ` ・ ${race.grade}` : ""}
           {race.race_class ? ` ・ ${race.race_class}` : ""}
-        </p>
-      </div>
+          </p>
+        </div>
 
-      <dl className="race-hero-metrics">
-        <div>
-          <dt>{primaryMetric.label}</dt>
-          <dd>{primaryMetric.value}</dd>
-        </div>
-        <div>
-          <dt>天候</dt>
-          <dd>{optionalLabel(race.weather)}</dd>
-        </div>
-        <div>
-          <dt>馬場</dt>
-          <dd>{optionalLabel(race.track_condition)}</dd>
-        </div>
-        <div>
-          <dt>上位3頭ペース</dt>
-          <dd style={{ color: pci3Speed.color }}>
-            {pci3Speed.symbol} {pci3Speed.label}
-          </dd>
-        </div>
-      </dl>
+        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10">
+          {[
+            { label: primaryMetric.label, value: primaryMetric.value },
+            { label: "天候", value: optionalLabel(race.weather) },
+            { label: "馬場", value: optionalLabel(race.track_condition) },
+            { label: "上位3頭の傾向", value: `${pci3Speed.symbol} ${pci3Speed.label}` },
+          ].map((item) => (
+            <div key={item.label} className="min-w-0 bg-[#17201d] p-4">
+              <dt className="text-xs font-semibold text-slate-400">{item.label}</dt>
+              <dd className="m-0 mt-1 truncate text-base font-semibold text-white">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </section>
   );
 }
