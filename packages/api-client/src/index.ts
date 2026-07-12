@@ -21,6 +21,8 @@ export type EntryDetail = components["schemas"]["EntryDetailSchema"];
 export type PaceAnalysis = components["schemas"]["PaceAnalysisSchema"];
 export type HorsePaceAnalysis = components["schemas"]["HorsePaceAnalysisSchema"];
 export type ForecastAccuracy = components["schemas"]["ForecastAccuracySchema"];
+export type StyleAdvantage = components["schemas"]["StyleAdvantageSchema"];
+export type StyleAdvantageEntry = components["schemas"]["StyleAdvantageEntrySchema"];
 
 export type { components, paths } from "./schema";
 

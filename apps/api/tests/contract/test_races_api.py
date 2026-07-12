@@ -20,11 +20,15 @@ FORECAST_KEYS = {
     "forecast_reasons",
     "comment",
     "formation",
+    "style_advantage",
 }
 
 HORSE_KEYS = {"horse_no", "horse_name", "running_style", "pai", "fit_label", "reasons"}
 
 COMMENT_KEYS = {"headline", "body", "model_version", "reasons"}
+
+STYLE_ADVANTAGE_KEYS = {"model_version", "entries", "reasons"}
+STYLE_ADVANTAGE_ENTRY_KEYS = {"style", "score"}
 
 FORMATION_KEYS = {"model_version", "groups"}
 FORMATION_GROUP_KEYS = {"key", "label", "horses"}
@@ -190,6 +194,17 @@ class TestForecastEndpoint:
                 assert 1 <= horse["frame_no"] <= 8
                 assert horse["confidence_label"] in ("高", "標準", "参考")
                 assert horse["reasons"]
+
+    def test_style_advantage_contract(self, client: TestClient) -> None:
+        advantage = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast").json()["style_advantage"]
+        assert set(advantage.keys()) == STYLE_ADVANTAGE_KEYS
+        assert advantage["model_version"] == "style-advantage-v1"
+        styles = [entry["style"] for entry in advantage["entries"]]
+        assert styles == ["逃げ", "先行", "差し", "追込"]
+        for entry in advantage["entries"]:
+            assert set(entry.keys()) == STYLE_ADVANTAGE_ENTRY_KEYS
+            assert 0 <= entry["score"] <= 100
+        assert advantage["reasons"], "説明可能性: 有利度の根拠は必須"
 
     def test_unknown_race_returns_404(self, client: TestClient) -> None:
         resp = client.get("/api/v1/races/9999999999999999/forecast")

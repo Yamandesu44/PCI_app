@@ -5,7 +5,7 @@
  * 体現する層。専門用語（RPCI・PAI）を非専門家向けの言葉・色・並びへ変換する。
  * 副作用なし・決定的なので vitest で単体テストする。
  */
-import type { ForecastAccuracy, HorseFit } from "@pci/api-client";
+import type { ForecastAccuracy, HorseFit, StyleAdvantage } from "@pci/api-client";
 
 export type PaceTone = "high" | "average" | "slow";
 
@@ -466,6 +466,46 @@ export function pciToneLabel(tone: PciTone): string {
 
 export function pciToneColor(tone: PciTone): string {
   return PCI_TONE_COLOR[tone];
+}
+
+export interface StyleAdvantageScore {
+  key: string;
+  label: string;
+  /** 50=互角。大きいほど今回の想定ペースが向く。 */
+  value: number;
+  description: string;
+  /** 有利/互角/不利の言葉ラベル（数字が苦手なユーザー向け）。 */
+  verdict: string;
+}
+
+const STYLE_DESCRIPTIONS: Record<string, string> = {
+  逃げ: "前半から主導権を取る馬",
+  先行: "好位で流れに乗る馬",
+  差し: "中団から末脚を伸ばす馬",
+  追込: "後方待機で直線勝負の馬",
+};
+
+function styleVerdict(score: number): string {
+  if (score >= 65) return "有利";
+  if (score >= 55) return "やや有利";
+  if (score > 45) return "互角";
+  if (score > 35) return "やや不利";
+  return "不利";
+}
+
+/**
+ * API の脚質別有利度（style-advantage-v1、50=互角）を表示用に変換する。
+ * 以前は web 側でその脚質の最大PAIを流用しており、スコアが高止まりして
+ * 差が出なかった。算出はドメイン層（想定RPCIの中立点からの乖離）へ移した。
+ */
+export function styleAdvantageScores(advantage: StyleAdvantage): StyleAdvantageScore[] {
+  return advantage.entries.map((entry) => ({
+    key: entry.style,
+    label: entry.style,
+    value: Math.round(entry.score),
+    description: STYLE_DESCRIPTIONS[entry.style] ?? "",
+    verdict: styleVerdict(entry.score),
+  }));
 }
 
 export type ForecastAccuracyTone = "hit" | "miss";

@@ -15,6 +15,8 @@ from pci.application.dto import (
     FormationOutput,
     HorseFitOutput,
     ReasonOutput,
+    StyleAdvantageEntryOutput,
+    StyleAdvantageOutput,
 )
 from pci.domain.pace.adaptability import HorsePaceProfile, PaceAdaptabilityScorer, PaiResult
 from pci.domain.pace.affinity import (
@@ -47,6 +49,7 @@ from pci.domain.pace.running_style import (
     predict_running_style_for_distance,
 )
 from pci.domain.pace.scenario import build_pace_scenario
+from pci.domain.pace.style_advantage import StyleAdvantage, build_style_advantage
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.racing.repository import RaceRepository
@@ -133,6 +136,11 @@ class ForecastRaceUseCase:
                 self._mart_repo.save_pace_fit(race_key_str, profile.horse_no, fit_result)
 
         scenario = build_pace_scenario(forecast, fit_results, profiles)
+        style_advantage = build_style_advantage(
+            forecast.value,
+            race.track_type,
+            tuple(p.running_style for p in profiles),
+        )
 
         name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)
         formation_prediction = predict_formation(tuple(formation_inputs))
@@ -178,6 +186,7 @@ class ForecastRaceUseCase:
             forecast_reasons=_to_reason_outputs(forecast.reasons),
             comment=comment,
             formation=_to_formation_output(formation_prediction, name_map, ketto_by_no),
+            style_advantage=_to_style_advantage_output(style_advantage),
         )
 
     def _resolve_style_evidence(
@@ -300,6 +309,17 @@ def _to_comment_output(commentary: Commentary) -> CommentOutput:
         body=list(commentary.body),
         model_version=commentary.model_version,
         reasons=_to_reason_outputs(commentary.reasons),
+    )
+
+
+def _to_style_advantage_output(advantage: StyleAdvantage) -> StyleAdvantageOutput:
+    return StyleAdvantageOutput(
+        model_version=advantage.model_version,
+        entries=[
+            StyleAdvantageEntryOutput(style=str(entry.style), score=entry.score)
+            for entry in advantage.entries
+        ],
+        reasons=_to_reason_outputs(advantage.reasons),
     )
 
 

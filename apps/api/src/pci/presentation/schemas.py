@@ -54,6 +54,21 @@ class HorseFitSchema(BaseModel):
     reasons: list[ReasonSchema] = []
 
 
+class StyleAdvantageEntrySchema(BaseModel):
+    """1脚質分の展開有利度（50=互角、大きいほど今回の流れが向く）。"""
+
+    style: str
+    score: float = Field(ge=0.0, le=100.0)
+
+
+class StyleAdvantageSchema(BaseModel):
+    """脚質別の展開有利度（style-advantage-v1）。"""
+
+    model_version: str
+    entries: list[StyleAdvantageEntrySchema] = []
+    reasons: list[ReasonSchema] = []
+
+
 class FormationHorseSchema(BaseModel):
     """隊列予想に表示する1頭分の配置。"""
 
@@ -96,6 +111,7 @@ class ForecastSchema(BaseModel):
     forecast_reasons: list[ReasonSchema] = []
     comment: CommentSchema | None = None
     formation: FormationSchema | None = None
+    style_advantage: StyleAdvantageSchema | None = None
 
     @classmethod
     def from_dto(cls, dto: ForecastOutput) -> ForecastSchema:
@@ -145,6 +161,18 @@ class ForecastSchema(BaseModel):
                     ],
                 )
                 if dto.formation
+                else None
+            ),
+            style_advantage=(
+                StyleAdvantageSchema(
+                    model_version=dto.style_advantage.model_version,
+                    entries=[
+                        StyleAdvantageEntrySchema(style=entry.style, score=entry.score)
+                        for entry in dto.style_advantage.entries
+                    ],
+                    reasons=[ReasonSchema(**vars(r)) for r in dto.style_advantage.reasons],
+                )
+                if dto.style_advantage
                 else None
             ),
         )

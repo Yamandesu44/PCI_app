@@ -16,6 +16,7 @@ import {
   sanitizeBeginnerComment,
   sortDiscountCandidates,
   sortByPai,
+  styleAdvantageScores,
 } from "./pace";
 
 describe("paceMeta", () => {
@@ -311,5 +312,35 @@ describe("forecastAccuracyMeta", () => {
     });
     expect(meta.summary).not.toMatch(/\d+\.\d+/);
     expect(meta.label).not.toMatch(/\d/);
+  });
+});
+
+describe("styleAdvantageScores", () => {
+  const advantage = {
+    model_version: "style-advantage-v1",
+    entries: [
+      { style: "逃げ", score: 72.0 },
+      { style: "先行", score: 62.0 },
+      { style: "差し", score: 38.0 },
+      { style: "追込", score: 32.6 },
+    ],
+    reasons: [],
+  };
+
+  it("APIのエントリ順を保ち、ラベルと説明を付ける", () => {
+    const scores = styleAdvantageScores(advantage);
+    expect(scores.map((s) => s.label)).toEqual(["逃げ", "先行", "差し", "追込"]);
+    expect(scores[0].description).toContain("主導権");
+    expect(scores[3].value).toBe(33);
+  });
+
+  it("スコアを 有利/やや有利/互角/やや不利/不利 の言葉へ変換する", () => {
+    const verdicts = styleAdvantageScores(advantage).map((s) => s.verdict);
+    expect(verdicts).toEqual(["有利", "やや有利", "やや不利", "不利"]);
+    const even = styleAdvantageScores({
+      ...advantage,
+      entries: [{ style: "先行", score: 50.0 }],
+    });
+    expect(even[0].verdict).toBe("互角");
   });
 });

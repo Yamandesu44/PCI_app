@@ -94,6 +94,23 @@ class HorseFitOutput:
 
 
 @dataclass
+class StyleAdvantageEntryOutput:
+    """1脚質分の展開有利度（50=互角）。"""
+
+    style: str
+    score: float
+
+
+@dataclass
+class StyleAdvantageOutput:
+    """脚質別の展開有利度（style-advantage-v1）。"""
+
+    model_version: str
+    entries: list[StyleAdvantageEntryOutput] = field(default_factory=list)
+    reasons: list[ReasonOutput] = field(default_factory=list)
+
+
+@dataclass
 class FormationHorseOutput:
     """隊列予想における1頭分の配置。"""
 
@@ -139,6 +156,7 @@ class ForecastOutput:
     forecast_reasons: list[ReasonOutput] = field(default_factory=list)
     comment: CommentOutput | None = None
     formation: FormationOutput | None = None
+    style_advantage: StyleAdvantageOutput | None = None
 
 
 @dataclass

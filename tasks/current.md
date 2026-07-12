@@ -22,7 +22,21 @@
 
 ## 最近完了したタスク
 
-- [x] ✅ **P2 バックテスト結果の可視化/保存**（本セッション、コミット予定）
+- [x] ✅ **P1 脚質別有利度の差が出ない問題を修正（style-advantage-v1）**（本セッション）
+  - ユーザー指摘: 展開分析の有利度が 71/76/91/96 のように高止まりし、機能していると言い難い。
+  - 原因: web が「その脚質の最大PAI」を有利度として流用（脚質自体の有利さではない）。
+  - 対応: domain に `style_advantage.py` を新設し、想定RPCIの中立点（classify_pace と同じ閾値中点:
+    芝50/ダート43）からの乖離を 50=互角の対称スコアへ写像。逃げ競合減点あり。reasons/model_version 付き。
+    DTO→schema→OpenAPI→api-client→web（`styleAdvantageScores` + 有利/互角/不利の言葉ラベル）まで結線。
+  - 対象: `domain/pace/style_advantage.py`(新規), `application/dto.py`, `forecast_use_cases.py`,
+    `presentation/schemas.py`, `tests/`(domain 12件+app 1件+contract 1件), `openapi.json`+`schema.d.ts`(再生成),
+    `packages/api-client/src/index.ts`, `apps/web/src/lib/pace.ts`(+テスト2件),
+    `apps/web/src/components/RaceForecastDashboard.tsx`
+  - 検証: API 396 passed（+14）、Web 57 passed（+2）、ruff/mypy --strict/lint-imports/typecheck/build clean。
+  - 関連: ユーザー要望②（展開＋絶対能力の統合順位予想）は `tasks/backlog.md` B節に P1 で記録
+    （能力指数の定義が必要なため着手時に仕様合意から）。
+
+- [x] ✅ **P2 バックテスト結果の可視化/保存**（コミット `03bc005`）
   - 対象: `apps/api/src/pci/application/backtest.py`（`report_to_dict`等の変換関数を追加）,
     `apps/api/scripts/backtest_forecast.py`（`--output <path>` オプション追加）,
     `apps/api/tests/unit/application/test_backtest.py`（`TestReportToDict` 2件追加）

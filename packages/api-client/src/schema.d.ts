@@ -407,6 +407,7 @@ export interface components {
             scenario_detail: string;
             /** Scenario Headline */
             scenario_headline: string;
+            style_advantage?: components["schemas"]["StyleAdvantageSchema"] | null;
         };
         /**
          * FormationGroupSchema
@@ -729,6 +730,34 @@ export interface components {
             race_key: string;
             /** Rpci */
             rpci: number | null;
+        };
+        /**
+         * StyleAdvantageEntrySchema
+         * @description 1脚質分の展開有利度（50=互角、大きいほど今回の流れが向く）。
+         */
+        StyleAdvantageEntrySchema: {
+            /** Score */
+            score: number;
+            /** Style */
+            style: string;
+        };
+        /**
+         * StyleAdvantageSchema
+         * @description 脚質別の展開有利度（style-advantage-v1）。
+         */
+        StyleAdvantageSchema: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["StyleAdvantageEntrySchema"][];
+            /** Model Version */
+            model_version: string;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
         };
         /** TrainerBody */
         TrainerBody: {

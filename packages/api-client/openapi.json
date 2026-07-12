@@ -355,6 +355,16 @@
           "scenario_headline": {
             "title": "Scenario Headline",
             "type": "string"
+          },
+          "style_advantage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StyleAdvantageSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1262,6 +1272,57 @@
           "formula_version"
         ],
         "title": "ResultResponse",
+        "type": "object"
+      },
+      "StyleAdvantageEntrySchema": {
+        "description": "1脚質分の展開有利度（50=互角、大きいほど今回の流れが向く）。",
+        "properties": {
+          "score": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "style": {
+            "title": "Style",
+            "type": "string"
+          }
+        },
+        "required": [
+          "style",
+          "score"
+        ],
+        "title": "StyleAdvantageEntrySchema",
+        "type": "object"
+      },
+      "StyleAdvantageSchema": {
+        "description": "脚質別の展開有利度（style-advantage-v1）。",
+        "properties": {
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StyleAdvantageEntrySchema"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model_version"
+        ],
+        "title": "StyleAdvantageSchema",
         "type": "object"
       },
       "TrainerBody": {

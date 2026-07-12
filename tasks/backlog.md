@@ -22,8 +22,14 @@
 
 ## B. 改善候補（やるか未確定・要判断）
 
+- [ ] **P1 展開＋絶対能力の統合順位予想**（ユーザー要望 2026-07-12、`docs/SPEC.md §9`-12）。
+  現状は展開恩恵馬のピックアップまで。能力指標（クラス実績・持ち時計・上がり順位・近走着順等）を
+  加味して「どの馬が上位に来そうか」まで示す。能力指数の定義（何を能力とみなすか）が先に必要で、
+  仕様の独断確定は不可 → 着手時はまず指標案をユーザーへ提示して合意を取る。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
-  `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)。実データ検証後に確定（独断で確定しない）。
+  `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
+  `DistanceStyleWeights`(running-style-v2-distance)・`StyleAdvantageWeights`(style-advantage-v1)。
+  実データ検証後に確定（独断で確定しない）。
 - [ ] 脚質判定ルールの最適化（design/07 C9・データ蓄積後）。
 - [ ] 展開コメントの LLM（Gemini）本採用可否と品質基準（ADR-0008）。数値はドメイン確定・表現のみ LLM。
 - [ ] PAI 正式定義の確定（design/07 C10・実運用検証後）。
