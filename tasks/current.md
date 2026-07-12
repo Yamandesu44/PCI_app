@@ -4,9 +4,13 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-12 / 担当: OpenAI Codex → 引き継ぎ先: Claude Code / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-12 / 担当: Claude Code（Codexからの引き継ぎ内容を検証済み） / ブランチ `claude/sweet-einstein-ilnaov`
 
-引き継ぎ前確認: 2026-07-12 OpenAI Codex。作業ツリーはクリーン状態から開始し、新規実装は行っていない。Webは `npm.cmd run test` 55 passed、`npm.cmd run typecheck` 成功、`npm.cmd run build` 成功。API側はこのCodex環境に `python` / `py` / `ruff` / `mypy` / `lint-imports` が存在せず再実行不能だったため、Claude Code側で最初に再実行する。
+引き継ぎ検証: 2026-07-12 Claude Code。ローカルが`origin`より7コミット遅れていたため`git merge --ff-only`で追従
+（コンフリクトなし・Codexの変更は無傷）。Codexの実装3件（running-style-v2-distance/formation-v1/UI刷新）を
+コードレベルで検証し、API側の全テスト（`python -m pytest` 380 passed, ruff/mypy --strict/lint-imports すべて
+成功）・Web側（vitest 55 passed, typecheck/build成功）・OpenAPI/schema.d.ts再生成ドリフトなしを自ら再実行して確認。
+重大な不整合なし（詳細はチャット履歴の検証報告を参照）。
 
 ---
 
@@ -109,11 +113,16 @@
     手元で確認済み。
   - ブロック要因: Webhook通知の動作確認にはユーザーの実行環境（Windows機）が必要。
 
-- [ ] **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・上がり3F妥当範囲・`RuleWeights`・`PaiWeights`）
+- [ ] **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・上がり3F妥当範囲・`RuleWeights`・`PaiWeights`・
+  `FormationWeights`・`DistanceStyleWeights`）
   - 状態: ⬜未着手
   - 背景: `docs/SPEC.md §9` に記載の仮仕様。実データ検証後に確定する方針（独断で確定しない）。
+    `FormationWeights`（脚質70%/近走序盤位置30%・4ゾーン境界）と`DistanceStyleWeights`
+    （距離スケール・新しさ減衰・先行距離補正）は2026-07-12にCodexが追加した仮係数
+    （`docs/SPEC.md §9`-10, `docs/DECISIONS.md` 2026-07-12参照）。
   - 完了条件: 対象定数ごとに実データでの妥当性検証結果を記録し、確定 or 調整の判断を
-    `docs/DECISIONS.md` に残す。
+    `docs/DECISIONS.md` に残す。formation-v1については隊列ゾーン一致率（実際の後方カメラ等の
+    確定データがあれば）での再検証が望ましいが、現状データで可能な範囲でよい。
   - ブロック要因: 実DBアクセスが必要（このクラウド環境からは接続不可。想定RPCI検証と同様、
     ユーザーに手元でスクリプト実行→結果を貼ってもらう進め方になる見込み）。着手前にどの定数を
     対象にするかユーザーに確認。
