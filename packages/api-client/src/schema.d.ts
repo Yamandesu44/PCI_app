@@ -384,6 +384,7 @@ export interface components {
              * @default []
              */
             forecast_reasons: components["schemas"]["ReasonSchema"][];
+            formation?: components["schemas"]["FormationSchema"] | null;
             /**
              * Front Runners
              * @default []
@@ -406,6 +407,55 @@ export interface components {
             scenario_detail: string;
             /** Scenario Headline */
             scenario_headline: string;
+        };
+        /**
+         * FormationGroupSchema
+         * @description 先頭・好位・中団・後方の隊列グループ。
+         */
+        FormationGroupSchema: {
+            /**
+             * Horses
+             * @default []
+             */
+            horses: components["schemas"]["FormationHorseSchema"][];
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * FormationHorseSchema
+         * @description 隊列予想に表示する1頭分の配置。
+         */
+        FormationHorseSchema: {
+            /** Confidence Label */
+            confidence_label: string;
+            /** Frame No */
+            frame_no: number;
+            /** Horse Name */
+            horse_name?: string | null;
+            /** Horse No */
+            horse_no: number;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
+            /** Running Style */
+            running_style: string;
+        };
+        /**
+         * FormationSchema
+         * @description 枠順確定後にのみ返す序盤隊列予想。
+         */
+        FormationSchema: {
+            /**
+             * Groups
+             * @default []
+             */
+            groups: components["schemas"]["FormationGroupSchema"][];
+            /** Model Version */
+            model_version: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {

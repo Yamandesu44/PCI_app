@@ -10,6 +10,9 @@ from __future__ import annotations
 from pci.application.dto import (
     CommentOutput,
     ForecastOutput,
+    FormationGroupOutput,
+    FormationHorseOutput,
+    FormationOutput,
     HorseFitOutput,
     ReasonOutput,
 )
@@ -25,6 +28,11 @@ from pci.domain.pace.commentary import (
     CommentGenerator,
     ForecastCommentInput,
     RuleBasedCommentGenerator,
+)
+from pci.domain.pace.formation import (
+    FormationHorseInput,
+    FormationPrediction,
+    predict_formation,
 )
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import (
@@ -75,13 +83,26 @@ class ForecastRaceUseCase:
 
         profiles: list[HorsePaceProfile] = []
         front_pace_samples: list[FrontRunnerPaceSample] = []
+        formation_inputs: list[FormationHorseInput] = []
         for e in entries:
-            style = self._resolve_style(e.ketto_num)
+            style, style_confidence, early_position, early_sample_size = (
+                self._resolve_style_evidence(e.ketto_num)
+            )
             profiles.append(
                 HorsePaceProfile(
                     horse_no=e.horse_no,
                     running_style=style,
                     pace_affinity=self._build_affinity_profile(e.ketto_num, style, race),
+                )
+            )
+            formation_inputs.append(
+                FormationHorseInput(
+                    horse_no=e.horse_no,
+                    frame_no=e.frame_no,
+                    running_style=style,
+                    style_confidence=style_confidence,
+                    recent_early_position=early_position,
+                    recent_sample_size=early_sample_size,
                 )
             )
             sample = self._build_front_pace_sample(e.horse_no, e.ketto_num, style)
@@ -110,6 +131,7 @@ class ForecastRaceUseCase:
         scenario = build_pace_scenario(forecast, fit_results, profiles)
 
         name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)
+        formation_prediction = predict_formation(tuple(formation_inputs))
         ketto_by_no = {e.horse_no: e.ketto_num for e in entries}
         fit_by_no = {r.horse_no: r for r in fit_results}
         horses = [
@@ -151,15 +173,26 @@ class ForecastRaceUseCase:
             horses=horses,
             forecast_reasons=_to_reason_outputs(forecast.reasons),
             comment=comment,
+            formation=_to_formation_output(formation_prediction, name_map, ketto_by_no),
         )
 
-    def _resolve_style(self, ketto_num: str) -> RunningStyleLabel:
-        """直近5走の4角通過順位から脚質を判定する。データ不足時は自在。"""
+    def _resolve_style_evidence(
+        self, ketto_num: str
+    ) -> tuple[RunningStyleLabel, float, float | None, int]:
+        """脚質と、隊列予想に使う近走序盤位置の証拠をまとめて返す。"""
         if not ketto_num:
-            return RunningStyleLabel.FLEXIBLE
+            return RunningStyleLabel.FLEXIBLE, 0.0, None, 0
         recent = self._repo.find_horse_recent_entries(ketto_num, limit=5)
         c4 = tuple(e.corner_4 for e in recent if e.corner_4 is not None)
-        return classify_running_style(c4).label
+        style = classify_running_style(c4)
+        early_position_items: list[int] = []
+        for entry in recent:
+            position = entry.corner_1 if entry.corner_1 is not None else entry.corner_4
+            if position is not None:
+                early_position_items.append(position)
+        early_positions = tuple(early_position_items)
+        average = sum(early_positions) / len(early_positions) if early_positions else None
+        return style.label, style.confidence, average, len(early_positions)
 
     def _build_front_pace_sample(
         self, horse_no: int, ketto_num: str, style: RunningStyleLabel
@@ -246,4 +279,34 @@ def _to_comment_output(commentary: Commentary) -> CommentOutput:
         body=list(commentary.body),
         model_version=commentary.model_version,
         reasons=_to_reason_outputs(commentary.reasons),
+    )
+
+
+def _to_formation_output(
+    prediction: FormationPrediction | None,
+    name_map: dict[str, str],
+    ketto_by_no: dict[int, str],
+) -> FormationOutput | None:
+    if prediction is None:
+        return None
+    return FormationOutput(
+        model_version=prediction.model_version,
+        groups=[
+            FormationGroupOutput(
+                key=str(group.zone),
+                label=group.label,
+                horses=[
+                    FormationHorseOutput(
+                        horse_no=horse.horse_no,
+                        frame_no=horse.frame_no,
+                        horse_name=name_map.get(ketto_by_no.get(horse.horse_no, "")),
+                        running_style=str(horse.running_style),
+                        confidence_label=horse.confidence_label,
+                        reasons=_to_reason_outputs(horse.reasons),
+                    )
+                    for horse in group.horses
+                ],
+            )
+            for group in prediction.groups
+        ],
     )

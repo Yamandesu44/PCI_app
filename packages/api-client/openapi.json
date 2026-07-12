@@ -306,6 +306,16 @@
             "title": "Forecast Reasons",
             "type": "array"
           },
+          "formation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FormationSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "front_runners": {
             "default": [],
             "items": {
@@ -357,6 +367,105 @@
           "scenario_detail"
         ],
         "title": "ForecastSchema",
+        "type": "object"
+      },
+      "FormationGroupSchema": {
+        "description": "先頭・好位・中団・後方の隊列グループ。",
+        "properties": {
+          "horses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FormationHorseSchema"
+            },
+            "title": "Horses",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "FormationGroupSchema",
+        "type": "object"
+      },
+      "FormationHorseSchema": {
+        "description": "隊列予想に表示する1頭分の配置。",
+        "properties": {
+          "confidence_label": {
+            "title": "Confidence Label",
+            "type": "string"
+          },
+          "frame_no": {
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Frame No",
+            "type": "integer"
+          },
+          "horse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horse Name"
+          },
+          "horse_no": {
+            "title": "Horse No",
+            "type": "integer"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "running_style": {
+            "title": "Running Style",
+            "type": "string"
+          }
+        },
+        "required": [
+          "horse_no",
+          "frame_no",
+          "running_style",
+          "confidence_label"
+        ],
+        "title": "FormationHorseSchema",
+        "type": "object"
+      },
+      "FormationSchema": {
+        "description": "枠順確定後にのみ返す序盤隊列予想。",
+        "properties": {
+          "groups": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FormationGroupSchema"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_version"
+        ],
+        "title": "FormationSchema",
         "type": "object"
       },
       "HTTPValidationError": {

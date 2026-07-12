@@ -54,6 +54,32 @@ class HorseFitSchema(BaseModel):
     reasons: list[ReasonSchema] = []
 
 
+class FormationHorseSchema(BaseModel):
+    """隊列予想に表示する1頭分の配置。"""
+
+    horse_no: int
+    frame_no: int = Field(ge=1, le=8)
+    horse_name: str | None = None
+    running_style: str
+    confidence_label: str
+    reasons: list[ReasonSchema] = []
+
+
+class FormationGroupSchema(BaseModel):
+    """先頭・好位・中団・後方の隊列グループ。"""
+
+    key: str
+    label: str
+    horses: list[FormationHorseSchema] = []
+
+
+class FormationSchema(BaseModel):
+    """枠順確定後にのみ返す序盤隊列予想。"""
+
+    model_version: str
+    groups: list[FormationGroupSchema] = []
+
+
 class ForecastSchema(BaseModel):
     """レース展開予想（想定RPCI + 展開シナリオ + 各馬 PAI）。"""
 
@@ -69,6 +95,7 @@ class ForecastSchema(BaseModel):
     horses: list[HorseFitSchema] = []
     forecast_reasons: list[ReasonSchema] = []
     comment: CommentSchema | None = None
+    formation: FormationSchema | None = None
 
     @classmethod
     def from_dto(cls, dto: ForecastOutput) -> ForecastSchema:
@@ -95,6 +122,31 @@ class ForecastSchema(BaseModel):
             ],
             forecast_reasons=[ReasonSchema(**vars(r)) for r in dto.forecast_reasons],
             comment=CommentSchema.from_dto(dto.comment) if dto.comment else None,
+            formation=(
+                FormationSchema(
+                    model_version=dto.formation.model_version,
+                    groups=[
+                        FormationGroupSchema(
+                            key=group.key,
+                            label=group.label,
+                            horses=[
+                                FormationHorseSchema(
+                                    horse_no=horse.horse_no,
+                                    frame_no=horse.frame_no,
+                                    horse_name=horse.horse_name,
+                                    running_style=horse.running_style,
+                                    confidence_label=horse.confidence_label,
+                                    reasons=[ReasonSchema(**vars(r)) for r in horse.reasons],
+                                )
+                                for horse in group.horses
+                            ],
+                        )
+                        for group in dto.formation.groups
+                    ],
+                )
+                if dto.formation
+                else None
+            ),
         )
 
 

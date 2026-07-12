@@ -19,11 +19,23 @@ FORECAST_KEYS = {
     "horses",
     "forecast_reasons",
     "comment",
+    "formation",
 }
 
 HORSE_KEYS = {"horse_no", "horse_name", "running_style", "pai", "fit_label", "reasons"}
 
 COMMENT_KEYS = {"headline", "body", "model_version", "reasons"}
+
+FORMATION_KEYS = {"model_version", "groups"}
+FORMATION_GROUP_KEYS = {"key", "label", "horses"}
+FORMATION_HORSE_KEYS = {
+    "horse_no",
+    "frame_no",
+    "horse_name",
+    "running_style",
+    "confidence_label",
+    "reasons",
+}
 
 RACE_DETAIL_KEYS = {
     "race_key",
@@ -160,6 +172,24 @@ class TestForecastEndpoint:
         assert comment["body"], "自然文の段落本文は必須"
         assert comment["model_version"] == "comment-v1"
         assert comment["reasons"], "説明可能性: コメントの根拠は必須"
+
+    def test_formation_contract(self, client: TestClient) -> None:
+        formation = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast").json()["formation"]
+        assert set(formation.keys()) == FORMATION_KEYS
+        assert formation["model_version"] == "formation-v1"
+        assert [group["key"] for group in formation["groups"]] == [
+            "lead",
+            "front",
+            "midfield",
+            "rear",
+        ]
+        for group in formation["groups"]:
+            assert set(group.keys()) == FORMATION_GROUP_KEYS
+            for horse in group["horses"]:
+                assert set(horse.keys()) == FORMATION_HORSE_KEYS
+                assert 1 <= horse["frame_no"] <= 8
+                assert horse["confidence_label"] in ("高", "標準", "参考")
+                assert horse["reasons"]
 
     def test_unknown_race_returns_404(self, client: TestClient) -> None:
         resp = client.get("/api/v1/races/9999999999999999/forecast")

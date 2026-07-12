@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { HorseFitTable } from "@/components/HorseFitTable";
+import { FormationView } from "@/components/FormationView";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { PaceProfileChart } from "@/components/PaceProfileChart";
 import { ReasonList } from "@/components/ReasonList";
@@ -211,6 +212,8 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
           ))}
         </div>
       </section>
+
+      {forecast.formation ? <FormationView formation={forecast.formation} /> : null}
 
       {forecast.comment ? (
         <section className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm">

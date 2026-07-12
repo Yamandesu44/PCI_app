@@ -11,12 +11,18 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pci.application.dto import EntryInput, RaceInfo, ResultInput
+from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
+from pci.domain.pace.rpci_forecast import RuleBasedRpciForecaster
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 from pci.presentation.app import create_app
-from pci.presentation.dependencies import get_mart_repository, get_race_repository
+from pci.presentation.dependencies import (
+    get_forecast_use_case,
+    get_mart_repository,
+    get_race_repository,
+)
 from tests.unit.application.fake_mart_repository import FakeMartRepository
 from tests.unit.application.fake_repository import FakeRaceRepository
 
@@ -126,6 +132,13 @@ def repo() -> FakeRaceRepository:
 @pytest.fixture
 def client(repo: FakeRaceRepository) -> TestClient:
     app = create_app()
+    mart_repo = FakeMartRepository()
     app.dependency_overrides[get_race_repository] = lambda: repo
-    app.dependency_overrides[get_mart_repository] = lambda: FakeMartRepository()
+    app.dependency_overrides[get_mart_repository] = lambda: mart_repo
+    # 契約テストはAPI形状が対象。ネイティブMLライブラリに依存させず決定的にする。
+    app.dependency_overrides[get_forecast_use_case] = lambda: ForecastRaceUseCase(
+        repo,
+        forecaster=RuleBasedRpciForecaster(),
+        mart_repo=mart_repo,
+    )
     return TestClient(app)

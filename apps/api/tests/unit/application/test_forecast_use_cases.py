@@ -36,11 +36,18 @@ class _RepoWithSuppressedPastRace(FakeRaceRepository):
             return None
         return super().find_by_key(key)
 
+
 UPCOMING = "2026062005010101"
 RACE_DATE = datetime.date(2026, 6, 20)
 
 
-def _register_upcoming(repo: FakeRaceRepository, n: int = 6, distance_m: int = 1600) -> None:
+def _register_upcoming(
+    repo: FakeRaceRepository,
+    n: int = 6,
+    distance_m: int = 1600,
+    *,
+    draw_confirmed: bool = True,
+) -> None:
     info = RaceInfo(
         race_key=UPCOMING,
         race_date=RACE_DATE,
@@ -53,7 +60,7 @@ def _register_upcoming(repo: FakeRaceRepository, n: int = 6, distance_m: int = 1
     entries = [
         EntryInput(
             horse_no=i,
-            frame_no=i,
+            frame_no=i if draw_confirmed else 0,
             ketto_num=f"202010000{i}",
             weight=480.0,
             jockey_code=f"J00{i}",
@@ -160,6 +167,38 @@ class TestForecastRaceUseCase:
         assert output.scenario_headline
         assert output.scenario_detail
         assert len(output.horses) == 6
+        assert output.formation is not None
+        assert output.formation.model_version == "formation-v1"
+        assert [group.label for group in output.formation.groups] == [
+            "先頭",
+            "好位",
+            "中団",
+            "後方",
+        ]
+
+    def test_formation_is_hidden_before_draw_confirmation(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=6, draw_confirmed=False)
+
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        assert output.formation is None
+
+    def test_formation_uses_horse_names_and_frame_numbers(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=2)
+        repo.save_horse(Horse(ketto_num="2020100001", name="隊列サンプル"))
+        _seed_history(repo, "2020100001", corner4=1, corner1=1)
+
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        assert output.formation is not None
+        formation_horses = [horse for group in output.formation.groups for horse in group.horses]
+        target = next(horse for horse in formation_horses if horse.horse_no == 1)
+        assert target.frame_no == 1
+        assert target.horse_name == "隊列サンプル"
+        assert target.running_style == "逃げ"
+        assert target.reasons
 
     def test_each_horse_has_pai_and_reasons(self) -> None:
         repo = FakeRaceRepository()

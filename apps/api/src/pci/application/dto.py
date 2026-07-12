@@ -94,6 +94,35 @@ class HorseFitOutput:
 
 
 @dataclass
+class FormationHorseOutput:
+    """隊列予想における1頭分の配置。"""
+
+    horse_no: int
+    frame_no: int
+    horse_name: str | None
+    running_style: str
+    confidence_label: str
+    reasons: list[ReasonOutput] = field(default_factory=list)
+
+
+@dataclass
+class FormationGroupOutput:
+    """先頭・好位・中団・後方のいずれかの隊列グループ。"""
+
+    key: str
+    label: str
+    horses: list[FormationHorseOutput] = field(default_factory=list)
+
+
+@dataclass
+class FormationOutput:
+    """枠順確定後にのみ返す序盤隊列予想。"""
+
+    model_version: str
+    groups: list[FormationGroupOutput] = field(default_factory=list)
+
+
+@dataclass
 class ForecastOutput:
     """ForecastRaceUseCase の出力（想定RPCI + 展開シナリオ + 各馬 PAI）。"""
 
@@ -109,6 +138,7 @@ class ForecastOutput:
     horses: list[HorseFitOutput] = field(default_factory=list)
     forecast_reasons: list[ReasonOutput] = field(default_factory=list)
     comment: CommentOutput | None = None
+    formation: FormationOutput | None = None
 
 
 @dataclass
