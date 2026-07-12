@@ -3,7 +3,7 @@
 > 本ファイルは現在のコードを調査して整理したもの。**推測を含む箇所には「（推測）」を明記**する。
 > 確定した設計判断の背景は `docs/adr/` を参照。
 
-最終調査: 2026-07-12 / 対象コミット `c679e09` / ブランチ `claude/sweet-einstein-ilnaov`
+最終調査: 2026-07-12 / 対象コミット `2b083ba` / ブランチ `claude/sweet-einstein-ilnaov`
 
 ---
 
@@ -42,7 +42,7 @@ src/pci/
     racing/          エンティティ: Race, RaceEntry, Horse/Jockey/Trainer マスタ, Repository Protocol
     pace/            ★計算核（式を隔離）
       pci.py         PCI / RPCI / PCI3 計算（唯一の真実の場所・formula_version）
-      running_style.py 脚質判定（4角通過順位ベース）
+      running_style.py 脚質判定（4角順位の確定判定 + 対象距離対応の混在型予測）
       rpci_forecast.py 想定RPCI 予測（戦略IF + rule-v4 実装 + classify_pace + 答え合わせ）
       adaptability.py  PAI・展開合致（pai-v1）
       affinity.py      過去好走から得意ペースを推定
@@ -101,6 +101,8 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 ### 予測（出走前）
 - `GET /api/v1/races/{key}/forecast` → `ForecastRaceUseCase` が想定RPCI（rule-v4）・PAI・展開コメントを算出。
 - 全馬の実枠番が1〜8なら、脚質・近走序盤位置から `formation-v1` の4ゾーン隊列も算出。
+  従来判定で脚質が混在する馬だけ、対象距離と過去走距離を加味した `running-style-v2-distance` で
+  今回向けの脚質へ具体化する。履歴なしは自在のまま「参考」とする。
   特別登録（`frame_no=0`）では `formation=null` とし、Webも非表示にする。
 - 結果は mart 層 `predicted_pace` / `pace_fit` に `model_version` 付きで**永続化**（upsert）。
 
