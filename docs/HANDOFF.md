@@ -13,8 +13,9 @@
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
+| 最新コミット | `HEAD` docs: prepare handoff for Claude Code |
 | 最新実装コミット | `2b083ba` fix(forecast): resolve mixed running styles by distance |
-| 作業ツリー | 引き継ぎ文書更新後にクリーン化し、リモートへpushする |
+| 作業ツリー | Claude Codeへ安全に引き継ぐため、Git状態・差分・検証結果を整理する |
 | 新規実装 | 隊列予想の混在型脚質を対象距離に応じて具体化（running-style-v2-distance） |
 
 ---
@@ -177,6 +178,26 @@
 未実行: integration（Docker/testcontainers前提）。ブラウザ操作プラグインは実行環境の初期化エラーで
 利用できず、スクリーンショットによる視覚QAは未実施。typecheckとproduction buildで代替確認した。
 
+### 引き継ぎ前の再確認（OpenAI Codex / 2026-07-12）
+
+今回の区切り作業では新規実装は行わず、既存の未コミット差分も存在しなかった。再確認結果は以下。
+
+| 対象 | コマンド | 結果 |
+|---|---|---|
+| Git状態 | `git status --short --branch` | clean / `claude/sweet-einstein-ilnaov...origin/claude/sweet-einstein-ilnaov` |
+| Web単体 | `npm.cmd run test` | **55 passed** |
+| Web型 | `npm.cmd run typecheck` | **成功** |
+| Web build | `npm.cmd run build` | **成功**（Next.js production build / 全3ページ生成） |
+| API単体+契約 | `python -m pytest tests/unit/ tests/contract/ -q` | **未実行**: このCodex環境では `python` / `py` がPATHに存在せず、同梱Pythonにも `pytest` が未導入 |
+| API Lint | `ruff check src/ tests/ scripts/` | **未実行**: `ruff` がPATHに存在しない |
+| API型 | `mypy src/pci/domain/ src/pci/application/ --strict` | **未実行**: `mypy` がPATHに存在しない |
+| import境界 | `lint-imports` | **未実行**: `lint-imports` がPATHに存在しない |
+
+補足:
+- `npm.cmd run test` はサンドボックス内では esbuild が親ディレクトリを読めず `Access is denied` で失敗したため、通常権限で再実行して成功。
+- `npm.cmd run typecheck` は `.next/types` 生成前に実行すると TS6053 で失敗する。`npm.cmd run build` 後に再実行すると成功。
+- API側は前回セッションで `380 passed` / ruff / mypy / import-linter 成功を確認済み。ただし今回の引き継ぎ前再確認ではツール不足により再現できていないため、Claude Code側で最初に再実行すること。
+
 ---
 
 ## 注意事項
@@ -204,7 +225,7 @@
 6. `docs/DECISIONS.md` — 直近の設計判断（特に2026-07-11の2件）
 7. 必要に応じて `docs/ARCHITECTURE.md`, `docs/adr/0005-rpci-forecast-strategy.md`
 
-## Codex が最初に実行すべきコマンド
+## Claude Code が最初に実行すべきコマンド
 
 ```bash
 # 1. 最新化・状態確認

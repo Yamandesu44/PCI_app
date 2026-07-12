@@ -6,6 +6,8 @@
 
 最終更新: 2026-07-12 / 担当: OpenAI Codex → 引き継ぎ先: Claude Code / ブランチ `claude/sweet-einstein-ilnaov`
 
+引き継ぎ前確認: 2026-07-12 OpenAI Codex。作業ツリーはクリーン状態から開始し、新規実装は行っていない。Webは `npm.cmd run test` 55 passed、`npm.cmd run typecheck` 成功、`npm.cmd run build` 成功。API側はこのCodex環境に `python` / `py` / `ruff` / `mypy` / `lint-imports` が存在せず再実行不能だったため、Claude Code側で最初に再実行する。
+
 ---
 
 ## 進行中
