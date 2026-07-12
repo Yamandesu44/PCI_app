@@ -7,9 +7,13 @@ from hypothesis import strategies as st
 from pci.domain.pace.running_style import (
     DEFAULT_THRESHOLDS,
     MODEL_VERSION,
+    PREDICTION_MODEL_VERSION,
+    DistanceStyleWeights,
+    RunningStyleHistory,
     RunningStyleLabel,
     RunningStyleThresholds,
     classify_running_style,
+    predict_running_style_for_distance,
 )
 
 # ----- ゴールデンテスト -----
@@ -89,6 +93,61 @@ def test_custom_thresholds_applied() -> None:
     assert classify_running_style(positions).label == RunningStyleLabel.ESCAPE
     result_strict = classify_running_style(positions, thresholds=strict_th)
     assert result_strict.label == RunningStyleLabel.FLEXIBLE
+
+
+def test_mixed_style_uses_shorter_distance_front_history_as_front() -> None:
+    """先行と差しが半々なら、今回より短い距離での先行歴を優先する。"""
+    histories = (
+        RunningStyleHistory(corner_position=4, distance_m=1200),
+        RunningStyleHistory(corner_position=7, distance_m=1600),
+        RunningStyleHistory(corner_position=4, distance_m=1200),
+        RunningStyleHistory(corner_position=7, distance_m=1600),
+    )
+
+    result = predict_running_style_for_distance(histories, target_distance_m=1600)
+
+    assert result.label == RunningStyleLabel.FRONT
+    assert result.model_version == PREDICTION_MODEL_VERSION
+    assert result.reasons[0].code == "mixed_style_resolved"
+    assert "短い距離" in result.reasons[0].description
+
+
+def test_mixed_style_uses_longer_distance_front_history_as_stalker() -> None:
+    """先行歴が今回より長い距離に偏る場合は、差し寄りに補正する。"""
+    histories = (
+        RunningStyleHistory(corner_position=4, distance_m=2000),
+        RunningStyleHistory(corner_position=7, distance_m=1600),
+        RunningStyleHistory(corner_position=4, distance_m=2000),
+        RunningStyleHistory(corner_position=7, distance_m=1600),
+    )
+
+    result = predict_running_style_for_distance(histories, target_distance_m=1600)
+
+    assert result.label == RunningStyleLabel.STALKER
+    assert "長い距離" in result.reasons[0].description
+
+
+def test_distance_prediction_preserves_decisive_style() -> None:
+    histories = tuple(
+        RunningStyleHistory(corner_position=1, distance_m=distance)
+        for distance in (1200, 1400, 1600, 1800, 2000)
+    )
+
+    result = predict_running_style_for_distance(histories, target_distance_m=1600)
+
+    assert result.label == RunningStyleLabel.ESCAPE
+    assert result.model_version == MODEL_VERSION
+
+
+def test_distance_prediction_without_history_stays_flexible() -> None:
+    result = predict_running_style_for_distance((), target_distance_m=1600)
+    assert result.label == RunningStyleLabel.FLEXIBLE
+    assert result.confidence == 0.0
+
+
+def test_distance_style_weights_validate_values() -> None:
+    with pytest.raises(ValueError, match="距離スケール"):
+        DistanceStyleWeights(distance_scale_m=0)
 
 
 # ----- プロパティテスト -----

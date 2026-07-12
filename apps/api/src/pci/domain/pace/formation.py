@@ -186,6 +186,6 @@ def _recent_position_zone(position: float | None) -> float | None:
 def _confidence_label(horse: FormationHorseInput) -> str:
     if horse.style_confidence >= 0.8 and horse.recent_sample_size >= 3:
         return "高"
-    if horse.style_confidence >= 0.6 or horse.recent_sample_size >= 2:
+    if horse.style_confidence >= 0.55 and horse.recent_sample_size >= 2:
         return "標準"
     return "参考"

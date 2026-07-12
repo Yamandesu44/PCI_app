@@ -41,7 +41,11 @@ from pci.domain.pace.rpci_forecast import (
     RpciForecaster,
     RuleBasedRpciForecaster,
 )
-from pci.domain.pace.running_style import RunningStyleLabel, classify_running_style
+from pci.domain.pace.running_style import (
+    RunningStyleHistory,
+    RunningStyleLabel,
+    predict_running_style_for_distance,
+)
 from pci.domain.pace.scenario import build_pace_scenario
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
@@ -86,7 +90,7 @@ class ForecastRaceUseCase:
         formation_inputs: list[FormationHorseInput] = []
         for e in entries:
             style, style_confidence, early_position, early_sample_size = (
-                self._resolve_style_evidence(e.ketto_num)
+                self._resolve_style_evidence(e.ketto_num, race)
             )
             profiles.append(
                 HorsePaceProfile(
@@ -177,19 +181,36 @@ class ForecastRaceUseCase:
         )
 
     def _resolve_style_evidence(
-        self, ketto_num: str
+        self, ketto_num: str, target_race: Race
     ) -> tuple[RunningStyleLabel, float, float | None, int]:
         """脚質と、隊列予想に使う近走序盤位置の証拠をまとめて返す。"""
         if not ketto_num:
             return RunningStyleLabel.FLEXIBLE, 0.0, None, 0
-        recent = self._repo.find_horse_recent_entries(ketto_num, limit=5)
-        c4 = tuple(e.corner_4 for e in recent if e.corner_4 is not None)
-        style = classify_running_style(c4)
+        recent = self._repo.find_horse_recent_entries(
+            ketto_num,
+            limit=5,
+            before=target_race.race_date,
+        )
         early_position_items: list[int] = []
+        style_histories: list[RunningStyleHistory] = []
         for entry in recent:
-            position = entry.corner_1 if entry.corner_1 is not None else entry.corner_4
-            if position is not None:
-                early_position_items.append(position)
+            early_position = entry.corner_1 if entry.corner_1 is not None else entry.corner_4
+            if early_position is not None:
+                early_position_items.append(early_position)
+            if entry.corner_4 is None:
+                continue
+            past_race = self._repo.find_by_key(entry.race_key)
+            if past_race is not None:
+                style_histories.append(
+                    RunningStyleHistory(
+                        corner_position=entry.corner_4,
+                        distance_m=past_race.distance_m,
+                    )
+                )
+        style = predict_running_style_for_distance(
+            tuple(style_histories),
+            target_race.distance_m,
+        )
         early_positions = tuple(early_position_items)
         average = sum(early_positions) / len(early_positions) if early_positions else None
         return style.label, style.confidence, average, len(early_positions)

@@ -120,6 +120,37 @@ def _seed_history(
         )
 
 
+def _seed_mixed_distance_history(repo: FakeRaceRepository, ketto_num: str) -> None:
+    """先行と差しが半々で、先行歴が対象より短距離にある履歴を作る。"""
+    runs = ((4, 1200), (7, 1600), (4, 1200), (7, 1600))
+    for index, (corner, distance) in enumerate(runs, start=1):
+        race_key = RaceKey(f"202604{index:02d}05010188")
+        repo.save_race(
+            Race(
+                race_key=race_key,
+                race_date=datetime.date(2026, 4, index),
+                jyo_cd="05",
+                distance_m=distance,
+                track_type="芝",
+                field_size=12,
+                status=RaceStatus.RESULT,
+            )
+        )
+        repo.save_entry(
+            RaceEntry(
+                race_key=race_key,
+                horse_no=1,
+                frame_no=1,
+                ketto_num=ketto_num,
+                weight=480.0,
+                jockey_code="J001",
+                trainer_code="T001",
+                finish_pos=3,
+                corner_4=corner,
+            )
+        )
+
+
 class _FixedForecaster:
     def __init__(self, value: float, label: PaceLabel) -> None:
         self._forecast = RpciForecast(
@@ -228,6 +259,23 @@ class TestForecastRaceUseCase:
             _seed_history(repo, f"202010000{i}", corner4=1)
         output = ForecastRaceUseCase(repo).execute(UPCOMING)
         assert output.pace_label == "ハイ"
+
+    def test_mixed_style_is_resolved_for_target_distance(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=1)
+        _seed_mixed_distance_history(repo, "2020100001")
+
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        assert output.horses[0].running_style == "先行"
+        assert output.formation is not None
+        formation_horse = next(
+            horse
+            for group in output.formation.groups
+            for horse in group.horses
+            if horse.horse_no == 1
+        )
+        assert formation_horse.running_style == "先行"
 
     def test_closers_field_predicts_slow(self) -> None:
         repo = FakeRaceRepository()

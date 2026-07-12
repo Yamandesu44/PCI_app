@@ -17,6 +17,7 @@ from enum import StrEnum
 from pci.domain.shared.reason import Reason
 
 MODEL_VERSION = "running-style-v1"
+PREDICTION_MODEL_VERSION = "running-style-v2-distance"
 
 
 class RunningStyleLabel(StrEnum):
@@ -53,6 +54,34 @@ class RunningStyleResult:
     confidence: float
     model_version: str
     reasons: tuple[Reason, ...]
+
+
+@dataclass(frozen=True)
+class RunningStyleHistory:
+    """予想対象より前の1走分の位置取りと距離。新しい順で渡す。"""
+
+    corner_position: int
+    distance_m: int
+
+
+@dataclass(frozen=True)
+class DistanceStyleWeights:
+    """混在型の脚質予測に使う仮係数。実データ検証後の調整を前提とする。"""
+
+    recency_decay: float = 0.15
+    distance_scale_m: int = 1200
+    min_distance_weight: float = 0.4
+    front_distance_bonus: float = 0.2
+
+    def __post_init__(self) -> None:
+        if self.recency_decay < 0:
+            raise ValueError("新しさの減衰率は0以上である必要があります")
+        if self.distance_scale_m <= 0:
+            raise ValueError("距離スケールは正の値である必要があります")
+        if not 0 <= self.min_distance_weight <= 1:
+            raise ValueError("距離の最低重みは0〜1である必要があります")
+        if self.front_distance_bonus < 0:
+            raise ValueError("距離補正ボーナスは0以上である必要があります")
 
 
 def classify_running_style(
@@ -136,3 +165,98 @@ def classify_running_style(
             ),
         ),
     )
+
+
+def predict_running_style_for_distance(
+    histories: tuple[RunningStyleHistory, ...],
+    target_distance_m: int,
+    *,
+    thresholds: RunningStyleThresholds | None = None,
+    weights: DistanceStyleWeights | None = None,
+) -> RunningStyleResult:
+    """混在して「自在」になる履歴を、距離と新しさで今回向けに再判定する。
+
+    60%閾値を満たす明確な脚質は従来判定を維持する。複数脚質が混在する場合だけ、
+    対象距離に近い近走を重く投票し、先行と差しが競る場合は先行した距離帯で補正する。
+    """
+    th = thresholds or DEFAULT_THRESHOLDS
+    config = weights or DistanceStyleWeights()
+    recent = histories[: th.lookback_races]
+    base = classify_running_style(
+        tuple(history.corner_position for history in recent),
+        thresholds=th,
+    )
+    if base.label != RunningStyleLabel.FLEXIBLE or not recent:
+        return base
+
+    labels = (
+        RunningStyleLabel.ESCAPE,
+        RunningStyleLabel.FRONT,
+        RunningStyleLabel.STALKER,
+        RunningStyleLabel.CLOSER,
+    )
+    votes = {label: 0.0 for label in labels}
+    counts = {label: 0 for label in labels}
+    front_distances: list[int] = []
+    for index, history in enumerate(recent):
+        label = _label_for_position(history.corner_position, th)
+        distance_gap = abs(target_distance_m - history.distance_m)
+        distance_weight = max(
+            config.min_distance_weight,
+            1.0 - distance_gap / config.distance_scale_m,
+        )
+        recency_weight = 1.0 / (1.0 + index * config.recency_decay)
+        votes[label] += distance_weight * recency_weight
+        counts[label] += 1
+        if label == RunningStyleLabel.FRONT:
+            front_distances.append(history.distance_m)
+
+    distance_reason = "対象距離に近い近走を優先"
+    distance_preference: RunningStyleLabel | None = None
+    if front_distances and votes[RunningStyleLabel.STALKER] > 0:
+        total_vote = sum(votes.values())
+        average_front_distance = sum(front_distances) / len(front_distances)
+        bonus = total_vote * config.front_distance_bonus
+        if average_front_distance < target_distance_m:
+            votes[RunningStyleLabel.FRONT] += bonus
+            distance_reason = "今回より短い距離で先行した実績を優先"
+            if counts[RunningStyleLabel.FRONT] == counts[RunningStyleLabel.STALKER] and counts[
+                RunningStyleLabel.FRONT
+            ] == max(counts.values()):
+                distance_preference = RunningStyleLabel.FRONT
+        elif average_front_distance > target_distance_m:
+            votes[RunningStyleLabel.STALKER] += bonus
+            distance_reason = "今回より長い距離での先行歴から差し寄りに補正"
+            if counts[RunningStyleLabel.FRONT] == counts[RunningStyleLabel.STALKER] and counts[
+                RunningStyleLabel.FRONT
+            ] == max(counts.values()):
+                distance_preference = RunningStyleLabel.STALKER
+
+    selected = distance_preference or max(labels, key=lambda label: votes[label])
+    vote_total = sum(votes.values())
+    confidence = votes[selected] / vote_total if vote_total > 0 else 0.0
+    return RunningStyleResult(
+        label=selected,
+        confidence=min(0.85, confidence),
+        model_version=PREDICTION_MODEL_VERSION,
+        reasons=(
+            Reason(
+                code="mixed_style_resolved",
+                description=f"脚質が混在するため{distance_reason}し、{selected}寄りと予想",
+                contribution=confidence,
+            ),
+        ),
+    )
+
+
+def _label_for_position(
+    position: int,
+    thresholds: RunningStyleThresholds,
+) -> RunningStyleLabel:
+    if thresholds.escape_low <= position <= thresholds.escape_high:
+        return RunningStyleLabel.ESCAPE
+    if thresholds.front_low <= position <= thresholds.front_high:
+        return RunningStyleLabel.FRONT
+    if thresholds.stalker_low <= position <= thresholds.stalker_high:
+        return RunningStyleLabel.STALKER
+    return RunningStyleLabel.CLOSER
