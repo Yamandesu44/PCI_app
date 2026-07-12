@@ -3,7 +3,7 @@
 > 本ファイルは現在のコードを調査して整理したもの。**推測を含む箇所には「（推測）」を明記**する。
 > 確定した設計判断の背景は `docs/adr/` を参照。
 
-最終調査: 2026-07-11 / 対象コミット `9712fd2` / ブランチ `claude/sweet-einstein-ilnaov`
+最終調査: 2026-07-12 / 対象コミット `c679e09` / ブランチ `claude/sweet-einstein-ilnaov`
 
 ---
 
@@ -46,6 +46,7 @@ src/pci/
       rpci_forecast.py 想定RPCI 予測（戦略IF + rule-v4 実装 + classify_pace + 答え合わせ）
       adaptability.py  PAI・展開合致（pai-v1）
       affinity.py      過去好走から得意ペースを推定
+      formation.py     枠順確定判定 + 4ゾーンの序盤隊列予想（formation-v1）
       commentary.py    展開コメント生成（戦略IF + comment-v1 ルールベースNLG）
       scenario.py      展開シナリオ見出し/詳細
       mart_repository.py mart 層 Repository Protocol（read/write）
@@ -64,7 +65,7 @@ src/
   app/               App Router。page.tsx（レース一覧）、races/[raceKey]/forecast, /pace-analysis
   components/        RaceForecastDashboard, RaceHero, PaceHeadline, HorseFitTable,
                      PaceAnalysisTable, PaceProfileChart, CommentCard, ReasonList,
-                     RaceDateCalendar, ui/（accordion/card/progress）
+                     RaceDateCalendar, FormationView, ui/（accordion/card/progress）
   lib/               api.ts（API 呼び出し）, pace.ts（★ペース表現の翻訳層）,
                      races.ts（一覧の分類整形）, raceSchedule.ts, utils.ts
                      *.test.ts（vitest）
@@ -99,6 +100,8 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 
 ### 予測（出走前）
 - `GET /api/v1/races/{key}/forecast` → `ForecastRaceUseCase` が想定RPCI（rule-v4）・PAI・展開コメントを算出。
+- 全馬の実枠番が1〜8なら、脚質・近走序盤位置から `formation-v1` の4ゾーン隊列も算出。
+  特別登録（`frame_no=0`）では `formation=null` とし、Webも非表示にする。
 - 結果は mart 層 `predicted_pace` / `pace_fit` に `model_version` 付きで**永続化**（upsert）。
 
 ### 回顧（確定後）と答え合わせ
@@ -145,6 +148,7 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 - **HorsePaceAffinityProfile**: 過去好走から得た得意ペース分布（隣接レベルへのにじみ込み）。
 - **Commentary**: 自然文の展開コメント（headline/body/model_version/reasons）。
 - **ForecastAccuracy**: 想定 vs 実績の答え合わせ（error/label_hit）。
+- **FormationPrediction**: 枠順確定後の序盤隊列（先頭/好位/中団/後方、model_version/reasons付き）。
 
 ---
 

@@ -3,7 +3,7 @@
 > コード・README・既存資料（docs/design, docs/adr）から確認できる仕様を、確度別に区別する。
 > **「実装されている」ことは「正式仕様」ではない。** 迷ったら「未確定事項」に置くこと。
 
-最終更新: 2026-07-11 / 対象コミット `8584e50`
+最終更新: 2026-07-12 / 対象コミット `c679e09`
 
 凡例: ✅確定 / 🟡実装済み(仕様書未記載の挙動) / 🧪仮仕様 / ❓未確定 / 🔎要確認
 
@@ -45,6 +45,20 @@
 
 ---
 
+## 3.5 隊列予想（formation-v1）
+
+- ✅ **表示条件**: 出走馬が存在し、馬番が正の一意値、全馬の `frame_no` が1〜8の場合だけ生成する。
+  特別登録は仮馬番を持つ場合があるため、馬番だけでなく `frame_no=0` を未確定判定に使う。
+- ✅ **表示単位**: 厳密な一列順ではなく「先頭・好位・中団・後方」の4ゾーン。各ゾーン内は枠番順。
+- 🧪 **配置ロジック**: 過去5走から求めた脚質を70%、1角（欠損時は4角）の平均位置を30%で混合する。
+  `FormationWeights` に隔離した `formation-v1` の仮仕様で、実データ検証後に調整する。
+- ✅ **説明可能性**: 各馬に脚質、近走序盤位置、内外枠の短い `reasons` と
+  「高・標準・参考」の信頼度ラベルを付ける。PCI/RPCI等の内部実数値はUIへ出さない。
+- ✅ **API/UI**: `/forecast` の `formation` は枠順確定後のみオブジェクト、未確定時は `null`。
+  Webは `null` の場合に隊列セクション自体を表示しない。
+
+---
+
 ## 4. 展開コメント（commentary, comment-v1）
 
 - ✅ ルールベース NLG。決定論的・再現可能。生成根拠を `reasons` に出力。（ADR-0008, commentary.py）
@@ -64,6 +78,7 @@
   `DELETE /internal/ingest/races/{key}`。`X-Ingest-Token` 認証（未設定時はスキップ=開発モード）。
 - 🟡 `pace-analysis` に `forecast_accuracy`（predicted/actual RPCI・label・error・label_hit・model_version）を追加。
   mart に想定RPCI が保存済みのレースのみ非 null（本セッションで追加）。
+- 🟡 `/forecast` に optional な `formation` を追加。枠順確定後のみ4ゾーンの隊列予想を返す。
 - ❓ 認証（本番の INGEST_TOKEN 運用）・レート制限・公開 API の範囲は未確定。
 
 ---
@@ -84,6 +99,8 @@
 
 - ✅ raw / core / mart の3層。core に確定 PCI を埋め込み、mart は version 管理分離（ADR-0006, 0009）。
 - ✅ `races.status`（entries/result）+ `race_entries` の NULL 許容で確定前後を同一テーブル管理。
+- 🟡 `entries` は特別登録と枠順確定後を内包する。現状は `race_entries.frame_no=0` を枠順未確定、
+  1〜8が全馬に入った状態を枠順確定として派生判定する（DB列・status追加なし）。
 - ✅ mart（predicted_pace / pace_fit）は `model_version` 込みで upsert。
 - 🟡 `ingest_log`（batch_date/step/mode/started_at/finished_at/status/error_msg）を追加（migration 002）。
 
@@ -155,3 +172,5 @@ ADR-0005 §5.2 の大規模バックテスト（芝 MAE 9.472/一致率76.0%/相
 7. 🔎 affinity の `_NEIGHBOR_BLEED_RATIO`、上がり3F 妥当範囲などの暫定定数の妥当性検証。
 8. 🔎 JV-Data バイトオフセットの JV-Link 新バージョン追従。
 9. ❓ 正式公開時の JRA-VAN 規約適合性（法務・C2）。
+10. 🔎 `FormationWeights`（脚質70%・近走序盤位置30%）と4ゾーン境界の実データ検証。
+    スタート速度の直接データがないため、現段階では「序盤位置のゾーン予想」として扱う。
