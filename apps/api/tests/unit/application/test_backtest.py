@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 
 from pci.application.backtest import (
     BacktestReport,
@@ -19,6 +20,7 @@ from pci.application.backtest import (
     _AsOfRaceRepository,
     format_report,
     group_races_by_track,
+    report_to_dict,
     summarize_pai_lift,
     summarize_rpci,
 )
@@ -346,3 +348,92 @@ class TestFormatReport:
         text = format_report(report)
         assert "(不明)" in text
         assert "有効サンプルなし" in text
+
+
+class TestReportToDict:
+    def _full_report(self) -> BacktestReport:
+        return BacktestReport(
+            model_version="rule-v1",
+            n_races=1,
+            n_horses=1,
+            skipped=0,
+            rpci=RpciAccuracy(
+                n=1,
+                mae=2.0,
+                rmse=2.0,
+                bias=2.0,
+                label_accuracy=1.0,
+                per_label_accuracy={"PaceLabel.SLOW": 1.0},
+            ),
+            pai=PaiLift(
+                n=1,
+                baseline_rate=1.0,
+                bands=[PaiBand(0, 100, 1, 1)],
+                point_biserial=0.5,
+                top_band_lift=1.0,
+            ),
+            rpci_samples=[
+                RpciSample(
+                    race_key="2026010105010101",
+                    predicted=52.0,
+                    actual=50.0,
+                    predicted_label=PaceLabel.SLOW,
+                    actual_label=PaceLabel.AVERAGE,
+                )
+            ],
+            horse_samples=[
+                HorseSample(race_key="2026010105010101", horse_no=1, pai=80.0, good_run=True)
+            ],
+        )
+
+    def test_full_report_round_trips_as_json(self) -> None:
+        result = report_to_dict(self._full_report())
+
+        assert result["model_version"] == "rule-v1"
+        assert result["rpci"] == {
+            "n": 1,
+            "mae": 2.0,
+            "rmse": 2.0,
+            "bias": 2.0,
+            "label_accuracy": 1.0,
+            "per_label_accuracy": {"PaceLabel.SLOW": 1.0},
+        }
+        assert result["pai"] == {
+            "n": 1,
+            "baseline_rate": 1.0,
+            "point_biserial": 0.5,
+            "top_band_lift": 1.0,
+            "bands": [{"lo": 0, "hi": 100, "n": 1, "good_runs": 1, "good_rate": 1.0}],
+        }
+        # error はプロパティなので、明示的に計算して含める（predicted - actual）。
+        assert result["rpci_samples"] == [
+            {
+                "race_key": "2026010105010101",
+                "predicted": 52.0,
+                "actual": 50.0,
+                "error": 2.0,
+                "predicted_label": "スロー",
+                "actual_label": "平均",
+            }
+        ]
+        assert result["horse_samples"] == [
+            {"race_key": "2026010105010101", "horse_no": 1, "pai": 80.0, "good_run": True}
+        ]
+        # PaceLabel(StrEnum) が生の値のまま紛れ込んでいないか、実際にJSON化して確認する。
+        json.dumps(result)
+
+    def test_empty_report_has_null_rpci_and_pai(self) -> None:
+        report = BacktestReport(
+            model_version="",
+            n_races=0,
+            n_horses=0,
+            skipped=3,
+            rpci=None,
+            pai=None,
+        )
+        result = report_to_dict(report)
+        assert result["rpci"] is None
+        assert result["pai"] is None
+        assert result["rpci_samples"] == []
+        assert result["horse_samples"] == []
+        json.dumps(result)

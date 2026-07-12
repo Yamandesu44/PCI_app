@@ -13,6 +13,9 @@ pci.application.backtest に集約。本スクリプトは DB 配線と対象選
     # 外れ値を除いた正常 rpci_actual のみで評価（データ品質診断後に使用）
     python -m scripts.backtest_forecast --limit 200 --rpci-min 20 --rpci-max 90
 
+    # 結果をJSONに保存し、的中率の推移を後日比較できるようにする
+    python -m scripts.backtest_forecast --limit 200 --output results/2026-07-12.json
+
 対象は status="result" かつ rpci_actual を持つレース。1レースの予測は
 数百クエリを伴うため、既定は新しい順 200 レースに絞る（--limit で調整）。
 lookahead は backtest 側でレース当日カットオフして防止する。
@@ -32,13 +35,20 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import sys
 
 sys.path.insert(0, "src")
 
 from sqlalchemy import select
 
-from pci.application.backtest import ForecastBacktester, format_report, group_races_by_track
+from pci.application.backtest import (
+    BacktestReport,
+    ForecastBacktester,
+    format_report,
+    group_races_by_track,
+    report_to_dict,
+)
 from pci.config.settings import get_settings
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
@@ -80,6 +90,12 @@ def _parse_args() -> argparse.Namespace:
         choices=["芝", "ダート", "障害"],
         default=None,
         help="コース種別フィルター（芝/ダート/障害）。未指定=全種別",
+    )
+    p.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="結果をJSONファイルへ保存するパス（print出力は維持）",
     )
     return p.parse_args()
 
@@ -136,25 +152,49 @@ def main() -> None:
     repo = SqlAlchemyRaceRepository(session)
     forecaster = load_best_forecaster()
     backtester = ForecastBacktester(repo, forecaster=forecaster)
-    print(format_report(backtester.run(targets)))
+    report = backtester.run(targets)
+    print(format_report(report))
 
+    track_reports: dict[str, BacktestReport] = {}
     if args.track_type is None:
-        _print_track_breakdown(backtester, targets)
+        track_reports = _print_track_breakdown(backtester, targets)
+
+    if args.output:
+        _write_output(args.output, report, track_reports)
 
 
-def _print_track_breakdown(backtester: ForecastBacktester, targets: list[Race]) -> None:
-    """--track-type 未指定時、芝/ダート別の内訳も追加表示する。
+def _print_track_breakdown(
+    backtester: ForecastBacktester, targets: list[Race]
+) -> dict[str, BacktestReport]:
+    """--track-type 未指定時、芝/ダート別の内訳も追加表示する。戻り値は --output 保存用。
 
     コース混合のみの集計だと PAI の point-biserial 相関が希釈されて見える落とし穴があるため
     （docs/adr/0005-rpci-forecast-strategy.md §5.4）、常に track 別内訳も併記して誤読を防ぐ。
     """
     by_track = group_races_by_track(targets)
     if len(by_track) <= 1:
-        return
+        return {}
+    reports: dict[str, BacktestReport] = {}
     for track_type in sorted(by_track):
         races = by_track[track_type]
         print(f"\n{'#' * 60}\nコース別内訳: {track_type}（{len(races)}レース）\n{'#' * 60}")
-        print(format_report(backtester.run(races)))
+        track_report = backtester.run(races)
+        print(format_report(track_report))
+        reports[track_type] = track_report
+    return reports
+
+
+def _write_output(
+    path: str, report: BacktestReport, track_reports: dict[str, BacktestReport]
+) -> None:
+    payload: dict[str, object] = {"combined": report_to_dict(report)}
+    if track_reports:
+        payload["by_track"] = {
+            track: report_to_dict(track_report) for track, track_report in track_reports.items()
+        }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    print(f"\n結果を {path} に保存しました。")
 
 
 if __name__ == "__main__":

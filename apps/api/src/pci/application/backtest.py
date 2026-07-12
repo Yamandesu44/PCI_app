@@ -23,6 +23,7 @@ import datetime
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Any
 
 from pci.application.dto import ForecastOutput
 from pci.application.forecast_use_cases import ForecastRaceUseCase
@@ -254,6 +255,68 @@ def group_races_by_track(races: Iterable[Race]) -> dict[str, list[Race]]:
     for race in races:
         grouped.setdefault(race.track_type, []).append(race)
     return grouped
+
+
+def report_to_dict(report: BacktestReport) -> dict[str, Any]:
+    """BacktestReport をJSON保存用の辞書に変換する（的中率推移の記録・後日の再集計に使う）。"""
+    return {
+        "model_version": report.model_version,
+        "n_races": report.n_races,
+        "n_horses": report.n_horses,
+        "skipped": report.skipped,
+        "rpci": _rpci_accuracy_to_dict(report.rpci),
+        "pai": _pai_lift_to_dict(report.pai),
+        "rpci_samples": [_rpci_sample_to_dict(s) for s in report.rpci_samples],
+        "horse_samples": [_horse_sample_to_dict(s) for s in report.horse_samples],
+    }
+
+
+def _rpci_accuracy_to_dict(accuracy: RpciAccuracy | None) -> dict[str, Any] | None:
+    if accuracy is None:
+        return None
+    return {
+        "n": accuracy.n,
+        "mae": accuracy.mae,
+        "rmse": accuracy.rmse,
+        "bias": accuracy.bias,
+        "label_accuracy": accuracy.label_accuracy,
+        "per_label_accuracy": dict(accuracy.per_label_accuracy),
+    }
+
+
+def _pai_lift_to_dict(lift: PaiLift | None) -> dict[str, Any] | None:
+    if lift is None:
+        return None
+    return {
+        "n": lift.n,
+        "baseline_rate": lift.baseline_rate,
+        "point_biserial": lift.point_biserial,
+        "top_band_lift": lift.top_band_lift,
+        "bands": [
+            {"lo": b.lo, "hi": b.hi, "n": b.n, "good_runs": b.good_runs, "good_rate": b.good_rate}
+            for b in lift.bands
+        ],
+    }
+
+
+def _rpci_sample_to_dict(sample: RpciSample) -> dict[str, Any]:
+    return {
+        "race_key": sample.race_key,
+        "predicted": sample.predicted,
+        "actual": sample.actual,
+        "error": sample.error,
+        "predicted_label": str(sample.predicted_label),
+        "actual_label": str(sample.actual_label),
+    }
+
+
+def _horse_sample_to_dict(sample: HorseSample) -> dict[str, Any]:
+    return {
+        "race_key": sample.race_key,
+        "horse_no": sample.horse_no,
+        "pai": sample.pai,
+        "good_run": sample.good_run,
+    }
 
 
 def format_report(report: BacktestReport) -> str:

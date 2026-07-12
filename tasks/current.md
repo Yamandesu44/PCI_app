@@ -22,6 +22,17 @@
 
 ## 最近完了したタスク
 
+- [x] ✅ **P2 バックテスト結果の可視化/保存**（本セッション、コミット予定）
+  - 対象: `apps/api/src/pci/application/backtest.py`（`report_to_dict`等の変換関数を追加）,
+    `apps/api/scripts/backtest_forecast.py`（`--output <path>` オプション追加）,
+    `apps/api/tests/unit/application/test_backtest.py`（`TestReportToDict` 2件追加）
+  - 結果: `--output` 指定時、混合集計＋（`--track-type`未指定なら）track別内訳をJSONに保存。
+    既存の `print` 出力は変更なし。DBテーブル化は見送り（推移ダッシュボードが要る段階で再検討、
+    `tasks/backlog.md` A節に記録）。
+  - 検証: `python -m pytest tests/unit/ tests/contract/ -q` 382 passed（+2）、ruff/mypy/lint-imports
+    clean。`_write_output`の実ファイル書き込み・JSON往復読み込みを手動スモークテストで確認
+    （スクリプト層はプロジェクト方針上ユニットテスト対象外のため）。
+
 - [x] ✅ **P1 隊列予想の「自在」過多を距離対応の脚質予測で改善**（コミット `2b083ba`）
   - 原因調査: 直近20レース266頭で自在139頭のうち、混在履歴99頭・履歴なし40頭。
   - 明確な従来脚質は維持し、混在型だけを対象距離・過去走距離・近走順で再判定。
@@ -95,15 +106,6 @@
 
 （進行中タスクはなし。以下は `tasks/backlog.md` から優先度順に抜粋した候補。
 **着手前にユーザーへどれを選ぶか確認すること**（`docs/PROJECT_RULES.md` に沿い独断で選定しない）。）
-
-- [ ] **P2 バックテスト結果の可視化/保存**（`tasks/backlog.md` A節）
-  - 状態: ⬜未着手
-  - 背景: `apps/api/scripts/backtest_forecast.py` は `print()` のみで結果を永続化しない。
-    的中率の推移を追いたいフェーズで必要になる。
-  - 完了条件: `BacktestReport` をJSON等で保存できる（`--output <path>` オプション追加、または
-    DBテーブル化）。既存の `print` 出力は後方互換で維持。
-  - ブロック要因: なし（着手可能）。ただしDBテーブル化まで踏み込む場合は設計判断が必要なため
-    先にユーザーへ方針確認。
 
 - [ ] **P2 Windows ワーカー運用の監視強化**（`tasks/backlog.md` A節）
   - 状態: ⬜未着手
