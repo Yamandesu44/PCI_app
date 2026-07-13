@@ -3,7 +3,7 @@
 > 現時点で確認できる未着手事項を整理する。**確定タスク**（やると決まっている）と
 > **改善案/検討**（やるかどうか未確定）を区別する。着手したら `tasks/current.md` へ移す。
 
-最終更新: 2026-07-12
+最終更新: 2026-07-13
 
 ---
 
@@ -59,7 +59,13 @@
   「吸収すべき未収録の情報」が残っていなかったため削除（`docs/ARCHITECTURE.md`への吸収は不要）。
   Git履歴には残るため復元可能。
 - [ ] 統合テスト（testcontainers-postgres）の日常実行環境（CI/ローカル Docker）整備。
-- [ ] JV-Data バイトオフセットの JV-Link 新バージョン追従手順の明文化（`jv_spec.py`）。
+- [x] ~~JV-Data バイトオフセットの JV-Link 新バージョン追従手順の明文化（`jv_spec.py`）~~
+  → **2026-07-13 手順書作成**: `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` を新規作成。
+  `dump_records.py`→`verify_layout.py`→`locate_haron.py`/`locate_corners.py`→`jv_spec.py`更新の
+  流れと安全策を明文化。副次的に、UM/KS/CH（`master_parsers.py`）はVer.3.0.0→Ver.4.9移行を
+  実データで確認済みだが、RA/SE（`jv_spec.py`）は README.md/common.py が「Ver.3.0準拠」表記の
+  まま未確認という具体的なギャップを発見（`docs/SPEC.md §9`-8）。**手順の明文化は完了、
+  実際の再検証実施はWindows実行機（JV-Link必須）が必要なため引き続き未着手。**
 
 ## D. 将来スコープ（MVP 外・design/07 参照）
 

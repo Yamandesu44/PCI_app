@@ -115,6 +115,9 @@
 - 🟡 バッチ実行ログを `ingest_log` に記録、失敗時 Webhook 通知（本セッション周辺で追加）。
 - ✅ Task Scheduler 自動化: 金・土 10:00 / 日 18:00 に `sync_mykeibadb.bat`。（scripts/, MANUAL_SYNC_GUIDE.md）
 - 🔎 JV-Data バイトオフセットは実データ校正済みだが、JV-Link バージョン差で要再確認。（jv_spec.py, se_parser.py）
+  具体的には、UM/KS/CH（master_parsers.py）は Ver.3.0.0→Ver.4.9 の実データ差分を確認・反映済みだが、
+  RA/SE（jv_spec.py）は README.md/common.py が「Ver.3.0準拠」と書いたまま未確認（§9-8）。
+  再検証・追従の具体手順は `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md`（2026-07-13 追加）に明文化。
 
 ### 6.1 取り込み鮮度監視（`GET /api/v1/ingest-status`、2026-07-12 追加）
 
@@ -211,7 +214,13 @@ ADR-0005 §5.2 の大規模バックテスト（芝 MAE 9.472/一致率76.0%/相
 5. ❓ 展開コメントの LLM 化を正式採用するか、その品質基準。
 6. ❓ 本番の認証（INGEST_TOKEN）・公開範囲・課金の仕様。
 7. 🔎 affinity の `_NEIGHBOR_BLEED_RATIO`、上がり3F 妥当範囲などの暫定定数の妥当性検証。
-8. 🔎 JV-Data バイトオフセットの JV-Link 新バージョン追従。
+8. 🔎 JV-Data バイトオフセットの JV-Link 新バージョン追従。**手順自体は2026-07-13に
+   `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` へ明文化済み**（未着手なのは手順ではなく
+   実施そのもの）。具体的な未確認点: RA/SE（jv_spec.py）が現在準拠する JV-Data バージョンは
+   README.md/common.py 上「Ver.3.0[.0]」表記のままだが、UM/KS/CH（master_parsers.py）は既に
+   Ver.4.9 相当への移行を実データで確認済み。RA/SE の実測校正（2026-06-13函館1R・2026-06-21阪神9R
+   等）が Ver.3.0.0 時点の出力なのか、実は Ver.4.9 相当の出力から逆算したものなのかは未検証。
+   次にJV-Link実機（Windows）へアクセスできるタイミングで上記ガイドの手順を実施して確定させる。
 9. ❓ 正式公開時の JRA-VAN 規約適合性（法務・C2）。
 10. 🔎 `FormationWeights`（脚質70%・近走序盤位置30%）と4ゾーン境界の実データ検証。
     スタート速度の直接データがないため、現段階では「序盤位置のゾーン予想」として扱う。

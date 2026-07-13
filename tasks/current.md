@@ -18,6 +18,21 @@
 
 ## 最近完了したタスク
 
+- [x] ✅ **P3 JV-Dataバイトオフセットの JV-Link新バージョン追従手順の明文化（技術的負債）**（本セッション）
+  - 背景: `jv_spec.py`（RA/SE）のオフセットは実データ校正済みだが、JV-Linkが仕様バージョンを
+    上げた場合の再検証手順が文書化されていなかった。
+  - 調査で判明: UM/KS/CH（`master_parsers.py`）は既に Ver.3.0.0→Ver.4.9 の実データ差分
+    （日付フィールド群24byte追加による名前位置シフト）を確認・反映済みという実例が存在した。
+    一方RA/SE側は README.md/common.py が「Ver.3.0準拠」と書いたままで、実際にどのバージョンの
+    出力を元に校正したかは未確認と判明（独断で確定せず `docs/SPEC.md §9`-8 に記録）。
+  - 対応: `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` を新規作成。UM/KS/CHの実例を
+    土台に、`dump_records.py`→`verify_layout.py`（アンカー検証→フィールド目視確認）→
+    `locate_haron.py`/`locate_corners.py`（新オフセット特定）→`jv_spec.py`更新→テスト更新→
+    記録、の手順と安全策（1レースだけでCONFIRMED昇格しない等）を明文化。
+    `README.md`・`docs/SPEC.md`（§6, §9-8）から相互参照を追加。
+  - コード変更なし（ドキュメントのみ）。実際の再検証はWindows実行機（JV-Link必須）が必要なため、
+    ガイドの実施自体は引き続き未着手（`docs/SPEC.md §9`-8に残置）。
+
 - [x] ✅ **P3 旧handoffファイルの整理（技術的負債）**（本セッション）
   - `docs/handoff-claude-code-2026-06-25.md` の内容を精査。全項目が (a) 現構成と食い違う
     誤情報（`domain/services.py`・`infrastructure/repositories.py`は現存しない旧パス、
@@ -179,11 +194,11 @@
     ユーザーに手元でスクリプト実行→結果を貼ってもらう進め方になる見込み）。着手前にどの定数を
     対象にするかユーザーに確認。
 
-- [ ] **P3 技術的負債の解消**（`tasks/backlog.md` C節: mypy strict全体化・統合テスト環境整備・
-  旧handoffファイル整理・JV-Dataオフセット追従手順の明文化）
-  - 状態: ⬜未着手
-  - 完了条件: 各項目は `tasks/backlog.md` C節を参照。優先度は相対的に低い。
-  - ブロック要因: 統合テスト環境整備はDocker/testcontainers-postgresが必要。
+- [ ] **P3 技術的負債の解消（残件）**（`tasks/backlog.md` C節）
+  - 状態: mypy strict全体化・旧handoffファイル整理・JV-Dataオフセット追従手順の明文化は完了
+    （上記「最近完了したタスク」参照）。**残るは統合テスト環境整備のみ**。
+  - 完了条件: `tasks/backlog.md` C節を参照。優先度は相対的に低い。
+  - ブロック要因: Docker/testcontainers-postgresが必要（このクラウド環境では利用不可）。
 
 ---
 
