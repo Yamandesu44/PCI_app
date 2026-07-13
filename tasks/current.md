@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-12 / 担当: Claude Code / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-13 / 担当: Claude Code / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,15 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P3 旧handoffファイルの整理（技術的負債）**（本セッション）
+  - `docs/handoff-claude-code-2026-06-25.md` の内容を精査。全項目が (a) 現構成と食い違う
+    誤情報（`domain/services.py`・`infrastructure/repositories.py`は現存しない旧パス、
+    「次に推奨する作業」は全項目完了済み）か、(b) 既存資料で完全に上書き済み
+    （ローカル起動→`apps/api|web/README.md`、mykeibadb `.env`→`.env.example`、
+    同期手順→`MANUAL_SYNC_GUIDE.md`、ディレクトリ構成→`docs/ARCHITECTURE.md`）と判明。
+    「吸収すべき未収録の情報」が残っていなかったため削除（Git履歴には残るため復元可能）。
+  - 対応: ファイル削除、`tasks/backlog.md` 更新。他ドキュメントからの参照なし（削除前に確認済み）。
 
 - [x] ✅ **P3 `mypy --strict` 全体化（技術的負債）**（本セッション、ドキュメント訂正のみ）
   - `tasks/backlog.md` C節に着手したところ、既存の「infrastructure/presentationはスタブ未導入で

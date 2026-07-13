@@ -50,8 +50,14 @@
   `python -m mypy src/ --strict` で実行すると **56ファイル全体で0エラー**（キャッシュ削除後も再現）。
   `CLAUDE.md`/`AGENTS.md`/`docs/PROJECT_RULES.md`/`docs/ARCHITECTURE.md`/`apps/api/README.md`の
   誤記載を訂正し、DoDも「domain・applicationのみ」から「全体で0エラー」へ引き上げ。
-- [ ] 旧 `docs/handoff-claude-code-2026-06-25.md` の記載ファイル名が現構成と不一致。
-  歴史資料として残置するか、`docs/ARCHITECTURE.md` へ吸収して削除するか要判断。
+- [x] ~~旧 `docs/handoff-claude-code-2026-06-25.md` の記載ファイル名が現構成と不一致~~
+  → **2026-07-13 削除**: 内容を精査した結果、全項目が (a) 現構成と食い違う誤情報
+  （`domain/services.py`・`infrastructure/repositories.py` は現存しない旧パス、
+  「次に推奨する作業」は全項目完了済み）か、(b) 既存資料で完全に上書き済み
+  （ローカル起動手順→`apps/api|web/README.md`、mykeibadb `.env`→`.env.example`、
+  同期手順→`MANUAL_SYNC_GUIDE.md`、ディレクトリ構成→`docs/ARCHITECTURE.md`）であり、
+  「吸収すべき未収録の情報」が残っていなかったため削除（`docs/ARCHITECTURE.md`への吸収は不要）。
+  Git履歴には残るため復元可能。
 - [ ] 統合テスト（testcontainers-postgres）の日常実行環境（CI/ローカル Docker）整備。
 - [ ] JV-Data バイトオフセットの JV-Link 新バージョン追従手順の明文化（`jv_spec.py`）。
 
