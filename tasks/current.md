@@ -18,9 +18,43 @@
     このクラウド環境から診断不可**（Task Scheduler実行履歴・ログ・MySQL80状態はユーザーの
     Windows実行機でのみ確認可能）。ユーザーからの追加情報待ち。
 
+- [ ] 🔄 **P0 一部レース結果（9R〜11R）が反映されていない件の調査**
+  - ユーザー報告: レース一覧で3会場とも3R〜8Rと12Rは「確定後」表示だが9R〜11Rが完全に欠落。
+  - `ListRacesUseCase`/`race_query_use_cases.py`を確認: アプリ層に会場・レース番号での
+    フィルタリングは無く、DBに存在するRaceレコードをそのまま返すのみ。この欠落は
+    アプリ層のバグではなく、該当レースのRA/SEレコードが取り込まれていない
+    （ingestion側のギャップ）である可能性が高いと判断。
+  - `ra_parser.py`を確認したが、特定のレース番号や競走種別で選択的に失敗するような
+    明白なコードパスは見当たらなかった（障害レース等でも例外にはならない）。
+  - **このクラウド環境からはDB/ログにアクセスできず、これ以上の特定は不可**。
+    ユーザーに該当レース（開催場・日付・レース番号）の特定と、その日付範囲での
+    `--step results` 再実行、`apps/ingestion-worker/logs/`のエラー有無確認を依頼中。
+
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P0 展開恩恵馬カードが枠順未確定の馬番を確定情報のように表示するバグを修正**（本セッション）
+  - ユーザー報告: 枠順確定前のレースなのに展開予想画面の「展開恩恵馬TOP5」等に馬番が出ている。
+  - 原因: `formation-v1`（隊列予想）は`frame_no`（枠番）で確定/未確定を判定し未確定時は
+    `formation: null`にする設計だったが、同じ画面のPAI系出力`HorseFitOutput`にはそもそも
+    `frame_no`が無く、この判定が一切されていなかった。特別登録段階の`horse_no`は
+    `ingest_entries()`がUMABAN=0時に割り当てる暫定連番で、公式馬番ではない。
+  - 対応: `HorseFitOutput`/`HorseFitSchema`に`frame_no`を追加（`forecast_use_cases.py`で
+    `RaceEntry.frame_no`から供給）。web側`lib/pace.ts`に`horseNumberLabel()`を新設し、
+    `frame_no>0`なら「馬番 N」、`frame_no=0`なら「登録順 N（馬番未確定）」を表示。
+    `RaceForecastDashboard.tsx`・`HorseFitTable.tsx`・`app/page.tsx`の計5箇所を統一。
+    PAIスコア自体は枠順確定前でも意味があるため、カードごと非表示にはせずラベルのみ是正。
+  - 対象: `application/dto.py`, `application/forecast_use_cases.py`, `presentation/schemas.py`,
+    `openapi.json`+`schema.d.ts`(再生成), `apps/web/src/lib/pace.ts`(+テスト2件),
+    `apps/web/src/components/RaceForecastDashboard.tsx`, `apps/web/src/components/HorseFitTable.tsx`,
+    `apps/web/src/app/page.tsx`, `tests/unit/application/test_forecast_use_cases.py`(+1件),
+    `tests/contract/test_races_api.py`(HORSE_KEYS更新)
+  - 検証: API 415 passed（+1）、Web 65 passed（+2）、ruff/mypy --strict/lint-imports/
+    typecheck/build すべてclean。
+  - 未対応（既知の残課題）: `scenario.py`の自然文コメント内「馬番 N」表記は同種の問題が残る
+    （`docs/SPEC.md §9`-14）。露出箇所が「判定根拠データ」アコーディオン内に限られ、
+    ユーザー報告の箇所（常時表示カード）とは異なるため今回は対象外。
 
 - [x] ✅ **P0 自動同期が来週の特別登録を一度も取り込んでいなかったバグを修正**（本セッション）
   - ユーザー報告「月曜なのに土日の結果・来週の特別登録馬が未反映」を受けて

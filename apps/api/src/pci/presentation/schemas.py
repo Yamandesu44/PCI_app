@@ -45,9 +45,14 @@ class CommentSchema(BaseModel):
 
 
 class HorseFitSchema(BaseModel):
-    """馬単位の展開適性（PAI）。"""
+    """馬単位の展開適性（PAI）。
+
+    frame_no=0 は枠順未確定（特別登録段階）。horse_no はその場合、
+    確定した公式馬番ではない可能性がある（FormationHorseSchema と同じ判定基準）。
+    """
 
     horse_no: int
+    frame_no: int
     horse_name: str | None = None
     running_style: str
     pai: float = Field(ge=0.0, le=100.0)
@@ -129,6 +134,7 @@ class ForecastSchema(BaseModel):
             horses=[
                 HorseFitSchema(
                     horse_no=h.horse_no,
+                    frame_no=h.frame_no,
                     horse_name=h.horse_name,
                     running_style=h.running_style,
                     pai=h.pai,

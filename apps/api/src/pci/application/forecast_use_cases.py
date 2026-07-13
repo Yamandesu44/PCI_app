@@ -145,10 +145,12 @@ class ForecastRaceUseCase:
         name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)
         formation_prediction = predict_formation(tuple(formation_inputs))
         ketto_by_no = {e.horse_no: e.ketto_num for e in entries}
+        frame_no_by_no = {e.horse_no: e.frame_no for e in entries}
         fit_by_no = {r.horse_no: r for r in fit_results}
         horses = [
             HorseFitOutput(
                 horse_no=p.horse_no,
+                frame_no=frame_no_by_no[p.horse_no],
                 horse_name=name_map.get(ketto_by_no.get(p.horse_no, "")),
                 running_style=str(p.running_style),
                 pai=fit_by_no[p.horse_no].pai,

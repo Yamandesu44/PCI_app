@@ -221,6 +221,21 @@ export function sortByPai(horses: HorseFit[]): HorseFit[] {
   return [...horses].sort((a, b) => b.pai - a.pai);
 }
 
+/**
+ * 馬番の表示ラベルを作る。
+ *
+ * frame_no=0 は特別登録段階で枠順未確定を意味し、horse_no は ingest 側が
+ * 割り当てた暫定の仮番号である可能性がある（確定済みの公式馬番ではない）。
+ * 未確定時にそのまま「馬番」と表示すると確定情報であるかのように誤解されるため、
+ * 枠順確定後（frame_no 1〜8）と区別してラベル化する。
+ */
+export function horseNumberLabel(horse: Pick<HorseFit, "horse_no" | "frame_no">): string {
+  if (horse.frame_no > 0) {
+    return `馬番 ${horse.horse_no}`;
+  }
+  return `登録順 ${horse.horse_no}（馬番未確定）`;
+}
+
 export type RaceSpotlightTone = "focus" | "value" | "caution" | "normal";
 
 export interface RaceSpotlight {
@@ -393,7 +408,7 @@ export interface ForecastDecisionChecklistItem {
 }
 
 function horseName(horse: HorseFit): string {
-  return horse.horse_name ?? `${horse.horse_no}番`;
+  return horse.horse_name ?? horseNumberLabel(horse);
 }
 
 /** 詳細画面の冒頭で見せる「今回どう見るか」の要約を作る。 */

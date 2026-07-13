@@ -83,9 +83,16 @@ class CommentOutput:
 
 @dataclass
 class HorseFitOutput:
-    """ForecastRaceUseCase の馬単位出力。"""
+    """ForecastRaceUseCase の馬単位出力。
+
+    frame_no=0 は特別登録段階で枠順未確定を意味し、その場合 horse_no も
+    暫定の仮番号（ingest_entries の連番割当）である可能性がある。表示側は
+    frame_no で確定/未確定を判定し、未確定時は horse_no を確定馬番として
+    扱わないこと（FormationHorseOutput と同じ判定基準）。
+    """
 
     horse_no: int
+    frame_no: int
     horse_name: str | None
     running_style: str
     pai: float

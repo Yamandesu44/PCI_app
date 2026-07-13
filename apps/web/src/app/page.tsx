@@ -15,6 +15,7 @@ import { RaceDateCalendar } from "@/components/RaceDateCalendar";
 import { api } from "@/lib/api";
 import {
   confidenceInsight,
+  horseNumberLabel,
   paceSpeedFromIndex,
   raceSpotlight,
   sanitizeBeginnerComment,
@@ -115,7 +116,7 @@ function raceActionLabel(race: RaceSummary): string {
 function topHorseLabel(forecast: Forecast): string | null {
   const top = sortByPai(forecast.horses ?? [])[0];
   if (!top) return null;
-  const name = top.horse_name ?? `${top.horse_no}番`;
+  const name = top.horse_name ?? horseNumberLabel(top);
   return `${name} / ${top.running_style}`;
 }
 

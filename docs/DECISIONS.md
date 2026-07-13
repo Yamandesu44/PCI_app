@@ -9,6 +9,37 @@
 
 ---
 
+## 2026-07-13 展開恩恵馬カードの馬番表示に frame_no ガードを追加
+
+- **背景**: ユーザーがスクリーンショットで報告: 枠順確定前（特別登録段階）のレースで、
+  展開予想画面の「展開恩恵馬TOP5」「評価を下げたい馬」カードに馬番が表示されていた。
+  調査の結果、`formation-v1`（隊列予想）は既に `frame_no`（枠番）で確定/未確定を判定し
+  未確定時は `formation: null` を返す設計だったが、同じ画面の PAI 系出力
+  `HorseFitOutput`/`HorseFitSchema` にはそもそも `frame_no` フィールドが無く、
+  この判定が一切されていなかったと判明。特別登録段階の `horse_no` は
+  `ingest_entries()` が UMABAN=0 のときに割り当てる暫定連番（実際の公式馬番ではない）
+  であるため、これをそのまま「馬番 N」と表示するのは確定情報であるかのような誤解を招く。
+- **採用案**: `HorseFitOutput`/`HorseFitSchema` に `frame_no: int` を追加
+  （`FormationHorseSchema`と異なり `ge=1, le=8` の制約は付けない。0=未確定が正常値のため）。
+  `forecast_use_cases.py` で `RaceEntry.frame_no` から `frame_no_by_no` マップを作り、
+  `HorseFitOutput` 構築時に流し込む。web側は `lib/pace.ts` に `horseNumberLabel()` を新設し、
+  `frame_no>0` なら「馬番 N」、`frame_no=0` なら「登録順 N（馬番未確定）」を返す。
+  `RaceForecastDashboard.tsx`（TOP5カード・評価下げカード・先導候補チップ）、
+  `HorseFitTable.tsx`、`app/page.tsx`（トップ画面の中心候補プレビュー）の計5箇所を統一。
+  PAIスコア自体は枠順確定前でも意味があるため、formation-v1のように出力ごと非表示にはせず、
+  ラベルの誠実さだけを是正する方針とした。
+- **理由**: `RaceEntry`ドメインエンティティは既に`frame_no`を持ち、`formation-v1`が既に同じ
+  判定基準（`has_confirmed_draw`）を確立していたため、新しい判定ロジックを作らず既存の
+  「frame_no=0→未確定」という規約に揃えるのが一貫性が高い。
+- **不採用案**: 枠順未確定時はPAI系カード自体を非表示にする案 → 展開恩恵馬の推薦は枠順確定前
+  （特別登録段階）でも脚質ベースの分析として意味を持つため、情報自体を隠すのは過剰と判断。
+  ラベルの表現だけを修正する方が実用的。
+- **未対応（既知の残課題）**: `scenario.py`が生成する自然文コメント（`headline`/`detail`/
+  `reasons`内の「馬番 N」等）は同種の問題が残る。`HorsePaceProfile`/`PaiResult`にframe_no相当が
+  無く、対応にはdomain層の拡張が必要なため今回は対象外（`docs/SPEC.md §9`-14に記録）。
+  露出箇所は「判定根拠データ」アコーディオン内に限られ、スクリーンショットで報告された
+  箇所（常時表示のカード）とは異なる。
+
 ## 2026-07-13 自動同期スクリプトに `--step special-entries` 呼び出しを追加
 
 - **背景**: ユーザー報告「月曜なのに土日の開催結果と来週の特別登録馬が反映されていない」を調査。

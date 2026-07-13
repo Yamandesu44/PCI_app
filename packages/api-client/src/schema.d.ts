@@ -505,10 +505,15 @@ export interface components {
         /**
          * HorseFitSchema
          * @description 馬単位の展開適性（PAI）。
+         *
+         *     frame_no=0 は枠順未確定（特別登録段階）。horse_no はその場合、
+         *     確定した公式馬番ではない可能性がある（FormationHorseSchema と同じ判定基準）。
          */
         HorseFitSchema: {
             /** Fit Label */
             fit_label: string;
+            /** Frame No */
+            frame_no: number;
             /** Horse Name */
             horse_name?: string | null;
             /** Horse No */

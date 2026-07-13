@@ -23,6 +23,7 @@ import {
   confidenceInsight,
   discountRecommendation,
   forecastDecisionChecklist,
+  horseNumberLabel,
   paceSpeedFromIndex,
   sanitizeBeginnerComment,
   sortDiscountCandidates,
@@ -41,7 +42,7 @@ function confidencePct(confidence: number): number {
 }
 
 function horseDisplayName(horse: HorseFit): string {
-  return horse.horse_name ?? `馬番 ${horse.horse_no}`;
+  return horse.horse_name ?? horseNumberLabel(horse);
 }
 
 function toneClass(index: number): string {
@@ -84,6 +85,7 @@ function confidenceClass(tone: ReturnType<typeof confidenceInsight>["tone"]): st
 
 export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardProps) {
   const horses = forecast.horses ?? [];
+  const frameNoByHorseNo = new Map(horses.map((horse) => [horse.horse_no, horse.frame_no]));
   const topHorses = sortByPai(horses).slice(0, 5);
   const discountHorses = sortDiscountCandidates(horses)
     .filter((horse) => horse.fit_label === "不利" || horse.pai < 60)
@@ -307,7 +309,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
                 </div>
                 <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
                 <p className="mt-1 text-sm opacity-80">
-                  馬番 {horse.horse_no} ・ {horse.running_style}
+                  {horseNumberLabel(horse)} ・ {horse.running_style}
                 </p>
                 <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
                   <div>
@@ -356,7 +358,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
                   </div>
                   <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
                   <p className="mt-1 text-sm opacity-80">
-                    馬番 {horse.horse_no} ・ {horse.running_style} ・ {horse.fit_label}
+                    {horseNumberLabel(horse)} ・ {horse.running_style} ・ {horse.fit_label}
                   </p>
                   <p className="mt-4 text-sm leading-6 opacity-90">{discount.reason}</p>
                 </article>
@@ -397,7 +399,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
                   key={horseNo}
                   className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold"
                 >
-                  馬番 {horseNo}
+                  {horseNumberLabel({ horse_no: horseNo, frame_no: frameNoByHorseNo.get(horseNo) ?? 0 })}
                 </span>
               ))}
             </div>

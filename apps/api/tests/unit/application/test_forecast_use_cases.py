@@ -215,6 +215,22 @@ class TestForecastRaceUseCase:
 
         assert output.formation is None
 
+    def test_horse_fit_frame_no_reflects_draw_confirmation(self) -> None:
+        """frame_no は枠順確定状態をそのまま反映する（未確定時は0、馬番を確定扱いしない）。"""
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=6, draw_confirmed=False)
+
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        assert all(h.frame_no == 0 for h in output.horses)
+
+        repo_confirmed = FakeRaceRepository()
+        _register_upcoming(repo_confirmed, n=6, draw_confirmed=True)
+        confirmed_output = ForecastRaceUseCase(repo_confirmed).execute(UPCOMING)
+
+        by_no = {h.horse_no: h.frame_no for h in confirmed_output.horses}
+        assert by_no == {i: i for i in range(1, 7)}
+
     def test_style_advantage_reflects_pace_direction(self) -> None:
         """スロー想定なら前有利、ハイ想定なら後有利のスコアになる（50=互角）。"""
         repo = FakeRaceRepository()

@@ -545,11 +545,15 @@
         "type": "object"
       },
       "HorseFitSchema": {
-        "description": "馬単位の展開適性（PAI）。",
+        "description": "馬単位の展開適性（PAI）。\n\nframe_no=0 は枠順未確定（特別登録段階）。horse_no はその場合、\n確定した公式馬番ではない可能性がある（FormationHorseSchema と同じ判定基準）。",
         "properties": {
           "fit_label": {
             "title": "Fit Label",
             "type": "string"
+          },
+          "frame_no": {
+            "title": "Frame No",
+            "type": "integer"
           },
           "horse_name": {
             "anyOf": [
@@ -587,6 +591,7 @@
         },
         "required": [
           "horse_no",
+          "frame_no",
           "running_style",
           "pai",
           "fit_label"

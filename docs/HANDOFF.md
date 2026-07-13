@@ -9,12 +9,12 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-13（更新7回目・自動同期の特別登録取り込み漏れを修正） |
+| 更新日時 | 2026-07-13（更新8回目・展開恩恵馬カードの馬番誤表示を修正） |
 | 作業担当AI | Claude Code |
 | 直前の担当AI | OpenAI Codex（`4d9e5b5`〜`81ddb9d`の3実装+引き継ぎ文書を実施。検証済み・不整合なし） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | 本更新をコミットする直前は `24731ed` docs(ingestion): document JV-Link spec-version follow-up procedure |
-| 作業ツリー | 本更新時点で自動同期スクリプトの特別登録取り込み漏れ修正+関連ドキュメント更新がコミット前（下記「変更対象ファイル」参照） |
+| 最新コミット | 本更新をコミットする直前は `c49ce05` fix(ingestion): run special-entries in the automated weekly sync |
+| 作業ツリー | 本更新時点で展開恩恵馬カードのframe_no対応+関連ドキュメント更新がコミット前（下記「変更対象ファイル」参照） |
 
 ---
 
@@ -31,16 +31,42 @@
 (b) 旧handoffファイルの整理（`f2a8ea6`）、
 (c) JV-Dataバイトオフセットの JV-Link新バージョン追従手順の明文化（`24731ed`）を行った。
 
-その後ユーザーから新規の不具合報告: 「月曜なのに土日の開催結果と来週の特別登録馬が反映されて
-いない」。調査の結果、自動同期スクリプトが`--step special-entries`を一度も呼んでいなかった
-バグを発見・修正（本セッション、下記「完了した作業」1.）。土日結果側は別原因の可能性が高く、
-このクラウド環境からは診断できないためユーザーへ確認依頼中。
+その後ユーザーから新規の不具合報告が2件続いた。
+1件目: 「月曜なのに土日の開催結果と来週の特別登録馬が反映されていない」。調査の結果、
+自動同期スクリプトが`--step special-entries`を一度も呼んでいなかったバグを発見・修正
+（`c49ce05`）。土日結果側は別原因の可能性が高く、このクラウド環境からは診断できないため
+ユーザーへ確認依頼中。
+2件目: スクリーンショット2枚で「①一部のレース結果（9R〜11R）が反映されていない」
+「②枠順確定前のレースなのに馬番が出ている」を報告。②はコードで原因を特定・修正
+（本セッション、下記「完了した作業」1.）。①はアプリ層のバグではなく取り込みギャップの
+可能性が高いと判断したが、このクラウド環境からは特定できずユーザーへ確認依頼中。
 
 ---
 
 ## 完了した作業（直近セッション）
 
-1. **自動同期が来週の特別登録を一度も取り込んでいなかったバグを修正**（本セッション・未コミット）
+1. **展開恩恵馬カードが枠順未確定の馬番を確定情報のように表示するバグを修正**（本セッション・未コミット）
+   - ユーザー報告（スクリーンショット）: 枠順確定前のレースなのに「展開恩恵馬TOP5」等に馬番が出ている。
+   - 原因: `formation-v1`（隊列予想）は`frame_no`で確定/未確定を判定し未確定時は`formation: null`に
+     する設計だったが、同じ画面のPAI系出力`HorseFitOutput`にはそもそも`frame_no`が無く、
+     この判定が一切されていなかった。特別登録段階の`horse_no`は`ingest_entries()`がUMABAN=0時に
+     割り当てる暫定連番で、公式馬番ではない可能性がある。
+   - 対応: `HorseFitOutput`/`HorseFitSchema`に`frame_no`を追加（`FormationHorseSchema`と異なり
+     `ge=1,le=8`制約なし。0=未確定が正常値）。`forecast_use_cases.py`で`RaceEntry.frame_no`から
+     供給。OpenAPI再生成。web側`lib/pace.ts`に`horseNumberLabel()`を新設し、`frame_no>0`なら
+     「馬番 N」、`frame_no=0`なら「登録順 N（馬番未確定）」を返す。`RaceForecastDashboard.tsx`
+     （TOP5カード・評価下げカード・先導候補チップ）・`HorseFitTable.tsx`・`app/page.tsx`
+     （トップ画面の中心候補プレビュー）の計5箇所を統一。
+   - PAIスコア自体は枠順確定前でも意味があるため、formation-v1のように出力ごと非表示にはせず、
+     ラベルの誠実さだけを是正する方針とした（`docs/DECISIONS.md`参照）。
+   - **未対応（既知の残課題）**: `scenario.py`の自然文コメント内「馬番 N」表記は同種の問題が
+     残る（`docs/SPEC.md §9`-14）。`HorsePaceProfile`/`PaiResult`にframe_no相当が無く、対応には
+     domain層拡張が必要なため今回は対象外。露出箇所は「判定根拠データ」アコーディオン内のみで、
+     ユーザー報告の箇所（常時表示カード）とは異なる。
+   - 検証: API 415 passed（+1）、Web 65 passed（+2）、ruff/mypy --strict/lint-imports/
+     typecheck/build すべてclean。
+
+2. **自動同期が来週の特別登録を一度も取り込んでいなかったバグを修正**（`c49ce05`）
    - ユーザー報告「月曜なのに土日の結果・来週の特別登録馬が未反映」を調査。
      `run_mykeibadb_full_sync.ps1`（Task Scheduler「PCI_Sync_Mykeibadb」金/土10:00・日18:00が実行）は
      `batch.py --step entries`/`--step results` のみを呼んでおり、`--step special-entries`
@@ -60,7 +86,7 @@
    - コード修正のみでは今週分の取りこぼしは遡って埋まらないため、`--step special-entries`の
      手動実行コマンドを別途ユーザーへ案内。
 
-2. **JV-Dataバイトオフセットの JV-Link新バージョン追従手順の明文化**（`24731ed`）
+3. **JV-Dataバイトオフセットの JV-Link新バージョン追従手順の明文化**（`24731ed`）
    - `tasks/backlog.md` C節に着手。`apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` を新規作成し、
      `dump_records.py`→`verify_layout.py`（アンカー検証→フィールド目視確認）→`locate_haron.py`/
      `locate_corners.py`（新オフセット特定）→`jv_spec.py`更新→テスト更新→記録、という一連の手順と
@@ -73,7 +99,7 @@
    - 未完了: 実際の再検証実施はWindows実行機（JV-Link必須）が必要なため、このセッションでは
      手順の明文化のみ。実施自体は引き続き未着手。
 
-3. **旧handoffファイルの整理**（`f2a8ea6`）
+4. **旧handoffファイルの整理**（`f2a8ea6`）
    - `docs/handoff-claude-code-2026-06-25.md` を精査。全項目が (a) 現構成と食い違う誤情報
      （`domain/services.py`・`infrastructure/repositories.py`は現存しない旧パス、
      「次に推奨する作業」は全項目完了済み）か、(b) 既存資料で完全に上書き済み
@@ -82,7 +108,7 @@
      「吸収すべき未収録の情報」が残っていなかったため削除（Git履歴には残り復元可能）。
    - 他ドキュメントからの参照は `tasks/backlog.md` のみだったことを確認済み（削除後に更新）。
 
-4. **mypy --strict 全体エラーは誤情報だったと判明・訂正**（`9ed1ff7`、コード変更なし）
+5. **mypy --strict 全体エラーは誤情報だったと判明・訂正**（`9ed1ff7`、コード変更なし）
    - `tasks/backlog.md` C節「mypy src/ --strict を全体で通すためのスタブ導入」に着手する過程で、
      `python -m mypy src/ --strict` を実行したところ **56ファイル全体で0エラー**（キャッシュ削除後も再現）。
    - 原因: 素の `mypy` コマンドが `/root/.local/bin/mypy`（`uv tool` 等で別途インストールされた、
@@ -96,7 +122,7 @@
      （実態がその基準を既に満たしていたため）。
    - 検証: `rm -rf .mypy_cache && python -m mypy src/ --strict` → Success: no issues found in 56 source files。
 
-5. **データ取り込みの鮮度監視**（`2b83d75`）
+6. **データ取り込みの鮮度監視**（`2b83d75`）
    - 背景: `ingest_log` は書き込み専用で、自動同期が静かに失敗し続けても気づけなかった。
    - 対応: 新規 `domain/ops/ingest_log.py`（`IngestLogRepository` Protocol + 純粋関数
      `evaluate_freshness()`）。判定は「直近試行の失敗有無」「直近成功からの経過日数
@@ -109,21 +135,21 @@
    - **未実施（ユーザー環境でのみ確認可能）**: `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に
      届くかの実地確認。画面からの手動再実行導線も未着手（`tasks/backlog.md` A節に残課題として記録）。
 
-6. **脚質別有利度の修正（style-advantage-v1）**（`3d3131e`）
+7. **脚質別有利度の修正（style-advantage-v1）**（`3d3131e`）
    - 原因: web が「その脚質の最大PAI」を有利度に流用しており、スコアが60〜96に高止まり。
    - 対応: `domain/pace/style_advantage.py` 新設。想定RPCIの中立点（classify_pace と同じ
      rule-v4 閾値の中点: 芝50/ダート43）からの乖離を 50=互角の対称スコア（0〜100）へ写像。
      逃げ・追込は増幅1.2、逃げ候補2頭以上で逃げのみ競合減点。reasons/model_version 付き。
    - `StyleAdvantageWeights` は🧪仮係数（`docs/SPEC.md §3.4/§9`-11、`docs/DECISIONS.md` 2026-07-12）。
 
-7. **バックテスト結果のJSON保存**（`03bc005`）
+8. **バックテスト結果のJSON保存**（`03bc005`）
    - `report_to_dict()` + `--output <path>`。混合＋track別内訳をJSON保存。print出力は不変。
 
-8. **Codex引き継ぎ内容の検証**（`af66e8f`、ドキュメントのみ）
+9. **Codex引き継ぎ内容の検証**（`af66e8f`、ドキュメントのみ）
    - ローカルが`origin`より7コミット遅れていたため`git merge --ff-only`で追従（無傷）。
    - Codexの実装3件をコードレベルで検証し、テストを独立再実行。重大な不整合なし。
 
-9. **混在型脚質の距離対応予測**（`2b083ba`、Codex実装・検証済み）
+10. **混在型脚質の距離対応予測**（`2b083ba`、Codex実装・検証済み）
    - 直近20レース266頭を調査し、旧自在139頭のうち99頭が60%未満の混在、40頭が履歴なしと確認。
    - 明確な `running-style-v1` 判定は維持し、混在型だけ `running-style-v2-distance` で再判定。
    - 過去5走の4角位置、対象距離との距離差、近走順を使用。先行・差し同数時の距離規則を追加。
@@ -131,7 +157,7 @@
    - 同じ266頭で自在を139頭（52.3%）から40頭（15.0%）へ削減。履歴なしは参考のまま維持。
    - API 380件、Web 55件、ruff/mypy/import-linter/typecheck/buildがすべて成功。
 
-10. **枠順確定後の隊列予想**（`c679e09`、Codex実装・検証済み）
+11. **枠順確定後の隊列予想**（`c679e09`、Codex実装・検証済み）
    - `domain/pace/formation.py` に枠順確定判定と formation-v1 を追加。
    - 全馬の枠番が1〜8、馬番が正かつ一意の場合のみ予想し、特別登録（frame_no=0）は `null`。
    - 脚質70%・近走の1角（欠損時4角）位置30%で先頭/好位/中団/後方へ配置。
@@ -140,7 +166,7 @@
    - 契約テストの予測器をルールベースへ固定し、WindowsのLightGBMネイティブabortを回避。
    - 実DBで entries 278件、枠順確定112件は生成、未確定166件は非生成を確認。
 
-11. **レース分析UIの刷新**（`4d9e5b5`、Codex実装・検証済み）
+12. **レース分析UIの刷新**（`4d9e5b5`、Codex実装・検証済み）
    - `AppHeader` を追加し、全画面でブランドとレース一覧への導線を固定。
    - レース一覧を最大幅拡張し、統計、開催日カレンダー、日付・競馬場別レースを2カラム化。
    - 展開予想と確定後回顧へ共通のダークヒーローとエメラルドのアクセントを導入。
@@ -150,7 +176,7 @@
 
 以下は以前の完了作業:
 
-12. **`backtest_forecast.py` の track別内訳を既定表示に追加**（`d840e66`）
+13. **`backtest_forecast.py` の track別内訳を既定表示に追加**（`d840e66`）
    - `apps/api/src/pci/application/backtest.py` に純粋関数 `group_races_by_track(races) -> dict[str, list[Race]]` を追加。
    - `apps/api/scripts/backtest_forecast.py` に `_print_track_breakdown()` を追加。
      `--track-type` 未指定時、混合集計に加えて芝/ダート別の再集計も自動表示する。
@@ -161,16 +187,16 @@
      （キャッシュ済みサンプルの再集計ではなく、予測をもう一度回す）。DB再クエリ（対象選定）は
      発生しないが、予測処理自体は2倍実行される。`--limit` が大きい（例: 2000+）場合は
      実行時間がおよそ2倍になる点に注意。
-13. **想定RPCI 受入基準の未達方針を決定**（`docs/DECISIONS.md` 2026-07-11、`d840e66`）
+14. **想定RPCI 受入基準の未達方針を決定**（`docs/DECISIONS.md` 2026-07-11、`d840e66`）
    - 判断: 現行モデル（lgbm-turf-v1/lgbm-dirt-v1）のまま運用継続。MAE≤1.5 を追う追加投資は今は行わない。
    - 詳細な理由・不採用案・見直し条件は `docs/DECISIONS.md` の該当エントリを参照。
-14. **想定RPCI 精度の検証**（`c94f708`、コード変更なし）
+15. **想定RPCI 精度の検証**（`c94f708`、コード変更なし）
    - ユーザーが実DB（mykeibadb蓄積データ）で `python -m scripts.backtest_forecast --limit 200` を
      3パターン（混合／芝／ダート）実行、結果を `docs/SPEC.md §8/§9` と `docs/adr/0005 §5.4` に記録。
    - 結果概要: MAE≤1.5 は構造的に未達（混合7.848/芝8.861/ダート8.332）。ラベル一致率≥60% は
      芝(73.5%)・混合(61.0%)は達成、ダート(42.5%)は未達。混合サンプルだと PAI point-biserial が
      希釈されて見える（+0.009）が track別だと正の相関（芝+0.084/ダート+0.032）に戻る新知見あり。
-15. **`forecast_accuracy` の UI 表示**（`e65f919`）、**AI 引き継ぎ基盤整備**（`004aead`）、
+16. **`forecast_accuracy` の UI 表示**（`e65f919`）、**AI 引き継ぎ基盤整備**（`004aead`）、
     **予測フィードバックループ**（`9712fd2`）ほか、それ以前の完了作業は
     `tasks/current.md`「最近完了したタスク」参照。
 
@@ -181,30 +207,38 @@
   「実行自体の失敗/未発火」の可能性が高い。Task Scheduler実行履歴・ログ・MySQL80サービス状態は
   このクラウド環境から確認不可。`MANUAL_SYNC_GUIDE.md §6.8`に診断手順を用意し、ユーザーへの
   確認依頼を送った状態（回答待ち）。
+- **一部レース（9R〜11R）の結果が反映されない件も原因未特定**（ユーザー報告・スクリーンショット、
+  本セッション）。`ListRacesUseCase`にはフィルタリングロジックが無く、DBに存在するRaceレコードを
+  そのまま返すのみと確認済み。アプリ層のバグではなく取り込み側のギャップの可能性が高いが、
+  DB/ログにアクセスできずこれ以上の特定は不可。該当レース（開催場・日付・レース番号）の特定と
+  ログ確認をユーザーへ依頼中。
 - ユーザー要望②「**展開＋絶対能力の統合順位予想**」は保留中（ユーザー判断・`tasks/backlog.md` B節）。
   能力指数の算出方法自体の模索が必要なため。再開時はまず指標案をユーザーへ提示して合意を取ること。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
-  `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。
+  `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。今回`special-entries`呼び出しを追加した
+  自動同期スクリプト自体がWindows実行機で問題なく動くかも未確認。
 - 画面からの手動再実行導線は未着手（`tasks/backlog.md` A節。多重実行防止等の設計が必要）。
 - **JV-Data仕様追従の実施自体は未着手**（`apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md`で
   手順は明文化したが、実データ取得にはWindows実行機＋JV-Linkが必要でこのクラウド環境からは不可。
   RA/SEが実際にVer.3.0.0/Ver.4.9のどちらの出力を元に校正されたかも未確認のまま、`docs/SPEC.md §9`-8）。
-- それ以外はなし。本セッションの変更はこれからコミットする（`.ps1`/`.bat`/ドキュメントのみ、
-  Python/TypeScriptコード変更なし）。
+- 展開コメント自然文（`scenario.py`）内の「馬番 N」表記が枠順未確定時を区別できない件
+  （`docs/SPEC.md §9`-14）。domain層拡張が必要な既知の残課題として記録のみ、対応は未着手。
+- それ以外はなし。本セッションの変更はこれからコミットする。
 
 ## 現在止まっている箇所
 
-**土日の確定成績未反映の根本原因**（上記「未完了の作業」参照）。ユーザーからの追加情報
-（Task Scheduler実行履歴・ログ・`ingest-status`の内容）待ちで、このクラウド環境からは
-これ以上の診断が進められない。
+2件ともユーザーからの追加情報待ちで、このクラウド環境からはこれ以上の診断が進められない。
+- **土日の確定成績未反映の根本原因**（上記「未完了の作業」参照）。
+  Task Scheduler実行履歴・ログ・`ingest-status`の内容待ち。
+- **9R〜11R欠落の根本原因**（上記「未完了の作業」参照）。該当レースの特定とログ確認待ち。
 
 ---
 
 ## 次に実施すべき作業（候補・優先順位順）
 
-**最優先**: 土日の確定成績が反映されない件（上記「現在止まっている箇所」）は、ユーザーが
-`MANUAL_SYNC_GUIDE.md §6.8`の診断手順（Task Scheduler実行結果・ログ・`ingest-status`確認）を
-実行し、結果を共有してくれ次第、それを元に原因を特定して対応する。それ以外にユーザーからの
+**最優先**: 上記「現在止まっている箇所」の2件は、ユーザーが診断情報
+（`MANUAL_SYNC_GUIDE.md §6.8`の手順、および9R〜11R欠落レースの特定・ログ）を
+共有してくれ次第、それを元に原因を特定して対応する。それ以外にユーザーからの
 新規指示がない場合、以下の優先順で `tasks/backlog.md` から着手を検討する
 （A節が方針決定済み、B節は着手可否に判断が必要、C節は技術的負債）。**どれを選ぶかは
 ユーザー確認を推奨**（`docs/PROJECT_RULES.md` の「独断で正式仕様化しない」方針に沿う）。
@@ -232,17 +266,26 @@
 
 ## 変更対象ファイル（本セッション・コミット前）
 
-- 更新（`.ps1`/`.bat`、Python/TypeScriptコードへの変更ではない）:
-  `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`（`--step special-entries`呼び出しを
-  追加）, `apps/ingestion-worker/scripts/sync_mykeibadb.bat`（コメント更新）
-- 更新（ドキュメント）: `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`（0/1/2節更新+6.8節新設+
-  更新履歴）, `docs/SPEC.md`（§6にバグ修正を追記）, `docs/DECISIONS.md`（2026-07-13エントリ追加）,
-  `tasks/backlog.md`, `tasks/current.md`（進行中タスクに残課題を追加）, `docs/HANDOFF.md`（本ファイル）
+- 更新（API・コード）: `apps/api/src/pci/application/dto.py`（`HorseFitOutput`に`frame_no`追加）,
+  `apps/api/src/pci/application/forecast_use_cases.py`（`frame_no_by_no`マップ経由で供給）,
+  `apps/api/src/pci/presentation/schemas.py`（`HorseFitSchema`に`frame_no`追加）,
+  `packages/api-client/openapi.json`+`schema.d.ts`（再生成）
+- 更新（web・コード）: `apps/web/src/lib/pace.ts`（`horseNumberLabel()`新設、`horseName`内部関数の
+  フォールバックも統一）, `apps/web/src/components/RaceForecastDashboard.tsx`（TOP5/評価下げ/
+  先導候補チップの3箇所+`horseDisplayName`フォールバック）, `apps/web/src/components/HorseFitTable.tsx`,
+  `apps/web/src/app/page.tsx`（トップ画面の中心候補プレビュー）
+- 更新（テスト）: `apps/api/tests/unit/application/test_forecast_use_cases.py`（+1件）,
+  `apps/api/tests/contract/test_races_api.py`（`HORSE_KEYS`に`frame_no`追加+range検証）,
+  `apps/web/src/lib/pace.test.ts`（`horseNumberLabel`テスト+既存フィクスチャに`frame_no`追加、+2件）
+- 更新（ドキュメント）: `docs/SPEC.md`（§3.5にバグ修正・§9-14に残課題を追記）,
+  `docs/DECISIONS.md`（2026-07-13エントリ追加）, `tasks/current.md`（進行中・完了タスク更新）,
+  `docs/HANDOFF.md`（本ファイル）
 
-（JV-Data仕様追従ガイド新規作成はコミット `24731ed`、旧handoffファイル削除は `f2a8ea6`、
-mypy誤情報訂正の変更ファイル一覧はコミット `9ed1ff7`、データ取り込み鮮度監視は `2b83d75`、
-style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` の変更ファイル一覧は
-各コミットまたは `docs/DECISIONS.md`/`docs/SPEC.md` の該当エントリ参照）
+（自動同期special-entries修正はコミット `c49ce05`、JV-Data仕様追従ガイド新規作成は `24731ed`、
+旧handoffファイル削除は `f2a8ea6`、mypy誤情報訂正の変更ファイル一覧はコミット `9ed1ff7`、
+データ取り込み鮮度監視は `2b83d75`、style-advantage-v1 は `3d3131e`、Codex実装分
+`2b083ba`/`c679e09`/`4d9e5b5` の変更ファイル一覧は各コミットまたは
+`docs/DECISIONS.md`/`docs/SPEC.md` の該当エントリ参照）
 
 ---
 
@@ -262,6 +305,9 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
   UM/KS/CH（`master_parsers.py`）は既に Ver.4.9 相当への移行を確認済みだが、RA/SEは
   README.md/common.pyが「Ver.3.0準拠」表記のまま。再検証手順は
   `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` に明文化済み（実施はWindows実行機が必要）。
+- 🔎 展開コメント自然文（`scenario.py`）の「馬番 N」表記は`HorseFitOutput`と異なり枠順未確定時の
+  区別が未対応（`docs/SPEC.md §9`-14、本セッションで発見・対応は未着手）。domain層
+  （`HorsePaceProfile`/`PaiResult`）にframe_no相当が無く、対応にはdomain層拡張が必要。
 
 ## 仮実装
 
@@ -278,32 +324,34 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 ## 既知の不具合
 
+- **修正済み**: 展開恩恵馬カード等が枠順未確定の馬番を確定情報のように表示していた
+  （本セッション、上記「完了した作業」1.）。
 - **修正済み**: 自動同期スクリプト（`run_mykeibadb_full_sync.ps1`）が`--step special-entries`を
-  一度も呼んでおらず、来週の特別登録馬が自動では反映されなかった（本セッション、上記
-  「完了した作業」1.）。
+  一度も呼んでおらず、来週の特別登録馬が自動では反映されなかった（`c49ce05`、上記
+  「完了した作業」2.）。
 - **未特定**: 土日の確定成績が反映されない件（原因調査中、上記「未完了の作業」参照）。
+- **未特定**: 一部レース（9R〜11R）の結果が反映されない件（原因調査中、上記「未完了の作業」参照）。
 
 ---
 
-## テスト状況（2026-07-13・特別登録バグ修正後。`.ps1`/`.bat`/ドキュメントのみでPython/TS未変更のため
-既存のテストスイートは対象外・前回から数値は不変。PowerShellスクリプトはこの環境に
-インタプリタが無く実行検証不可 — 既存の`entries`/`results`呼び出しと全く同じパターンで
-`special-entries`呼び出しを追加しただけであることを目視で確認）
+## テスト状況（2026-07-13・展開恩恵馬frame_no対応後に再実行）
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
-| API 単体+契約 | `python -m pytest tests/unit/ tests/contract/ -q` | **414 passed** |
+| API 単体+契約 | `python -m pytest tests/unit/ tests/contract/ -q` | **415 passed**（+1） |
 | API Lint | `ruff check src/ tests/` | **成功**（`scripts/seed_dev.py`に無関係な既存10件あり・未着手） |
-| **API 型（全体・今回の発見）** | `rm -rf .mypy_cache && python -m mypy src/ --strict` | **成功（56 files、0エラー）** |
+| API 型（全体） | `python -m mypy src/ --strict` | **成功（56 files、0エラー）** |
 | import境界 | `lint-imports` | **2 kept, 0 broken**（domain/ops も含め依存方向OK） |
+| OpenAPI同期 | `test_committed_openapi_is_in_sync` | **成功**（`export_openapi.py`で再生成済み） |
 | api-client 型 | `cd packages/api-client && npm run typecheck` | **成功** |
-| Web 単体 | `cd apps/web && npm run test` | **63 passed** |
+| Web 単体 | `cd apps/web && npm run test` | **65 passed**（+2） |
 | Web 型 | `npm run typecheck` | **成功** |
 | Web build | `npm run build` | **成功**（3ページ + not-found） |
 
 未実行: integration（Docker/testcontainers前提）。実DB依存の検証（実運用での鮮度判定の
-振る舞い、Webhook通知の到達確認、**および今回の`special-entries`自動呼び出しが実際に
-Windows実行機で動くかの実地確認**）はこのクラウド環境から不可。ユーザーの実環境での確認を推奨。
+振る舞い、Webhook通知の到達確認、`special-entries`自動呼び出しが実際にWindows実行機で
+動くかの実地確認、9R〜11R欠落の原因特定）はこのクラウド環境から不可。ユーザーの実環境での
+確認を推奨。
 
 ---
 
@@ -319,7 +367,7 @@ Windows実行機で動くかの実地確認**）はこのクラウド環境か�
   実データに依存する検証（バックテスト・実運用での鮮度判定・Webhook到達確認等）は
   ユーザーに手元（Windows機）で実行してもらい、出力を貼ってもらって分析する進め方になる。
 - `backtest_forecast.py` の track別内訳表示は予測を2回実行するため、`--limit` を大きくすると
-  実行時間が伸びる（上記「完了した作業」12.の既知のトレードオフ参照）。
+  実行時間が伸びる（上記「完了した作業」13.の既知のトレードオフ参照）。
 - UI（Next.js）には PCI/RPCI/PAI の実数値を出さない方針（`docs/PROJECT_RULES.md §5`）。
   ただし CLI診断ツール（`backtest_forecast.py`等）は開発者向けであり、この方針の対象外
   （実数値をprintするのは意図的な挙動）。取り込み鮮度監視の失敗詳細（エラー要約）も、
@@ -329,6 +377,12 @@ Windows実行機で動くかの実地確認**）はこのクラウド環境か�
   masters/entries/resultsのみで special-entries は含まれない。「取り込みが動いている」ことと
   「特別登録も含めて動いている」ことは別。今後この領域を触る際は両方を意識すること
   （2026-07-13、自動同期スクリプトの呼び出し漏れとして発見）。
+- **`frame_no`（枠番）は`horse_no`（馬番）と別概念で、確定タイミングも異なる**。特別登録段階
+  （枠順確定前）では`frame_no=0`かつ`horse_no`が`ingest_entries()`の暫定連番の場合がある。
+  新しく馬単位の出力を追加する際は、`frame_no`（0=未確定/1〜8=確定）で判定してから`horse_no`を
+  「確定馬番」として扱うこと。既存の判定基準は`formation.has_confirmed_draw()`
+  （レース全体で1つの判定）と`lib/pace.ts`の`horseNumberLabel()`（表示ラベル）の2箇所
+  （2026-07-13、`HorseFitOutput`の表示バグ修正で追加）。
 
 ---
 
@@ -337,12 +391,12 @@ Windows実行機で動くかの実地確認**）はこのクラウド環境か�
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
-4. `tasks/current.md` — 進行中タスク（土日結果未反映の原因調査が進行中。次候補は本ファイル
-   「次に実施すべき作業」参照）
+4. `tasks/current.md` — 進行中タスク（土日結果未反映・9R〜11R欠落の原因調査が進行中。
+   次候補は本ファイル「次に実施すべき作業」参照）
 5. `docs/SPEC.md` — 確定/未確定仕様の区別
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-13: 自動同期special-entries追加。
-   2026-07-12の4件: ingest-status鮮度監視・style-advantage-v1・formation-v1・
-   running-style-v2-distance）
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-13の2件: 展開恩恵馬frame_noガード追加・
+   自動同期special-entries追加。2026-07-12の4件: ingest-status鮮度監視・style-advantage-v1・
+   formation-v1・running-style-v2-distance）
 7. 必要に応じて `docs/ARCHITECTURE.md`, `docs/adr/0005-rpci-forecast-strategy.md`
 
 ## 次の担当者が最初に実行すべきコマンド

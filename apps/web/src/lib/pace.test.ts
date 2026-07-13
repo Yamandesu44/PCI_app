@@ -7,6 +7,7 @@ import {
   fitTone,
   forecastAccuracyMeta,
   forecastDecisionChecklist,
+  horseNumberLabel,
   paceMeta,
   paceSpeedFromIndex,
   paiBarWidth,
@@ -110,12 +111,25 @@ describe("paiBarWidth", () => {
 describe("sortByPai", () => {
   it("PAI 降順に並べ、入力を破壊しない", () => {
     const input = [
-      { horse_no: 1, running_style: "逃げ", pai: 50, fit_label: "中立", reasons: [] },
-      { horse_no: 2, running_style: "差し", pai: 80, fit_label: "合致", reasons: [] },
+      { horse_no: 1, frame_no: 1, running_style: "逃げ", pai: 50, fit_label: "中立", reasons: [] },
+      { horse_no: 2, frame_no: 2, running_style: "差し", pai: 80, fit_label: "合致", reasons: [] },
     ];
     const out = sortByPai(input);
     expect(out.map((h) => h.horse_no)).toEqual([2, 1]);
     expect(input[0]?.horse_no).toBe(1);
+  });
+});
+
+describe("horseNumberLabel", () => {
+  it("枠順確定済み（frame_no>0）なら馬番として表示する", () => {
+    expect(horseNumberLabel({ horse_no: 3, frame_no: 1 })).toBe("馬番 3");
+  });
+
+  it("枠順未確定（frame_no=0）なら確定情報と誤解されない表示にする", () => {
+    const label = horseNumberLabel({ horse_no: 3, frame_no: 0 });
+    expect(label).not.toBe("馬番 3");
+    expect(label).toContain("3");
+    expect(label).toContain("未確定");
   });
 });
 
@@ -124,7 +138,7 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.72,
       fieldSize: 12,
-      horses: [{ horse_no: 1, running_style: "先行", pai: 84, fit_label: "合う", reasons: [] }],
+      horses: [{ horse_no: 1, frame_no: 1, running_style: "先行", pai: 84, fit_label: "合う", reasons: [] }],
     });
 
     expect(out).toMatchObject({ label: "注目", tone: "focus" });
@@ -134,7 +148,7 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.58,
       fieldSize: 16,
-      horses: [{ horse_no: 1, running_style: "差し", pai: 74, fit_label: "合う", reasons: [] }],
+      horses: [{ horse_no: 1, frame_no: 1, running_style: "差し", pai: 74, fit_label: "合う", reasons: [] }],
     });
 
     expect(out).toMatchObject({ label: "妙味", tone: "value" });
@@ -144,7 +158,7 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.42,
       fieldSize: 10,
-      horses: [{ horse_no: 1, running_style: "逃げ", pai: 66, fit_label: "中立", reasons: [] }],
+      horses: [{ horse_no: 1, frame_no: 1, running_style: "逃げ", pai: 66, fit_label: "中立", reasons: [] }],
     });
 
     expect(out).toMatchObject({ label: "波乱注意", tone: "caution" });
@@ -154,7 +168,7 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.42,
       fieldSize: 16,
-      horses: [{ horse_no: 1, running_style: "差し", pai: 76, fit_label: "合う", reasons: [] }],
+      horses: [{ horse_no: 1, frame_no: 1, running_style: "差し", pai: 76, fit_label: "合う", reasons: [] }],
     });
 
     expect(out).toMatchObject({ label: "波乱注意", tone: "caution" });
@@ -164,7 +178,7 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.55,
       fieldSize: 12,
-      horses: [{ horse_no: 1, running_style: "追込", pai: 62, fit_label: "中立", reasons: [] }],
+      horses: [{ horse_no: 1, frame_no: 1, running_style: "追込", pai: 62, fit_label: "中立", reasons: [] }],
     });
 
     expect(out).toMatchObject({ label: "通常", tone: "normal" });
@@ -216,10 +230,10 @@ describe("discountRecommendation", () => {
 describe("sortDiscountCandidates", () => {
   it("不利ラベルを優先し、その中では適性指数が低い順に並べる", () => {
     const input = [
-      { horse_no: 1, running_style: "逃げ", pai: 65, fit_label: "中立", reasons: [] },
-      { horse_no: 2, running_style: "差し", pai: 48, fit_label: "不利", reasons: [] },
-      { horse_no: 3, running_style: "先行", pai: 40, fit_label: "不利", reasons: [] },
-      { horse_no: 4, running_style: "追込", pai: 38, fit_label: "中立", reasons: [] },
+      { horse_no: 1, frame_no: 1, running_style: "逃げ", pai: 65, fit_label: "中立", reasons: [] },
+      { horse_no: 2, frame_no: 2, running_style: "差し", pai: 48, fit_label: "不利", reasons: [] },
+      { horse_no: 3, frame_no: 3, running_style: "先行", pai: 40, fit_label: "不利", reasons: [] },
+      { horse_no: 4, frame_no: 4, running_style: "追込", pai: 38, fit_label: "中立", reasons: [] },
     ];
 
     expect(sortDiscountCandidates(input).map((horse) => horse.horse_no)).toEqual([3, 2, 4, 1]);
@@ -234,13 +248,14 @@ describe("forecastDecisionChecklist", () => {
       horses: [
         {
           horse_no: 1,
+          frame_no: 1,
           horse_name: "テストホース",
           running_style: "先行",
           pai: 86,
           fit_label: "合致",
           reasons: [],
         },
-        { horse_no: 2, running_style: "差し", pai: 70, fit_label: "合致", reasons: [] },
+        { horse_no: 2, frame_no: 2, running_style: "差し", pai: 70, fit_label: "合致", reasons: [] },
       ],
     });
 
