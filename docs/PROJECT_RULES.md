@@ -152,7 +152,8 @@ tasks/           current.md / backlog.md
 
 ## 11. Definition of Done（共通）
 
-- [ ] 型ヒント 100% / `mypy --strict`（domain・application は 0 エラー）
+- [ ] 型ヒント 100% / `python -m mypy src/ --strict` で全体0エラー（`mypy`は必ず`python -m`経由。
+  素の`mypy`コマンドは環境によって隔離venvを指しfastapi等が「見つからない」誤検知になり得る）
 - [ ] Ruff 0 エラー / web は `tsc --noEmit` clean
 - [ ] pytest / vitest green（新機能・修正にテスト追加）
 - [ ] domain 層に外部依存なし（import-linter KEPT）

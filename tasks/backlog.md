@@ -44,8 +44,12 @@
 
 ## C. 技術的負債・環境
 
-- [ ] `mypy src/ --strict` を全体で通すための SQLAlchemy/Pydantic/FastAPI スタブ導入 or 設定
-  （infrastructure/presentation で多数エラー・現状は domain/application のみ strict 確認）。
+- [x] ~~`mypy src/ --strict` を全体で通すための SQLAlchemy/Pydantic/FastAPI スタブ導入 or 設定~~
+  → **2026-07-12 判明・対応済み**: スタブ不足ではなく、素の `mypy` コマンドが `uv tool` 等の
+  隔離環境（プロジェクト依存関係が入っていない）を指していた誤検知だった。
+  `python -m mypy src/ --strict` で実行すると **56ファイル全体で0エラー**（キャッシュ削除後も再現）。
+  `CLAUDE.md`/`AGENTS.md`/`docs/PROJECT_RULES.md`/`docs/ARCHITECTURE.md`/`apps/api/README.md`の
+  誤記載を訂正し、DoDも「domain・applicationのみ」から「全体で0エラー」へ引き上げ。
 - [ ] 旧 `docs/handoff-claude-code-2026-06-25.md` の記載ファイル名が現構成と不一致。
   歴史資料として残置するか、`docs/ARCHITECTURE.md` へ吸収して削除するか要判断。
 - [ ] 統合テスト（testcontainers-postgres）の日常実行環境（CI/ローカル Docker）整備。

@@ -170,8 +170,11 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 - JV-Link は Windows 専用 COM、かつ**32bit 版**でしか COM 登録されていない環境がある
   （64bit Python からは `クラスが登録されていません`）。現運用は mykeibadb 経由で回避。
 - mykeibadb のテーブル名・列名は環境/バージョンで揺れる（候補名リストで吸収）。
-- `mypy src/ --strict` は infrastructure/presentation で SQLAlchemy/Pydantic/FastAPI の
-  スタブ未導入により多数エラーになる（**環境要因・コード欠陥ではない**）。domain/application は clean。
+- **`mypy`/`pytest` は必ず `python -m` 経由で実行する**こと。素の `mypy`/`pytest` コマンドが
+  `uv tool` 等の隔離環境（プロジェクト依存関係が入っていない）を指し、fastapi/sqlalchemy 等が
+  「見つからない」という誤ったエラーになる場合がある（2026-07-12訂正: 従来「infrastructure/
+  presentationはスタブ未導入で多数エラー・環境要因」と記載していたが、これは誤りだった。
+  `python -m mypy src/ --strict` で実行すると全体が0エラーで通ることを確認済み）。
 - Windows PowerShell 5.1 は BOM 無し UTF-8 を ANSI(CP932) で誤読するため、
   自動実行スクリプトは**純 ASCII**で書く（日本語コメント混入で過去にクラッシュ）。
 - 開発は `fixtures/` で JV-Link/Windows なしに domain/application/API を進められる。

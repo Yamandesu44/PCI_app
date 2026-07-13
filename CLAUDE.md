@@ -152,13 +152,13 @@ pci_app/
 
 ```bash
 # テスト（全体）
-cd apps/api && pytest tests/
+cd apps/api && python -m pytest tests/
 
 # テスト（ドメイン層のみ・高速）
-cd apps/api && pytest tests/unit/domain/
+cd apps/api && python -m pytest tests/unit/domain/
 
-# 型チェック
-cd apps/api && mypy src/ --strict
+# 型チェック（全体。python -m 経由で実行すること→下記「テスト・型・Lint の実行方針」参照）
+cd apps/api && python -m mypy src/ --strict
 
 # Lint
 cd apps/api && ruff check src/ tests/
@@ -259,15 +259,19 @@ Git 履歴・現在のブランチ・`docs/` の資料・`tasks/` の進捗・�
 
 ```bash
 cd apps/api
-pytest tests/unit/ tests/contract/ -q
+python -m pytest tests/unit/ tests/contract/ -q
 ruff check src/ tests/
 lint-imports
-mypy src/pci/domain/ src/pci/application/ --strict   # domain+application は 0 エラー基準
+python -m mypy src/ --strict   # 全体で0エラー基準（domain/application限定ではない）
 cd ../web && npm run test && npm run typecheck
 ```
-`mypy src/ --strict` を全体にかけると infrastructure/presentation で SQLAlchemy/Pydantic/FastAPI の
-スタブ未導入エラーが多数出る（環境要因・コード欠陥ではない）。API スキーマ変更時は
-`python scripts/export_openapi.py` で `packages/api-client/openapi.json` を再生成し契約テストを通す。
+**`pytest`/`mypy` は必ず `python -m` 経由で実行すること。** 素の `pytest`/`mypy` コマンドは環境によっては
+`uv tool` 等で別途インストールされた隔離環境（プロジェクトの依存関係が入っていない）を指すことがあり、
+その場合 `fastapi`/`sqlalchemy` 等が「見つからない」という誤ったエラーになる
+（`which mypy` の先が `/root/.local/bin/mypy` 等プロジェクト外なら該当）。
+`python -m mypy src/ --strict` で実行すれば、infrastructure/presentation を含む全体が0エラーで通る。
+API スキーマ変更時は `python scripts/export_openapi.py` で `packages/api-client/openapi.json` を
+再生成し契約テストを通す。
 
 ### 作業中断・終了時の手順（次の担当＝Codex へ渡す）
 

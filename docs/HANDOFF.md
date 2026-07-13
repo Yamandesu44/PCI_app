@@ -9,12 +9,12 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-12（更新3回目・取り込み鮮度監視 実装） |
+| 更新日時 | 2026-07-12（更新4回目・mypy誤情報の訂正） |
 | 作業担当AI | Claude Code |
 | 直前の担当AI | OpenAI Codex（`4d9e5b5`〜`81ddb9d`の3実装+引き継ぎ文書を実施。検証済み・不整合なし） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | 本更新をコミットする直前は `3d3131e` feat(forecast): compute per-style pace advantage in domain |
-| 作業ツリー | 本更新時点で取り込み鮮度監視（ingest-status）一式が未コミット（下記「変更対象ファイル」参照） |
+| 最新コミット | 本更新をコミットする直前は `2b83d75` feat(ops): monitor ingestion freshness ... |
+| 作業ツリー | 本更新時点でドキュメント訂正のみ未コミット（コードは無変更。下記「変更対象ファイル」参照） |
 
 ---
 
@@ -25,13 +25,30 @@
 ② 展開恩恵馬のピックアップに加えて絶対能力も加味した順位予想が欲しい → ユーザー判断で保留
 （`tasks/backlog.md` B節、能力指数の算出方法自体の模索が必要なため）。
 
-保留②を受け、「他に実施すべき改善」の相談から**推奨1: データ取り込みの監視・鮮度表示**に着手した。
+保留②を受け「他に実施すべき改善」の相談から**推奨1: データ取り込みの監視・鮮度表示**を実装（`2b83d75`）。
+続けて「次の推奨する選択肢」として `tasks/backlog.md` C節の技術的負債に着手したところ、
+**長年「環境要因」として記録されていた mypy の全体エラーが、実は誤ったコマンド起動が原因の
+誤検知だったと判明**したため、コードは変更せずドキュメントの訂正を行った。
 
 ---
 
 ## 完了した作業（直近セッション）
 
-1. **データ取り込みの鮮度監視**（本セッション・未コミット）
+0. **mypy --strict 全体エラーは誤情報だったと判明・訂正**（本セッション・未コミット、コード変更なし）
+   - `tasks/backlog.md` C節「mypy src/ --strict を全体で通すためのスタブ導入」に着手する過程で、
+     `python -m mypy src/ --strict` を実行したところ **56ファイル全体で0エラー**（キャッシュ削除後も再現）。
+   - 原因: 素の `mypy` コマンドが `/root/.local/bin/mypy`（`uv tool` 等で別途インストールされた、
+     プロジェクトの依存関係が入っていない隔離環境）を指しており、fastapi/sqlalchemy/pydantic
+     （実際はいずれも py.typed 同梱で型情報あり）を「見つからない」という誤エラーを出していた。
+     `pytest`と全く同じ根本原因（前セッションで発見済みの問題と同型）。
+   - 対応: `CLAUDE.md`, `AGENTS.md`, `docs/PROJECT_RULES.md`, `docs/ARCHITECTURE.md`,
+     `apps/api/README.md`, `tasks/backlog.md` の「環境要因・コード欠陥ではない」という誤記載を
+     すべて訂正し、`python -m mypy src/ --strict`（全体0エラー）を正しい実行方法として明記。
+   - Definition of Done も「domain・applicationは0エラー」から「全体で0エラー」へ引き上げ
+     （実態がその基準を既に満たしていたため）。
+   - 検証: `rm -rf .mypy_cache && python -m mypy src/ --strict` → Success: no issues found in 56 source files。
+
+1. **データ取り込みの鮮度監視**（`2b83d75`）
    - 背景: `ingest_log` は書き込み専用で、自動同期が静かに失敗し続けても気づけなかった。
    - 対応: 新規 `domain/ops/ingest_log.py`（`IngestLogRepository` Protocol + 純粋関数
      `evaluate_freshness()`）。判定は「直近試行の失敗有無」「直近成功からの経過日数
@@ -116,11 +133,11 @@
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。
 - 画面からの手動再実行導線は未着手（`tasks/backlog.md` A節。多重実行防止等の設計が必要）。
-- それ以外はなし。①（脚質別有利度）・監視強化（推奨1）とも実装・検証済みでこれからコミットする。
+- それ以外はなし。mypy誤情報の訂正はドキュメントのみでこれからコミットする（コード変更なし）。
 
 ## 現在止まっている箇所
 
-**なし。** 取り込み鮮度監視一式は検証済みでコミット待ちの状態。
+**なし。** ドキュメント訂正のみでコミット待ちの状態。
 
 ---
 
@@ -134,8 +151,9 @@
    `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`STALE_AFTER_DAYS` 等）
    - 実データ・実運用での検証が前提のため、想定RPCI検証と同様「ユーザーが実DBでスクリプト実行/
      しばらく運用→結果を分析」の進め方になる可能性が高い。着手前にどの定数を対象にするか確認する。
-2. **P3 技術的負債**（`mypy --strict` 全体化・統合テスト環境整備・旧handoffファイル整理等）
-   - 優先度は相対的に低い。着手前にユーザーに確認。
+2. **P3 技術的負債**（統合テスト環境整備・旧handoffファイル整理・JV-Dataオフセット追従手順明文化）
+   - `mypy --strict` 全体化は本セッションで完了（誤情報の訂正のみで実質対応済み、
+     `tasks/backlog.md` C節）。残りは優先度が相対的に低い。着手前にユーザーに確認。
 
 **保留・確認待ちの項目**:
 - **P1 展開＋絶対能力の統合順位予想**（`tasks/backlog.md` B節・ユーザー要望2026-07-12）
@@ -149,25 +167,15 @@
 
 ---
 
-## 変更対象ファイル（本セッション・コミット前）
+## 変更対象ファイル（本セッション・コミット前・すべてドキュメントのみ、コード変更なし）
 
-- API: `apps/api/src/pci/domain/ops/`（新規パッケージ: `ingest_log.py`, `__init__.py`）,
-  `infrastructure/repositories/ingest_log_repository.py`（新規）, `application/dto.py`,
-  `application/ingest_status_use_cases.py`（新規）, `presentation/schemas.py`,
-  `presentation/routers/status.py`（新規）, `presentation/dependencies.py`, `presentation/app.py`
-- テスト: `tests/unit/domain/ops/test_ingest_log.py`（新規10件）,
-  `tests/unit/application/test_ingest_status_use_cases.py`（新規5件）,
-  `tests/unit/application/fake_ingest_log_repository.py`（新規）,
-  `tests/contract/test_status_api.py`（新規3件）, `tests/contract/conftest.py`（fixture拡張）
-- 生成物: `packages/api-client/openapi.json`, `packages/api-client/src/schema.d.ts`（再生成）,
-  `packages/api-client/src/index.ts`（`IngestStatus`/`IngestFailure`型 + `getIngestStatus()`追加）
-- Web: `apps/web/src/lib/ingestStatus.ts`（新規、翻訳層）, `apps/web/src/lib/ingestStatus.test.ts`（新規6件）,
-  `apps/web/src/components/IngestStatusBanner.tsx`（新規）, `apps/web/src/app/page.tsx`（バナー組み込み）
-- 文書: `docs/SPEC.md`（§5/§6.1/§9）, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`,
-  `tasks/current.md`, `tasks/backlog.md`, `docs/HANDOFF.md`（本ファイル）
+- `CLAUDE.md`, `AGENTS.md`, `docs/PROJECT_RULES.md`, `docs/ARCHITECTURE.md`,
+  `apps/api/README.md`, `tasks/backlog.md`, `docs/HANDOFF.md`（本ファイル）
+  — いずれも「mypy --strict 全体化はスタブ未導入で環境要因により不可能」という誤記載を訂正し、
+  `python -m mypy src/ --strict`（`python -m`必須）で全体0エラーが通る旨を明記。
 
-（style-advantage-v1 の変更ファイル一覧はコミット `3d3131e`、Codex実装分
-`2b083ba`/`c679e09`/`4d9e5b5` の変更ファイル一覧は各コミットまたは
+（データ取り込み鮮度監視の変更ファイル一覧はコミット `2b83d75`、style-advantage-v1 は `3d3131e`、
+Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` の変更ファイル一覧は各コミットまたは
 `docs/DECISIONS.md`/`docs/SPEC.md` の該当エントリ参照）
 
 ---
@@ -203,19 +211,18 @@
 
 ---
 
-## テスト状況（2026-07-12・取り込み鮮度監視 実装後）
+## テスト状況（2026-07-12・mypy誤情報の訂正後。コード変更はないため前回から数値は不変）
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
-| API 単体+契約 | `python -m pytest tests/unit/ tests/contract/ -q` | **414 passed**（+18: ops domain 10 + application 5 + contract 3） |
+| API 単体+契約 | `python -m pytest tests/unit/ tests/contract/ -q` | **414 passed** |
 | API Lint | `ruff check src/ tests/` | **成功**（`scripts/seed_dev.py`に無関係な既存10件あり・未着手） |
-| API 型 | `mypy src/pci/domain/ src/pci/application/ --strict` | **成功（32 files）** |
+| **API 型（全体・今回の発見）** | `rm -rf .mypy_cache && python -m mypy src/ --strict` | **成功（56 files、0エラー）** |
 | import境界 | `lint-imports` | **2 kept, 0 broken**（domain/ops も含め依存方向OK） |
 | api-client 型 | `cd packages/api-client && npm run typecheck` | **成功** |
-| Web 単体 | `cd apps/web && npm run test` | **63 passed**（+6: ingestStatusMeta） |
+| Web 単体 | `cd apps/web && npm run test` | **63 passed** |
 | Web 型 | `npm run typecheck` | **成功** |
 | Web build | `npm run build` | **成功**（3ページ + not-found） |
-| OpenAPI | `python scripts/export_openapi.py` 実行済み | 差分はコミット対象（IngestStatusSchema等追加） |
 
 未実行: integration（Docker/testcontainers前提）。実DB依存の検証（実運用での鮮度判定の
 振る舞い、Webhook通知の到達確認）はこのクラウド環境から不可。ユーザーの実環境での確認を推奨。
@@ -224,9 +231,12 @@
 
 ## 注意事項
 
-- **`pytest`単体コマンドはこの実行環境では `uv tool` の隔離環境（fastapi未インストール）を
-  指す場合がある。** `python -m pytest` を使うこと（プロジェクトの依存関係が正しく解決される）。
-  `which pytest` が `/root/.local/bin/pytest` を指す場合はこの問題に当たっている可能性が高い。
+- **`pytest`/`mypy` 単体コマンドはこの実行環境では `uv tool` の隔離環境（プロジェクトの依存関係が
+  入っていない）を指す場合がある。** `python -m pytest` / `python -m mypy` を使うこと。
+  `which pytest` や `which mypy` が `/root/.local/bin/...` を指す場合はこの問題に当たっている
+  可能性が高い。**2026-07-12判明**: 従来「`mypy src/ --strict`を全体にかけるとinfrastructure/
+  presentationでスタブ未導入エラーが多数出る（環境要因）」と広く記載されていたが、これは誤り
+  だった。`python -m mypy src/ --strict` なら全体で0エラー。詳細は各docsの訂正箇所を参照。
 - このクラウド実行環境からは本番相当DB（mykeibadb蓄積データ）に**接続できない**。
   実データに依存する検証（バックテスト・実運用での鮮度判定・Webhook到達確認等）は
   ユーザーに手元（Windows機）で実行してもらい、出力を貼ってもらって分析する進め方になる。
@@ -258,12 +268,13 @@ git fetch origin && git checkout claude/sweet-einstein-ilnaov && git pull origin
 git log --oneline -10
 git status   # クリーンであるはず
 
-# 2. API 健全性確認（pytest ではなく python -m pytest を使うこと）
+# 2. API 健全性確認（pytest/mypy は python -m 経由で使うこと。素のコマンドは
+#    隔離環境を指しfastapi等が「見つからない」誤検知になり得る）
 cd apps/api
 python -m pytest tests/unit/ tests/contract/ -q
 ruff check src/ tests/ scripts/
 lint-imports
-mypy src/pci/domain/ src/pci/application/ --strict
+python -m mypy src/ --strict   # 全体で0エラーが基準（domain/applicationだけではない）
 
 # 3. Web 健全性確認
 cd ../web

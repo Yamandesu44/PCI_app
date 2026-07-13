@@ -4,13 +4,9 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-12 / 担当: Claude Code（Codexからの引き継ぎ内容を検証済み） / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-12 / 担当: Claude Code / ブランチ `claude/sweet-einstein-ilnaov`
 
-引き継ぎ検証: 2026-07-12 Claude Code。ローカルが`origin`より7コミット遅れていたため`git merge --ff-only`で追従
-（コンフリクトなし・Codexの変更は無傷）。Codexの実装3件（running-style-v2-distance/formation-v1/UI刷新）を
-コードレベルで検証し、API側の全テスト（`python -m pytest` 380 passed, ruff/mypy --strict/lint-imports すべて
-成功）・Web側（vitest 55 passed, typecheck/build成功）・OpenAPI/schema.d.ts再生成ドリフトなしを自ら再実行して確認。
-重大な不整合なし（詳細はチャット履歴の検証報告を参照）。
+詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
 ---
 
@@ -22,7 +18,19 @@
 
 ## 最近完了したタスク
 
-- [x] ✅ **P1 データ取り込みの鮮度監視（推奨1・「監視・鮮度表示」）**（本セッション）
+- [x] ✅ **P3 `mypy --strict` 全体化（技術的負債）**（本セッション、ドキュメント訂正のみ）
+  - `tasks/backlog.md` C節に着手したところ、既存の「infrastructure/presentationはスタブ未導入で
+    多数エラー・環境要因」という長年の記載が**誤りだったと判明**。
+    `python -m mypy src/ --strict` を実行（`.mypy_cache`削除後も再現）すると
+    **56ファイル全体で0エラー**。原因は素の`mypy`コマンドが`uv tool`等の隔離環境
+    （プロジェクト依存関係が入っていない）を指していたこと（前セッションで発見した
+    `pytest`の問題と同根）。fastapi/sqlalchemy/pydanticはいずれも`py.typed`同梱で型情報あり。
+  - 対応: `CLAUDE.md`, `AGENTS.md`, `docs/PROJECT_RULES.md`, `docs/ARCHITECTURE.md`,
+    `apps/api/README.md`, `tasks/backlog.md` の誤記載をすべて訂正。Definition of Doneも
+    「domain・applicationのみ0エラー」から「全体で0エラー」へ引き上げ（実態を反映）。
+  - コード変更なし。次回以降は `python -m mypy src/ --strict` を標準コマンドとして使うこと。
+
+- [x] ✅ **P1 データ取り込みの鮮度監視（推奨1・「監視・鮮度表示」）**（コミット `2b83d75`）
   - 目的: `ingest_log` は書き込み専用で、自動同期が静かに失敗し続けても気づく手段が無かった。
   - 対応: 新規 `domain/ops/ingest_log.py`（`IngestLogRepository` Protocol +
     純粋関数 `evaluate_freshness()`）。判定は「直近試行の失敗有無」「直近成功からの経過日数

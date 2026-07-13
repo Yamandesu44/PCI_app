@@ -36,11 +36,12 @@ ADR-0008）を含み、生成根拠を `reasons` で説明する。
 ## テスト
 
 ```bash
-pytest tests/unit/ tests/contract/   # 高速・DB不要（ドメイン/アプリ/API契約）
-pytest tests/integration/            # testcontainers-postgres（要 Docker）
-mypy src/ --strict                   # 型チェック
-ruff check src/ tests/               # Lint
-lint-imports                         # レイヤー依存方向の検証
+python -m pytest tests/unit/ tests/contract/   # 高速・DB不要（ドメイン/アプリ/API契約）
+python -m pytest tests/integration/            # testcontainers-postgres（要 Docker）
+python -m mypy src/ --strict                   # 型チェック（`python -m` 必須。素の mypy/pytest は
+                                                # 隔離環境を指し得るため fastapi 等が見つからないエラーになる場合あり）
+ruff check src/ tests/                         # Lint
+lint-imports                                   # レイヤー依存方向の検証
 ```
 
 ## レイヤー構成（依存は一方向・import-linter で強制）
