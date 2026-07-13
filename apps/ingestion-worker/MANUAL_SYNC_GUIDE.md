@@ -37,6 +37,8 @@ cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
 1. `mykeibadb.exe` 実行（JV-Link → ローカルMySQL、最大10分待機）
 2. `batch.py --mode mykeibadb --step entries`（過去7日〜未来14日分の出走表）
 3. `batch.py --mode mykeibadb --step results`（同期間の確定成績）
+4. `batch.py --mode mykeibadb --step special-entries`（同期間の重賞等特別登録。
+   2026-07-13まで自動実行から漏れていた。詳細は`docs/DECISIONS.md`参照）
 
 ログは `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log` に出力される。
 
@@ -56,11 +58,16 @@ python -m ingestion.batch --mode mykeibadb --step entries --date 20260704 --date
 # 確定成績だけ
 python -m ingestion.batch --mode mykeibadb --step results --date 20260704 --date-to 20260705
 
+# 重賞等の特別登録だけ（来週分を先取りしたい時。--step all には含まれないので単独指定が必要）
+python -m ingestion.batch --mode mykeibadb --step special-entries --date 20260704 --date-to 20260718
+
 # 出走表・成績まとめて（--step all、日付省略時は今日1日のみ）
 python -m ingestion.batch --mode mykeibadb --step all --date 20260704 --date-to 20260705
 ```
 
 `--date` のみ指定して `--date-to` を省略すると、その1日だけが対象になる。
+**注意**: `--step all` は masters/entries/results のみで、`special-entries` は含まれない
+（別のmykeibadbテーブルを読むため独立ステップ。上記のように単独で指定する）。
 
 ---
 
@@ -216,6 +223,46 @@ cmd.exe（コマンドプロンプト）で実行している。これらは Pow
 | `Get-Service` | `sc query サービス名` |
 | `Get-ChildItem` | `dir /s /b` |
 
+### 6.8 週明けに土日の結果や来週の特別登録馬が反映されていない
+
+原因は2通りある。切り分けてから対処する。
+
+**(a) 来週の特別登録馬（重賞等の advance entry）が出ない場合**
+
+`run_mykeibadb_full_sync.ps1` が **2026-07-13まで `--step special-entries` を
+呼んでいなかった**（`entries`/`results`だけを実行しており、特別登録は別テーブル
+`TOKUBETSU_TOROKUBA`/`TOKUBETSU_TOROKUBAGOTO_JOHO` を読む独立ステップのため、
+自動実行からは常に漏れていた。`docs/DECISIONS.md` 参照）。修正済みのため、
+`git pull` で最新化すれば次回の自動実行から解消する。**今すぐ反映したい場合**は
+手動で実行する。
+
+```powershell
+cd C:\Users\yuuta\PCI_app
+git pull origin claude/sweet-einstein-ilnaov
+cd apps\ingestion-worker
+python -m ingestion.batch --mode mykeibadb --step special-entries --date <今日> --date-to <2週間後>
+```
+
+**(b) 土日の確定成績（`results`）が出ない場合**
+
+こちらは自動実行の対象内（`--step results`、過去7日分含む）のはずなので、
+「取りこぼし」ではなく「実行自体が失敗/未実行だった」可能性が高い。
+
+1. Task Scheduler の最終実行結果を確認する:
+   ```powershell
+   Get-ScheduledTaskInfo -TaskName "PCI_Sync_Mykeibadb"
+   ```
+   `LastTaskResult` が `0` 以外、または `LastRunTime` が期待より古い（例: 直近の
+   日曜18:00より前）場合は自動実行自体が失敗/未発火。PC がスリープ/シャットダウン
+   していなかったか確認する。
+2. ログを確認する: `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log`。
+   よくある原因は 6.1（MySQL80 サービス停止）・6.3（`mykeibadb.exe` がタイムアウトで
+   Kill された）。
+3. `GET /api/v1/ingest-status`（Webトップの鮮度バナー、2026-07-12追加）で
+   直近の取り込みログの成功/失敗と経過日数を確認できる。
+4. 原因が分かってもわからなくても、まず 1.の手動更新（`sync_mykeibadb.bat`）を
+   今すぐ実行すれば、その場でデータは最新化される。
+
 ---
 
 ## 7. 関連ファイル一覧
@@ -240,3 +287,5 @@ apps/ingestion-worker/
 | 日付 | 内容 |
 |---|---|
 | 2026-07-07 | mykeibadb ベースの自動化を構築。MySQL接続・サービスクラッシュ・PCI異常値の3件を調査・修正 |
+| 2026-07-13 | ユーザー報告（週明けに土日結果・来週特別登録が未反映）を調査し、`run_mykeibadb_full_sync.ps1`
+  が `--step special-entries` を一度も呼んでいなかったバグを発見・修正（6.8節）。 |

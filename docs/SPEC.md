@@ -114,6 +114,10 @@
   外部データの異常値が PCI を破壊するのを防ぐ）。範囲値は 🧪暫定。（se_parser.py）
 - 🟡 バッチ実行ログを `ingest_log` に記録、失敗時 Webhook 通知（本セッション周辺で追加）。
 - ✅ Task Scheduler 自動化: 金・土 10:00 / 日 18:00 に `sync_mykeibadb.bat`。（scripts/, MANUAL_SYNC_GUIDE.md）
+  **2026-07-13修正**: `run_mykeibadb_full_sync.ps1` が `--step special-entries`（重賞等の来週分
+  advance entry、別mykeibadbテーブル）を呼んでおらず自動実行から常に漏れていたバグを発見・修正
+  （`docs/DECISIONS.md` 2026-07-13）。entries/resultsのみ実行という認識だった場合、本行の従来の
+  記載も不正確だったことになる。
 - 🔎 JV-Data バイトオフセットは実データ校正済みだが、JV-Link バージョン差で要再確認。（jv_spec.py, se_parser.py）
   具体的には、UM/KS/CH（master_parsers.py）は Ver.3.0.0→Ver.4.9 の実データ差分を確認・反映済みだが、
   RA/SE（jv_spec.py）は README.md/common.py が「Ver.3.0準拠」と書いたまま未確認（§9-8）。

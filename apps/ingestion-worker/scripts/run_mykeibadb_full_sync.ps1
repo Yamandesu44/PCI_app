@@ -7,8 +7,12 @@
        using the mykeibadb.ini already configured through wmykeibadb.exe.
        Waits with a timeout so an unattended run doesn't hang forever if
        "pause on exit" is left enabled in wmykeibadb.exe.
-    2. batch.py --mode mykeibadb --step entries   -> pushes entries to PostgreSQL.
-    3. batch.py --mode mykeibadb --step results   -> pushes confirmed results.
+    2. batch.py --mode mykeibadb --step entries          -> pushes entries to PostgreSQL.
+    3. batch.py --mode mykeibadb --step results           -> pushes confirmed results.
+    4. batch.py --mode mykeibadb --step special-entries  -> pushes graded-stakes advance
+       entries (TOKUBETSU_TOROKUBA/TOKUBETSU_TOROKUBAGOTO_JOHO tables) for next week's races.
+       This reads a different mykeibadb table than step 2, so it was silently never run
+       by this script until 2026-07-13 -- see docs/DECISIONS.md.
 
     Intended to be run from Windows Task Scheduler on a JRA-calendar-aware
     schedule (Fri/Sat 10:00, Sun 18:00 -- see setup_task_scheduler.ps1).
@@ -96,7 +100,7 @@ if ($proc.ExitCode -ne 0) {
     Write-Log "mykeibadb.exe finished (exit code 0)"
 }
 
-# --- Step 2/3: batch.py (local MySQL -> PostgreSQL) ---
+# --- Step 2/3/4: batch.py (local MySQL -> PostgreSQL) ---
 $RunBatch = Join-Path $PSScriptRoot "run_batch.ps1"
 $DateFrom = (Get-Date).AddDays(-$DaysBack).ToString("yyyyMMdd")
 $DateTo   = (Get-Date).AddDays($DaysForward).ToString("yyyyMMdd")
@@ -109,9 +113,13 @@ Write-Log "--- results sync (batch.py --mode mykeibadb --step results, $DateFrom
 & $RunBatch -Step results -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
 $resultsExit = $LASTEXITCODE
 
-Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit results=$resultsExit) ==="
+Write-Log "--- special-entries sync (batch.py --mode mykeibadb --step special-entries, $DateFrom to $DateTo) ---"
+& $RunBatch -Step special-entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+$specialEntriesExit = $LASTEXITCODE
 
-if ($entriesExit -ne 0 -or $resultsExit -ne 0) {
+Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit results=$resultsExit special-entries=$specialEntriesExit) ==="
+
+if ($entriesExit -ne 0 -or $resultsExit -ne 0 -or $specialEntriesExit -ne 0) {
     exit 1
 }
 exit 0

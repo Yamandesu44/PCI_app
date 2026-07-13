@@ -9,6 +9,34 @@
 
 ---
 
+## 2026-07-13 自動同期スクリプトに `--step special-entries` 呼び出しを追加
+
+- **背景**: ユーザー報告「月曜なのに土日の開催結果と来週の特別登録馬が反映されていない」を調査。
+  `run_mykeibadb_full_sync.ps1`（Task Scheduler「PCI_Sync_Mykeibadb」金/土10:00・日18:00が実行）の
+  中身を確認したところ、`batch.py --mode mykeibadb --step entries` と `--step results` のみを
+  呼んでおり、`--step special-entries`（`ingest_mykeibadb_special_entries()`、mykeibadbの
+  `TOKUBETSU_TOROKUBA`/`TOKUBETSU_TOROKUBAGOTO_JOHO` という**別テーブル**を読む独立ステップ）を
+  一度も呼んでいなかったと判明。`setup_task_scheduler.ps1` 自身のdocstringには「日曜18:00は
+  土日の結果に加え、来週の重賞特別登録の取り込みも兼ねる」と明記されていたため、これは意図的な
+  仕様ではなく実装漏れ（2026-07-11のTask Scheduler自動化切替時に、entries/resultsのみ実装して
+  special-entriesの追加を忘れたと推測される）。
+- **採用案**: `run_mykeibadb_full_sync.ps1` に3番目の呼び出し
+  `& $RunBatch -Step special-entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo`
+  を追加（entries/resultsと同じ過去7日〜未来14日の日付窓を流用）。`sync_mykeibadb.bat`・
+  `MANUAL_SYNC_GUIDE.md`（0節説明・1節手順・2節コマンド例・6.8節トラブルシューティング新設）・
+  `docs/SPEC.md §6` を合わせて更新。
+- **理由**: `--step special-entries` 自体は既にbatch.py/mykeibadb_client.pyで実装・単体テスト
+  済みの機能で、`run_batch.ps1`のリトライ/Webhook通知も汎用的に対応済みだった。抜けていたのは
+  自動実行スクリプトからの呼び出しのみで、日付窓の設計変更等は不要な低リスクな追加。
+- **不採用案**: 特別登録専用の別スケジュール（例: 毎日実行）を新設する案 → 現状の金/土/日の
+  週3回で「来週の特別登録」を捕捉するには十分な頻度と判断し、既存スケジュールへの追加のみとした。
+  必要になれば`DaysForward`パラメータや専用トリガーを別途検討する。
+- **見直し条件**: 今回の追加後も特別登録の反映漏れが再発する場合、日付窓（過去7日〜未来14日）が
+  グレード較走の登録タイミングに対して不十分でないか確認する。
+- **未解決**: 「土日の確定成績が反映されていない」側は、自動実行自体が失敗/未発火していた
+  可能性がある（Task Scheduler実行履歴・ログ・MySQL80サービス状態はこのクラウド環境から
+  確認不可）。ユーザー自身による診断が必要（`MANUAL_SYNC_GUIDE.md §6.8`参照）。
+
 ## 2026-07-12 取り込み鮮度を新規ドメイン`domain/ops`で監視する
 
 - **背景**: `ingest_log` はバッチ実行の監査ログとして書き込まれるが、読み返す手段が無く、
