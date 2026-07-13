@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/ingest-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ingest Status
+         * @description 直近の取り込みバッチの鮮度・失敗有無を返す（トップ画面の更新状況表示用）。
+         */
+        get: operations["get_ingest_status_api_v1_ingest_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/races": {
         parameters: {
             query?: never;
@@ -527,6 +547,22 @@ export interface components {
             running_style?: string | null;
         };
         /**
+         * IngestFailureSchema
+         * @description 直近の取り込み失敗1件。
+         */
+        IngestFailureSchema: {
+            /** Batch Date */
+            batch_date: string;
+            /** Error Summary */
+            error_summary: string;
+            /** Mode */
+            mode: string;
+            /** Started At */
+            started_at: string;
+            /** Step */
+            step: string;
+        };
+        /**
          * IngestLogBody
          * @description バッチ実行ログの記録リクエスト。
          */
@@ -566,6 +602,37 @@ export interface components {
              * @default ok
              */
             message: string;
+        };
+        /**
+         * IngestStatusSchema
+         * @description 取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。
+         *
+         *     has_history=False は「ログが無い（開発/fixture環境等）」を表し、異常を意味しない。
+         */
+        IngestStatusSchema: {
+            /** Days Since Last Success */
+            days_since_last_success?: number | null;
+            /** Has History */
+            has_history: boolean;
+            /**
+             * Is Stale
+             * @default false
+             */
+            is_stale: boolean;
+            /**
+             * Last Attempt Failed
+             * @default false
+             */
+            last_attempt_failed: boolean;
+            /** Last Success At */
+            last_success_at?: string | null;
+            /** Last Success Step */
+            last_success_step?: string | null;
+            /**
+             * Recent Failures
+             * @default []
+             */
+            recent_failures: components["schemas"]["IngestFailureSchema"][];
         };
         /** JockeyBody */
         JockeyBody: {
@@ -788,6 +855,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_ingest_status_api_v1_ingest_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestStatusSchema"];
+                };
+            };
+        };
+    };
     list_races_api_v1_races_get: {
         parameters: {
             query?: {

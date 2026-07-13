@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from pci.application.dto import (
     CommentOutput,
     ForecastOutput,
+    IngestStatusOutput,
     PaceAnalysisOutput,
     RaceDetailOutput,
     RaceSummaryOutput,
@@ -324,6 +325,43 @@ class PaceAnalysisSchema(BaseModel):
                 if dto.forecast_accuracy
                 else None
             ),
+        )
+
+
+class IngestFailureSchema(BaseModel):
+    """直近の取り込み失敗1件。"""
+
+    batch_date: str
+    step: str
+    mode: str
+    started_at: str
+    error_summary: str
+
+
+class IngestStatusSchema(BaseModel):
+    """取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。
+
+    has_history=False は「ログが無い（開発/fixture環境等）」を表し、異常を意味しない。
+    """
+
+    has_history: bool
+    last_success_at: str | None = None
+    last_success_step: str | None = None
+    last_attempt_failed: bool = False
+    days_since_last_success: int | None = None
+    is_stale: bool = False
+    recent_failures: list[IngestFailureSchema] = []
+
+    @classmethod
+    def from_dto(cls, dto: IngestStatusOutput) -> IngestStatusSchema:
+        return cls(
+            has_history=dto.has_history,
+            last_success_at=dto.last_success_at,
+            last_success_step=dto.last_success_step,
+            last_attempt_failed=dto.last_attempt_failed,
+            days_since_last_success=dto.days_since_last_success,
+            is_stale=dto.is_stale,
+            recent_failures=[IngestFailureSchema(**vars(f)) for f in dto.recent_failures],
         )
 
 

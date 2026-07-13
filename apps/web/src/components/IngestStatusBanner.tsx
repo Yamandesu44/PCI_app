@@ -1,0 +1,65 @@
+import { CheckCircle2, TriangleAlert, XCircle } from "lucide-react";
+
+import { ingestStatusMeta } from "@/lib/ingestStatus";
+import type { IngestStatus } from "@pci/api-client";
+
+const TONE_CLASS: Record<string, { border: string; bg: string; icon: string }> = {
+  ok: { border: "border-emerald-200", bg: "bg-emerald-50", icon: "bg-emerald-100 text-emerald-700" },
+  warning: { border: "border-amber-200", bg: "bg-amber-50", icon: "bg-amber-100 text-amber-700" },
+  error: { border: "border-rose-200", bg: "bg-rose-50", icon: "bg-rose-100 text-rose-700" },
+};
+
+const TONE_ICON = {
+  ok: CheckCircle2,
+  warning: TriangleAlert,
+  error: XCircle,
+} as const;
+
+/**
+ * データ取り込みの鮮度・失敗状況をトップ画面上部に表示するバナー。
+ *
+ * `has_history=false`（開発/fixture環境等でログが無い）では何も描画しない。
+ * 正常時は落ち着いた表示、鮮度低下・失敗時は目立つ表示にする。
+ */
+export function IngestStatusBanner({ status }: { status: IngestStatus }) {
+  const meta = ingestStatusMeta(status);
+  if (!meta.visible) return null;
+
+  const tone = TONE_CLASS[meta.tone];
+  const Icon = TONE_ICON[meta.tone];
+
+  return (
+    <div className={`mb-6 rounded-lg border ${tone.border} ${tone.bg} p-4`}>
+      <div className="flex items-start gap-3">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${tone.icon}`}>
+          <Icon className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="m-0 text-sm font-semibold" style={{ color: meta.color }}>
+            {meta.headline}
+          </p>
+          <p className="m-0 mt-1 text-sm leading-6 text-slate-700">{meta.detail}</p>
+
+          {meta.failures.length > 0 ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
+                失敗の詳細（{meta.failures.length}件）
+              </summary>
+              <ul className="m-0 mt-2 list-none space-y-1.5 p-0">
+                {meta.failures.map((failure, i) => (
+                  <li key={i} className="rounded border border-slate-200 bg-white p-2 text-xs">
+                    <span className="font-semibold text-slate-800">{failure.label}</span>
+                    <span className="ml-2 text-slate-500">{failure.timestamp}</span>
+                    <p className="m-0 mt-1 break-all font-mono text-[11px] text-slate-500">
+                      {failure.detail}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}

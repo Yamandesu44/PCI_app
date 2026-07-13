@@ -253,3 +253,31 @@ class PaceAnalysisOutput:
     reasons: list[ReasonOutput] = field(default_factory=list)
     comment: CommentOutput | None = None
     forecast_accuracy: ForecastAccuracyOutput | None = None
+
+
+@dataclass
+class IngestFailureOutput:
+    """直近の取り込み失敗1件（GetIngestStatusUseCase の出力の一部）。"""
+
+    batch_date: str
+    step: str
+    mode: str
+    started_at: str
+    error_summary: str
+
+
+@dataclass
+class IngestStatusOutput:
+    """取り込みバッチの鮮度サマリ（GetIngestStatusUseCase の出力）。
+
+    ingest_log を1件も持たない環境（開発/fixture運用）では has_history=False とし、
+    「監視対象外」であって「異常」ではないことを区別する。
+    """
+
+    has_history: bool
+    last_success_at: str | None = None
+    last_success_step: str | None = None
+    last_attempt_failed: bool = False
+    days_since_last_success: int | None = None
+    is_stale: bool = False
+    recent_failures: list[IngestFailureOutput] = field(default_factory=list)

@@ -3,7 +3,7 @@
 > 現時点で確認できる未着手事項を整理する。**確定タスク**（やると決まっている）と
 > **改善案/検討**（やるかどうか未確定）を区別する。着手したら `tasks/current.md` へ移す。
 
-最終更新: 2026-07-11
+最終更新: 2026-07-12
 
 ---
 
@@ -17,8 +17,11 @@
   `group_races_by_track` + `_print_track_breakdown`）。
 - [x] ~~P2 バックテスト結果の可視化/保存~~ → 完了（2026-07-12、`report_to_dict` + `--output`）。
   JSON保存のみ実装。DBテーブル化は見送り（的中率推移ダッシュボードが要る段階で再検討）。
-- [ ] **P2 Windows ワーカー運用の監視強化**（design/07）。`ingest_log` は導入済み。失敗の可視化・
-  再実行導線・Webhook 通知の定着（`NOTIFY_WEBHOOK_URL`）。
+- [x] ~~P2 Windows ワーカー運用の監視強化（失敗の可視化）~~ → 完了（2026-07-12、
+  `GET /api/v1/ingest-status` + `IngestStatusBanner`）。**残課題**: `NOTIFY_WEBHOOK_URL`
+  によるWebhook通知が実際に届くかは、Windows実行機での実地確認が必要（このクラウド環境から不可）。
+  再実行導線（画面からの手動再実行トリガー）は未着手（要判断: ボタン一発で本当に安全に
+  再実行できるか、多重実行防止をどうするか）。
 
 ## B. 改善候補（やるか未確定・要判断）
 
@@ -29,8 +32,8 @@
   ユーザーへ提示して合意を取ってから着手する（独断で仕様化しない）。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
-  `DistanceStyleWeights`(running-style-v2-distance)・`StyleAdvantageWeights`(style-advantage-v1)。
-  実データ検証後に確定（独断で確定しない）。
+  `DistanceStyleWeights`(running-style-v2-distance)・`StyleAdvantageWeights`(style-advantage-v1)・
+  `STALE_AFTER_DAYS`(ingest_log鮮度監視)。実データ・実運用での検証後に確定（独断で確定しない）。
 - [ ] 脚質判定ルールの最適化（design/07 C9・データ蓄積後）。
 - [ ] 展開コメントの LLM（Gemini）本採用可否と品質基準（ADR-0008）。数値はドメイン確定・表現のみ LLM。
 - [ ] PAI 正式定義の確定（design/07 C10・実運用検証後）。

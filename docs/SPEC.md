@@ -3,7 +3,7 @@
 > コード・README・既存資料（docs/design, docs/adr）から確認できる仕様を、確度別に区別する。
 > **「実装されている」ことは「正式仕様」ではない。** 迷ったら「未確定事項」に置くこと。
 
-最終更新: 2026-07-12 / 対象コミット `03bc005` 以降（style-advantage-v1 追加を含む）
+最終更新: 2026-07-12 / 対象コミット `3d3131e` 以降（取り込み鮮度監視・ingest-status 追加を含む）
 
 凡例: ✅確定 / 🟡実装済み(仕様書未記載の挙動) / 🧪仮仕様 / ❓未確定 / 🔎要確認
 
@@ -95,7 +95,7 @@
 ## 5. API（presentation）
 
 - ✅ `GET /api/v1/races`（一覧・limit/date）, `/races/dates`, `/races/{key}`,
-  `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/health`。
+  `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`, `/health`。
 - ✅ 内部取り込み `POST /internal/ingest/{horses,jockeys,trainers,entries,results,log}`,
   `DELETE /internal/ingest/races/{key}`。`X-Ingest-Token` 認証（未設定時はスキップ=開発モード）。
 - 🟡 `pace-analysis` に `forecast_accuracy`（predicted/actual RPCI・label・error・label_hit・model_version）を追加。
@@ -115,6 +115,24 @@
 - 🟡 バッチ実行ログを `ingest_log` に記録、失敗時 Webhook 通知（本セッション周辺で追加）。
 - ✅ Task Scheduler 自動化: 金・土 10:00 / 日 18:00 に `sync_mykeibadb.bat`。（scripts/, MANUAL_SYNC_GUIDE.md）
 - 🔎 JV-Data バイトオフセットは実データ校正済みだが、JV-Link バージョン差で要再確認。（jv_spec.py, se_parser.py）
+
+### 6.1 取り込み鮮度監視（`GET /api/v1/ingest-status`、2026-07-12 追加）
+
+- ✅ **目的**: `ingest_log` に記録はあるが読み返す手段が無かった（書き込み専用）ため、
+  Web トップ画面で「データが最新か」を一目で確認できるようにする。
+  ユーザー指摘（自動同期が静かに失敗し続けるリスク）への対応。
+- ✅ **算出**: `domain/ops/ingest_log.py` の `evaluate_freshness()`（純粋関数）が、直近ログ
+  （新しい順20件）から (a) 直近試行が失敗していないか、(b) 直近成功からの経過日数、
+  を判定する。ログが1件も無い環境（開発/fixture等）は `has_history=False` とし、
+  「監視対象外」であって「異常」とは区別する（誤警告防止）。
+- 🧪 **仮値**: `STALE_AFTER_DAYS=4`（週3回運用のマージンを見込んだ暫定値、独断で確定しない）。
+- ✅ **表示**: Web トップに `IngestStatusBanner`。正常時は控えめな表示、鮮度低下・失敗時のみ
+  目立つ配色にする。失敗一覧（最大5件、エラーの要約200文字まで）は開閉式で表示。
+- ✅ **API/UI 認証**: `/api/v1/ingest-status` は公開GET（`/internal/ingest/*` の
+  X-Ingest-Token 保護とは別。MVPは個人利用のため運用者自身への表示という前提。
+  多人数公開時は表示要否を再検討（§9-6 の認証・公開範囲の議論と合わせて）。
+- 🔎 Webhook通知（`NOTIFY_WEBHOOK_URL`）自体が実際に届くかは、Windows実行機での
+  実地確認が必要（このクラウド環境から検証不可）。
 
 ---
 
@@ -199,6 +217,9 @@ ADR-0005 §5.2 の大規模バックテスト（芝 MAE 9.472/一致率76.0%/相
     スタート速度の直接データがないため、現段階では「序盤位置のゾーン予想」として扱う。
 11. 🔎 `StyleAdvantageWeights`（勾配4.0/pt・増幅1.2・逃げ競合減点6.0/頭）の実データ検証（3.4節）。
     検証案: 実績RPCIで同スコアを再計算し、有利判定脚質の好走率がベースラインを上回るか確認。
-12. ❓ **展開＋絶対能力の統合順位予想**（ユーザー要望 2026-07-12・機能追加）。現状は展開恩恵馬の
-    ピックアップまでで、能力指標（クラス実績・持ち時計・近走着順等）を加味した「どの馬が上位に
-    来そうか」は未実装。能力指数の定義から必要なため `tasks/backlog.md` B節に記録。
+12. ⏸ **展開＋絶対能力の統合順位予想**（ユーザー要望 2026-07-12・機能追加）。**2026-07-12
+    ユーザー判断で保留**（能力指数の算出方法自体の模索が必要なため）。現状は展開恩恵馬の
+    ピックアップまでで、能力指標を加味した「どの馬が上位に来そうか」は未実装。
+    再開時は能力指数の定義案をユーザーへ提示して合意を取る（`tasks/backlog.md` B節参照）。
+13. 🔎 `STALE_AFTER_DAYS=4`（取り込み鮮度監視の暫定閾値、6.1節）の妥当性。実運用（週3回同期）で
+    誤警告・見逃しが無いか、しばらく運用して検証する。

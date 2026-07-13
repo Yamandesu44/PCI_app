@@ -668,6 +668,40 @@
         "title": "HorsePaceAnalysisSchema",
         "type": "object"
       },
+      "IngestFailureSchema": {
+        "description": "直近の取り込み失敗1件。",
+        "properties": {
+          "batch_date": {
+            "title": "Batch Date",
+            "type": "string"
+          },
+          "error_summary": {
+            "title": "Error Summary",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_date",
+          "step",
+          "mode",
+          "started_at",
+          "error_summary"
+        ],
+        "title": "IngestFailureSchema",
+        "type": "object"
+      },
       "IngestLogBody": {
         "description": "バッチ実行ログの記録リクエスト。",
         "properties": {
@@ -762,6 +796,71 @@
           "accepted"
         ],
         "title": "IngestResponse",
+        "type": "object"
+      },
+      "IngestStatusSchema": {
+        "description": "取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。\n\nhas_history=False は「ログが無い（開発/fixture環境等）」を表し、異常を意味しない。",
+        "properties": {
+          "days_since_last_success": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Since Last Success"
+          },
+          "has_history": {
+            "title": "Has History",
+            "type": "boolean"
+          },
+          "is_stale": {
+            "default": false,
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "last_attempt_failed": {
+            "default": false,
+            "title": "Last Attempt Failed",
+            "type": "boolean"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "last_success_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success Step"
+          },
+          "recent_failures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IngestFailureSchema"
+            },
+            "title": "Recent Failures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "has_history"
+        ],
+        "title": "IngestStatusSchema",
         "type": "object"
       },
       "JockeyBody": {
@@ -1392,6 +1491,28 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/ingest-status": {
+      "get": {
+        "description": "直近の取り込みバッチの鮮度・失敗有無を返す（トップ画面の更新状況表示用）。",
+        "operationId": "get_ingest_status_api_v1_ingest_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestStatusSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Ingest Status",
+        "tags": [
+          "status"
+        ]
+      }
+    },
     "/api/v1/races": {
       "get": {
         "description": "新しい順にレース一覧を返す。date 指定時はその日のレースのみ返す。",

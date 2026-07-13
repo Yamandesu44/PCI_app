@@ -3,7 +3,7 @@
 > 本ファイルは現在のコードを調査して整理したもの。**推測を含む箇所には「（推測）」を明記**する。
 > 確定した設計判断の背景は `docs/adr/` を参照。
 
-最終調査: 2026-07-12 / 対象コミット `2b083ba` / ブランチ `claude/sweet-einstein-ilnaov`
+最終調査: 2026-07-12 / 対象コミット `3d3131e` 以降 / ブランチ `claude/sweet-einstein-ilnaov`
 
 ---
 
@@ -49,10 +49,13 @@ src/pci/
       formation.py     枠順確定判定 + 4ゾーンの序盤隊列予想（formation-v1）
       commentary.py    展開コメント生成（戦略IF + comment-v1 ルールベースNLG）
       scenario.py      展開シナリオ見出し/詳細
+      style_advantage.py 脚質別展開有利度（style-advantage-v1、想定RPCIの中立点からの乖離）
       mart_repository.py mart 層 Repository Protocol（read/write）
-  application/       ユースケース（forecast / race_query / race / ingest / backtest）+ DTO
-  infrastructure/    SQLAlchemy models・database・repositories（race / mart）・pace（lgbm forecaster）
-  presentation/      FastAPI app・routers（races / ingest / health）・Pydantic schemas・DI(dependencies)
+    ops/               運用監視ドメイン（PCI等の算出ロジックは持たない）
+      ingest_log.py    取り込みログの読取Protocol + 鮮度判定（evaluate_freshness、純粋関数）
+  application/       ユースケース（forecast / race_query / race / ingest / backtest / ingest_status）+ DTO
+  infrastructure/    SQLAlchemy models・database・repositories（race / mart / ingest_log）・pace（lgbm forecaster）
+  presentation/      FastAPI app・routers（races / ingest / status / health）・Pydantic schemas・DI(dependencies)
   config/            設定（settings）
 tests/               unit / contract（+ integration は testcontainers）
 alembic/             マイグレーション（001 initial, 002 ingest_log）
@@ -65,8 +68,10 @@ src/
   app/               App Router。page.tsx（レース一覧）、races/[raceKey]/forecast, /pace-analysis
   components/        RaceForecastDashboard, RaceHero, PaceHeadline, HorseFitTable,
                      PaceAnalysisTable, PaceProfileChart, CommentCard, ReasonList,
-                     RaceDateCalendar, FormationView, ui/（accordion/card/progress）
+                     RaceDateCalendar, FormationView, IngestStatusBanner,
+                     ui/（accordion/card/progress）
   lib/               api.ts（API 呼び出し）, pace.ts（★ペース表現の翻訳層）,
+                     ingestStatus.ts（取り込み鮮度の翻訳層）,
                      races.ts（一覧の分類整形）, raceSchedule.ts, utils.ts
                      *.test.ts（vitest）
 ```
@@ -113,6 +118,10 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 ### 表示
 - web が API から DTO を取得し、`lib/pace.ts` 等で実数値を言葉・バー・色に翻訳して表示。
 
+### 取り込み鮮度監視
+- `GET /api/v1/ingest-status` → `GetIngestStatusUseCase` が `ingest_log` の直近20件から
+  鮮度・直近失敗有無を判定し返す。web トップ画面が `IngestStatusBanner` で表示（2026-07-12追加）。
+
 ---
 
 ## 4. 外部サービスとの連携
@@ -132,10 +141,10 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 
 | 画面 | API | 主なテーブル |
 |---|---|---|
-| レース一覧（`app/page.tsx`） | `GET /api/v1/races`, `/races/dates` | core: races |
+| レース一覧（`app/page.tsx`） | `GET /api/v1/races`, `/races/dates`, `/ingest-status` | core: races, ingest_log（読込） |
 | 展開予想（`races/[key]/forecast`） | `GET /api/v1/races/{key}/forecast` | core: races/race_entries, mart: predicted_pace/pace_fit（書込） |
 | ペース分析/回顧（`races/[key]/pace-analysis`） | `GET /api/v1/races/{key}/pace-analysis` | core: races/race_entries, mart: predicted_pace（読込・答え合わせ） |
-| （内部）取り込み | `POST /internal/ingest/*` | core 全般 + ingest_log |
+| （内部）取り込み | `POST /internal/ingest/*` | core 全般 + ingest_log（書込） |
 
 ---
 
@@ -151,6 +160,8 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 - **Commentary**: 自然文の展開コメント（headline/body/model_version/reasons）。
 - **ForecastAccuracy**: 想定 vs 実績の答え合わせ（error/label_hit）。
 - **FormationPrediction**: 枠順確定後の序盤隊列（先頭/好位/中団/後方、model_version/reasons付き）。
+- **StyleAdvantage**: 脚質別の展開有利度（50=互角、model_version/reasons付き）。
+- **IngestFreshness**: 取り込みの鮮度サマリ（最終成功・直近失敗有無・経過日数、`domain/ops`）。
 
 ---
 

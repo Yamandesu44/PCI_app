@@ -22,7 +22,26 @@
 
 ## 最近完了したタスク
 
-- [x] ✅ **P1 脚質別有利度の差が出ない問題を修正（style-advantage-v1）**（本セッション）
+- [x] ✅ **P1 データ取り込みの鮮度監視（推奨1・「監視・鮮度表示」）**（本セッション）
+  - 目的: `ingest_log` は書き込み専用で、自動同期が静かに失敗し続けても気づく手段が無かった。
+  - 対応: 新規 `domain/ops/ingest_log.py`（`IngestLogRepository` Protocol +
+    純粋関数 `evaluate_freshness()`）。判定は「直近試行の失敗有無」「直近成功からの経過日数
+    （暫定閾値 `STALE_AFTER_DAYS=4`）」のみで、Task Schedulerの具体的cronはハードコードしない。
+    `GET /api/v1/ingest-status`（公開GET、`/internal/ingest/*`の認証とは別）を新設し、
+    web トップに `IngestStatusBanner` を追加（正常時は控えめ、鮮度低下・失敗時のみ目立つ表示、
+    失敗一覧は開閉式）。ログが1件も無い環境（開発/fixture等）は「異常」ではなく「監視対象外」
+    として扱い誤警告を防ぐ。
+  - 対象: `domain/ops/ingest_log.py`(新規), `infrastructure/repositories/ingest_log_repository.py`(新規),
+    `application/dto.py`, `application/ingest_status_use_cases.py`(新規), `presentation/schemas.py`,
+    `presentation/routers/status.py`(新規), `presentation/dependencies.py`, `presentation/app.py`,
+    `packages/api-client`(型+クライアントメソッド追加), `apps/web/src/lib/ingestStatus.ts`(新規),
+    `apps/web/src/components/IngestStatusBanner.tsx`(新規), `apps/web/src/app/page.tsx`
+  - 検証: API 414 passed（+18: domain 10・application 5・contract 3）、Web 63 passed（+6）、
+    ruff/mypy --strict/lint-imports/typecheck/build すべてclean。
+  - 未実施（ユーザー環境でのみ確認可能）: `NOTIFY_WEBHOOK_URL` によるWebhook通知が実際に届くかの
+    実地確認。このクラウド環境からは検証不可。
+
+- [x] ✅ **P1 脚質別有利度の差が出ない問題を修正（style-advantage-v1）**（コミット `3d3131e`）
   - ユーザー指摘: 展開分析の有利度が 71/76/91/96 のように高止まりし、機能していると言い難い。
   - 原因: web が「その脚質の最大PAI」を有利度として流用（脚質自体の有利さではない）。
   - 対応: domain に `style_advantage.py` を新設し、想定RPCIの中立点（classify_pace と同じ閾値中点:

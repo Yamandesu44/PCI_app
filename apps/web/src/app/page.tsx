@@ -9,6 +9,7 @@ import {
   ListFilter,
   Search,
 } from "lucide-react";
+import { IngestStatusBanner } from "@/components/IngestStatusBanner";
 import { RaceDateCalendar } from "@/components/RaceDateCalendar";
 
 import { api } from "@/lib/api";
@@ -33,7 +34,7 @@ import {
   statusLabel,
   statusTone,
 } from "@/lib/races";
-import { ApiError, type Forecast, type RaceSummary } from "@pci/api-client";
+import { ApiError, type Forecast, type IngestStatus, type RaceSummary } from "@pci/api-client";
 
 // レース一覧は実行時にバックエンドへ問い合わせる（ビルド時フェッチを避ける）。
 export const dynamic = "force-dynamic";
@@ -76,6 +77,15 @@ async function loadAllRaceDates(): Promise<string[]> {
     return await api.listRaceDates();
   } catch {
     return [];
+  }
+}
+
+async function loadIngestStatus(): Promise<IngestStatus | null> {
+  try {
+    return await api.getIngestStatus();
+  } catch {
+    // 取得失敗時はバナーを出さない（ページ全体を壊さない）。
+    return null;
   }
 }
 
@@ -358,8 +368,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const weekend = weekendRange();
   const today = todayKey();
 
-  // カレンダー用の全開催日と、選択日の決定は並列で取得する。
-  const [allDates] = await Promise.all([loadAllRaceDates()]);
+  // カレンダー用の全開催日・取り込み状況は並列で取得する。
+  const [allDates, ingestStatus] = await Promise.all([loadAllRaceDates(), loadIngestStatus()]);
   const selectedDate = selectRaceDate(allDates, params?.date, weekend);
 
   // 選択日のレースを取得（過去日付でも正確に取得できるよう日付指定フェッチを使う）。
@@ -396,6 +406,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-7 text-slate-950 sm:px-6 lg:px-8 lg:py-9">
+      {ingestStatus ? <IngestStatusBanner status={ingestStatus} /> : null}
+
       <section className="mb-7 border-b border-slate-200 pb-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">

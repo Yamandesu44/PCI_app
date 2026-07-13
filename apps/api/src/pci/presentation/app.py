@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from pci.application.errors import RaceNotConfirmedError
-from pci.presentation.routers import health, ingest, races
+from pci.presentation.routers import health, ingest, races, status
 
 
 def create_app() -> FastAPI:
@@ -38,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(races.router)
     app.include_router(ingest.router)
+    app.include_router(status.router)
     return app
 
 
