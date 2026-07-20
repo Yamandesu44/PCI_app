@@ -30,7 +30,12 @@
     and the process gets killed.
 
 .PARAMETER DaysBack
-    Start of the query window, days before today (default 7).
+    Start of the query window, days before today (default 10).
+    10 (not 7) so that a single skipped weekend does not silently drop the
+    prior weekend's confirmed results out of the window: running on a Monday
+    with DaysBack=7 starts at the previous Tuesday and excludes the Saturday
+    8 days earlier. For a longer backfill pass an explicit larger value, e.g.
+    .\run_mykeibadb_full_sync.ps1 -DaysBack 21
 
 .PARAMETER DaysForward
     End of the query window, days after today (default 14).
@@ -40,7 +45,7 @@
 #>
 param(
     [int]$TimeoutSeconds = 600,
-    [int]$DaysBack = 7,
+    [int]$DaysBack = 10,
     [int]$DaysForward = 14
 )
 

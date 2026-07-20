@@ -255,6 +255,14 @@ def ingest_entries(
     if horse_supplements:
         api.upsert_horses(horse_supplements)
 
+    _log.info(
+        "出走表集計 %s→%s: RA %d レース / SE エントリ紐付け済み %d レース",
+        date_from,
+        date_to,
+        len(races),
+        sum(1 for r in races.values() if r.entries),
+    )
+
     # API へ送信
     for race_key, race in races.items():
         if not race.entries:
@@ -299,18 +307,42 @@ def ingest_results(
         except Exception as exc:
             _log.warning("RA(results) パースエラー: %s | %.40s", exc, rec)
 
+    # 取り込みが「exit 0 なのに0件」のとき、SE行が読めていない（mykeibadb未取得）のか、
+    # 読めているが確定成績として解析できていない（列マッピング/DATA_KUBUN不整合）のかを
+    # ログだけで切り分けられるよう、各段の件数を記録する（2026-07-20 調査で追加）。
+    se_rows = 0
+    parsed_results = 0
     for rec in client.iter_se_records(date_from, date_to):
+        se_rows += 1
         try:
             race_key = parse_race_key_from_se(rec)
             result = parse_se_result(rec)
             if result is None:
                 continue
+            parsed_results += 1
 
             if race_key not in race_results:
                 race_results[race_key] = RaceResultRecord(race_key=race_key)
             race_results[race_key].results.append(result)
         except Exception as exc:
             _log.warning("SE(result) パースエラー: %s | %.40s", exc, rec)
+
+    _log.info(
+        "確定成績集計 %s→%s: SE %d 行読込 / 確定成績 %d 行解析 / %d レース記録予定",
+        date_from,
+        date_to,
+        se_rows,
+        parsed_results,
+        len(race_results),
+    )
+    if se_rows > 0 and parsed_results == 0:
+        _log.warning(
+            "SE行は読めているが確定成績が0件です。mykeibadbに確定データ（着順・タイム・"
+            "上り3F）が未取得か、列名がパーサ候補と不一致の可能性があります。"
+            "`python -m ingestion.diagnose_results --date %s --date-to %s` で原因切り分け可。",
+            date_from,
+            date_to,
+        )
 
     for race_key, rr in race_results.items():
         if not rr.results:

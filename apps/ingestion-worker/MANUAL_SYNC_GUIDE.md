@@ -243,25 +243,42 @@ cd apps\ingestion-worker
 python -m ingestion.batch --mode mykeibadb --step special-entries --date <今日> --date-to <2週間後>
 ```
 
-**(b) 土日の確定成績（`results`）が出ない場合**
+**(b) 確定成績（`results`）が出ない場合**
 
-こちらは自動実行の対象内（`--step results`、過去7日分含む）のはずなので、
-「取りこぼし」ではなく「実行自体が失敗/未実行だった」可能性が高い。
+`sync_mykeibadb.log` の末尾が `end (entries=0 results=0 special-entries=0)` でも、
+この `0` は **exit code（成功=0）であって件数ではない**。「成功しているのに0件」を
+そのまま見ても原因が分からないため、以下の順で切り分ける。
 
-1. Task Scheduler の最終実行結果を確認する:
-   ```powershell
-   Get-ScheduledTaskInfo -TaskName "PCI_Sync_Mykeibadb"
+1. **まず件数を見る**（2026-07-20〜、`batch.py` が件数ログを出すようになった）。
+   `logs\<日付>-mykeibadb-sync.log` に次のような行が出る:
    ```
-   `LastTaskResult` が `0` 以外、または `LastRunTime` が期待より古い（例: 直近の
-   日曜18:00より前）場合は自動実行自体が失敗/未発火。PC がスリープ/シャットダウン
-   していなかったか確認する。
-2. ログを確認する: `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log`。
-   よくある原因は 6.1（MySQL80 サービス停止）・6.3（`mykeibadb.exe` がタイムアウトで
-   Kill された）。
-3. `GET /api/v1/ingest-status`（Webトップの鮮度バナー、2026-07-12追加）で
-   直近の取り込みログの成功/失敗と経過日数を確認できる。
-4. 原因が分かってもわからなくても、まず 1.の手動更新（`sync_mykeibadb.bat`）を
-   今すぐ実行すれば、その場でデータは最新化される。
+   確定成績集計 20260712→20260719: SE 1234 行読込 / 確定成績 0 行解析 / 0 レース記録予定
+   ```
+   - `SE ... 行読込` が **0**: mykeibadb にその期間のデータが無い（未取得）。
+     → mykeibadb.exe / JV-Link 側の取得設定・FROMTIME を確認（本リポジトリ外）。
+     日付窓の問題の可能性もある（`-DaysBack` を大きくして再実行、下記2）。
+   - `SE ... 行読込` が **>0 なのに 確定成績 0 行**: データはあるが確定成績として
+     解析できていない。→ **2. の診断ツールで原因を特定する**。
+
+2. **診断ツールで切り分ける**（2026-07-20 追加）:
+   ```powershell
+   cd apps\ingestion-worker
+   python -m ingestion.diagnose_results --date 20260712 --date-to 20260719
+   ```
+   末尾の「判定」で (A)mykeibadb未取得 /(B)結果列の列名がパーサ候補と不一致 /
+   (C)バイト配置バグ のどれかを提示する。出力（件数・DATA_KUBUN分布・**SEテーブルの
+   実列名一覧**・判定）を開発担当（Claude/Codex）に共有すれば、(B)/(C) はコード側で
+   修正できる。※ 出力には馬名等の個人データは既定で含めない（`--show-values` を付けない限り）。
+
+3. **日付窓の確認**: `run_mykeibadb_full_sync.ps1` は既定で「今日の10日前〜14日後」だけを
+   見る。1週間以上前の取りこぼしを埋めるにはバックフィルが要る:
+   ```powershell
+   .\scripts\run_mykeibadb_full_sync.ps1 -DaysBack 21
+   ```
+
+4. 自動実行そのものの失敗を疑う場合: `Get-ScheduledTaskInfo -TaskName "PCI_Sync_Mykeibadb"`
+   で `LastTaskResult`/`LastRunTime` を確認（`0`以外や古ければ未発火。PCのスリープ等）。
+   `GET /api/v1/ingest-status`（Webトップの鮮度バナー）でも直近の成功/失敗を確認できる。
 
 ---
 
@@ -289,3 +306,5 @@ apps/ingestion-worker/
 | 2026-07-07 | mykeibadb ベースの自動化を構築。MySQL接続・サービスクラッシュ・PCI異常値の3件を調査・修正 |
 | 2026-07-13 | ユーザー報告（週明けに土日結果・来週特別登録が未反映）を調査し、`run_mykeibadb_full_sync.ps1`
   が `--step special-entries` を一度も呼んでいなかったバグを発見・修正（6.8節）。 |
+| 2026-07-20 | 確定成績が1週間以上未反映の件で、`batch.py` に件数ログを追加し、切り分け診断ツール
+  `ingestion.diagnose_results` を新設（6.8(b)節）。`DaysBack` 既定を 7→10 に変更。 |

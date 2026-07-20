@@ -9,12 +9,12 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-20（更新9回目・確定成績1週間以上未反映の原因調査とDATA_KUBUN修正・未検証） |
+| 更新日時 | 2026-07-20（更新10回目・確定成績未反映：DATA_KUBUN修正は空振り→切り分け診断ツール導入） |
 | 作業担当AI | Claude Code |
 | 直前の担当AI | OpenAI Codex（`4d9e5b5`〜`81ddb9d`の3実装+引き継ぎ文書を実施。検証済み・不整合なし） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | 本更新をコミットする直前は `e2f0b3c` fix(forecast): don't show unconfirmed horse numbers as if official |
-| 作業ツリー | 本更新時点でmykeibadb_client.pyのDATA_KUBUN修正+関連ドキュメント更新がコミット前（下記「変更対象ファイル」参照） |
+| 最新コミット | 本更新をコミットする直前は `af922a5` fix(ingestion): don't let a stale DATA_KUBUN column hide confirmed results |
+| 作業ツリー | 本更新時点で診断ツール(diagnose_results.py)+件数ログ+DaysBack修正+関連ドキュメントがコミット前（下記「変更対象ファイル」参照） |
 
 ---
 
@@ -46,40 +46,45 @@
 7/18・7/19の全開催日）確定成績が一切反映されていない**一方、**7/25・26の特別登録は
 正常に反映されている**とのユーザー報告。「取り込みは動いているが確定成績の検出だけが
 機能していない」という手がかりから`mykeibadb_client._build_se_record()`のDATA_KUBUN
-列の扱いに仮説的な原因を特定し修正（本セッション、下記「完了した作業」1.）。
-**この修正は実DBで検証できておらず、ユーザーによる再同期後の確認が必要**。
+列の扱いに仮説を立て修正した（`af922a5`）。
+
+**しかしユーザーが再pull＆再同期しても改善せず、DATA_KUBUN仮説は空振り**と判明。
+同期ログは全ステップ exit code 0（＝件数ではなく「クラッシュしていない」だけ）で、
+原因層すら特定できない状態だった。そこで方針を「推測で直す」から「測って切り分ける」へ
+転換し、(1)`batch.py`に件数ログを常設、(2)切り分け診断ツール`ingestion.diagnose_results`を
+新設、(3)`DaysBack`既定を7→10に修正した（本セッション2巡目、下記「完了した作業」1.）。
+**次アクションはユーザーによる診断ツール実行と出力共有**（原因層 (A)/(B)/(C) の確定）。
 
 ---
 
 ## 完了した作業（直近セッション）
 
-1. **確定成績1週間以上未反映の原因調査とDATA_KUBUN修正**（本セッション・未コミット・**未検証**）
-   - ユーザー報告: 2026-07-12以降（7/12・7/18・7/19の全開催日）確定成績が一切反映されない一方、
-     7/25・26の特別登録は正常に反映されている。「取り込み自体は動いているが確定成績の検出だけが
-     機能していない」という状態で、しかも先に修正した`--step special-entries`の反映を確認する
-     ための再同期を実施済みにも関わらず改善しなかった（単発の実行失敗ではなく再現性あり）。
-   - 調査: `mykeibadb_client._build_se_record()`を確認。wmykeibadbが「列分解済みテーブル」で
-     出力する環境（一般的なケース）では、着順・タイム・上り3Fの値は無条件にSEレコードのバイト
-     位置へ書き込まれる一方、DataKubunバイト（`se_parser.parse_se_result`が'4'/'7'でのみ確定
-     扱いする判定材料）は、`DATA_KUBUN`列が存在すればその値をそのまま採用し、存在しない場合
-     のみ着順等の有無から'7'/'1'を推測していた。実環境の`DATA_KUBUN`列がJV-Data本来の確定
-     コードを正しく反映していない場合、着順等のデータ自体は揃っているのに`parse_se_result`が
-     毎回`None`を返し続ける、という一貫した説明がつく。同種の「列名/値の不一致で確定成績が
-     全件消える」不具合は`test_iter_se_records_parses_results_from_wmykeibadb_columns`の
-     コメントに過去の回帰として記録されており、今回はその変種と考えられる。
-   - 対応: 着順・タイム・上り3Fが全て揃っている場合は`DATA_KUBUN`列の値に関わらず'7'（確定）
-     とするよう変更（揃っていない行を誤って確定扱いにする副作用がない単調な修正）。
-     `apps/ingestion-worker/tests/test_mykeibadb_client.py`に回帰テストを追加。
-   - 検証: `apps/ingestion-worker`はPython 3.12専用（pyproject.toml）だが、このクラウド環境の
-     既定Pythonは3.11のため、`python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"`
-     でテスト環境を用意（同梱のsystem-wide環境には元々pytest等が入っていなかった）。
-     pytest 179 passed（+1）、ruff（変更ファイルのみ0エラー）、mypy --strict（変更前後で
-     25エラーのまま=新規エラーなしを確認）。
-   - **重要な限界（未検証）**: このクラウド環境からは実DB・実mykeibadbスキーマにアクセス
-     できず、静的なコードリーディングのみに基づく仮説的な修正。ユーザーが本修正を反映して
-     再同期し、確定成績が実際に反映されるようになるかで検証が必要（`docs/DECISIONS.md`
-     2026-07-20参照）。直らない場合はこの仮説が誤りで、mykeibadb.exe/wmykeibadb側
-     （このリポジトリのコード外の要因）を疑う必要がある。
+1. **確定成績未反映：DATA_KUBUN修正は空振り → 切り分け診断ツールを導入**（本セッション）
+   - **現状**: 2026-07-12以降（7/12・7/18・7/19）確定成績が一切反映されない一方、7/25・26の
+     特別登録は正常。**まだ直っていない**。原因層を確定させるための診断待ち。
+   - **第1仮説（DATA_KUBUN、空振り）**: `_build_se_record()`が`DATA_KUBUN`列を無条件に信用して
+     いた点を修正（`af922a5`、単調・無害）。しかしユーザーが再pull＆再同期しても改善せず、この
+     仮説は単独の真因ではないと判明。同期ログは `entries=0 results=0 special-entries=0` だった
+     （**exit codeであって件数ではない**＝クラッシュしていないだけで中身は不明）。
+   - **判明した構造的問題**: `run_mykeibadb_full_sync.ps1`のログは各ステップのexit codeのみで、
+     「SE行を1行も読めていない（mykeibadb未取得＝コード外）」のか「読めているが確定成績として
+     解析できていない（コード内のバグ）」のかを区別できなかった。ただしレースは「成績未取込」
+     一覧に出る＝entries側はSE行を読めているので、SE行自体は存在する。
+   - **対応（2巡目）**: 推測をやめ「測って切り分ける」方針へ。
+     (1) `batch.py`の`ingest_results`/`ingest_entries`に件数INFOログ（SE何行読込／確定成績何行
+        解析／何レース記録）を常設。「SE行>0だが確定成績0」なら診断コマンドを促すWARNINGも追加。
+     (2) `ingestion/diagnose_results.py`（新規）: 実DBのSE行の着順/タイム/上り3F列の有無・
+        DATA_KUBUN分布・parse_se_result成功数・**SEテーブルの実列名一覧**を出力し、判定セクションで
+        (A)mykeibadb未取得 /(B)列名不一致 /(C)バイト配置バグ を切り分ける。個人・馬名系列は既定で伏せる。
+     (3) `run_mykeibadb_full_sync.ps1`の`DaysBack`既定 7→10（月曜実行時に前々週土曜が日付窓外へ
+        漏れる問題。7/12の欠落を説明可能）。長期バックフィルは`-DaysBack 21`等を明示指定。
+   - **検証**: pytest 182 passed（+3: 診断テスト）、ruff clean（新規ファイル）、mypy --strict clean
+     （diagnose_results/batch.pyとも新規エラーなし。batch.pyの既存4件は`ingest_masters`内・未編集で対象外）。
+   - **次アクション（ユーザー依頼中）**: Windows機で
+     `python -m ingestion.diagnose_results --date 20260712 --date-to 20260719` を実行して出力を共有。
+     判定が (A)→mykeibadb.exe/JV-Link設定側の調査（コード外）、(B)→`mykeibadb_client`の列候補追加、
+     (C)→バイト配置修正、へ分岐。出力が出るまでは(A)/(B)/(C)を断定しない
+     （`docs/DECISIONS.md` 2026-07-20（2）、`docs/SPEC.md §9`-15）。
 
 2. **展開恩恵馬カードが枠順未確定の馬番を確定情報のように表示するバグを修正**（`e2f0b3c`）
    - ユーザー報告（スクリーンショット）: 枠順確定前のレースなのに「展開恩恵馬TOP5」等に馬番が出ている。
@@ -238,11 +243,10 @@
 
 ## 未完了の作業
 
-- **確定成績1週間以上未反映の件、修正は投入したが実DBでの検証待ち**（ユーザー報告、本セッション）。
-  `mykeibadb_client._build_se_record()`のDATA_KUBUN列扱いを修正したが、静的なコードリーディング
-  のみに基づく仮説であり、このクラウド環境からは実DBで確認できない。ユーザーが再同期して
-  確定成績が反映されるようになるか確認依頼中（回答待ち）。直らない場合はmykeibadb.exe/
-  wmykeibadb側（コード外の要因）を疑う必要がある。
+- **確定成績1週間以上未反映の件、原因層が未確定（診断ツールの実行待ち）**（ユーザー報告、本セッション）。
+  第1仮説（DATA_KUBUN）は投入済みだが再同期しても改善せず空振り。原因が (A)mykeibadb未取得
+  （コード外）/(B)列名不一致（コード内）/(C)バイト配置バグ（コード内）のどれかを、新設の
+  `ingestion.diagnose_results`をユーザーがWindows機で実行して切り分ける段階。出力共有待ち。
 - ユーザー要望②「**展開＋絶対能力の統合順位予想**」は保留中（ユーザー判断・`tasks/backlog.md` B節）。
   能力指数の算出方法自体の模索が必要なため。再開時はまず指標案をユーザーへ提示して合意を取ること。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
@@ -258,9 +262,11 @@
 
 ## 現在止まっている箇所
 
-**確定成績未反映修正の実DB検証**（上記「未完了の作業」参照）。ユーザーが再同期を実施し、
-結果（直った/直っていない、直っていなければログ）を共有してくれるまで、このクラウド環境からは
-これ以上の診断・対応が進められない。
+**確定成績未反映の原因層特定**（上記「未完了の作業」参照）。ユーザーがWindows機で
+`python -m ingestion.diagnose_results --date 20260712 --date-to 20260719` を実行し、その出力
+（SE行数・着順/タイム/上り3F列の有無・DATA_KUBUN分布・SE実列名一覧・判定セクション）を
+共有してくれるまで、このクラウド環境からは (A)/(B)/(C) を断定できずこれ以上進められない。
+出力さえ来れば (B)/(C) は本リポジトリ側で即修正できる（列候補追加・バイト配置修正）。
 
 ---
 
@@ -295,13 +301,18 @@
 
 ## 変更対象ファイル（本セッション・コミット前）
 
-- 更新（ingestion-worker・コード、**未検証**）:
-  `apps/ingestion-worker/src/ingestion/client/mykeibadb_client.py`（`_build_se_record()`の
-  DATA_KUBUN判定ロジック修正）,
-  `apps/ingestion-worker/tests/test_mykeibadb_client.py`（回帰テスト+1件）
-- 更新（ドキュメント）: `docs/SPEC.md`（§6にバグ修正・§9-15に検証待ちを追記）,
-  `docs/DECISIONS.md`（2026-07-20エントリ追加）, `tasks/current.md`（進行中・完了タスク更新）,
-  `docs/HANDOFF.md`（本ファイル）
+- 新規（ingestion-worker・コード）:
+  `apps/ingestion-worker/src/ingestion/diagnose_results.py`（切り分け診断ツール）,
+  `apps/ingestion-worker/tests/test_diagnose_results.py`（診断テスト3件）
+- 更新（ingestion-worker・コード）:
+  `apps/ingestion-worker/src/ingestion/batch.py`（`ingest_results`/`ingest_entries`に件数ログ・
+  0件時WARNING追加）,
+  `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`（`DaysBack`既定 7→10・docstring更新）
+- 更新（ドキュメント）: `docs/SPEC.md`（§6に診断ツール・§9-15を原因究明中へ更新）,
+  `docs/DECISIONS.md`（2026-07-20（2）エントリ追加・既存エントリを空振りへ更新）,
+  `tasks/current.md`（進行中・完了タスク更新）, `docs/HANDOFF.md`（本ファイル）
+- 前コミット `af922a5`（DATA_KUBUN修正・空振り）で変更済み:
+  `mykeibadb_client.py`（`_build_se_record()`）, `test_mykeibadb_client.py`（回帰テスト+1件）
 
 （展開恩恵馬frame_noガード追加はコミット `e2f0b3c`、自動同期special-entries修正は `c49ce05`、
 JV-Data仕様追従ガイド新規作成は `24731ed`、旧handoffファイル削除は `f2a8ea6`、
@@ -349,40 +360,36 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 ## 既知の不具合
 
-- **修正済み（未検証）**: `mykeibadb_client._build_se_record()`がDATA_KUBUN列の値を無条件に
-  信用しており、この値が確定コードを正しく反映しない環境では確定成績が検出されなかった
-  （本セッション、上記「完了した作業」1.、`docs/DECISIONS.md` 2026-07-20参照）。
-  **実DBでの検証待ち**。
+- **未解決（原因層の特定中）**: 確定成績が2026-07-12以降1週間以上反映されない件。
+  第1仮説（DATA_KUBUN、`af922a5`）は空振り。原因が (A)mykeibadb未取得 /(B)列名不一致 /
+  (C)バイト配置バグ のどれかを診断ツール`ingestion.diagnose_results`の出力で切り分ける段階
+  （上記「完了した作業」1.、`docs/DECISIONS.md` 2026-07-20（2）、`docs/SPEC.md §9`-15）。
+- **修正済み（空振り・残置）**: `_build_se_record()`がDATA_KUBUN列の値を無条件に信用していた点
+  （`af922a5`）。単調・無害だが確定成績未反映の真因ではなかった。
 - **修正済み**: 展開恩恵馬カード等が枠順未確定の馬番を確定情報のように表示していた
   （`e2f0b3c`、上記「完了した作業」2.）。
 - **修正済み**: 自動同期スクリプト（`run_mykeibadb_full_sync.ps1`）が`--step special-entries`を
   一度も呼んでおらず、来週の特別登録馬が自動では反映されなかった（`c49ce05`、上記
   「完了した作業」3.）。
-- **未特定・修正対応済みで検証待ち**: 確定成績が2026-07-12以降1週間以上反映されない件
-  （原因の仮説と修正は上記「完了した作業」1.、実際に直るかはユーザーの再同期結果待ち）。
 
 ---
 
-## テスト状況（2026-07-20・DATA_KUBUN修正後）
+## テスト状況（2026-07-20・診断ツール追加後）
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
-| API 単体+契約 | `python -m pytest tests/unit/ tests/contract/ -q` | **415 passed**（+1） |
-| API Lint | `ruff check src/ tests/` | **成功**（`scripts/seed_dev.py`に無関係な既存10件あり・未着手） |
+| **ingestion-worker 単体（今回）** | `.venv/bin/python -m pytest tests/ -q`（要 Python 3.12 venv、下記注意事項参照） | **182 passed**（+3: 診断テスト） |
+| ingestion-worker Lint（変更ファイルのみ） | `ruff check src/ingestion/diagnose_results.py src/ingestion/batch.py tests/test_diagnose_results.py` | **成功** |
+| ingestion-worker 型（新規ファイル） | `.venv/bin/python -m mypy src/ingestion/diagnose_results.py --strict` | **成功（0エラー）** |
+| ingestion-worker 型（batch.py） | `.venv/bin/python -m mypy src/ingestion/batch.py --strict` | 既存4件のまま（`ingest_masters`内・未編集。新規エラーなし） |
+| API 単体+契約（前セッション） | `python -m pytest tests/unit/ tests/contract/ -q` | **415 passed** |
 | API 型（全体） | `python -m mypy src/ --strict` | **成功（56 files、0エラー）** |
-| import境界 | `lint-imports` | **2 kept, 0 broken**（domain/ops も含め依存方向OK） |
-| OpenAPI同期 | `test_committed_openapi_is_in_sync` | **成功**（`export_openapi.py`で再生成済み） |
-| api-client 型 | `cd packages/api-client && npm run typecheck` | **成功** |
-| Web 単体 | `cd apps/web && npm run test` | **65 passed**（+2） |
-| Web 型 | `npm run typecheck` | **成功** |
-| Web build | `npm run build` | **成功**（3ページ + not-found） |
-| **ingestion-worker 単体（今回）** | `.venv/bin/python -m pytest tests/ -q`（要 Python 3.12 venv、下記注意事項参照） | **179 passed**（+1） |
-| ingestion-worker Lint（変更ファイルのみ） | `ruff check src/ingestion/client/mykeibadb_client.py tests/test_mykeibadb_client.py` | **成功** |
-| ingestion-worker 型（全体・既存25件は対象外） | `mypy src/ --strict` | 変更前後で**25エラーのまま**（新規エラーなし。既存debtは対象外） |
+| Web 単体（前セッション） | `cd apps/web && npm run test` | **65 passed** |
+| Web build | `npm run build` | **成功** |
 
 未実行: integration（Docker/testcontainers前提）。実DB依存の検証（実運用での鮮度判定の
 振る舞い、Webhook通知の到達確認、`special-entries`自動呼び出しが実際にWindows実行機で
-動くかの実地確認、**そして今回のDATA_KUBUN修正が実際に確定成績を反映させるかの検証**）は
+動くかの実地確認、**そして確定成績未反映の原因層を切り分ける診断ツールの実行**）は
 このクラウド環境から不可。ユーザーの実環境での確認を推奨。
 
 ---
@@ -434,10 +441,11 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
-4. `tasks/current.md` — 進行中タスク（確定成績未反映修正の実DB検証待ちが進行中。
+4. `tasks/current.md` — 進行中タスク（確定成績未反映：診断ツール実行待ちが進行中。
    次候補は本ファイル「次に実施すべき作業」参照）
 5. `docs/SPEC.md` — 確定/未確定仕様の区別
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-20: DATA_KUBUN修正（未検証）。
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-20（2）: 切り分け診断ツール導入。
+   2026-07-20: DATA_KUBUN修正（空振り）。
    2026-07-13の2件: 展開恩恵馬frame_noガード追加・自動同期special-entries追加。
    2026-07-12の4件: ingest-status鮮度監視・style-advantage-v1・formation-v1・
    running-style-v2-distance）
@@ -469,5 +477,14 @@ npm run typecheck
 cd ../ingestion-worker
 python3.12 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/ -q
+.venv/bin/python -m pytest tests/ -q   # 182 passed
 ```
+
+**確定成績未反映の調査を引き継ぐ場合**（最優先の未解決事項）: ユーザーがWindows実行機で
+以下を実行して出力を貼ってくれるのを待つ。出力の判定セクションで原因層 (A)/(B)/(C) が分かる。
+```powershell
+cd apps\ingestion-worker
+python -m ingestion.diagnose_results --date 20260712 --date-to 20260719
+```
+(B)列名不一致なら `mykeibadb_client.py` の `_FINISH_POS_COLUMNS`/`_RACE_TIME_COLUMNS`/
+`_AGARI_3F_*` 等へ実列名を追加、(C)バイト配置バグなら未解析サンプルの合成byte値から修正する。

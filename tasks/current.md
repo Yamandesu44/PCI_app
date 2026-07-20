@@ -12,25 +12,52 @@
 
 ## 進行中
 
-- [ ] 🔄 **P0 確定成績が反映されない件（修正は投入済み・実環境での検証待ち）**
+- [ ] 🔄 **P0 確定成績が反映されない件（DATA_KUBUN修正は空振り→診断ツールで原因切り分け中）**
   - 経緯: 「9R〜11Rが欠落」という当初の報告（7/13時点）から、ユーザーが再同期を試した結果、
     実際は**2026-07-12以降1週間以上、確定成績が一切反映されていない**（7/12・7/18・7/19の
-    全レースが「成績未取込」のまま）と判明。一方、特別登録（7/25・26）は正常に反映されている
-    ため、「取り込みは動いているが確定成績の検出だけが機能していない」という、より広範で
-    深刻な状態と再定義。
-  - 原因の仮説と修正: `mykeibadb_client._build_se_record()`が`DATA_KUBUN`列の値を無条件に
-    信用しており、この列がJV-Data本来の確定コード('4'/'7')を正しく反映しない環境では、
-    着順・タイム・上り3Fが実際は揃っていても出走前扱いのまま止まる、と判断し修正
-    （下記「最近完了したタスク」参照）。
-  - **未検証**: このクラウド環境では実DBにアクセスできないため、静的なコードリーディングのみに
-    基づく仮説的な修正。ユーザーが再同期して確定成績が反映されるようになるか確認待ち。
-    直らない場合はmykeibadb.exe/wmykeibadb側（コード外の要因）を疑う必要がある。
+    全レースが「成績未取込」のまま）と判明。一方、特別登録（7/25・26）は正常に反映されている。
+  - 第1仮説（DATA_KUBUN、空振り）: `_build_se_record()`が`DATA_KUBUN`列を無条件に信用している
+    点を修正（`af922a5`）したが、ユーザーが再pull＆再同期しても**直らなかった**。同期ログは
+    entries=0 results=0 special-entries=0（＝全ステップ**exit code 0**で、件数ではない）で、
+    「クラッシュはしていないが中身が0」以上のことが分からなかった。
+  - 判明した構造的問題: `run_mykeibadb_full_sync.ps1`のログは**exit codeのみ**で、
+    「SE行を1行も読めていない（＝mykeibadb未取得。コード外）」のか「読めているが確定成績として
+    解析できていない（＝列マッピング/バイト配置のバグ。コード内）」のかを区別できなかった。
+    レースは「成績未取込」に出る＝entries側はSE行を読めているので、SE行自体は存在する。
+  - 対応（本セッション2巡目）: (1) `batch.py`の`ingest_results`/`ingest_entries`に件数ログを追加
+    （SE何行読込／確定成績何行解析／何レース記録）。(2) 診断ツール`ingestion.diagnose_results`を
+    新設し、実DBのSE行について「着順/タイム/上り3F列の有無」「DATA_KUBUN分布」「parse成功数」
+    「実列名一覧」を出力して(A)mykeibadb未取得か(B)列名不一致かを一撃で切り分ける。
+    (3) `DaysBack`既定を7→10に（月曜実行時に前々週土曜が窓から漏れる問題。7/12はこれで説明可）。
+  - **次アクション（ユーザー依頼中）**: Windows機で
+    `python -m ingestion.diagnose_results --date 20260712 --date-to 20260719` を実行し出力を共有。
+    その結果で(A)/(B)が確定し、(B)なら列候補を追加、(A)ならmykeibadb.exe/JV-Link設定側の調査へ。
 
 ---
 
 ## 最近完了したタスク
 
-- [x] 🧪 **P0（未検証） 確定成績1週間以上未反映の原因調査とDATA_KUBUN修正**（本セッション）
+- [x] ✅ **P0 確定成績未反映の切り分け診断ツール＋件数ログ＋日付窓修正**（本セッション2巡目）
+  - 契機: DATA_KUBUN修正（`af922a5`）投入後もユーザー環境で確定成績が反映されず、同期ログは
+    全ステップexit 0（件数ではない）。「exit 0で0件」だけでは原因層を特定できないと判明。
+  - 対応:
+    - `batch.py`: `ingest_results`に「SE何行読込／確定成績何行解析／何レース記録」の件数INFOログ、
+      「SE行>0だが確定成績0行」なら診断コマンドを促すWARNINGを追加。`ingest_entries`にも件数ログ。
+    - `ingestion/diagnose_results.py`(新規): 実DBのSE行を読み、着順/タイム/上り3F列の有無・
+      DATA_KUBUN分布・parse_se_result成功数・SEテーブルの実列名一覧を出力。判定セクションで
+      (A)mykeibadb未取得 / (B)列名不一致 / (C)バイト配置バグ を切り分ける。個人・馬名系列は既定で伏せる。
+    - `run_mykeibadb_full_sync.ps1`: `DaysBack`既定 7→10（月曜実行時に前々週土曜が窓外へ漏れる
+      問題を緩和。7/12の欠落はこれで説明可能）。長期バックフィル用に`-DaysBack 21`例を明記。
+  - 対象: `apps/ingestion-worker/src/ingestion/batch.py`,
+    `apps/ingestion-worker/src/ingestion/diagnose_results.py`(新規),
+    `apps/ingestion-worker/tests/test_diagnose_results.py`(新規3件),
+    `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`
+  - 検証: pytest 182 passed（+3）、ruff clean（新規ファイル）、mypy --strict clean（diagnose_results/
+    batch.pyとも新規エラーなし。batch.pyの既存4件はingest_masters内・未編集で対象外）。
+  - **未解決**: 診断ツールの実行はユーザー環境（Windows+MySQL）でのみ可能。出力を受け取り次第
+    (A)/(B)/(C)を確定して次の手を打つ。上記「進行中」に残置。
+
+- [x] 🧪 **P0（未検証・空振り） 確定成績1週間以上未反映の原因調査とDATA_KUBUN修正**（本セッション）
   - 調査: entries/special-entriesは動いているのに確定成績だけが1週間以上反映されないという
     ユーザー報告を受け、`mykeibadb_client._build_se_record()`を確認。着順・タイム・上り3Fは
     無条件にバイト列へ書き込まれる一方、DataKubun（確定判定に使う値）は`DATA_KUBUN`列が
@@ -43,8 +70,9 @@
   - 検証: `apps/ingestion-worker`は3.12専用のためこの環境にpython3.12でvenvを作成し
     `pip install -e ".[dev]"`後に実行。pytest 179 passed（+1）、ruff/mypy（該当ファイルは
     差分前後で0/25エラーのまま=新規エラーなし）clean。
-  - **重要な限界**: 実DBでの検証はできていない。ユーザーへの確認依頼中
-    （`docs/DECISIONS.md` 2026-07-20参照）。
+  - **結果（空振り）**: ユーザーが再pull＆再同期したが確定成績は反映されず、この仮説は外れ
+    （または原因の一部でしかない）と判明。修正自体は単調で無害なため残置。真因は別（診断ツールで
+    切り分け中。上記の2巡目タスク参照）。
 
 ---
 
