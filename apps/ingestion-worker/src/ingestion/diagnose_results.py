@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import contextlib
 import datetime
 from typing import Any
 
@@ -34,9 +35,11 @@ from ingestion.client.mykeibadb_client import (
     _AGARI_3F_RAW_COLUMNS,
     _DATA_KUBUN_COLUMNS,
     _FINISH_POS_COLUMNS,
+    _RA_TABLE_CANDIDATES,
     _RACE_TIME_COLUMNS,
     _SE_TABLE_CANDIDATES,
     MyKeibaDbClient,
+    _build_ra_record,
     _build_se_record,
     _int_or_none,
     _pick,
@@ -44,7 +47,8 @@ from ingestion.client.mykeibadb_client import (
     _row_in_date_range,
     _str_or_none,
 )
-from ingestion.parser.se_parser import parse_se_result
+from ingestion.parser.ra_parser import parse_ra
+from ingestion.parser.se_parser import parse_race_key_from_se, parse_se_result
 
 # 値を伏せる列（個人・馬名系）。--show-values 未指定時はサンプル表示から除外する。
 _SENSITIVE_HINTS = ("name", "bamei", "馬名", "氏名", "shimei", "kisyu", "chokyo")
@@ -57,6 +61,14 @@ def _is_sensitive(column: str) -> bool:
 
 def _fmt_present(value: Any) -> str:
     return "あり" if _str_or_none(value) else "なし"
+
+
+def _build_ra_record_safe(row: dict[str, Any]) -> str | None:
+    """RA レコード合成。日付列などが欠けて例外になる行は None（診断では無視）。"""
+    try:
+        return _build_ra_record(row)
+    except Exception:  # noqa: BLE001 - 診断目的
+        return None
 
 
 def diagnose(
@@ -83,6 +95,9 @@ def diagnose(
     built_dk_dist: collections.Counter[str] = collections.Counter()
     samples_shown = 0
     column_names: list[str] | None = None
+    # 確定成績が解析できたレースキー。RA（出走表元）に対応が無いと、取り込み側で
+    # レースが登録されず record_results が「レースが見つかりません」で全滅する。
+    se_result_race_keys: set[str] = set()
 
     for row in client._iter_table_by_date_range(connection, table, date_from, date_to):
         if not _row_in_date_range(row, date_from, date_to):
@@ -126,6 +141,8 @@ def diagnose(
                 print(f"  parse_se_result 例外: {exc}")
         if result is not None:
             parsed_ok += 1
+            with contextlib.suppress(Exception):
+                se_result_race_keys.add(parse_race_key_from_se(record))
 
         # 「結果列はあるのに解析できない」行をサンプル表示（原因究明の核心）。
         if f_ok and result is None and samples_shown < sample_limit:
@@ -154,6 +171,38 @@ def diagnose(
         print(f"\nSE テーブルの列名（{len(column_names)}列）:")
         print("  " + ", ".join(column_names))
 
+    # --- RA（出走表元）との突き合わせ ---
+    # 取り込みは RA からレースを作り、そこへ SE を紐付ける。RA が無いレースは
+    # 出走表が登録されず、確定成績を送っても record_results が失敗する。
+    ra_missing = sorted(se_result_race_keys)
+    ra_rows = 0
+    ra_race_keys: set[str] = set()
+    try:
+        ra_table = client._find_table(connection, _RA_TABLE_CANDIDATES)
+        for row in client._iter_table_by_date_range(connection, ra_table, date_from, date_to):
+            if not _row_in_date_range(row, date_from, date_to):
+                continue
+            ra_rows += 1
+            ra_record = _raw_record(row) or _build_ra_record_safe(row)
+            if ra_record is None:
+                continue
+            try:
+                ra = parse_ra(ra_record)
+            except Exception:  # noqa: BLE001 - 診断目的
+                ra = None
+            if ra is not None:
+                ra_race_keys.add(ra.race_key)
+        ra_missing = sorted(se_result_race_keys - ra_race_keys)
+        print("\n===== RA（出走表元）突き合わせ =====")
+        print(f"RA テーブル: {ra_table}")
+        print(f"RA 行数: {ra_rows} / RA レースキー数: {len(ra_race_keys)}")
+        print(f"確定成績ありレース数: {len(se_result_race_keys)}")
+        print(f"確定成績はあるが RA が無いレース数: {len(ra_missing)}")
+        if ra_missing:
+            print("  例: " + ", ".join(ra_missing[:10]))
+    except Exception as exc:  # noqa: BLE001 - RA突き合わせは補助情報
+        print(f"\n（RA突き合わせをスキップ: {exc}）")
+
     print("\n===== 判定 =====")
     if total == 0:
         print("  ⚠ この期間の SE 行が0件。mykeibadb に該当開催のデータが未取得です。")
@@ -168,8 +217,20 @@ def diagnose(
         print("  ⚠ 結果3項目は揃っているのに parse_se_result が全件 None。")
         print("    → 合成レコードのバイト配置か値変換（時計/上り3Fの妥当範囲）に不整合。")
         print("       上の未解析サンプルの合成byte値を確認してください（本リポジトリのバグ）。")
+    elif ra_missing:
+        print(f"  ⚠ 確定成績は {parsed_ok} 件解析できるが、うち {len(ra_missing)} レースは")
+        print("     RA（出走表元）がmykeibadbに無い。取り込みは RA からレースを作ってそこへ")
+        print("     成績を紐付けるため、RA が無いと出走表が登録されず、確定成績を送っても")
+        print("     API側で『レースが見つかりません』となり status が確定へ更新されない。")
+        print("     → RA テーブル（race_shosai 等）にこの期間のデータが入っているかを確認。")
+        print("       入っていなければ mykeibadb.exe 側の RA 取得漏れ（本リポジトリ外）。")
     else:
-        print(f"  ✓ {parsed_ok} 件の確定成績を解析可能。取り込み側は正常に動作するはずです。")
+        print(f"  ✓ 確定成績 {parsed_ok} 件を解析でき、対応する RA も揃っている。")
+        print("     解析・出走表登録の前提は満たしているので、それでもアプリに反映されない場合は")
+        print("     『送信』段階を疑う。最新コードで results ステップを再実行し、ログの")
+        print("     『確定成績送信 …: 成功 X / 失敗 Y』行と『成績送信エラー …』の有無を確認。")
+        print("     失敗が多い場合、API接続先(API_BASE_URL)がWebのDBと同一か、record_results の")
+        print("     例外内容（レース未登録/HTTP/VO検証）を確認する。")
 
 
 def main() -> None:

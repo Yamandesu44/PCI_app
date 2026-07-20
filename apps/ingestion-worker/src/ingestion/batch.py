@@ -344,6 +344,8 @@ def ingest_results(
             date_to,
         )
 
+    sent_ok = 0
+    sent_fail = 0
     for race_key, rr in race_results.items():
         if not rr.results:
             continue
@@ -353,8 +355,27 @@ def ingest_results(
             _log.debug("HaronTime 取得 %s: S3=%.1f L3=%.1f", race_key, rr.race_s3f, rr.race_l3f)
         try:
             api.record_results(rr)
+            sent_ok += 1
         except Exception as exc:
+            sent_fail += 1
             _log.error("成績送信エラー %s: %s", race_key, exc)
+
+    # 解析はできたのに送信で全滅している状態（＝APIレイヤの問題。レース未登録で
+    # find_by_key が None を返す等）を exit 0 に埋もれさせない。件数を明示する。
+    _log.info(
+        "確定成績送信 %s→%s: 成功 %d レース / 失敗 %d レース（解析済み %d レース）",
+        date_from,
+        date_to,
+        sent_ok,
+        sent_fail,
+        len(race_results),
+    )
+    if race_results and sent_ok == 0:
+        _log.warning(
+            "確定成績を解析できたが、API送信が全件失敗しています。"
+            "上の『成績送信エラー』の内容（例: レースが見つかりません=出走表未登録、"
+            "HTTPエラー=API/DB接続先の相違）を確認してください。"
+        )
 
 
 def _to_iso_date(yyyymmdd: str) -> str:

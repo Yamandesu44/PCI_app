@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -49,7 +50,9 @@ def test_diagnose_reports_confirmed_results(capsys: pytest.CaptureFixture[str]) 
 
     out = capsys.readouterr().out
     assert "parse_se_result 成功: 1" in out
-    assert "確定成績を解析可能" in out
+    # RA も揃っているので、原因は解析ではなく「送信」段階だと案内する分岐に入る。
+    assert "対応する RA も揃っている" in out
+    assert "確定成績はあるが RA が無いレース数: 0" in out
 
 
 def test_diagnose_flags_missing_result_columns(capsys: pytest.CaptureFixture[str]) -> None:
@@ -64,6 +67,28 @@ def test_diagnose_flags_missing_result_columns(capsys: pytest.CaptureFixture[str
     assert "parse_se_result 成功: 0" in out
     # 判定セクションが (A)/(B) の切り分けを促していること
     assert "列名" in out
+
+
+class _NoRaConnection(_Connection):
+    """SE の確定成績はあるが、対応する RA（出走表元）が無い mykeibadb を模す。
+
+    取り込みは RA からレースを作るため、RA が無いと record_results が
+    「レースが見つかりません」で失敗する。診断はこれを検出できる必要がある。
+    """
+
+    ra: list[dict[str, Any]] = []
+
+
+def test_diagnose_flags_results_without_ra(capsys: pytest.CaptureFixture[str]) -> None:
+    """確定成績はあるが RA が無い場合、レース未登録による送信失敗の可能性を提示する。"""
+    client = MyKeibaDbClient(connection=_NoRaConnection())
+
+    diagnose("20260620", "20260622", show_values=False, sample_limit=3, client=client)
+
+    out = capsys.readouterr().out
+    assert "parse_se_result 成功: 1" in out
+    assert "確定成績はあるが RA が無いレース数: 1" in out
+    assert "レースが見つかりません" in out
 
 
 def test_diagnose_reports_empty_period(capsys: pytest.CaptureFixture[str]) -> None:
