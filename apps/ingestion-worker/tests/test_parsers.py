@@ -50,6 +50,7 @@ def _ra(
     condition_name: str | None = None,
     haron_s3: int | None = None,
     haron_l3: int | None = None,
+    grade_code: str | None = None,
 ) -> str:
     """RA レコードのテスト用フィクスチャ（byte 正確 / 実測オフセット）。
 
@@ -71,6 +72,8 @@ def _ra(
     _put_field(buf, 33, race_name)                # Hondai（全角30字まで）
     if condition_name is not None:
         _put_field(buf, 623, condition_name)      # JyokenName（競走条件名称）
+    if grade_code is not None:
+        _put_field(buf, 615, grade_code)          # GradeCD（JV-Data仕様）
     _put_field(buf, 697, f"{kyori:04d}")          # Kyori CONFIRMED
     _put_field(buf, 705, "17")                    # TrackCD='17'(芝内回り) CONFIRMED
     if haron_s3 is not None:
@@ -337,10 +340,18 @@ class TestRaParser:
         assert result.track_condition is None
 
     def test_grade_unknown(self) -> None:
-        # GradeCd オフセット未確定のため None を返す
         result = parse_ra(_ra())
         assert result is not None
         assert result.grade is None
+
+    @pytest.mark.parametrize(
+        ("code", "expected"),
+        [("A", "G1"), ("B", "G2"), ("C", "G3"), ("F", "J・G1"), ("L", "L")],
+    )
+    def test_grade_code_is_decoded(self, code: str, expected: str) -> None:
+        result = parse_ra(_ra(grade_code=code))
+        assert result is not None
+        assert result.grade == expected
 
     def test_field_size_unknown_is_zero(self) -> None:
         # SyussoTosu の byte 位置は未特定のため暫定 0（RA --map で特定予定）
@@ -511,6 +522,11 @@ class TestSeResultParser:
         result = parse_se_result(rec)
         assert result is not None
         assert abs(result.agari_3f_s - 33.9) < 0.15
+
+    def test_body_weight(self) -> None:
+        result = parse_se_result(_se_result(ba_taijyu=486))
+        assert result is not None
+        assert result.body_weight == 486.0
 
     def test_corners_absent_returns_none(self) -> None:
         """コーナーデータを埋め込まない（空白）レコードは None を返す。"""

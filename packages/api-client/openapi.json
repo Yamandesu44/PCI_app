@@ -1287,6 +1287,17 @@
       },
       "ResultBody": {
         "properties": {
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
           "race_key": {
             "pattern": "^\\d{16}$",
             "title": "Race Key",
@@ -1357,6 +1368,19 @@
             "exclusiveMinimum": 0.0,
             "title": "Agari 3F S",
             "type": "number"
+          },
+          "body_weight": {
+            "anyOf": [
+              {
+                "maximum": 700.0,
+                "minimum": 300.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Weight"
           },
           "corner_1": {
             "anyOf": [

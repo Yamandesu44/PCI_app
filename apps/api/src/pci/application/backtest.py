@@ -27,6 +27,7 @@ from typing import Any
 
 from pci.application.dto import ForecastOutput
 from pci.application.forecast_use_cases import ForecastRaceUseCase
+from pci.domain.pace.ability import AbilityScorer
 from pci.domain.pace.affinity import is_good_run
 from pci.domain.pace.commentary import CommentGenerator
 from pci.domain.pace.rpci_forecast import PaceLabel, RpciForecaster, classify_pace
@@ -133,6 +134,17 @@ class HorseSample:
     good_run: bool
 
 
+@dataclass(frozen=True)
+class IntegratedSample:
+    """統合順位1頭分と実績の比較サンプル。"""
+
+    race_key: str
+    horse_no: int
+    rank: int
+    finish_pos: int | None
+    good_run: bool
+
+
 # ----- 集計結果 -----
 
 
@@ -174,6 +186,17 @@ class PaiLift:
 
 
 @dataclass(frozen=True)
+class IntegratedAccuracy:
+    """統合順位の実績指標。AbilityWeights比較時の共通評価軸として使う。"""
+
+    n_races: int
+    n_horses: int
+    top1_win_rate: float
+    top1_good_rate: float
+    top3_good_capture_rate: float
+
+
+@dataclass(frozen=True)
 class BacktestReport:
     """バックテスト全体の結果。"""
 
@@ -183,8 +206,10 @@ class BacktestReport:
     skipped: int
     rpci: RpciAccuracy | None
     pai: PaiLift | None
+    integrated: IntegratedAccuracy | None = None
     rpci_samples: list[RpciSample] = field(default_factory=list)
     horse_samples: list[HorseSample] = field(default_factory=list)
+    integrated_samples: list[IntegratedSample] = field(default_factory=list)
 
 
 def summarize_rpci(samples: list[RpciSample]) -> RpciAccuracy | None:
@@ -243,6 +268,33 @@ def summarize_pai_lift(
     )
 
 
+def summarize_integrated_accuracy(
+    samples: list[IntegratedSample],
+) -> IntegratedAccuracy | None:
+    """統合順位の上位が勝利・好走を捉えた割合を集計する。"""
+    if not samples:
+        return None
+    top1 = [sample for sample in samples if sample.rank == 1]
+    good_runs = [sample for sample in samples if sample.good_run]
+    return IntegratedAccuracy(
+        n_races=len(top1),
+        n_horses=len(samples),
+        top1_win_rate=round(
+            sum(1 for sample in top1 if sample.finish_pos == 1) / len(top1), 4
+        )
+        if top1
+        else 0.0,
+        top1_good_rate=round(sum(1 for sample in top1 if sample.good_run) / len(top1), 4)
+        if top1
+        else 0.0,
+        top3_good_capture_rate=round(
+            sum(1 for sample in good_runs if sample.rank <= 3) / len(good_runs), 4
+        )
+        if good_runs
+        else 0.0,
+    )
+
+
 def group_races_by_track(races: Iterable[Race]) -> dict[str, list[Race]]:
     """レース群をコース種別ごとにグルーピングする。
 
@@ -266,8 +318,12 @@ def report_to_dict(report: BacktestReport) -> dict[str, Any]:
         "skipped": report.skipped,
         "rpci": _rpci_accuracy_to_dict(report.rpci),
         "pai": _pai_lift_to_dict(report.pai),
+        "integrated": _integrated_accuracy_to_dict(report.integrated),
         "rpci_samples": [_rpci_sample_to_dict(s) for s in report.rpci_samples],
         "horse_samples": [_horse_sample_to_dict(s) for s in report.horse_samples],
+        "integrated_samples": [
+            _integrated_sample_to_dict(s) for s in report.integrated_samples
+        ],
     }
 
 
@@ -299,6 +355,20 @@ def _pai_lift_to_dict(lift: PaiLift | None) -> dict[str, Any] | None:
     }
 
 
+def _integrated_accuracy_to_dict(
+    accuracy: IntegratedAccuracy | None,
+) -> dict[str, Any] | None:
+    if accuracy is None:
+        return None
+    return {
+        "n_races": accuracy.n_races,
+        "n_horses": accuracy.n_horses,
+        "top1_win_rate": accuracy.top1_win_rate,
+        "top1_good_rate": accuracy.top1_good_rate,
+        "top3_good_capture_rate": accuracy.top3_good_capture_rate,
+    }
+
+
 def _rpci_sample_to_dict(sample: RpciSample) -> dict[str, Any]:
     return {
         "race_key": sample.race_key,
@@ -315,6 +385,16 @@ def _horse_sample_to_dict(sample: HorseSample) -> dict[str, Any]:
         "race_key": sample.race_key,
         "horse_no": sample.horse_no,
         "pai": sample.pai,
+        "good_run": sample.good_run,
+    }
+
+
+def _integrated_sample_to_dict(sample: IntegratedSample) -> dict[str, Any]:
+    return {
+        "race_key": sample.race_key,
+        "horse_no": sample.horse_no,
+        "rank": sample.rank,
+        "finish_pos": sample.finish_pos,
         "good_run": sample.good_run,
     }
 
@@ -356,6 +436,15 @@ def format_report(report: BacktestReport) -> str:
     else:
         lines.append("\n■ PAI: 有効サンプルなし")
 
+    if report.integrated is not None:
+        i = report.integrated
+        lines.append("\n■ 統合順位予想の実績")
+        lines.append(f"  1位馬の勝率: {i.top1_win_rate:.1%}")
+        lines.append(f"  1位馬の好走率: {i.top1_good_rate:.1%}")
+        lines.append(f"  TOP3の好走馬捕捉率: {i.top3_good_capture_rate:.1%}")
+    else:
+        lines.append("\n■ 統合順位予想: 有効サンプルなし")
+
     return "\n".join(lines)
 
 
@@ -383,16 +472,19 @@ class ForecastBacktester:
         repo: RaceRepository,
         forecaster: RpciForecaster | None = None,
         comment_generator: CommentGenerator | None = None,
+        ability_scorer: AbilityScorer | None = None,
         band_edges: tuple[int, ...] = DEFAULT_BAND_EDGES,
     ) -> None:
         self._repo = repo
         self._forecaster = forecaster
         self._commenter = comment_generator
+        self._ability_scorer = ability_scorer
         self._band_edges = band_edges
 
     def run(self, targets: Iterable[Race]) -> BacktestReport:
         rpci_samples: list[RpciSample] = []
         horse_samples: list[HorseSample] = []
+        integrated_samples: list[IntegratedSample] = []
         n_races = 0
         skipped = 0
         model_versions: set[str] = set()
@@ -432,6 +524,18 @@ class ForecastBacktester:
                         good_run=is_good_run(finish, race.grade),
                     )
                 )
+            if out.integrated_ranking is not None:
+                for entry in out.integrated_ranking.entries:
+                    finish = finish_by_no.get(entry.horse_no)
+                    integrated_samples.append(
+                        IntegratedSample(
+                            race_key=key,
+                            horse_no=entry.horse_no,
+                            rank=entry.rank,
+                            finish_pos=finish,
+                            good_run=is_good_run(finish, race.grade),
+                        )
+                    )
             n_races += 1
 
         model_version = " / ".join(sorted(model_versions)) if model_versions else ""
@@ -442,8 +546,10 @@ class ForecastBacktester:
             skipped=skipped,
             rpci=summarize_rpci(rpci_samples),
             pai=summarize_pai_lift(horse_samples, self._band_edges),
+            integrated=summarize_integrated_accuracy(integrated_samples),
             rpci_samples=rpci_samples,
             horse_samples=horse_samples,
+            integrated_samples=integrated_samples,
         )
 
     def _predict_as_of(self, race: Race) -> ForecastOutput:
@@ -454,5 +560,6 @@ class ForecastBacktester:
             forecaster=self._forecaster,
             mart_repo=None,
             comment_generator=self._commenter,
+            ability_scorer=self._ability_scorer,
         )
         return use_case.execute(str(race.race_key))

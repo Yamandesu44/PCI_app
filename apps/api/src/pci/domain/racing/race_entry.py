@@ -13,7 +13,7 @@ class RaceEntry:
     horse_no: int
     frame_no: int
     ketto_num: str  # 血統登録番号
-    weight: float  # 斤量(kg)
+    weight: float  # 馬体重(kg)。既存DB/API名との互換性のためフィールド名は維持。
     jockey_code: str
     trainer_code: str
 

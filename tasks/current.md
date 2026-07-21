@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-21（Claude Codeへの引き継ぎ準備・リモート更新統合） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-21（統合順位予想 Phase 2 完成） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,15 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P1 統合順位予想 Phase 2 完成（grade・確定馬体重・検証指標）**（本セッション・OpenAI Codex）
+  - grade: RA `GradeCD[615]` を公式コードから名称へ変換し、mykeibadb→API→`races.grade`へ保存。
+    ability-v3はgradeをクラス補正へ優先利用し、欠損時だけrace_class推定へ縮退。
+  - 馬体重: SE `BaTaijyu[324:327]` をresults payloadにも追加し、results単独再取込でも既存
+    `race_entries.weight`を確定馬体重で更新。体格と能力を直結させる根拠がないため能力加点は見送り。
+  - 検証: バックテストへ統合順位の1位馬勝率・1位馬好走率・TOP3好走捕捉率とJSON出力を追加。
+  - テスト: API unit+contract 440 passed、ingestion 191 passed、Web 65 passed、API/ingestion変更対象Ruff、
+    lint-imports、api-client/web typecheck、Web build成功。mypy strictは既存lgbm unused-ignore 1件のみ。
 
 - [x] ✅ **P0 Claude Code リモート更新の統合と引き継ぎ資料更新**（本セッション・OpenAI Codex）
   - 状況: Codex が `tasks/current.md` の最優先候補（バックテスト結果のJSON保存）に着手し
@@ -44,7 +53,7 @@
     （`MANUAL_SYNC_GUIDE §7.5`）。やらなくても壊れない（縮退）。
   - 検証: API 436 passed（+ability-v2 4件・parser round-trip等）、ingestion 185 passed（+2）、
     Web 65 passed・typecheck・build clean、ruff/lint-imports/mypy clean（既存lgbm/tuple-concat debtのみ・新規0）。
-  - 残（Phase2）: 馬体重・grade の永続化、実 JV-Data の人気/賞金オフセット検証（jvlink 用）。`tasks/backlog.md` B節。
+  - 後続で馬体重・gradeを追加済み（上記）。残るのは実JV-Dataの人気/賞金オフセット検証。
 
 - [x] ✅ **P1 統合順位予想（能力×展開）Phase1 実装**（本セッション・ユーザー選択のB節要望を再開）
   - 判断: データ範囲=現データのみ / 統合=2軸分類（本命/対抗/穴/危険）（ユーザー選択・`docs/DECISIONS.md` 2026-07-21）。
@@ -55,8 +64,8 @@
     OpenAPI再生成（`openapi.json`+`schema.d.ts`）, `api-client/src/index.ts`（型追加）。
   - web: `IntegratedRankingView.tsx`（新規・◎○▲△と能力上位/中位・展開向く/向きにくいを言葉表示、
     実数値は非表示）を `RaceForecastDashboard` の隊列予想の前に配置。
-  - 既知の限界: `grade`未永続化のためクラス係数は`race_class`文字列のbest-effort（重賞のステークス名
-    のみは中立化）。事実上「クラス補正付き近走充実度」。Phase2（人気・賞金・馬体重の永続化）はbacklog。
+  - 当時の既知の限界: `grade`未永続化のためクラス係数は`race_class`文字列のbest-effortだった。
+    本セッションのability-v3でgrade・人気・本賞金・確定馬体重の永続化まで完了済み。
   - 検証: API 432 passed（+新規domain16・contract1）、Web 65 passed、api/web typecheck・build・
     ruff・lint-imports・mypy --strict すべてclean（既存のlgbm 1件は当環境固有・無関係）。
 

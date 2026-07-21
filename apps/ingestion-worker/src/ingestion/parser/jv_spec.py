@@ -90,7 +90,7 @@ RA_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("Nkai", 612, 3, "num", _T, "回次 [第N回]"),
     FieldSpec(
         "GradeCD", 615, 1, "code", _T,
-        "615=spec標準（Nkai[612:615]直後）。dump_records は614仮定→要確認",
+        "JV-Data Ver.4.9.0.1仕様書のRAグレードコード位置。実COMレコードでの再確認は未実施",
     ),
     FieldSpec("GradeCDBefore", 616, 1, "code", _T, "変更前グレードコード"),
     FieldSpec("SyubetuCD", 617, 2, "code", _T, "競走種別コード"),

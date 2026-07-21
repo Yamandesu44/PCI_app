@@ -50,8 +50,10 @@ ENTRIES_PAYLOAD = {
 RESULTS_PAYLOAD = {
     "race_key": RACE_KEY,
     "track_condition": "良",
+    "grade": "G3",
     "results": [
-        {"horse_no": 1, "finish_pos": 1, "race_time_s": 94.4, "agari_3f_s": 34.0, "corner_4": 2},
+        {"horse_no": 1, "finish_pos": 1, "race_time_s": 94.4, "agari_3f_s": 34.0, "corner_4": 2,
+         "body_weight": 486.0},
         {"horse_no": 2, "finish_pos": 2, "race_time_s": 94.6, "agari_3f_s": 34.2, "corner_4": 1},
         {"horse_no": 3, "finish_pos": 3, "race_time_s": 95.0, "agari_3f_s": 34.5, "corner_4": 4},
     ],
@@ -235,6 +237,18 @@ class TestIngestResults:
     def test_entry_pcis_keyed_by_horse_no(self, seeded_client: TestClient) -> None:
         body = seeded_client.post("/internal/ingest/results", json=RESULTS_PAYLOAD).json()
         assert set(body["entry_pcis"].keys()) == {"1", "2", "3"}
+
+    def test_result_updates_grade_and_body_weight(
+        self, seeded_client: TestClient, fake_repo: FakeRaceRepository
+    ) -> None:
+        from pci.domain.shared.race_key import RaceKey
+
+        seeded_client.post("/internal/ingest/results", json=RESULTS_PAYLOAD)
+
+        race = fake_repo.find_by_key(RaceKey(RACE_KEY))
+        entries = fake_repo.find_entries(RaceKey(RACE_KEY))
+        assert race is not None and race.grade == "G3"
+        assert next(e for e in entries if e.horse_no == 1).weight == 486.0
 
     def test_unknown_race_key_returns_500_or_4xx(self, client: TestClient) -> None:
         bad = {**RESULTS_PAYLOAD, "race_key": "9999999999999999"}

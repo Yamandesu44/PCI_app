@@ -145,6 +145,7 @@ class IngestApiClient:
             "race_key": record.race_key,
             "track_condition": record.track_condition,
             "weather": record.weather,
+            "grade": record.grade,
             "race_s3f": record.race_s3f,
             "race_l3f": record.race_l3f,
             "results": [
@@ -157,6 +158,7 @@ class IngestApiClient:
                     "corner_2": r.corner_2,
                     "corner_3": r.corner_3,
                     "corner_4": r.corner_4,
+                    "body_weight": r.body_weight,
                     "popularity": r.popularity,
                     "prize_money": r.prize_money,
                 }

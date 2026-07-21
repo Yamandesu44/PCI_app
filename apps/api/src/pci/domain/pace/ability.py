@@ -1,14 +1,13 @@
-"""能力指数 (ability-v1) 算出モジュール。
+"""能力指数 (ability-v3) 算出モジュール。
 
 展開適性(PAI)とは独立に、馬の「地力（近走内容の強さ）」を推定する指標。
 統合順位予想（展開×能力の2軸分類）の能力軸として使う。
 
-設計上の制約（現データのみ・Phase1）:
-    現状 core 層に永続化されている過去走データは finish_pos / field_size /
-    race_class（レース名 or 条件名の文字列）/ race_date 等に限られ、人気・オッズ・
-    獲得賞金・grade コードは未取得（`docs/SPEC.md §9`）。そのため本指標の中核は
-    「出走頭数で正規化した近走着順の新しさ加重平均」= 事実上の近走充実度で、
-    クラス補正は race_class のキーワードから best-effort で行う（判別不能時は中立）。
+設計上の制約:
+    本指標の中核は「出走頭数で正規化した近走着順の新しさ加重平均」。クラス補正は
+    grade を優先し、欠損時だけ race_class のキーワードから best-effort で行う。
+    人気・獲得本賞金も補助成分として使うが、未取得の成分は除外して安全に縮退する。
+    馬体重は永続化するものの、体格の大小を地力と結び付ける根拠がないため加点しない。
     → 絶対値の意味は限定的なので、上位/中位/下位の tier 判定はレース内の相対順位で
       行う（統合層 `integrated_ranking` が担当）。本モジュールは 0〜100 の score と
       根拠のみを返す。
@@ -24,7 +23,7 @@ from dataclasses import dataclass
 
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "ability-v2"
+MODEL_VERSION = "ability-v3"
 
 
 @dataclass(frozen=True)
@@ -35,7 +34,8 @@ class AbilityRaceResult:
     field_size: int
     race_class: str | None
     days_ago: int
-    # Phase2（ability-v2）。未取得は None（旧データ）→ 該当成分を使わず form のみへ縮退。
+    grade: str | None = None
+    # Phase2。未取得は None（旧データ）→ 該当成分を使わず form のみへ縮退。
     popularity: int | None = None  # 単勝人気順（1=1番人気）
     prize_money: int | None = None  # 獲得本賞金（円・入着時のみ正値）
 
@@ -61,7 +61,7 @@ class AbilityWeights:
     class_unknown: float = 1.0
     # score 正規化基準（contribution=finish_rate×class_coef の想定最大値）
     score_reference: float = 1.5
-    # ability-v2 の成分ブレンド重み（🧪暫定）。データが無い成分は自動的に除外し、
+    # 能力成分のブレンド重み（🧪暫定）。データが無い成分は自動的に除外し、
     # 残りの重みで再正規化する（旧データは form のみ＝v1 相当へ縮退）。
     weight_form: float = 0.55
     weight_prize: float = 0.30
@@ -88,7 +88,7 @@ class AbilityScore:
 
 
 class AbilityScorer:
-    """能力指数算出器（ability-v1）。近走着順×クラス×新しさから地力を推定する。"""
+    """近走着順・grade・賞金・人気から地力を推定する能力指数算出器。"""
 
     def __init__(self, weights: AbilityWeights | None = None) -> None:
         self._w = weights or DEFAULT_WEIGHTS
@@ -129,7 +129,7 @@ class AbilityScorer:
             assert r.finish_pos is not None  # usable 条件で保証
             recency = _recency_weight(r.days_ago, w)
             finish_rate = (r.field_size - r.finish_pos) / (r.field_size - 1)
-            class_coef, class_label = _class_coefficient(r.race_class, w)
+            class_coef, class_label = _class_coefficient(r.grade, r.race_class, w)
             contribution = finish_rate * class_coef
             form_sum += min(contribution / w.score_reference, 1.0) * recency
             form_wt += recency
@@ -193,12 +193,21 @@ def _popularity_score(popularity: int, w: AbilityWeights) -> float:
     return min(max((w.popularity_span - popularity) / (w.popularity_span - 1), 0.0), 1.0)
 
 
-def _class_coefficient(race_class: str | None, w: AbilityWeights) -> tuple[float, str]:
-    """race_class 文字列からクラス係数を best-effort で推定する。
-
-    grade コードは未永続化のため（`docs/SPEC.md §9`）、レース名／条件名の
-    キーワードで判定する。半角・全角の数字表記の両方に対応。判別不能時は中立(1.0)。
-    """
+def _class_coefficient(
+    grade: str | None, race_class: str | None, w: AbilityWeights
+) -> tuple[float, str]:
+    """gradeを優先し、欠損時だけrace_classからクラス係数を推定する。"""
+    normalized_grade = (grade or "").upper().replace("・", "")
+    if normalized_grade in {"G1", "JG1"}:
+        return w.class_g1, "G1級"
+    if normalized_grade in {"G2", "JG2"}:
+        return w.class_g2, "G2級"
+    if normalized_grade in {"G3", "JG3"}:
+        return w.class_g3, "G3級"
+    if normalized_grade == "L":
+        return w.class_open, "リステッド"
+    if normalized_grade == "重賞":
+        return w.class_open, "重賞"
     if not race_class:
         return w.class_unknown, "クラス不明"
     s = race_class.upper()

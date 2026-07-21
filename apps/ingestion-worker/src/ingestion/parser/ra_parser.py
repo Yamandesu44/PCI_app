@@ -93,7 +93,7 @@ def parse_ra(record: str) -> RaceEntriesRecord | None:
     field_size = 0
     weather = None
     track_condition = None
-    grade = None
+    grade = _decode_grade(_bs(raw, 615, 616))
 
     return RaceEntriesRecord(
         race_key=race_key,
@@ -117,3 +117,21 @@ def _normalize_race_name(value: str) -> str | None:
     if not name or name in {"@", "...", "-"}:
         return None
     return name
+
+
+_GRADE_NAMES = {
+    "A": "G1",
+    "B": "G2",
+    "C": "G3",
+    "D": "重賞",
+    "E": "特別",
+    "F": "J・G1",
+    "G": "J・G2",
+    "H": "J・G3",
+    "L": "L",
+}
+
+
+def _decode_grade(code: str) -> str | None:
+    """JV-Data 2003.グレードコードを画面・分析用の名称へ変換する。"""
+    return _GRADE_NAMES.get(code.strip().upper())

@@ -94,14 +94,16 @@ class ResultItem(BaseModel):
     corner_2: int | None = None
     corner_3: int | None = None
     corner_4: int | None = None
-    popularity: int | None = None  # 単勝人気順（Phase2・ability-v2）
-    prize_money: int | None = None  # 獲得本賞金（円・Phase2・ability-v2）
+    body_weight: float | None = Field(default=None, ge=300, le=700)
+    popularity: int | None = None  # 単勝人気順（能力指数の補助成分）
+    prize_money: int | None = None  # 獲得本賞金（円・能力指数の補助成分）
 
 
 class ResultBody(BaseModel):
     race_key: str = Field(pattern=r"^\d{16}$")
     track_condition: str | None = None
     weather: str | None = None
+    grade: str | None = None
     race_s3f: float | None = None  # RA HaronTimeS3（前半3ハロン秒）。TARGET 準拠 RPCI に使用
     race_l3f: float | None = None  # RA HaronTimeL3（後半3ハロン秒）。TARGET 準拠 RPCI に使用
     results: list[ResultItem]
@@ -238,6 +240,7 @@ def ingest_results(
             corner_2=r.corner_2,
             corner_3=r.corner_3,
             corner_4=r.corner_4,
+            body_weight=r.body_weight,
             popularity=r.popularity,
             prize_money=r.prize_money,
         )
@@ -248,6 +251,7 @@ def ingest_results(
         results,
         track_condition=body.track_condition,
         weather=body.weather,
+        grade=body.grade,
         race_s3f=body.race_s3f,
         race_l3f=body.race_l3f,
     )

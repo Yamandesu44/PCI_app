@@ -130,10 +130,12 @@ class TestRecordResults:
         return RaceResultRecord(
             race_key="2026061805010101",
             track_condition="良",
+            grade="G3",
             results=[
                 ResultRecord(
                     horse_no=3, finish_pos=1, race_time_s=94.4, agari_3f_s=33.9,
                     corner_1=3, corner_2=3, corner_3=3, corner_4=3,
+                    body_weight=486.0,
                 ),
                 ResultRecord(
                     horse_no=1, finish_pos=2, race_time_s=94.6, agari_3f_s=34.2, corner_4=2,
@@ -157,8 +159,10 @@ class TestRecordResults:
         api = IngestApiClient("http://api", http_client=http)
         api.record_results(self._make_record())
         payload = http.post.call_args.kwargs["json"]
+        assert payload["grade"] == "G3"
         assert len(payload["results"]) == 2
         assert payload["results"][0]["finish_pos"] == 1
+        assert payload["results"][0]["body_weight"] == 486.0
 
     def test_returns_rpci(self) -> None:
         http = _make_http_client(

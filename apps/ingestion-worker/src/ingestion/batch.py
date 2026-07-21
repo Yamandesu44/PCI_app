@@ -296,6 +296,7 @@ def ingest_results(
     # ingest_entries より後に呼ばれるが、RA は SE と独立したデータ種別のため再取得可能。
     race_s3f_map: dict[str, float] = {}
     race_l3f_map: dict[str, float] = {}
+    grade_map: dict[str, str] = {}
     for rec in client.iter_ra_records(date_from, date_to):
         try:
             ra = _parse_ra(rec)
@@ -304,6 +305,8 @@ def ingest_results(
                     race_s3f_map[ra.race_key] = ra.race_s3f
                 if ra.race_l3f is not None:
                     race_l3f_map[ra.race_key] = ra.race_l3f
+                if ra.grade is not None:
+                    grade_map[ra.race_key] = ra.grade
         except Exception as exc:
             _log.warning("RA(results) パースエラー: %s | %.40s", exc, rec)
 
@@ -351,6 +354,7 @@ def ingest_results(
             continue
         rr.race_s3f = race_s3f_map.get(race_key)
         rr.race_l3f = race_l3f_map.get(race_key)
+        rr.grade = grade_map.get(race_key)
         if rr.race_s3f is not None and rr.race_l3f is not None:
             _log.debug("HaronTime 取得 %s: S3=%.1f L3=%.1f", race_key, rr.race_s3f, rr.race_l3f)
         try:

@@ -799,6 +799,8 @@ export interface components {
         };
         /** ResultBody */
         ResultBody: {
+            /** Grade */
+            grade?: string | null;
             /** Race Key */
             race_key: string;
             /** Race L3F */
@@ -816,6 +818,8 @@ export interface components {
         ResultItem: {
             /** Agari 3F S */
             agari_3f_s: number;
+            /** Body Weight */
+            body_weight?: number | null;
             /** Corner 1 */
             corner_1?: number | null;
             /** Corner 2 */

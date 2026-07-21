@@ -302,7 +302,7 @@ class ForecastRaceUseCase:
     def _build_ability_score(
         self, horse_no: int, ketto_num: str, target_race: Race
     ) -> AbilityScore:
-        """近走の着順・クラス・新しさから能力指数(ability-v1)を算出する。"""
+        """近走の着順・grade・賞金・人気から能力指数を算出する。"""
         if not ketto_num:
             return self._ability_scorer.score(horse_no, ())
         recent = self._repo.find_horse_recent_entries(
@@ -321,6 +321,7 @@ class ForecastRaceUseCase:
                     field_size=past_race.field_size,
                     race_class=past_race.race_class,
                     days_ago=(target_race.race_date - past_race.race_date).days,
+                    grade=past_race.grade,
                     popularity=entry.popularity,
                     prize_money=entry.prize_money,
                 )

@@ -232,6 +232,7 @@ def test_iter_ra_records_accepts_wmykeibadb_race_shosai_columns() -> None:
                 "KYOSO_JOKEN_MEISHO": "3歳未勝利",
                 "KYORI": 1600,
                 "TRACK_CODE": 17,
+                "GRADE_CODE": "A",
                 "ZENHAN_3F": 35.2,
                 "KOHAN_3F": 35.8,
             }
@@ -244,6 +245,7 @@ def test_iter_ra_records_accepts_wmykeibadb_race_shosai_columns() -> None:
 
     assert parsed.race_key == "2026062105030411"
     assert parsed.distance_m == 1600
+    assert parsed.grade == "G1"
 
 
 def test_iter_se_records_builds_result_record_from_mysql_row() -> None:

@@ -181,6 +181,7 @@ def parse_se_result(record: str) -> ResultRecord | None:
         corner_2=_corner_pos(raw, 358, 360),
         corner_3=_corner_pos(raw, 360, 362),
         corner_4=_corner_pos(raw, 362, 364),
+        body_weight=_body_weight(raw),
         popularity=_popularity(raw),
         prize_money=_prize_money(raw),
     )
@@ -189,6 +190,14 @@ def parse_se_result(record: str) -> ResultRecord | None:
 # 人気・本賞金（Phase2・ability-v2 用）。mykeibadb 合成の予約オフセット（jv_spec 参照）から
 # 読む。jvlink 実レコードには書かれておらず妥当性チェックで弾く（未検証領域のため）。
 _POPULARITY_MAX = 28  # 単勝人気順の上限（フルゲート18頭＋除外等の余裕）
+
+
+def _body_weight(raw: bytes) -> float | None:
+    value = _bs(raw, 324, 327).strip()
+    if not value.isdigit():
+        return None
+    weight = int(value)
+    return float(weight) if 300 <= weight <= 700 else None
 
 
 def _popularity(raw: bytes) -> int | None:

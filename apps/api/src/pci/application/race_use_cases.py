@@ -75,6 +75,7 @@ class RecordRaceResultUseCase:
         results: list[ResultInput],
         track_condition: str | None = None,
         weather: str | None = None,
+        grade: str | None = None,
         race_s3f: float | None = None,
         race_l3f: float | None = None,
     ) -> RaceResultOutput:
@@ -104,7 +105,11 @@ class RecordRaceResultUseCase:
                     horse_no=r.horse_no,
                     frame_no=base.frame_no if base else r.horse_no,
                     ketto_num=base.ketto_num if base else "",
-                    weight=base.weight if base else 0.0,
+                    weight=(
+                        r.body_weight
+                        if r.body_weight is not None
+                        else base.weight if base else 0.0
+                    ),
                     jockey_code=base.jockey_code if base else "",
                     trainer_code=base.trainer_code if base else "",
                     finish_pos=r.finish_pos,
@@ -175,7 +180,7 @@ class RecordRaceResultUseCase:
                 status=RaceStatus.RESULT,
                 track_condition=track_condition or race.track_condition,
                 weather=weather or race.weather,
-                grade=race.grade,
+                grade=grade or race.grade,
                 race_class=race.race_class,
                 rpci_actual=rpci_result.rpci,
                 pci3_actual=rpci_result.pci3,

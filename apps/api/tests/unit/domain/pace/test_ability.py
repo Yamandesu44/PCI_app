@@ -16,12 +16,14 @@ def _run(
     race_class: str | None = None,
     popularity: int | None = None,
     prize_money: int | None = None,
+    grade: str | None = None,
 ) -> AbilityRaceResult:
     return AbilityRaceResult(
         finish_pos=finish_pos,
         field_size=field_size,
         race_class=race_class,
         days_ago=days_ago,
+        grade=grade,
         popularity=popularity,
         prize_money=prize_money,
     )
@@ -79,10 +81,10 @@ class TestAbilityScorer:
         result = AbilityScorer().score(1, (_run(2, 10, 30, "2勝クラス"),))
         assert all(str(result.score) not in r.description for r in result.reasons)
 
-    def test_v2_falls_back_to_form_when_no_prize_or_popularity(self) -> None:
-        """旧データ（人気・賞金なし）は v1 相当の form のみ。model_version は v2。"""
+    def test_v3_falls_back_to_form_when_no_prize_or_popularity(self) -> None:
+        """旧データ（人気・賞金なし）は form のみへ安全に縮退する。"""
         result = AbilityScorer().score(1, (_run(1, 10, 30, "2勝クラス"),))
-        assert result.model_version == "ability-v2"
+        assert result.model_version == "ability-v3"
         assert not any("賞金" in r.description or "人気" in r.description for r in result.reasons)
 
     def test_v2_prize_lifts_score(self) -> None:
@@ -104,3 +106,10 @@ class TestAbilityScorer:
         big = AbilityScorer().score(1, (_run(2, 12, 40, "G3", prize_money=50_000_000),))
         small = AbilityScorer().score(2, (_run(2, 12, 40, "G3", prize_money=1_000_000),))
         assert big.score > small.score
+
+    def test_v3_grade_takes_priority_over_race_name(self) -> None:
+        """競走名にG表記がなくても、正式gradeがあればクラス補正へ使う。"""
+        graded = AbilityScorer().score(1, (_run(3, 10, 30, "共同通信杯", grade="G3"),))
+        unknown = AbilityScorer().score(2, (_run(3, 10, 30, "共同通信杯"),))
+        assert graded.score > unknown.score
+        assert any("G3級" in reason.description for reason in graded.reasons)

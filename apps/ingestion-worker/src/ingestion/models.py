@@ -60,6 +60,7 @@ class ResultRecord:
     corner_2: int | None = None
     corner_3: int | None = None
     corner_4: int | None = None
+    body_weight: float | None = None  # 確定時の馬体重（kg）
     # Phase2（能力指数 ability-v2 用）。mykeibadb 由来。未取得は None。
     popularity: int | None = None  # 単勝人気順（1=1番人気）
     prize_money: int | None = None  # 獲得本賞金（円）
@@ -91,6 +92,7 @@ class RaceResultRecord:
     race_key: str
     track_condition: str | None = None
     weather: str | None = None
+    grade: str | None = None
     race_s3f: float | None = None  # RA の HaronTimeS3（前半3F秒）。RPCI 算出に使用
     race_l3f: float | None = None  # RA の HaronTimeL3（後半3F秒）。RPCI 算出に使用
     results: list[ResultRecord] = field(default_factory=list)

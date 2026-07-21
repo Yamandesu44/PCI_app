@@ -479,7 +479,7 @@ def _race_from_row(row: dict[str, Any]) -> RaceEntriesRecord:
     distance = _int_or_none(_pick(row, _DISTANCE_COLUMNS)) or 1600
     track_type = _track_type(_pick(row, _TRACK_COLUMNS))
     race_name = _str_or_none(_pick(row, _RACE_NAME_COLUMNS))
-    grade = _str_or_none(_pick(row, _GRADE_COLUMNS))
+    grade = _grade_name(_pick(row, _GRADE_COLUMNS))
     return RaceEntriesRecord(
         race_key=race_key,
         race_date=race_date,
@@ -607,12 +607,58 @@ def _build_ra_record(row: dict[str, Any]) -> str:
     _put_cp932(buf, 27, "00")
     _put_cp932(buf, 29, "0000")
     _put_cp932(buf, 33, race_name, 60)
+    grade_code = _grade_code(_pick(row, _GRADE_COLUMNS))
+    if grade_code:
+        _put_cp932(buf, 615, grade_code)
     _put_cp932(buf, 623, condition_name, 60)
     _put_cp932(buf, 697, f"{(_int_or_none(_pick(row, _DISTANCE_COLUMNS)) or 0):04d}")
     _put_cp932(buf, 705, _track_code(_pick(row, _TRACK_COLUMNS)))
     _put_tenths(buf, 969, _float_or_none(_pick(row, _RACE_S3F_COLUMNS)))
     _put_tenths(buf, 975, _float_or_none(_pick(row, _RACE_L3F_COLUMNS)))
     return buf.decode("cp932")
+
+
+_GRADE_CODES = {
+    "G1": "A",
+    "GI": "A",
+    "G2": "B",
+    "GII": "B",
+    "G3": "C",
+    "GIII": "C",
+    "重賞": "D",
+    "特別": "E",
+    "JG1": "F",
+    "J・G1": "F",
+    "JG2": "G",
+    "J・G2": "G",
+    "JG3": "H",
+    "J・G3": "H",
+    "L": "L",
+}
+_GRADE_NAMES = {
+    "A": "G1",
+    "B": "G2",
+    "C": "G3",
+    "D": "重賞",
+    "E": "特別",
+    "F": "J・G1",
+    "G": "J・G2",
+    "H": "J・G3",
+    "L": "L",
+}
+
+
+def _grade_code(value: Any) -> str | None:
+    """mykeibadb の名称またはJVコードを、RAの1byteコードへ正規化する。"""
+    raw = (_str_or_none(value) or "").strip().upper().replace(" ", "")
+    if raw in {"A", "B", "C", "D", "E", "F", "G", "H", "L"}:
+        return raw
+    return _GRADE_CODES.get(raw)
+
+
+def _grade_name(value: Any) -> str | None:
+    code = _grade_code(value)
+    return _GRADE_NAMES.get(code) if code else None
 
 
 def _build_se_record(row: dict[str, Any]) -> str:

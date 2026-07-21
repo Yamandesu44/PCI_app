@@ -299,9 +299,10 @@ apps/ingestion-worker/
 
 ---
 
-## 7.5 Phase2（能力指数 ability-v2）反映のための一度きりの作業（2026-07-21）
+## 7.5 Phase2（能力指数 ability-v3）反映のための一度きりの作業（2026-07-21）
 
-統合順位予想の能力指数が「人気・獲得本賞金」も使うようになった。既存データにはこれらの列が無いため、
+統合順位予想の能力指数が「人気・獲得本賞金・正式grade」を使うようになり、確定馬体重もresults再取込で
+更新される。既存データには人気・本賞金列が無いため、
 **一度だけ** 次を実施する（やらなくても壊れないが、能力指数は従来どおり近走着順のみで動く＝縮退）。
 
 1. DBにカラムを追加（migration 003）:
@@ -309,7 +310,7 @@ apps/ingestion-worker/
    cd C:\Users\yuuta\PCI_app\apps\api
    .venv\Scripts\python -m alembic upgrade head
    ```
-2. 過去分の確定成績を再取込（人気・本賞金を埋める）。反映したい期間を指定して results を回す:
+2. 過去分の確定成績を再取込（人気・本賞金・grade・確定馬体重を埋める）。反映したい期間を指定して results を回す:
    ```powershell
    cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
    python -m ingestion.batch --mode mykeibadb --step results --date 20250101 --date-to 20261231
@@ -329,3 +330,5 @@ apps/ingestion-worker/
   `ingestion.diagnose_results` を新設（6.8(b)節）。`DaysBack` 既定を 7→10 に変更。 |
 | 2026-07-21 | 統合順位予想の能力指数 Phase2: 人気・獲得本賞金を永続化（ability-v2）。migration 003 適用と
   過去成績の再取込が必要（7.5節）。 |
+| 2026-07-21 | Phase2完成: gradeを正式コードから永続化しability-v3で直接利用。results単独再取込でも
+  確定馬体重を更新し、統合順位のバックテスト指標を追加（7.5節）。 |

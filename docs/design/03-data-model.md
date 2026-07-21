@@ -73,7 +73,7 @@ JV-Link 固定長レコードを原文保存。監査・再パースの源泉。
 | horse_no | int | 馬番 |
 | frame_no | int | 枠番 |
 | ketto_num | char(10) FK | |
-| weight | numeric | 斤量 |
+| weight | numeric | 馬体重（kg。既存カラム名との互換性のため名称を維持） |
 | jockey_code | text FK | |
 | trainer_code | text FK | |
 | finish_pos | int NULL | 着順（確定後） |

@@ -36,10 +36,12 @@
 - [x] ~~P1 統合順位予想 Phase2: 人気・本賞金の永続化（ability-v2）~~ → **2026-07-21 実装済み**
   （`docs/DECISIONS.md` 2026-07-21（2）・`docs/SPEC.md §3.6`）。人気(TANSHO_NINKIJUN)・本賞金
   (KAKUTOKU_HONSHOKIN)を永続化し ability-v2 でブレンド。運用は `MANUAL_SYNC_GUIDE §7.5`。
-- [ ] **P1 統合順位予想 Phase2 残: 馬体重・grade の永続化と重み検証**。
-  本賞金でクラス限界は緩和したが、馬体重(BATAIJU)・grade の追加余地あり。実 JV-Data の
-  人気/賞金オフセット（jvlink 実 COM 用）の検証も未（現状 mykeibadb 合成専用の予約offset）。
-  実データで ability-v2 の的中傾向・`AbilityWeights`🧪 を検証してから着手判断。
+- [x] ~~P1 統合順位予想 Phase2 残: 馬体重・grade の永続化~~ → **2026-07-21 実装済み**。
+  確定馬体重は既存 `race_entries.weight` へresults再取込時にも更新。gradeはRA GradeCD[615]を公式コード
+  から変換し、ability-v3のクラス補正で直接利用。馬体重は根拠不足のため能力加点には使わない。
+- [ ] **P1 AbilityWeightsの実DB比較検証**。バックテストに1位馬勝率・1位馬好走率・TOP3好走捕捉率を
+  追加済み。現行重みと候補重みを同一期間で比較し、改善が再現した場合のみ正式化する。
+- [ ] **P2 実JV-Dataの人気/賞金予約オフセット検証**（jvlink実COM用）。現状はmykeibadb合成専用。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
   `DistanceStyleWeights`(running-style-v2-distance)・`StyleAdvantageWeights`(style-advantage-v1)・

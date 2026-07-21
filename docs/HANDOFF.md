@@ -9,19 +9,22 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-21（更新14回目・**Claude Code への引き継ぎ**。Codex がリモート更新を統合し、引き継ぎ資料とテスト再現結果を更新） |
+| 更新日時 | 2026-07-21（更新15回目・**Claude Code への引き継ぎ**。Codex が統合順位予想 Phase 2残件を実装） |
 | 作業担当AI | OpenAI Codex |
-| 直前の担当AI | Claude Code（`af66e8f`〜`d2a74ff`のリモート更新を実施。Codex側でGit/実コード/テスト可能範囲を照合） |
+| 直前の担当AI | OpenAI Codex（grade・確定馬体重・統合順位バックテスト指標を実装） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本ファイル更新を含むマージコミット。直前のリモート先端は `d2a74ff`、Codexの重複実装コミットは `144ebfd`） |
-| 作業ツリー | マージコミット作成後にクリーン化する前提。競合はリモート実装を採用して解消済み |
+| 最新コミット | `HEAD`（本セッションのコミット作成前は `ad19dbe`） |
+| 作業ツリー | Phase 2完成差分をコミット後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**Claude Code への引き継ぎのため、本セッションでは新規仕様の実装を行わず、リモート更新の統合と
-引き継ぎ資料の整備を実施した。**
+**ユーザー指示により、統合順位予想 Phase 2の残件（grade・確定馬体重・重み検証基盤）を完成させた。**
+
+gradeはJRA-VAN公式コードをRA `GradeCD[615]`から読み、ability-v3のクラス補正で優先利用する。
+馬体重は既存`race_entries.weight`へ、results単独再取込でも確定値を更新する。体格の大小は能力へ
+加点せず、バックテストへ統合順位の比較指標を追加した。
 
 Codex は `tasks/current.md` の最優先候補として「バックテスト結果のJSON保存」に着手し、
 ローカルで `144ebfd feat(backtest): export reports as json` を作成した。しかし push 前に
@@ -79,6 +82,17 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 ## 完了した作業（直近セッション）
 
+0A. **統合順位予想 Phase 2完成（grade・確定馬体重・検証指標）**（本セッション・OpenAI Codex）
+   - ingestion: RA `GradeCD[615]`を公式コードから名称化。mykeibadb合成RAにも同位置へ書き込み。
+     SE確定レコードの`BaTaijyu[324:327]`をresults送信へ追加し、gradeとともにAPIへ渡す。
+   - API: `ResultBody.grade` / `ResultItem.body_weight`を追加。結果登録時に`races.grade`と既存
+     `race_entries.weight`を更新。新規migrationは不要。
+   - ability-v3: gradeをクラス係数へ優先利用し、欠損時のみrace_classへ縮退。馬体重は能力加点しない。
+   - backtest: 統合順位の1位馬勝率・1位馬好走率・TOP3好走捕捉率をテキスト/JSONへ追加。
+     `ForecastBacktester`へ`AbilityScorer`注入点を追加し、候補重みを同一期間で比較可能にした。
+   - 検証: API unit+contract 440 passed、ingestion 191 passed、Web 65 passed、変更対象Ruff、lint-imports、
+     api-client/web typecheck、Web build成功。mypy strictは既知の`lgbm_forecaster.py:58 unused-ignore`のみ。
+
 0. **統合順位予想: UI刷新（印→タグ）＋ Phase2（人気・本賞金→ability-v2）**（前セッション・`7997931`）
    - **UI（ユーザーFB「印よりタグが分かりやすい・順位を明確に」）**: `IntegratedRankingView` 刷新。
      ◎○▲△の印を廃止、総合順位（1位…）を主役に、分類は言葉タグ（本命/対抗/穴（妙味）/人気でも注意/
@@ -112,9 +126,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
      `schemas.py`（同Schema）、OpenAPI再生成（`openapi.json`+`schema.d.ts`）、`api-client/src/index.ts`。
    - web: `IntegratedRankingView.tsx`（新規）を `RaceForecastDashboard` の隊列予想の前に配置。
      ◎○▲△・能力上位/中位・展開が向く/向きにくいを**言葉と記号**で表示（PCI/PAI等の実数値は非表示）。
-   - 既知の限界: `grade`未永続化（`parse_ra`がNone）のためクラス係数は`race_class`文字列の
-     best-effort。ステークス名のみの重賞は中立化 → 事実上「クラス補正付き近走充実度」。Phase2
-     （人気・賞金・馬体重の永続化）は `tasks/backlog.md` B節。
+   - 当時の既知の限界: `grade`未永続化で、クラス係数は`race_class`文字列のbest-effortだった。
+     **この制約は本セッションのability-v3で解消済み**（上記0A）。
    - 検証: **apps/api はこの新コンテナで環境未構築だったため `python -m venv .venv && .venv/bin/pip
      install -e ".[dev]"` で構築**（下記「注意事項」）。API unit+contract 432 passed（+新規domain16・
      contract1）、Web 65 passed、api/web typecheck・build・ruff・lint-imports・mypy --strict すべてclean
@@ -289,9 +302,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 - **確定成績未反映は解決済み**（上記「完了した作業」2.）。残る関連事項は障害競走の成績が別途
   未反映（ユーザー保留）のみ。
-- **統合順位予想 Phase2 残**（馬体重・grade の追加永続化、実 JV-Data の人気/賞金オフセット検証）。
-  人気・獲得賞金の永続化＋ability-v2 は実装済み（上記「完了した作業」0.）。ユーザーが migration 003＋
-  過去成績再取込後、ability-v2 の的中傾向を実データで見てから着手判断（`tasks/backlog.md` B節）。
+- **統合順位予想 Phase2の機能実装は完了**。残る検証は、実DBでの`AbilityWeights`候補比較と、
+  実JV-Link COMにおけるGradeCD[615]および人気/賞金予約オフセットの確認（`tasks/backlog.md` B節）。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
   自動同期スクリプト自体がWindows実行機で問題なく動くかも未確認。
@@ -301,12 +313,11 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
   RA/SEが実際にVer.3.0.0/Ver.4.9のどちらの出力を元に校正されたかも未確認のまま、`docs/SPEC.md §9`-8）。
 - 展開コメント自然文（`scenario.py`）内の「馬番 N」表記が枠順未確定時を区別できない件
   （`docs/SPEC.md §9`-14）。domain層拡張が必要な既知の残課題として記録のみ、対応は未着手。
-- それ以外はなし。本セッション（Codexへの引き継ぎ作業）でのコード変更はなし。
+- それ以外はなし。
 
 ## 現在止まっている箇所
 
-**特になし**（確定成績未反映は解決、統合順位予想 Phase1〜Phase2〜UI刷新まで実装完了・`7997931`まで
-push済み）。次はユーザーの新規指示、または下記「次に実施すべき作業」から着手可否を確認して進める。
+**特になし**。次はユーザーの新規指示、または下記「次に実施すべき作業」から着手可否を確認して進める。
 
 ---
 
@@ -319,9 +330,9 @@ push済み）。次はユーザーの新規指示、または下記「次に実�
    本丸。現状の鮮度監視(`evaluate_freshness`)は batch-log の ok/経過日数のみ見ており、「過去日なのに
    未確定のまま残ったレース」を検知できない（ユーザーが目視していた「成績未取込」を自動アラート化＝
    高レバレッジ）。ユーザーは今回②統合順位予想を優先したため未着手。再提案候補。
-1. **P1 統合順位予想 Phase2 は実装済み**（人気・本賞金→ability-v2）。**残**は馬体重/grade の永続化、
-   実 JV-Data の人気/賞金オフセット検証（jvlink用）、`AbilityWeights`🧪 の実データ検証（`tasks/backlog.md` B節）。
-   まずはユーザーが migration 003＋再取込した上で ability-v2 の的中傾向を見てから判断。
+1. **P1 AbilityWeightsの実DB比較検証**。`scripts/backtest_forecast.py --output`で同一期間を評価し、
+   1位馬勝率・1位馬好走率・TOP3好走捕捉率を現行重みと候補重みで比較する。改善が再現した場合のみ変更。
+   grade・確定馬体重の反映には過去results再取込が必要（`MANUAL_SYNC_GUIDE.md §7.5`）。
 2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
    `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`STALE_AFTER_DAYS`・
    `AbilityWeights` 等）
@@ -422,7 +433,24 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 ---
 
-## テスト状況（2026-07-21・引き継ぎ前の全量再検証。統合順位予想 Phase1+Phase2+UI刷新 反映後）
+## テスト状況（2026-07-21・統合順位予想 Phase 2完成後）
+
+### OpenAI Codex による Phase 2完成後の全量確認
+
+| 対象 | コマンド | 結果 |
+|---|---|---|
+| API 単体+契約 | `PYTHONPATH=src python -m pytest tests/unit tests/contract -q` | **440 passed** |
+| ingestion-worker | `PYTHONPATH=src python -m pytest tests -q` | **191 passed** |
+| API変更対象Ruff | `python -m ruff check <変更ファイル>` | **成功** |
+| ingestion変更対象Ruff | `python -m ruff check <変更ファイル>` | **成功** |
+| API import境界 | `lint-imports` | **2 kept, 0 broken** |
+| API型 | `python -m mypy src --strict --python-version 3.12` | 既存`lgbm_forecaster.py:58` unused-ignore 1件のみ |
+| api-client型 | `npm.cmd run typecheck --workspace=@pci/api-client` | **成功** |
+| Web単体 / 型 / build | `npm.cmd run test` / `typecheck` / `build` | **65 passed** / **成功** / **成功** |
+| OpenAPI | `PYTHONPATH=src python scripts/export_openapi.py` + api-client generate | **再生成済み** |
+
+注意: WindowsのグローバルPythonには別チェックアウト`C:\Users\yuuta\PCI_app`がeditable installされている。
+検証時は必ず現在の作業ツリーで`PYTHONPATH=src`を明示すること。実DBバックテストとJV-Link COM実地確認は未実行。
 
 ### OpenAI Codex によるマージ後再確認（2026-07-21）
 
@@ -508,8 +536,8 @@ API/ingestion-worker の全量pytest・ruff・mypyは再実行できなかった
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
 4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了は統合順位予想 Phase1〜2〜UI刷新）
-5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v2 を記載）
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-21（2）: UI刷新（印→タグ）＋Phase2（ability-v2）。
+5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v3 を記載）
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-21（3）: grade優先のability-v3・確定馬体重の永続化・検証指標。
    2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、確定成績未反映の解決。
    2026-07-20（2）: 切り分け診断ツール導入。
    2026-07-13の2件: 展開恩恵馬frame_noガード追加・自動同期special-entries追加。
@@ -543,6 +571,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/python -m pytest tests/ -q   # 185 passed
 ```
 
-**統合順位予想 Phase2（人気・本賞金）を実データで反映する場合**: ユーザーが Windows 機で
-`alembic upgrade head`（migration 003）＋ 過去 results の再取込が必要（`MANUAL_SYNC_GUIDE.md §7.5`）。
-未実施でも壊れない（ability-v2 は該当データが無い成分を自動で除外し v1 相当へ縮退する）。
+**統合順位予想 Phase2を実データで反映する場合**: ユーザーが Windows 機で
+`alembic upgrade head`（migration 003）＋過去 results の再取込が必要（`MANUAL_SYNC_GUIDE.md §7.5`）。
+これにより人気・本賞金・grade・確定馬体重が揃う。未実施でも、ability-v3は欠損成分を
+自動で除外し、grade欠損時はrace_class推定へ縮退する。

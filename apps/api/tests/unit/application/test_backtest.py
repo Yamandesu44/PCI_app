@@ -13,6 +13,7 @@ from pci.application.backtest import (
     BacktestReport,
     ForecastBacktester,
     HorseSample,
+    IntegratedSample,
     PaiBand,
     PaiLift,
     RpciAccuracy,
@@ -21,6 +22,7 @@ from pci.application.backtest import (
     format_report,
     group_races_by_track,
     report_to_dict,
+    summarize_integrated_accuracy,
     summarize_pai_lift,
     summarize_rpci,
 )
@@ -111,6 +113,29 @@ class TestSummarizePaiLift:
         lift = summarize_pai_lift(samples)
         assert lift is not None
         assert lift.point_biserial > 0
+
+
+class TestSummarizeIntegratedAccuracy:
+    def test_empty_returns_none(self) -> None:
+        assert summarize_integrated_accuracy([]) is None
+
+    def test_top_rank_and_capture_metrics(self) -> None:
+        samples = [
+            IntegratedSample("R1", 1, 1, 1, True),
+            IntegratedSample("R1", 2, 2, 4, False),
+            IntegratedSample("R1", 3, 3, 2, True),
+            IntegratedSample("R2", 1, 1, 3, True),
+            IntegratedSample("R2", 2, 2, 1, True),
+            IntegratedSample("R2", 3, 3, 8, False),
+        ]
+
+        result = summarize_integrated_accuracy(samples)
+
+        assert result is not None
+        assert result.n_races == 2
+        assert result.top1_win_rate == 0.5
+        assert result.top1_good_rate == 1.0
+        assert result.top3_good_capture_rate == 1.0
 
 
 class TestGroupRacesByTrack:
@@ -272,6 +297,8 @@ class TestForecastBacktesterEndToEnd:
         assert report.rpci is not None
         # 好走馬は1着(H1)と2着(H3)の2頭。
         assert report.pai is not None
+        assert report.integrated is not None
+        assert report.integrated.n_races == 1
         good = sum(1 for s in report.horse_samples if s.good_run)
         assert good == 2
 
@@ -419,6 +446,8 @@ class TestReportToDict:
         assert result["horse_samples"] == [
             {"race_key": "2026010105010101", "horse_no": 1, "pai": 80.0, "good_run": True}
         ]
+        assert result["integrated"] is None
+        assert result["integrated_samples"] == []
         # PaceLabel(StrEnum) が生の値のまま紛れ込んでいないか、実際にJSON化して確認する。
         json.dumps(result)
 
@@ -434,6 +463,8 @@ class TestReportToDict:
         result = report_to_dict(report)
         assert result["rpci"] is None
         assert result["pai"] is None
+        assert result["integrated"] is None
         assert result["rpci_samples"] == []
         assert result["horse_samples"] == []
+        assert result["integrated_samples"] == []
         json.dumps(result)
