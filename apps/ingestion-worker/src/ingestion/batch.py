@@ -255,6 +255,14 @@ def ingest_entries(
     if horse_supplements:
         api.upsert_horses(horse_supplements)
 
+    _log.info(
+        "出走表集計 %s→%s: RA %d レース / SE エントリ紐付け済み %d レース",
+        date_from,
+        date_to,
+        len(races),
+        sum(1 for r in races.values() if r.entries),
+    )
+
     # API へ送信
     for race_key, race in races.items():
         if not race.entries:
@@ -299,12 +307,19 @@ def ingest_results(
         except Exception as exc:
             _log.warning("RA(results) パースエラー: %s | %.40s", exc, rec)
 
+    # 取り込みが「exit 0 なのに0件」のとき、SE行が読めていない（mykeibadb未取得）のか、
+    # 読めているが確定成績として解析できていない（列マッピング/DATA_KUBUN不整合）のかを
+    # ログだけで切り分けられるよう、各段の件数を記録する（2026-07-20 調査で追加）。
+    se_rows = 0
+    parsed_results = 0
     for rec in client.iter_se_records(date_from, date_to):
+        se_rows += 1
         try:
             race_key = parse_race_key_from_se(rec)
             result = parse_se_result(rec)
             if result is None:
                 continue
+            parsed_results += 1
 
             if race_key not in race_results:
                 race_results[race_key] = RaceResultRecord(race_key=race_key)
@@ -312,6 +327,25 @@ def ingest_results(
         except Exception as exc:
             _log.warning("SE(result) パースエラー: %s | %.40s", exc, rec)
 
+    _log.info(
+        "確定成績集計 %s→%s: SE %d 行読込 / 確定成績 %d 行解析 / %d レース記録予定",
+        date_from,
+        date_to,
+        se_rows,
+        parsed_results,
+        len(race_results),
+    )
+    if se_rows > 0 and parsed_results == 0:
+        _log.warning(
+            "SE行は読めているが確定成績が0件です。mykeibadbに確定データ（着順・タイム・"
+            "上り3F）が未取得か、列名がパーサ候補と不一致の可能性があります。"
+            "`python -m ingestion.diagnose_results --date %s --date-to %s` で原因切り分け可。",
+            date_from,
+            date_to,
+        )
+
+    sent_ok = 0
+    sent_fail = 0
     for race_key, rr in race_results.items():
         if not rr.results:
             continue
@@ -321,8 +355,27 @@ def ingest_results(
             _log.debug("HaronTime 取得 %s: S3=%.1f L3=%.1f", race_key, rr.race_s3f, rr.race_l3f)
         try:
             api.record_results(rr)
+            sent_ok += 1
         except Exception as exc:
+            sent_fail += 1
             _log.error("成績送信エラー %s: %s", race_key, exc)
+
+    # 解析はできたのに送信で全滅している状態（＝APIレイヤの問題。レース未登録で
+    # find_by_key が None を返す等）を exit 0 に埋もれさせない。件数を明示する。
+    _log.info(
+        "確定成績送信 %s→%s: 成功 %d レース / 失敗 %d レース（解析済み %d レース）",
+        date_from,
+        date_to,
+        sent_ok,
+        sent_fail,
+        len(race_results),
+    )
+    if race_results and sent_ok == 0:
+        _log.warning(
+            "確定成績を解析できたが、API送信が全件失敗しています。"
+            "上の『成績送信エラー』の内容（例: レースが見つかりません=出走表未登録、"
+            "HTTPエラー=API/DB接続先の相違）を確認してください。"
+        )
 
 
 def _to_iso_date(yyyymmdd: str) -> str:

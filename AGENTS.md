@@ -37,10 +37,10 @@ Claude Code とプロジェクトルールを共有するため、**共通ルー
 ```bash
 # API（Python）
 cd apps/api
-pytest tests/unit/ tests/contract/ -q
+python -m pytest tests/unit/ tests/contract/ -q
 ruff check src/ tests/
 lint-imports                                  # 依存方向（domain 外部依存禁止）
-mypy src/pci/domain/ src/pci/application/ --strict   # domain+application は 0 エラーが基準
+python -m mypy src/ --strict                  # 全体で0エラーが基準
 
 # Web（TypeScript）
 cd apps/web
@@ -49,8 +49,11 @@ npm run typecheck
 ```
 
 注意:
-- `mypy src/ --strict` を全体にかけると infrastructure/presentation で SQLAlchemy/Pydantic/FastAPI の
-  スタブ未導入エラーが多数出る（**環境要因・コード欠陥ではない**）。domain/application を対象に確認する。
+- **`pytest`/`mypy` は必ず `python -m` 経由で実行すること。** 素の `pytest`/`mypy` コマンドは
+  環境によっては `uv tool` 等の隔離環境（プロジェクトの依存関係が入っていない）を指すことがあり、
+  その場合 fastapi/sqlalchemy 等が「見つからない」という誤ったエラーになる
+  （`which mypy` の先が `/root/.local/bin/mypy` 等プロジェクト外なら該当）。
+  `python -m mypy src/ --strict` なら infrastructure/presentation を含め全体が0エラーで通る。
 - API スキーマを変えたら `cd apps/api && python scripts/export_openapi.py` で
   `packages/api-client/openapi.json` を再生成し、契約テストを通す。
 

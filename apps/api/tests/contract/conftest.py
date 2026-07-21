@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from pci.application.dto import EntryInput, RaceInfo, ResultInput
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
+from pci.domain.ops.ingest_log import IngestLogEntry
 from pci.domain.pace.rpci_forecast import RuleBasedRpciForecaster
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -20,9 +21,11 @@ from pci.domain.shared.race_key import RaceKey
 from pci.presentation.app import create_app
 from pci.presentation.dependencies import (
     get_forecast_use_case,
+    get_ingest_log_repository,
     get_mart_repository,
     get_race_repository,
 )
+from tests.unit.application.fake_ingest_log_repository import FakeIngestLogRepository
 from tests.unit.application.fake_mart_repository import FakeMartRepository
 from tests.unit.application.fake_repository import FakeRaceRepository
 
@@ -140,5 +143,19 @@ def client(repo: FakeRaceRepository) -> TestClient:
         repo,
         forecaster=RuleBasedRpciForecaster(),
         mart_repo=mart_repo,
+    )
+    # 実行時刻からの相対時刻にし、テスト実行日に依存せず「直近成功」を再現する。
+    started_at = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=3)
+    recent_success = IngestLogEntry(
+        batch_date=started_at.date(),
+        step="entries",
+        mode="mykeibadb",
+        started_at=started_at,
+        finished_at=started_at + datetime.timedelta(minutes=5),
+        status="ok",
+        error_msg=None,
+    )
+    app.dependency_overrides[get_ingest_log_repository] = lambda: FakeIngestLogRepository(
+        [recent_success]
     )
     return TestClient(app)

@@ -37,6 +37,8 @@ cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
 1. `mykeibadb.exe` 実行（JV-Link → ローカルMySQL、最大10分待機）
 2. `batch.py --mode mykeibadb --step entries`（過去7日〜未来14日分の出走表）
 3. `batch.py --mode mykeibadb --step results`（同期間の確定成績）
+4. `batch.py --mode mykeibadb --step special-entries`（同期間の重賞等特別登録。
+   2026-07-13まで自動実行から漏れていた。詳細は`docs/DECISIONS.md`参照）
 
 ログは `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log` に出力される。
 
@@ -56,11 +58,16 @@ python -m ingestion.batch --mode mykeibadb --step entries --date 20260704 --date
 # 確定成績だけ
 python -m ingestion.batch --mode mykeibadb --step results --date 20260704 --date-to 20260705
 
+# 重賞等の特別登録だけ（来週分を先取りしたい時。--step all には含まれないので単独指定が必要）
+python -m ingestion.batch --mode mykeibadb --step special-entries --date 20260704 --date-to 20260718
+
 # 出走表・成績まとめて（--step all、日付省略時は今日1日のみ）
 python -m ingestion.batch --mode mykeibadb --step all --date 20260704 --date-to 20260705
 ```
 
 `--date` のみ指定して `--date-to` を省略すると、その1日だけが対象になる。
+**注意**: `--step all` は masters/entries/results のみで、`special-entries` は含まれない
+（別のmykeibadbテーブルを読むため独立ステップ。上記のように単独で指定する）。
 
 ---
 
@@ -216,6 +223,63 @@ cmd.exe（コマンドプロンプト）で実行している。これらは Pow
 | `Get-Service` | `sc query サービス名` |
 | `Get-ChildItem` | `dir /s /b` |
 
+### 6.8 週明けに土日の結果や来週の特別登録馬が反映されていない
+
+原因は2通りある。切り分けてから対処する。
+
+**(a) 来週の特別登録馬（重賞等の advance entry）が出ない場合**
+
+`run_mykeibadb_full_sync.ps1` が **2026-07-13まで `--step special-entries` を
+呼んでいなかった**（`entries`/`results`だけを実行しており、特別登録は別テーブル
+`TOKUBETSU_TOROKUBA`/`TOKUBETSU_TOROKUBAGOTO_JOHO` を読む独立ステップのため、
+自動実行からは常に漏れていた。`docs/DECISIONS.md` 参照）。修正済みのため、
+`git pull` で最新化すれば次回の自動実行から解消する。**今すぐ反映したい場合**は
+手動で実行する。
+
+```powershell
+cd C:\Users\yuuta\PCI_app
+git pull origin claude/sweet-einstein-ilnaov
+cd apps\ingestion-worker
+python -m ingestion.batch --mode mykeibadb --step special-entries --date <今日> --date-to <2週間後>
+```
+
+**(b) 確定成績（`results`）が出ない場合**
+
+`sync_mykeibadb.log` の末尾が `end (entries=0 results=0 special-entries=0)` でも、
+この `0` は **exit code（成功=0）であって件数ではない**。「成功しているのに0件」を
+そのまま見ても原因が分からないため、以下の順で切り分ける。
+
+1. **まず件数を見る**（2026-07-20〜、`batch.py` が件数ログを出すようになった）。
+   `logs\<日付>-mykeibadb-sync.log` に次のような行が出る:
+   ```
+   確定成績集計 20260712→20260719: SE 1234 行読込 / 確定成績 0 行解析 / 0 レース記録予定
+   ```
+   - `SE ... 行読込` が **0**: mykeibadb にその期間のデータが無い（未取得）。
+     → mykeibadb.exe / JV-Link 側の取得設定・FROMTIME を確認（本リポジトリ外）。
+     日付窓の問題の可能性もある（`-DaysBack` を大きくして再実行、下記2）。
+   - `SE ... 行読込` が **>0 なのに 確定成績 0 行**: データはあるが確定成績として
+     解析できていない。→ **2. の診断ツールで原因を特定する**。
+
+2. **診断ツールで切り分ける**（2026-07-20 追加）:
+   ```powershell
+   cd apps\ingestion-worker
+   python -m ingestion.diagnose_results --date 20260712 --date-to 20260719
+   ```
+   末尾の「判定」で (A)mykeibadb未取得 /(B)結果列の列名がパーサ候補と不一致 /
+   (C)バイト配置バグ のどれかを提示する。出力（件数・DATA_KUBUN分布・**SEテーブルの
+   実列名一覧**・判定）を開発担当（Claude/Codex）に共有すれば、(B)/(C) はコード側で
+   修正できる。※ 出力には馬名等の個人データは既定で含めない（`--show-values` を付けない限り）。
+
+3. **日付窓の確認**: `run_mykeibadb_full_sync.ps1` は既定で「今日の10日前〜14日後」だけを
+   見る。1週間以上前の取りこぼしを埋めるにはバックフィルが要る:
+   ```powershell
+   .\scripts\run_mykeibadb_full_sync.ps1 -DaysBack 21
+   ```
+
+4. 自動実行そのものの失敗を疑う場合: `Get-ScheduledTaskInfo -TaskName "PCI_Sync_Mykeibadb"`
+   で `LastTaskResult`/`LastRunTime` を確認（`0`以外や古ければ未発火。PCのスリープ等）。
+   `GET /api/v1/ingest-status`（Webトップの鮮度バナー）でも直近の成功/失敗を確認できる。
+
 ---
 
 ## 7. 関連ファイル一覧
@@ -235,8 +299,33 @@ apps/ingestion-worker/
 
 ---
 
+## 7.5 Phase2（能力指数 ability-v2）反映のための一度きりの作業（2026-07-21）
+
+統合順位予想の能力指数が「人気・獲得本賞金」も使うようになった。既存データにはこれらの列が無いため、
+**一度だけ** 次を実施する（やらなくても壊れないが、能力指数は従来どおり近走着順のみで動く＝縮退）。
+
+1. DBにカラムを追加（migration 003）:
+   ```powershell
+   cd C:\Users\yuuta\PCI_app\apps\api
+   .venv\Scripts\python -m alembic upgrade head
+   ```
+2. 過去分の確定成績を再取込（人気・本賞金を埋める）。反映したい期間を指定して results を回す:
+   ```powershell
+   cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
+   python -m ingestion.batch --mode mykeibadb --step results --date 20250101 --date-to 20261231
+   ```
+   （既存レースは上書き更新される。以後の通常同期でも自動的に埋まる。）
+
+---
+
 ## 8. 更新履歴
 
 | 日付 | 内容 |
 |---|---|
 | 2026-07-07 | mykeibadb ベースの自動化を構築。MySQL接続・サービスクラッシュ・PCI異常値の3件を調査・修正 |
+| 2026-07-13 | ユーザー報告（週明けに土日結果・来週特別登録が未反映）を調査し、`run_mykeibadb_full_sync.ps1`
+  が `--step special-entries` を一度も呼んでいなかったバグを発見・修正（6.8節）。 |
+| 2026-07-20 | 確定成績が1週間以上未反映の件で、`batch.py` に件数ログを追加し、切り分け診断ツール
+  `ingestion.diagnose_results` を新設（6.8(b)節）。`DaysBack` 既定を 7→10 に変更。 |
+| 2026-07-21 | 統合順位予想の能力指数 Phase2: 人気・獲得本賞金を永続化（ability-v2）。migration 003 適用と
+  過去成績の再取込が必要（7.5節）。 |

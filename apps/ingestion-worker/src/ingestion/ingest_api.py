@@ -157,6 +157,8 @@ class IngestApiClient:
                     "corner_2": r.corner_2,
                     "corner_3": r.corner_3,
                     "corner_4": r.corner_4,
+                    "popularity": r.popularity,
+                    "prize_money": r.prize_money,
                 }
                 for r in record.results
             ],

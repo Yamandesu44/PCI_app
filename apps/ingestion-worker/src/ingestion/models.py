@@ -60,6 +60,9 @@ class ResultRecord:
     corner_2: int | None = None
     corner_3: int | None = None
     corner_4: int | None = None
+    # Phase2（能力指数 ability-v2 用）。mykeibadb 由来。未取得は None。
+    popularity: int | None = None  # 単勝人気順（1=1番人気）
+    prize_money: int | None = None  # 獲得本賞金（円）
 
 
 @dataclass

@@ -7,8 +7,12 @@
        using the mykeibadb.ini already configured through wmykeibadb.exe.
        Waits with a timeout so an unattended run doesn't hang forever if
        "pause on exit" is left enabled in wmykeibadb.exe.
-    2. batch.py --mode mykeibadb --step entries   -> pushes entries to PostgreSQL.
-    3. batch.py --mode mykeibadb --step results   -> pushes confirmed results.
+    2. batch.py --mode mykeibadb --step entries          -> pushes entries to PostgreSQL.
+    3. batch.py --mode mykeibadb --step results           -> pushes confirmed results.
+    4. batch.py --mode mykeibadb --step special-entries  -> pushes graded-stakes advance
+       entries (TOKUBETSU_TOROKUBA/TOKUBETSU_TOROKUBAGOTO_JOHO tables) for next week's races.
+       This reads a different mykeibadb table than step 2, so it was silently never run
+       by this script until 2026-07-13 -- see docs/DECISIONS.md.
 
     Intended to be run from Windows Task Scheduler on a JRA-calendar-aware
     schedule (Fri/Sat 10:00, Sun 18:00 -- see setup_task_scheduler.ps1).
@@ -26,7 +30,12 @@
     and the process gets killed.
 
 .PARAMETER DaysBack
-    Start of the query window, days before today (default 7).
+    Start of the query window, days before today (default 10).
+    10 (not 7) so that a single skipped weekend does not silently drop the
+    prior weekend's confirmed results out of the window: running on a Monday
+    with DaysBack=7 starts at the previous Tuesday and excludes the Saturday
+    8 days earlier. For a longer backfill pass an explicit larger value, e.g.
+    .\run_mykeibadb_full_sync.ps1 -DaysBack 21
 
 .PARAMETER DaysForward
     End of the query window, days after today (default 14).
@@ -36,7 +45,7 @@
 #>
 param(
     [int]$TimeoutSeconds = 600,
-    [int]$DaysBack = 7,
+    [int]$DaysBack = 10,
     [int]$DaysForward = 14
 )
 
@@ -96,7 +105,7 @@ if ($proc.ExitCode -ne 0) {
     Write-Log "mykeibadb.exe finished (exit code 0)"
 }
 
-# --- Step 2/3: batch.py (local MySQL -> PostgreSQL) ---
+# --- Step 2/3/4: batch.py (local MySQL -> PostgreSQL) ---
 $RunBatch = Join-Path $PSScriptRoot "run_batch.ps1"
 $DateFrom = (Get-Date).AddDays(-$DaysBack).ToString("yyyyMMdd")
 $DateTo   = (Get-Date).AddDays($DaysForward).ToString("yyyyMMdd")
@@ -109,9 +118,13 @@ Write-Log "--- results sync (batch.py --mode mykeibadb --step results, $DateFrom
 & $RunBatch -Step results -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
 $resultsExit = $LASTEXITCODE
 
-Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit results=$resultsExit) ==="
+Write-Log "--- special-entries sync (batch.py --mode mykeibadb --step special-entries, $DateFrom to $DateTo) ---"
+& $RunBatch -Step special-entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+$specialEntriesExit = $LASTEXITCODE
 
-if ($entriesExit -ne 0 -or $resultsExit -ne 0) {
+Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit results=$resultsExit special-entries=$specialEntriesExit) ==="
+
+if ($entriesExit -ne 0 -or $resultsExit -ne 0 -or $specialEntriesExit -ne 0) {
     exit 1
 }
 exit 0

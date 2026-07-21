@@ -3,7 +3,7 @@
 > コード・README・既存資料（docs/design, docs/adr）から確認できる仕様を、確度別に区別する。
 > **「実装されている」ことは「正式仕様」ではない。** 迷ったら「未確定事項」に置くこと。
 
-最終更新: 2026-07-21 / 対象コミット `HEAD`
+最終更新: 2026-07-12 / 対象コミット `3d3131e` 以降（取り込み鮮度監視・ingest-status 追加を含む）
 
 凡例: ✅確定 / 🟡実装済み(仕様書未記載の挙動) / 🧪仮仕様 / ❓未確定 / 🔎要確認
 
@@ -49,6 +49,21 @@
 
 ---
 
+## 3.4 脚質別有利度（style-advantage-v1）
+
+- ✅ **算出元**: 想定RPCIの「中立点からの乖離」を脚質別スコア（50=互角、0〜100）へ写す。
+  中立点は `classify_pace`（rule-v4）と同じ閾値の中点（芝50.0／ダート43.0）から導出し、
+  判定基準の二重定義を作らない。スロー寄り→逃げ・先行が加点／ハイ寄り→差し・追込が加点。
+- ✅ **逃げ競合の減点**: 逃げ候補が2頭以上の場合、1頭増えるごとに逃げのみ減点（先行争いの消耗）。
+- 🧪 **仮係数**（`StyleAdvantageWeights`）: 勾配4.0/pt・逃げ追込の増幅1.2・競合減点6.0/頭・
+  クランプ[5,95]。実データ検証後に調整する（独断で確定しない）。
+- ✅ **説明可能性**: `reasons` にペース方向・逃げ競合の根拠を出力。`model_version` 付き。
+- ✅ **UI**: `/forecast` の `style_advantage` を「展開分析」カードが表示（数値＋有利/互角/不利の言葉）。
+  経緯: 以前はweb側が「その脚質の最大PAI」を有利度として流用しており、スコアが60〜90に
+  高止まりして差が出なかった（ユーザー指摘 2026-07-12）。ドメインでの正式算出へ置き換え。
+
+---
+
 ## 3.5 隊列予想（formation-v1）
 
 - ✅ **表示条件**: 出走馬が存在し、馬番が正の一意値、全馬の `frame_no` が1〜8の場合だけ生成する。
@@ -63,6 +78,45 @@
   「高・標準・参考」の信頼度ラベルを付ける。PCI/RPCI等の内部実数値はUIへ出さない。
 - ✅ **API/UI**: `/forecast` の `formation` は枠順確定後のみオブジェクト、未確定時は `null`。
   Webは `null` の場合に隊列セクション自体を表示しない。
+- ✅ **2026-07-13修正**: `HorseFitOutput`（展開恩恵馬TOP5・評価を下げたい馬・先導候補、PAI関連の
+  馬単位出力）は formation-v1 と異なり `frame_no` を持たず、枠順未確定（特別登録段階、`horse_no`が
+  ingest側の暫定連番）でも確定馬番であるかのように「馬番 N」と表示していた（ユーザー報告で発覚）。
+  `HorseFitOutput`/`HorseFitSchema` に `frame_no` を追加し、web側 `horseNumberLabel()`（lib/pace.ts）
+  が `frame_no>0` のときのみ「馬番 N」、`frame_no=0` のときは「登録順 N（馬番未確定）」を表示する
+  ように統一（PAIスコア自体は枠順確定前でも意味があるため、formation-v1のように出力ごと`null`に
+  はしない。ラベルの誠実さだけを修正）。
+
+---
+
+## 3.6 統合順位予想（能力 ability-v2 × 展開 = integrated-v1）
+
+ユーザー要望（2026-07-12「展開＋絶対能力の統合順位予想」）。展開適性(PAI)に馬の地力を加味した
+順位・分類を出す。Phase1（現データのみ）→ Phase2（人気・本賞金を永続化）まで実装済み。
+
+- ✅ **能力指数 ability-v2**（`domain/pace/ability.py`）: 直近5走から3成分を新しさ加重で算出しブレンド。
+  - 成分1 **近走内容**: 出走頭数で正規化した着順 × クラス係数（v1 の中核）。
+  - 成分2 **本賞金**（Phase2）: 入着時の獲得本賞金を対数正規化（高額入着＝高評価）。
+  - 成分3 **人気**（Phase2）: 単勝人気順の市場支持（1番人気=1.0）。
+  - **縮退**: 人気・本賞金が無い行（旧データ）は該当成分を除外し重みを再正規化 → form のみ＝v1 相当。
+    再取込するまでは安全に劣化するだけ（壊れない）。0〜100の内部score＋`reasons`＋`model_version`。
+- 🧪 **仮係数**（`AbilityWeights`）: 新しさ減衰(≤180日1.0/≤365日0.7/超0.4)、クラス係数(G1 1.5〜未勝利0.8)、
+  score基準1.5、成分重み form0.55/賞金0.30/人気0.15、賞金の対数レンジ1e5〜1e8円、人気span18。
+  実データ検証後に確定（独断で確定しない・§9-16）。
+- ⚠️ **クラス信号の限界（緩和）**: `grade` は未永続化（`parse_ra` が None・§9-8）のためクラス係数は
+  `race_class` 文字列の best-effort。ただし Phase2 の**本賞金**が「入着時の稼ぎ＝競走相手のクラス」を
+  連続量で補うため、ステークス名のみの重賞でも賞金経由で地力に反映される。
+- ✅ **統合 integrated-v1**（`domain/pace/integrated_ranking.py`）: 能力のレース内相対順位（上位/中位/
+  下位/評価難）と展開適性(合致/中立/不利)を掛け合わせ、本命(上位×合致)・対抗(上位×中立)・
+  危険(上位×不利)・穴(中位×合致)・無印に分類。**恣意的な重み付け合算は採らず**（ユーザー選択）、
+  能力を主・展開を従とした決定的な表示順にする。近走データ無しは UNKNOWN（無印）。
+- ✅ **UI**（2026-07-21 刷新）: `/forecast` の `integrated_ranking` を「統合順位予想」セクションが表示。
+  ユーザー要望で **◎○▲△の印は廃止し、総合順位（1位,2位…）を主役に、分類は言葉タグ**
+  （本命／対抗／穴（妙味）／人気でも注意／能力上位・中位／展開が向く・向きにくい）で表示。実数値は非表示。
+- ✅ **Phase2 データ経路**: 人気(`TANSHO_NINKIJUN`)・本賞金(`KAKUTOKU_HONSHOKIN`)を mykeibadb→
+  SE合成レコードの予約領域（jv_spec `Ninki`[541:543]/`Honsyokin`[543:552]・**mykeibadb合成専用・未検証**）→
+  `parse_se_result`→Ingest API→`race_entries.popularity/prize_money`（migration `003`）へ。
+  **運用: `alembic upgrade head` と過去分の results 再取込が必要**（`MANUAL_SYNC_GUIDE.md`）。
+- 🔭 **Phase2 残**: 馬体重・grade の永続化、実 JV-Data の人気/賞金オフセット検証（jvlink 実 COM 用）。
 
 ---
 
@@ -80,12 +134,14 @@
 ## 5. API（presentation）
 
 - ✅ `GET /api/v1/races`（一覧・limit/date）, `/races/dates`, `/races/{key}`,
-  `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/health`。
+  `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`, `/health`。
 - ✅ 内部取り込み `POST /internal/ingest/{horses,jockeys,trainers,entries,results,log}`,
   `DELETE /internal/ingest/races/{key}`。`X-Ingest-Token` 認証（未設定時はスキップ=開発モード）。
 - 🟡 `pace-analysis` に `forecast_accuracy`（predicted/actual RPCI・label・error・label_hit・model_version）を追加。
   mart に想定RPCI が保存済みのレースのみ非 null（本セッションで追加）。
 - 🟡 `/forecast` に optional な `formation` を追加。枠順確定後のみ4ゾーンの隊列予想を返す。
+- 🟡 `/forecast` に `style_advantage`（脚質別有利度、3.4節）を追加。常時付与（2026-07-12）。
+- 🟡 `/forecast` に `integrated_ranking`（統合順位予想、3.6節）を追加。常時付与（2026-07-21）。
 - ❓ 認証（本番の INGEST_TOKEN 運用）・レート制限・公開 API の範囲は未確定。
 
 ---
@@ -94,11 +150,47 @@
 
 - ✅ `--mode fixture|jvlink|mykeibadb`、`--step masters|entries|results|special-entries|all`、`--date/--date-to`、`--chunk-days`。
 - ✅ mykeibadb: RA/SE/UM/KS/CH + 特別登録テーブルを読み、Ingest API へ投入。列名は候補リストで吸収。
+- ✅ **2026-07-20〜21 確定成績未反映を解決**（§9-15）: 診断ツール`diagnose_results`で「解析は正常
+  （453件解析可・DATA_KUBUN='7'）」と判明→原因は解析より下流と特定。`batch.py`が`record_results`
+  失敗をexit 0に握りつぶしていた欠陥を修正し、送信成功/失敗の件数ログを常設。ユーザーが最新コードで
+  results ステップを再実行したところ全レース送信成功しアプリに反映（解決）。恒久対策として:
+  - `batch.py`に件数ログ（SE読込／確定成績解析／送信成功・失敗）を常設。以後は再発時に即切り分け可。
+  - `ingestion.diagnose_results`（新規）: SE行の列有無・DATA_KUBUN分布・parse成功数・RA突き合わせを出力。
+  - `run_mykeibadb_full_sync.ps1`の`DaysBack`既定 7→10（月曜実行時に前々週土曜が日付窓外へ漏れる問題）。
+- 🧪 **2026-07-20修正（空振り確認済み）**: `_build_se_record()` は`DATA_KUBUN`列があればその値を
+  そのまま確定コード（'4'/'7'）として使っていたが、着順・タイム・上り3Fが全て揃っていれば
+  `DATA_KUBUN`列の値に関わらず確定扱いするよう修正（単調・無害）。ただし再同期しても改善せず、
+  この仮説は単独の真因ではないと判明。修正は残置し、真因究明は上記診断ツールへ引き継ぎ。
 - 🟡 **上がり3F 妥当範囲チェック**（25.0〜55.0秒）で外れ値レコードを除外（本セッションで追加、
   外部データの異常値が PCI を破壊するのを防ぐ）。範囲値は 🧪暫定。（se_parser.py）
 - 🟡 バッチ実行ログを `ingest_log` に記録、失敗時 Webhook 通知（本セッション周辺で追加）。
 - ✅ Task Scheduler 自動化: 金・土 10:00 / 日 18:00 に `sync_mykeibadb.bat`。（scripts/, MANUAL_SYNC_GUIDE.md）
+  **2026-07-13修正**: `run_mykeibadb_full_sync.ps1` が `--step special-entries`（重賞等の来週分
+  advance entry、別mykeibadbテーブル）を呼んでおらず自動実行から常に漏れていたバグを発見・修正
+  （`docs/DECISIONS.md` 2026-07-13）。entries/resultsのみ実行という認識だった場合、本行の従来の
+  記載も不正確だったことになる。
 - 🔎 JV-Data バイトオフセットは実データ校正済みだが、JV-Link バージョン差で要再確認。（jv_spec.py, se_parser.py）
+  具体的には、UM/KS/CH（master_parsers.py）は Ver.3.0.0→Ver.4.9 の実データ差分を確認・反映済みだが、
+  RA/SE（jv_spec.py）は README.md/common.py が「Ver.3.0準拠」と書いたまま未確認（§9-8）。
+  再検証・追従の具体手順は `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md`（2026-07-13 追加）に明文化。
+
+### 6.1 取り込み鮮度監視（`GET /api/v1/ingest-status`、2026-07-12 追加）
+
+- ✅ **目的**: `ingest_log` に記録はあるが読み返す手段が無かった（書き込み専用）ため、
+  Web トップ画面で「データが最新か」を一目で確認できるようにする。
+  ユーザー指摘（自動同期が静かに失敗し続けるリスク）への対応。
+- ✅ **算出**: `domain/ops/ingest_log.py` の `evaluate_freshness()`（純粋関数）が、直近ログ
+  （新しい順20件）から (a) 直近試行が失敗していないか、(b) 直近成功からの経過日数、
+  を判定する。ログが1件も無い環境（開発/fixture等）は `has_history=False` とし、
+  「監視対象外」であって「異常」とは区別する（誤警告防止）。
+- 🧪 **仮値**: `STALE_AFTER_DAYS=4`（週3回運用のマージンを見込んだ暫定値、独断で確定しない）。
+- ✅ **表示**: Web トップに `IngestStatusBanner`。正常時は控えめな表示、鮮度低下・失敗時のみ
+  目立つ配色にする。失敗一覧（最大5件、エラーの要約200文字まで）は開閉式で表示。
+- ✅ **API/UI 認証**: `/api/v1/ingest-status` は公開GET（`/internal/ingest/*` の
+  X-Ingest-Token 保護とは別。MVPは個人利用のため運用者自身への表示という前提。
+  多人数公開時は表示要否を再検討（§9-6 の認証・公開範囲の議論と合わせて）。
+- 🔎 Webhook通知（`NOTIFY_WEBHOOK_URL`）自体が実際に届くかは、Windows実行機での
+  実地確認が必要（このクラウド環境から検証不可）。
 
 ---
 
@@ -118,10 +210,6 @@
 **実行環境:** 本番相当 DB（mykeibadb 蓄積データ）。`python -m scripts.backtest_forecast --limit 200`
 （新しい順200レース・直近スナップショット）。既存の大規模バックテスト（ADR-0005 §5.2、DB 2022〜2026
 約15,440レース）との比較で再現性を確認した。
-
-🟡 **保存形式**: `python -m scripts.backtest_forecast --output <path>` で、標準出力と同じバックテスト結果を
-JSONファイルとして保存できる。保存内容は実行条件、対象 race_key、全体集計、track別内訳、
-RPCIサンプル、PAIサンプル。DBテーブル化は未実装で、時系列ダッシュボードが必要になった段階で再検討する。
 
 ### 8.1 結果（コース種別を分けない場合）
 
@@ -181,7 +269,38 @@ ADR-0005 §5.2 の大規模バックテスト（芝 MAE 9.472/一致率76.0%/相
 5. ❓ 展開コメントの LLM 化を正式採用するか、その品質基準。
 6. ❓ 本番の認証（INGEST_TOKEN）・公開範囲・課金の仕様。
 7. 🔎 affinity の `_NEIGHBOR_BLEED_RATIO`、上がり3F 妥当範囲などの暫定定数の妥当性検証。
-8. 🔎 JV-Data バイトオフセットの JV-Link 新バージョン追従。
+8. 🔎 JV-Data バイトオフセットの JV-Link 新バージョン追従。**手順自体は2026-07-13に
+   `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` へ明文化済み**（未着手なのは手順ではなく
+   実施そのもの）。具体的な未確認点: RA/SE（jv_spec.py）が現在準拠する JV-Data バージョンは
+   README.md/common.py 上「Ver.3.0[.0]」表記のままだが、UM/KS/CH（master_parsers.py）は既に
+   Ver.4.9 相当への移行を実データで確認済み。RA/SE の実測校正（2026-06-13函館1R・2026-06-21阪神9R
+   等）が Ver.3.0.0 時点の出力なのか、実は Ver.4.9 相当の出力から逆算したものなのかは未検証。
+   次にJV-Link実機（Windows）へアクセスできるタイミングで上記ガイドの手順を実施して確定させる。
 9. ❓ 正式公開時の JRA-VAN 規約適合性（法務・C2）。
 10. 🔎 `FormationWeights`（脚質70%・近走序盤位置30%）と4ゾーン境界の実データ検証。
     スタート速度の直接データがないため、現段階では「序盤位置のゾーン予想」として扱う。
+11. 🔎 `StyleAdvantageWeights`（勾配4.0/pt・増幅1.2・逃げ競合減点6.0/頭）の実データ検証（3.4節）。
+    検証案: 実績RPCIで同スコアを再計算し、有利判定脚質の好走率がベースラインを上回るか確認。
+12. ⏸ **展開＋絶対能力の統合順位予想**（ユーザー要望 2026-07-12・機能追加）。**2026-07-12
+    ユーザー判断で保留 → **2026-07-21 Phase1 実装**（ability-v1 × integrated-v1、§3.6）。
+    現データのみ（人気・賞金は未使用）で能力指数を作り、展開との2軸で本命/対抗/穴/危険に分類。
+    Phase2（市場・賞金指標の永続化での能力指数強化）は `tasks/backlog.md` B節に残置。
+13. 🔎 `STALE_AFTER_DAYS=4`（取り込み鮮度監視の暫定閾値、6.1節）の妥当性。実運用（週3回同期）で
+    誤警告・見逃しが無いか、しばらく運用して検証する。
+14. 🔎 展開コメント自然文（`scenario.py`）が生成する「馬番 N」「先行争いに絡みそうなのは馬番 [N,...]」
+    等の文言は、`HorseFitOutput`と異なり枠順未確定時の区別が未対応のまま（2026-07-13、§3.5参照）。
+    `HorsePaceProfile`/`PaiResult`にframe_no相当の情報がなく、対応するにはdomain層への拡張が必要。
+    「判定根拠データ」アコーディオン内のみで露出範囲は限定的だが、根本的には同種の問題。
+15. ✅ **【解決済み】確定成績が2026-07-12以降反映されなかった件**（2026-07-21 解決）。
+    経過: (a) DATA_KUBUN修正→空振り。(b) 診断ツール`diagnose_results`で「解析は正常（453件解析可・
+    DATA_KUBUN='7'）」と判明→原因は解析より下流。(c) `batch.py`が`record_results`失敗をexit 0に
+    握りつぶしていた欠陥を修正し件数ログを追加。(d) ユーザーが最新コードで results ステップを
+    各日付に対し実行したところ**全レース送信成功（成功35/失敗0 等）し、アプリに反映**された。
+    結論: パイプライン自体は正常で、旧状態は自動同期の日付窓・実行状況＋可視性欠如が絡んだもの。
+    件数ログ・診断ツールの常設で再発時は即座に切り分け可能になった。
+    **残**: 障害競走の成績が別途未反映（ユーザー保留）、自動同期の日付窓 `DaysBack` 既定を7→10済み。
+16. 🧪 **能力指数 ability-v2 の仮係数**（`AbilityWeights`、§3.6）。新しさ減衰・クラス係数・score基準に
+    加え、Phase2で **成分ブレンド重み（form0.55/本賞金0.30/人気0.15）・本賞金の対数レンジ(1e5〜1e8円)・
+    人気span(18)** を追加。いずれも暫定で、実データでの的中傾向の検証後に確定（独断で確定しない）。
+    クラス係数の `race_class` best-effort 限界は本賞金成分で緩和したが、`grade`/馬体重の永続化・
+    実 JV-Data の人気/賞金オフセット検証（jvlink 用）は残課題（`tasks/backlog.md` B節）。

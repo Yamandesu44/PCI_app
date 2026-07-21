@@ -175,4 +175,6 @@ pytest tests/
 - JV-Link 認証情報（SID）は `.env` で管理し、**絶対にコミットしない**
 - 生データ（JV-Data レコード）の再配布は JRA-VAN 規約上禁止
 - `windows_client.py` は Windows 専用。Linux では `FixtureJvLinkClient` を使用
-- SE レコードのバイト位置は JV-Data仕様書 Ver.3.0 準拠（実際の JV-Link 出力との照合推奨）
+- SE レコードのバイト位置は JV-Data仕様書 Ver.3.0 準拠（実際の JV-Link 出力との照合推奨。
+  Ver.3.0のまま変わっていないのか、UM/KS/CH同様Ver.4.9相当で校正済みなのかは未確認 → `docs/SPEC.md §9-8`）
+- JV-Linkの新バージョン追従・バイトオフセットの再検証手順は `JV_SPEC_MAINTENANCE_GUIDE.md` 参照

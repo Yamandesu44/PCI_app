@@ -9,36 +9,232 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-21（OpenAI Codex→Claude Code 引き継ぎ） |
+| 更新日時 | 2026-07-21（更新14回目・**Claude Code への引き継ぎ**。Codex がリモート更新を統合し、引き継ぎ資料とテスト再現結果を更新） |
 | 作業担当AI | OpenAI Codex |
-| 引き継ぎ先 | Claude Code |
+| 直前の担当AI | Claude Code（`af66e8f`〜`d2a74ff`のリモート更新を実施。Codex側でGit/実コード/テスト可能範囲を照合） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD` feat(backtest): export reports as json |
-| 最新実装コミット | `HEAD` feat(backtest): export reports as json |
-| 作業ツリー | バックテスト結果保存を実装し、検証・文書更新後にクリーン化する |
-| 新規実装 | `backtest_forecast.py --output <path>` によるバックテスト結果JSON保存 |
+| 最新コミット | `HEAD`（本ファイル更新を含むマージコミット。直前のリモート先端は `d2a74ff`、Codexの重複実装コミットは `144ebfd`） |
+| 作業ツリー | マージコミット作成後にクリーン化する前提。競合はリモート実装を採用して解消済み |
 
 ---
 
 ## 現在の作業目的
 
-`tasks/current.md` の最優先未完了タスク「バックテスト結果の可視化/保存」に対応する。
-既存の標準出力を維持しつつ、後続の可視化・時系列比較に使えるJSONレポートを保存できるようにする。
+**Claude Code への引き継ぎのため、本セッションでは新規仕様の実装を行わず、リモート更新の統合と
+引き継ぎ資料の整備を実施した。**
+
+Codex は `tasks/current.md` の最優先候補として「バックテスト結果のJSON保存」に着手し、
+ローカルで `144ebfd feat(backtest): export reports as json` を作成した。しかし push 前に
+`origin/claude/sweet-einstein-ilnaov` が16コミット進んでおり、その中の `03bc005 feat(backtest):
+persist backtest reports to JSON via --output` が同じ目的をより新しい文脈で実装済みだった。
+そのため `git merge origin/claude/sweet-einstein-ilnaov` の競合解消では、バックテストJSON保存関連
+ファイルと各ドキュメントについて**リモート版を採用**し、後続のClaude Code変更を上書きしない方針にした。
+競合マーカーは残っていない。
+
+**直前セッションの要約**: (1) 確定成績未反映の件は**解決**。診断で「解析は正常（453件解析可）」と特定し、
+`batch.py`が`record_results`失敗をexit 0に握りつぶしていた欠陥を可視化（件数ログ常設）。ユーザーが
+最新コードでresultsステップを再実行→全レース送信成功しアプリに反映。(2) ユーザーが選んだ改善
+「**統合順位予想（展開＋能力）**」を Phase1（ability-v1 × integrated-v1）→ ユーザーFB受けてUI刷新
+（◎○▲△の印を廃止しタグ＋順位主役へ）→ Phase2（人気・本賞金の永続化でability-v2）まで実装済み。
+詳細は下記「完了した作業」0.〜2.、`docs/DECISIONS.md` 2026-07-21（2件）。
+
+（以下は本セッションに至るまでの経緯。）
+
+ユーザーから実利用のフィードバックを受け、2点対応した:
+① 展開分析の脚質別有利度が高止まりして差が出ない（`3d3131e` で修正済み）。
+② 展開恩恵馬のピックアップに加えて絶対能力も加味した順位予想が欲しい → ユーザー判断で保留
+（`tasks/backlog.md` B節、能力指数の算出方法自体の模索が必要なため）。
+
+保留②を受け「他に実施すべき改善」の相談から**推奨1: データ取り込みの監視・鮮度表示**を実装（`2b83d75`）。
+続けて「次の推奨する選択肢」として `tasks/backlog.md` C節の技術的負債に順に着手し、
+(a) mypy --strict 全体エラーが誤情報だったと判明・訂正（`9ed1ff7`）、
+(b) 旧handoffファイルの整理（`f2a8ea6`）、
+(c) JV-Dataバイトオフセットの JV-Link新バージョン追従手順の明文化（`24731ed`）を行った。
+
+その後ユーザーから新規の不具合報告が2件続いた。
+1件目: 「月曜なのに土日の開催結果と来週の特別登録馬が反映されていない」。調査の結果、
+自動同期スクリプトが`--step special-entries`を一度も呼んでいなかったバグを発見・修正
+（`c49ce05`）。土日結果側は別原因の可能性が高く、このクラウド環境からは診断できないため
+ユーザーへ確認依頼中。
+2件目: スクリーンショット2枚で「①一部のレース結果（9R〜11R）が反映されていない」
+「②枠順確定前のレースなのに馬番が出ている」を報告。②はコードで原因を特定・修正
+（`e2f0b3c`）。①はアプリ層のバグではなく取り込みギャップの可能性が高いと判断したが、
+このクラウド環境からは特定できずユーザーへ確認依頼中、として一旦終了。
+
+その後、ユーザーがWindows実行機で①の指示どおり手動再同期を実施した結果、状況がより
+深刻かつ明確になっていたと判明: 実際は「9R〜11Rだけ」ではなく**2026-07-12以降（7/12・
+7/18・7/19の全開催日）確定成績が一切反映されていない**一方、**7/25・26の特別登録は
+正常に反映されている**とのユーザー報告。「取り込みは動いているが確定成績の検出だけが
+機能していない」という手がかりから`mykeibadb_client._build_se_record()`のDATA_KUBUN
+列の扱いに仮説を立て修正した（`af922a5`）。
+
+**しかしユーザーが再pull＆再同期しても改善せず、DATA_KUBUN仮説は空振り**と判明。
+同期ログは全ステップ exit code 0（＝件数ではなく「クラッシュしていない」だけ）で、
+原因層すら特定できない状態だった。そこで方針を「推測で直す」から「測って切り分ける」へ
+転換し、(1)`batch.py`に件数ログを常設、(2)切り分け診断ツール`ingestion.diagnose_results`を
+新設、(3)`DaysBack`既定を7→10に修正した（下記「完了した作業」2.）。
+その後の診断で解析は正常と判明し、送信段階の可視化で**解決に至った**（→「完了した作業」2.）。
 
 ---
 
-## 完了した作業（直近セッション、すべてコミット・プッシュ済み）
+## 完了した作業（直近セッション）
 
-1. **バックテスト結果のJSON保存**（`HEAD`）
-   - `apps/api/src/pci/application/backtest.py` に `backtest_report_to_dict()` を追加。
-   - `apps/api/scripts/backtest_forecast.py` に `--output <path>` を追加。
-   - 保存JSONには実行条件、対象race_key、全体集計、track別内訳、RPCIサンプル、PAIサンプルを含める。
-   - 既存の標準出力は後方互換で維持。DBテーブル化は将来の推移ダッシュボードが必要になった段階で再検討。
-   - テスト追加: `apps/api/tests/unit/application/test_backtest.py::TestBacktestReportToDict`。
-   - 検証: `py_compile` 成功。API pytest/ruff/mypy/import-linter はこのCodex環境にPython devツールが無く未実行。
-     Web `npm.cmd run test` / `typecheck` / `build` は成功。
+0. **統合順位予想: UI刷新（印→タグ）＋ Phase2（人気・本賞金→ability-v2）**（前セッション・`7997931`）
+   - **UI（ユーザーFB「印よりタグが分かりやすい・順位を明確に」）**: `IntegratedRankingView` 刷新。
+     ◎○▲△の印を廃止、総合順位（1位…）を主役に、分類は言葉タグ（本命/対抗/穴（妙味）/人気でも注意/
+     能力上位・中位/展開が向く・向きにくい）。プレゼン層のみ（`8cda3bb` のドメイン/スキーマは不変）。
+   - **Phase2 データ永続化**: 人気(TANSHO_NINKIJUN)・獲得本賞金(KAKUTOKU_HONSHOKIN)を追加。経路=
+     mykeibadb列 → SE合成の**予約offset**（jv_spec `Ninki`[541:543]/`Honsyokin`[543:552]・mykeibadb合成
+     専用・未検証。jvlink実COMでは書かれず読み側で弾く）→ `parse_se_result`（妥当性ゲート）→ Ingest API
+     （ResultItem/ResultInput）→ `RaceEntry`＋ORM＋repository＋**migration 003** → `race_entries.popularity/
+     prize_money`。ingest_api の results payload にも追加。
+   - **ability-v2**（`domain/pace/ability.py`）: form(近走着順×クラス)0.55＋本賞金(対数正規化)0.30＋
+     人気0.15 を新しさ加重ブレンド。**データ無し成分は除外し重み再正規化 → 旧データは form のみ＝v1相当へ
+     安全に縮退**（再取込まで壊れない）。本賞金が「入着時の稼ぎ＝相手クラス」を連続量で捉え、grade未永続化
+     によるクラス係数 best-effort の限界を緩和。🧪重みは §9-16。
+   - **運用（ユーザー作業・必須）**: `alembic upgrade head`（003）＋過去 results 再取込で人気/賞金が埋まる
+     （`MANUAL_SYNC_GUIDE §7.5`）。未実施でも縮退動作で壊れない。
+   - 検証: API 436 passed、ingestion 185 passed（+2 round-trip）、Web 65 passed・typecheck・build clean、
+     ruff/lint-imports/mypy clean（既存 lgbm・ingestion tuple-concat debt のみ・新規0）。OpenAPI/schema.d.ts 再生成。
 
-2. **混在型脚質の距離対応予測**（`2b083ba`）
+1. **統合順位予想（能力×展開）Phase1 を実装**（本セッション・`8cda3bb`）
+   - 経緯: ユーザー要望「展開＋絶対能力の統合順位予想」（2026-07-12保留）を再開。独断で仕様化しない
+     方針に従い、データ範囲と統合の見せ方をユーザーに選択提示 → **現データのみでPhase1** ＋
+     **2軸分類（本命/対抗/穴/危険）** を採用（`docs/DECISIONS.md` 2026-07-21）。
+   - domain（純粋・reasons・model_version付き）:
+     - `pace/ability.py`（ability-v1）: 各近走 = 出走頭数正規化した着順 × クラス係数、を新しさ加重
+       平均（直近5走）。0〜100の内部score。🧪仮係数は `AbilityWeights`。
+     - `pace/integrated_ranking.py`（integrated-v1）: 能力のレース内相対順位（上位/中位/下位/評価難）
+       × 展開適性(合致/中立/不利)で ◎本命/○対抗/△危険/▲穴/無印 に分類。表示順も2軸から決定的に導出
+       （恣意的な重み合算は不採用＝ユーザー選択）。
+   - 結線: `forecast_use_cases`（`_build_ability_score` で近走+過去レースからability構築→`build_
+     integrated_ranking`）、`dto.py`（`IntegratedRankingOutput`/`IntegratedEntryOutput`）、
+     `schemas.py`（同Schema）、OpenAPI再生成（`openapi.json`+`schema.d.ts`）、`api-client/src/index.ts`。
+   - web: `IntegratedRankingView.tsx`（新規）を `RaceForecastDashboard` の隊列予想の前に配置。
+     ◎○▲△・能力上位/中位・展開が向く/向きにくいを**言葉と記号**で表示（PCI/PAI等の実数値は非表示）。
+   - 既知の限界: `grade`未永続化（`parse_ra`がNone）のためクラス係数は`race_class`文字列の
+     best-effort。ステークス名のみの重賞は中立化 → 事実上「クラス補正付き近走充実度」。Phase2
+     （人気・賞金・馬体重の永続化）は `tasks/backlog.md` B節。
+   - 検証: **apps/api はこの新コンテナで環境未構築だったため `python -m venv .venv && .venv/bin/pip
+     install -e ".[dev]"` で構築**（下記「注意事項」）。API unit+contract 432 passed（+新規domain16・
+     contract1）、Web 65 passed、api/web typecheck・build・ruff・lint-imports・mypy --strict すべてclean
+     （既存の `lgbm_forecaster.py:58` unused-ignore 1件のみ＝当環境のlightgbm差異による既存・無関係）。
+
+2. **【解決】確定成績が2026-07-12以降反映されなかった件**（本セッション）
+   - 診断ツール`diagnose_results`で「**解析は正常（453件解析可・DATA_KUBUN='7'）**」と判明 → 原因は
+     解析より下流と特定。`RecordRaceResultUseCase`はレース未登録で例外を投げるが、`batch.py`の
+     `ingest_results`が**per-raceでcatchしてexit 0**にしていた（全送信失敗でも「成功・0件」に見える）。
+   - 送信成功/失敗の件数ログ（「確定成績送信 …: 成功 X / 失敗 Y」・全滅時WARNING）を常設し可視化。
+     ユーザーが最新コードで results ステップを各日付に再実行 → **全レース送信成功しアプリに反映（解決）**。
+   - 恒久対策: 件数ログ・`diagnose_results`（RA突き合わせ含む）・`DaysBack`既定7→10。再発時は即切り分け可。
+   - 残: 障害競走の成績が別途未反映（ユーザー保留）。第1仮説のDATA_KUBUN修正(`af922a5`)は空振りだが
+     単調・無害のため残置。
+
+3. **展開恩恵馬カードが枠順未確定の馬番を確定情報のように表示するバグを修正**（`e2f0b3c`）
+   - ユーザー報告（スクリーンショット）: 枠順確定前のレースなのに「展開恩恵馬TOP5」等に馬番が出ている。
+   - 原因: `formation-v1`（隊列予想）は`frame_no`で確定/未確定を判定し未確定時は`formation: null`に
+     する設計だったが、同じ画面のPAI系出力`HorseFitOutput`にはそもそも`frame_no`が無く、
+     この判定が一切されていなかった。特別登録段階の`horse_no`は`ingest_entries()`がUMABAN=0時に
+     割り当てる暫定連番で、公式馬番ではない可能性がある。
+   - 対応: `HorseFitOutput`/`HorseFitSchema`に`frame_no`を追加（`FormationHorseSchema`と異なり
+     `ge=1,le=8`制約なし。0=未確定が正常値）。`forecast_use_cases.py`で`RaceEntry.frame_no`から
+     供給。OpenAPI再生成。web側`lib/pace.ts`に`horseNumberLabel()`を新設し、`frame_no>0`なら
+     「馬番 N」、`frame_no=0`なら「登録順 N（馬番未確定）」を返す。`RaceForecastDashboard.tsx`
+     （TOP5カード・評価下げカード・先導候補チップ）・`HorseFitTable.tsx`・`app/page.tsx`
+     （トップ画面の中心候補プレビュー）の計5箇所を統一。
+   - PAIスコア自体は枠順確定前でも意味があるため、formation-v1のように出力ごと非表示にはせず、
+     ラベルの誠実さだけを是正する方針とした（`docs/DECISIONS.md`参照）。
+   - **未対応（既知の残課題）**: `scenario.py`の自然文コメント内「馬番 N」表記は同種の問題が
+     残る（`docs/SPEC.md §9`-14）。`HorsePaceProfile`/`PaiResult`にframe_no相当が無く、対応には
+     domain層拡張が必要なため今回は対象外。露出箇所は「判定根拠データ」アコーディオン内のみで、
+     ユーザー報告の箇所（常時表示カード）とは異なる。
+   - 検証: API 415 passed（+1）、Web 65 passed（+2）、ruff/mypy --strict/lint-imports/
+     typecheck/build すべてclean。
+
+4. **自動同期が来週の特別登録を一度も取り込んでいなかったバグを修正**（`c49ce05`）
+   - ユーザー報告「月曜なのに土日の結果・来週の特別登録馬が未反映」を調査。
+     `run_mykeibadb_full_sync.ps1`（Task Scheduler「PCI_Sync_Mykeibadb」金/土10:00・日18:00が実行）は
+     `batch.py --step entries`/`--step results` のみを呼んでおり、`--step special-entries`
+     （mykeibadbの`TOKUBETSU_TOROKUBA`系という**別テーブル**を読む独立ステップ）を一度も
+     呼んでいなかったと判明。`setup_task_scheduler.ps1`自身のdocstringは「日曜18:00は来週の
+     重賞特別登録取り込みも兼ねる」と明記しており、実装漏れと判断（`docs/DECISIONS.md`参照）。
+   - 対応: `run_mykeibadb_full_sync.ps1`に3番目の呼び出し（同じ過去7日〜未来14日の日付窓で
+     `-Step special-entries`）を追加。`sync_mykeibadb.bat`・`MANUAL_SYNC_GUIDE.md`（手順・
+     注意書き・6.8節トラブルシューティング新設）・`docs/SPEC.md §6`・`docs/DECISIONS.md`を更新。
+   - `--step special-entries`自体はbatch.py/mykeibadb_client.pyで既に実装・単体テスト済みの
+     機能で、`run_batch.ps1`のリトライ/Webhook通知も汎用対応済みだったため、追加は自動実行
+     スクリプトへの呼び出し1行の低リスクな変更。
+   - **未解決**: 「土日の確定成績が反映されていない」側は自動実行の対象内（`--step results`）
+     のはずで、「取りこぼし」ではなく「実行自体の失敗/未発火」の可能性が高いが、Task Scheduler
+     実行履歴・ログ・MySQL80サービス状態はこのクラウド環境から確認できないため、ユーザー自身の
+     診断が必要（`MANUAL_SYNC_GUIDE.md §6.8`に診断手順を用意、ユーザーへ確認依頼中）。
+   - コード修正のみでは今週分の取りこぼしは遡って埋まらないため、`--step special-entries`の
+     手動実行コマンドを別途ユーザーへ案内。
+
+5. **JV-Dataバイトオフセットの JV-Link新バージョン追従手順の明文化**（`24731ed`）
+   - `tasks/backlog.md` C節に着手。`apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` を新規作成し、
+     `dump_records.py`→`verify_layout.py`（アンカー検証→フィールド目視確認）→`locate_haron.py`/
+     `locate_corners.py`（新オフセット特定）→`jv_spec.py`更新→テスト更新→記録、という一連の手順と
+     安全策（1レースだけでCONFIRMED昇格しない等）を明文化。
+   - 調査で判明: UM/KS/CH（`master_parsers.py`）は Ver.3.0.0→Ver.4.9 の実データ差分
+     （ketto_num直後に日付フィールド群24byte追加、名前位置シフト）を既に確認・反映済みという実例が
+     存在した。一方RA/SE（`jv_spec.py`）はREADME.md/common.pyが「Ver.3.0準拠」と書いたままで、
+     実際にどのバージョンの出力を元に校正したかは未確認（独断で確定せず`docs/SPEC.md §9`-8に記録）。
+   - `README.md`・`docs/SPEC.md`（§6, §9-8）から新ガイドへの相互参照を追加。コード変更なし。
+   - 未完了: 実際の再検証実施はWindows実行機（JV-Link必須）が必要なため、このセッションでは
+     手順の明文化のみ。実施自体は引き続き未着手。
+
+6. **旧handoffファイルの整理**（`f2a8ea6`）
+   - `docs/handoff-claude-code-2026-06-25.md` を精査。全項目が (a) 現構成と食い違う誤情報
+     （`domain/services.py`・`infrastructure/repositories.py`は現存しない旧パス、
+     「次に推奨する作業」は全項目完了済み）か、(b) 既存資料で完全に上書き済み
+     （ローカル起動→`apps/api|web/README.md`、mykeibadb `.env`→`.env.example`、
+     同期手順→`MANUAL_SYNC_GUIDE.md`、ディレクトリ構成→`docs/ARCHITECTURE.md`）と判明。
+     「吸収すべき未収録の情報」が残っていなかったため削除（Git履歴には残り復元可能）。
+   - 他ドキュメントからの参照は `tasks/backlog.md` のみだったことを確認済み（削除後に更新）。
+
+7. **mypy --strict 全体エラーは誤情報だったと判明・訂正**（`9ed1ff7`、コード変更なし）
+   - `tasks/backlog.md` C節「mypy src/ --strict を全体で通すためのスタブ導入」に着手する過程で、
+     `python -m mypy src/ --strict` を実行したところ **56ファイル全体で0エラー**（キャッシュ削除後も再現）。
+   - 原因: 素の `mypy` コマンドが `/root/.local/bin/mypy`（`uv tool` 等で別途インストールされた、
+     プロジェクトの依存関係が入っていない隔離環境）を指しており、fastapi/sqlalchemy/pydantic
+     （実際はいずれも py.typed 同梱で型情報あり）を「見つからない」という誤エラーを出していた。
+     `pytest`と全く同じ根本原因（前セッションで発見済みの問題と同型）。
+   - 対応: `CLAUDE.md`, `AGENTS.md`, `docs/PROJECT_RULES.md`, `docs/ARCHITECTURE.md`,
+     `apps/api/README.md`, `tasks/backlog.md` の「環境要因・コード欠陥ではない」という誤記載を
+     すべて訂正し、`python -m mypy src/ --strict`（全体0エラー）を正しい実行方法として明記。
+   - Definition of Done も「domain・applicationは0エラー」から「全体で0エラー」へ引き上げ
+     （実態がその基準を既に満たしていたため）。
+   - 検証: `rm -rf .mypy_cache && python -m mypy src/ --strict` → Success: no issues found in 56 source files。
+
+8. **データ取り込みの鮮度監視**（`2b83d75`）
+   - 背景: `ingest_log` は書き込み専用で、自動同期が静かに失敗し続けても気づけなかった。
+   - 対応: 新規 `domain/ops/ingest_log.py`（`IngestLogRepository` Protocol + 純粋関数
+     `evaluate_freshness()`）。判定は「直近試行の失敗有無」「直近成功からの経過日数
+     （暫定閾値 `STALE_AFTER_DAYS=4`）」のみで、Task Schedulerの具体的cronはコードに埋め込まない。
+     `GET /api/v1/ingest-status`（公開GET、`/internal/ingest/*`の認証とは別）を新設し、
+     web トップに `IngestStatusBanner`（正常時は控えめ、鮮度低下・失敗時のみ目立つ配色、
+     失敗一覧は開閉式で最大5件・エラー要約200文字まで）を追加。
+   - ログが1件も無い環境（開発/fixture等）は `has_history=False` とし「異常」ではなく
+     「監視対象外」として扱い、誤警告を防ぐ。
+   - **未実施（ユーザー環境でのみ確認可能）**: `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に
+     届くかの実地確認。画面からの手動再実行導線も未着手（`tasks/backlog.md` A節に残課題として記録）。
+
+9. **脚質別有利度の修正（style-advantage-v1）**（`3d3131e`）
+   - 原因: web が「その脚質の最大PAI」を有利度に流用しており、スコアが60〜96に高止まり。
+   - 対応: `domain/pace/style_advantage.py` 新設。想定RPCIの中立点（classify_pace と同じ
+     rule-v4 閾値の中点: 芝50/ダート43）からの乖離を 50=互角の対称スコア（0〜100）へ写像。
+     逃げ・追込は増幅1.2、逃げ候補2頭以上で逃げのみ競合減点。reasons/model_version 付き。
+   - `StyleAdvantageWeights` は🧪仮係数（`docs/SPEC.md §3.4/§9`-11、`docs/DECISIONS.md` 2026-07-12）。
+
+10. **バックテスト結果のJSON保存**（`03bc005`）
+   - `report_to_dict()` + `--output <path>`。混合＋track別内訳をJSON保存。print出力は不変。
+
+11. **Codex引き継ぎ内容の検証**（`af66e8f`、ドキュメントのみ）
+   - ローカルが`origin`より7コミット遅れていたため`git merge --ff-only`で追従（無傷）。
+   - Codexの実装3件をコードレベルで検証し、テストを独立再実行。重大な不整合なし。
+
+12. **混在型脚質の距離対応予測**（`2b083ba`、Codex実装・検証済み）
    - 直近20レース266頭を調査し、旧自在139頭のうち99頭が60%未満の混在、40頭が履歴なしと確認。
    - 明確な `running-style-v1` 判定は維持し、混在型だけ `running-style-v2-distance` で再判定。
    - 過去5走の4角位置、対象距離との距離差、近走順を使用。先行・差し同数時の距離規則を追加。
@@ -46,7 +242,7 @@
    - 同じ266頭で自在を139頭（52.3%）から40頭（15.0%）へ削減。履歴なしは参考のまま維持。
    - API 380件、Web 55件、ruff/mypy/import-linter/typecheck/buildがすべて成功。
 
-3. **枠順確定後の隊列予想**（`c679e09`）
+13. **枠順確定後の隊列予想**（`c679e09`、Codex実装・検証済み）
    - `domain/pace/formation.py` に枠順確定判定と formation-v1 を追加。
    - 全馬の枠番が1〜8、馬番が正かつ一意の場合のみ予想し、特別登録（frame_no=0）は `null`。
    - 脚質70%・近走の1角（欠損時4角）位置30%で先頭/好位/中団/後方へ配置。
@@ -55,7 +251,7 @@
    - 契約テストの予測器をルールベースへ固定し、WindowsのLightGBMネイティブabortを回避。
    - 実DBで entries 278件、枠順確定112件は生成、未確定166件は非生成を確認。
 
-4. **レース分析UIの刷新**（`4d9e5b5`）
+14. **レース分析UIの刷新**（`4d9e5b5`、Codex実装・検証済み）
    - `AppHeader` を追加し、全画面でブランドとレース一覧への導線を固定。
    - レース一覧を最大幅拡張し、統計、開催日カレンダー、日付・競馬場別レースを2カラム化。
    - 展開予想と確定後回顧へ共通のダークヒーローとエメラルドのアクセントを導入。
@@ -65,7 +261,7 @@
 
 以下は以前の完了作業:
 
-5. **`backtest_forecast.py` の track別内訳を既定表示に追加**（`d840e66`）
+15. **`backtest_forecast.py` の track別内訳を既定表示に追加**（`d840e66`）
    - `apps/api/src/pci/application/backtest.py` に純粋関数 `group_races_by_track(races) -> dict[str, list[Race]]` を追加。
    - `apps/api/scripts/backtest_forecast.py` に `_print_track_breakdown()` を追加。
      `--track-type` 未指定時、混合集計に加えて芝/ダート別の再集計も自動表示する。
@@ -76,62 +272,102 @@
      （キャッシュ済みサンプルの再集計ではなく、予測をもう一度回す）。DB再クエリ（対象選定）は
      発生しないが、予測処理自体は2倍実行される。`--limit` が大きい（例: 2000+）場合は
      実行時間がおよそ2倍になる点に注意。
-6. **想定RPCI 受入基準の未達方針を決定**（`docs/DECISIONS.md` 2026-07-11、`d840e66`）
+16. **想定RPCI 受入基準の未達方針を決定**（`docs/DECISIONS.md` 2026-07-11、`d840e66`）
    - 判断: 現行モデル（lgbm-turf-v1/lgbm-dirt-v1）のまま運用継続。MAE≤1.5 を追う追加投資は今は行わない。
    - 詳細な理由・不採用案・見直し条件は `docs/DECISIONS.md` の該当エントリを参照。
-7. **想定RPCI 精度の検証**（`c94f708`、コード変更なし）
+17. **想定RPCI 精度の検証**（`c94f708`、コード変更なし）
    - ユーザーが実DB（mykeibadb蓄積データ）で `python -m scripts.backtest_forecast --limit 200` を
      3パターン（混合／芝／ダート）実行、結果を `docs/SPEC.md §8/§9` と `docs/adr/0005 §5.4` に記録。
    - 結果概要: MAE≤1.5 は構造的に未達（混合7.848/芝8.861/ダート8.332）。ラベル一致率≥60% は
      芝(73.5%)・混合(61.0%)は達成、ダート(42.5%)は未達。混合サンプルだと PAI point-biserial が
      希釈されて見える（+0.009）が track別だと正の相関（芝+0.084/ダート+0.032）に戻る新知見あり。
-8. **`forecast_accuracy` の UI 表示**（`e65f919`）: pace-analysis 画面に想定的中/相違を言葉と色で表示。
-9. **AI 引き継ぎ基盤整備**（`004aead`）、**予測フィードバックループ**（`9712fd2`）ほか、
-   それ以前の完了作業は `tasks/current.md`「最近完了したタスク」参照。
+18. **`forecast_accuracy` の UI 表示**（`e65f919`）、**AI 引き継ぎ基盤整備**（`004aead`）、
+    **予測フィードバックループ**（`9712fd2`）ほか、それ以前の完了作業は
+    `tasks/current.md`「最近完了したタスク」参照。
 
 ## 未完了の作業
 
-**なし。** 直近の依頼（`tasks/current.md` の最優先未完了タスク実装）は完了済み。
-`tasks/current.md`「進行中」は空。次の作業はユーザー指示、または下記候補から選ぶ形になる。
+- **確定成績未反映は解決済み**（上記「完了した作業」2.）。残る関連事項は障害競走の成績が別途
+  未反映（ユーザー保留）のみ。
+- **統合順位予想 Phase2 残**（馬体重・grade の追加永続化、実 JV-Data の人気/賞金オフセット検証）。
+  人気・獲得賞金の永続化＋ability-v2 は実装済み（上記「完了した作業」0.）。ユーザーが migration 003＋
+  過去成績再取込後、ability-v2 の的中傾向を実データで見てから着手判断（`tasks/backlog.md` B節）。
+- **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
+  `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
+  自動同期スクリプト自体がWindows実行機で問題なく動くかも未確認。
+- 画面からの手動再実行導線は未着手（`tasks/backlog.md` A節。多重実行防止等の設計が必要）。
+- **JV-Data仕様追従の実施自体は未着手**（`apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md`で
+  手順は明文化したが、実データ取得にはWindows実行機＋JV-Linkが必要でこのクラウド環境からは不可。
+  RA/SEが実際にVer.3.0.0/Ver.4.9のどちらの出力を元に校正されたかも未確認のまま、`docs/SPEC.md §9`-8）。
+- 展開コメント自然文（`scenario.py`）内の「馬番 N」表記が枠順未確定時を区別できない件
+  （`docs/SPEC.md §9`-14）。domain層拡張が必要な既知の残課題として記録のみ、対応は未着手。
+- それ以外はなし。本セッション（Codexへの引き継ぎ作業）でのコード変更はなし。
 
 ## 現在止まっている箇所
 
-**なし。** 作業ツリーはクリーンで、途中状態のコード・未コミット差分は存在しない。
-自然な区切り（= 次の作業を新規に開始してよいポイント）。
+**特になし**（確定成績未反映は解決、統合順位予想 Phase1〜Phase2〜UI刷新まで実装完了・`7997931`まで
+push済み）。次はユーザーの新規指示、または下記「次に実施すべき作業」から着手可否を確認して進める。
 
 ---
 
 ## 次に実施すべき作業（候補・優先順位順）
 
-ユーザーからの新規指示がない場合、以下の優先順で `tasks/backlog.md` から着手を検討する
-（A節が方針決定済み、B節は着手可否に判断が必要、C節は技術的負債）。**どれを選ぶかは
-ユーザー確認を推奨**（`docs/PROJECT_RULES.md` の「独断で正式仕様化しない」方針に沿う）。
+ユーザーからの新規指示がない場合、以下の優先順で `tasks/backlog.md` から着手を検討する。
+**どれを選ぶかはユーザー確認を推奨**（`docs/PROJECT_RULES.md` の「独断で正式仕様化しない」方針）。
 
-1. **P2 Windows ワーカー運用の監視強化**（`tasks/backlog.md` A節）
-   - `ingest_log`（migration 002）は導入済みだが、失敗の可視化・再実行導線・
-     `NOTIFY_WEBHOOK_URL` 通知の定着が未完了。
-   - 手順例: (a) `apps/api/src/pci/presentation/routers/ingest.py` の `/internal/ingest/log`
-     エンドポイントを使って直近の失敗一覧を返すエンドポイントを追加する案を検討、
-     (b) `apps/ingestion-worker/src/ingestion/batch.py` の `_notify_failure()` が実際に
-     Webhook通知するか手元で確認する。
-2. **B節: 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO` 等）
-   - 実データ検証が前提のため、想定RPCI検証と同様「ユーザーが実DBでスクリプト実行→結果を分析」の
-     進め方になる可能性が高い。着手前にどの定数を対象にするかユーザーに確認する。
-3. **C節: 技術的負債**（`mypy --strict` 全体化・統合テスト環境整備・旧handoffファイル整理等）
-   - 優先度は相対的に低い。着手前にユーザーに確認。
+0. **（当初のクリティカル提案①・未着手）取り込み監視を「データ完全性」へ**。今回の一件の再発防止の
+   本丸。現状の鮮度監視(`evaluate_freshness`)は batch-log の ok/経過日数のみ見ており、「過去日なのに
+   未確定のまま残ったレース」を検知できない（ユーザーが目視していた「成績未取込」を自動アラート化＝
+   高レバレッジ）。ユーザーは今回②統合順位予想を優先したため未着手。再提案候補。
+1. **P1 統合順位予想 Phase2 は実装済み**（人気・本賞金→ability-v2）。**残**は馬体重/grade の永続化、
+   実 JV-Data の人気/賞金オフセット検証（jvlink用）、`AbilityWeights`🧪 の実データ検証（`tasks/backlog.md` B節）。
+   まずはユーザーが migration 003＋再取込した上で ability-v2 の的中傾向を見てから判断。
+2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
+   `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`STALE_AFTER_DAYS`・
+   `AbilityWeights` 等）
+   - 実データ・実運用での検証が前提のため、想定RPCI検証と同様「ユーザーが実DBでスクリプト実行/
+     しばらく運用→結果を分析」の進め方になる可能性が高い。着手前にどの定数を対象にするか確認する。
+3. **P3 技術的負債（残件: 統合テスト環境整備のみ）**
+   - `mypy --strict` 全体化・旧handoffファイル整理・JV-Dataオフセット追従手順明文化は完了済み
+     （`tasks/backlog.md` C節）。統合テスト環境整備はDocker前提（このクラウド環境からは不可）。
+     着手前にユーザーに確認。
 
-**見直し条件つきで保留中の項目**（`docs/DECISIONS.md` 2026-07-11 参照。トリガーが来るまでは着手しない）:
-- ダート特徴量追加・学習データ拡張 — `forecast_accuracy` 蓄積が増える、またはダートの外れに
-  偏りが見えた場合に再検討。
+**保留・確認待ちの項目**:
+- 画面からの手動再実行導線（`tasks/backlog.md` A節）— 要判断（安全性・多重実行防止の設計）。
+- 当初のクリティカル提案①「取り込み監視をデータ完全性へ」（上記「次に実施すべき作業」0.）
+  — ユーザーは②統合順位予想を優先したため未着手のまま。再提案候補。
+
+**見直し条件つきで保留中の項目**（`docs/DECISIONS.md` 参照。トリガーが来るまでは着手しない）:
+- ダート特徴量追加・学習データ拡張（2026-07-11決定） — `forecast_accuracy` 蓄積が増える、
+  またはダートの外れに偏りが見えた場合に再検討。
 
 ---
 
-## 変更対象ファイル（直近セッション、コミット `HEAD`）
+## 変更対象ファイル（直近セッション・すべて push 済み。Codex は git log/diff で確認可能）
 
-- Application: `apps/api/src/pci/application/backtest.py`
-- CLI: `apps/api/scripts/backtest_forecast.py`
-- Tests: `apps/api/tests/unit/application/test_backtest.py`
-- 文書: `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md`, `tasks/current.md`, `tasks/backlog.md`
+`7997931`（Phase2＋UI刷新）で変更したファイル:
+- ingestion: `models.py`（ResultRecord+人気/賞金）, `parser/jv_spec.py`（SE予約offset Ninki/Honsyokin）,
+  `parser/se_parser.py`（読取+妥当性ゲート）, `client/mykeibadb_client.py`（列→合成書込）,
+  `ingest_api.py`（payload）, `tests/test_mykeibadb_client.py`（round-trip +2）
+- API: `presentation/routers/ingest.py`（ResultItem）, `application/dto.py`（ResultInput）,
+  `application/race_use_cases.py`（RecordRaceResult 反映）, `domain/racing/race_entry.py`（フィールド）,
+  `infrastructure/database/models.py`（ORM列）, `infrastructure/repositories/race_repository.py`（read/write）,
+  `alembic/versions/003_add_entry_popularity_prize.py`（新規migration）,
+  `domain/pace/ability.py`（ability-v2 ブレンド）, `tests/unit/domain/pace/test_ability.py`（+4）
+- 型/web: `packages/api-client/openapi.json`+`src/schema.d.ts`（再生成）,
+  `apps/web/src/components/IntegratedRankingView.tsx`（印→タグ・順位主役に全面刷新）
+- ドキュメント: `docs/SPEC.md`（§3.6 ability-v2化・§9-16更新）, `docs/DECISIONS.md`（2026-07-21（2））,
+  `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`（§7.5 migration+再取込手順）,
+  `tasks/current.md`, `tasks/backlog.md`, `docs/HANDOFF.md`
+
+`8cda3bb`（統合順位予想 Phase1: ability-v1/integrated-v1・domain+app+schema+web+contract）で変更:
+  `e286d94`（送信失敗可視化+RA突き合わせ）, `ccd6dc2`（診断ツール）, `af922a5`（DATA_KUBUN・空振り）。
+
+（展開恩恵馬frame_noガード追加はコミット `e2f0b3c`、自動同期special-entries修正は `c49ce05`、
+JV-Data仕様追従ガイド新規作成は `24731ed`、旧handoffファイル削除は `f2a8ea6`、
+mypy誤情報訂正の変更ファイル一覧はコミット `9ed1ff7`、データ取り込み鮮度監視は `2b83d75`、
+style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` の変更ファイル
+一覧は各コミットまたは `docs/DECISIONS.md`/`docs/SPEC.md` の該当エントリ参照）
 
 ---
 
@@ -142,7 +378,21 @@
 - ❓ PAI の正式定義・重み（pai-v1 は暫定、`docs/SPEC.md §9`-1）。
 - ❓ 脚質判定ルールの最適化基準、展開コメントのLLM本採用可否、本番認証・課金仕様
   （いずれも `docs/SPEC.md §9` にリストあり、詳細はそちらを参照）。
-- 🔎 formation-v1 の脚質70%・近走序盤位置30%と4ゾーン境界は実データ評価前の仮仕様。
+- 🔎 formation-v1 の脚質70%・近走序盤位置30%と4ゾーン境界は実データ評価前の仮仕様
+  （`tasks/current.md` の「暫定定数の検証と正式化」に追跡タスクあり）。
+- 🔎 `STALE_AFTER_DAYS=4`（取り込み鮮度監視の暫定閾値）が実運用（週3回同期）に対して
+  適切かは、しばらく運用してから検証する（`docs/SPEC.md §9`-13）。
+- 🔎 RA/SE（`jv_spec.py`）の実測校正済みバイトオフセットが JV-Data仕様書の Ver.3.0.0 と
+  Ver.4.9 のどちらの出力を元にしたものかは未確認（`docs/SPEC.md §9`-8、本セッションで発見）。
+  UM/KS/CH（`master_parsers.py`）は既に Ver.4.9 相当への移行を確認済みだが、RA/SEは
+  README.md/common.pyが「Ver.3.0準拠」表記のまま。再検証手順は
+  `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` に明文化済み（実施はWindows実行機が必要）。
+- 🔎 展開コメント自然文（`scenario.py`）の「馬番 N」表記は`HorseFitOutput`と異なり枠順未確定時の
+  区別が未対応（`docs/SPEC.md §9`-14、本セッションで発見・対応は未着手）。domain層
+  （`HorsePaceProfile`/`PaiResult`）にframe_no相当が無く、対応にはdomain層拡張が必要。
+- 🔎 **`mykeibadb_client._build_se_record()`のDATA_KUBUN修正（2026-07-20）は実DB未検証**
+  （`docs/SPEC.md §9`-15、`docs/DECISIONS.md` 2026-07-20）。コードリーディングのみに基づく
+  仮説的な修正で、ユーザーの再同期結果で検証されるまでは「原因はこれで確定」と扱わないこと。
 
 ## 仮実装
 
@@ -151,100 +401,123 @@
 - 🧪 `FormationWeights`（脚質0.7・近走序盤位置0.3）。`formation-v1` として隔離済み。
 - 🧪 `DistanceStyleWeights`（近走減衰・距離差・先行距離補正）。
   `running-style-v2-distance` として隔離済みで、隊列ゾーン一致率による再検証が必要。
+- 🧪 `StyleAdvantageWeights`（勾配4.0/pt・逃げ追込増幅1.2・逃げ競合減点6.0/頭）。
+  `style-advantage-v1` として隔離済み（`docs/SPEC.md §9`-11）。
+- 🧪 `STALE_AFTER_DAYS=4`（取り込み鮮度監視、`domain/ops/ingest_log.py`。本セッション追加）。
 - 🧪 想定RPCI 受入基準の未達に対する運用方針は暫定決定（追加投資しない、`docs/DECISIONS.md`）。
   見直し条件に該当したら再検討する前提。
 
 ## 既知の不具合
 
-- 特になし（今回の変更でバグは発見・修正されていない。既存の未解決事項は下記「注意事項」参照）。
+- **解決済み**: 確定成績が2026-07-12以降反映されなかった件（上記「完了した作業」2.）。診断で
+  解析は正常と判明、`batch.py`が`record_results`失敗をexit 0に握りつぶしていた欠陥を可視化。
+  ユーザーが最新コードで再実行→全レース送信成功しアプリに反映。
+- **未解決（ユーザー保留）**: 障害競走の成績が別途未反映。今回の一連とは切り分けて保留中。
+- **残置（空振り・無害）**: `_build_se_record()`のDATA_KUBUN修正（`af922a5`）。真因ではなかったが
+  単調・無害のため残置。
+- **修正済み**: 展開恩恵馬カード等が枠順未確定の馬番を確定情報のように表示していた
+  （`e2f0b3c`、上記「完了した作業」3.）。
+- **修正済み**: 自動同期スクリプトが`--step special-entries`を一度も呼んでいなかった
+  （`c49ce05`、上記「完了した作業」4.）。
 
 ---
 
-## テスト状況（OpenAI Codexが2026-07-21に再実行）
+## テスト状況（2026-07-21・引き継ぎ前の全量再検証。統合順位予想 Phase1+Phase2+UI刷新 反映後）
+
+### OpenAI Codex によるマージ後再確認（2026-07-21）
+
+`origin/claude/sweet-einstein-ilnaov` の16コミットを取り込むマージ中に、競合解消後の状態で以下を再実行した。
+このCodex環境では `python`/`py`/`ruff`/`mypy`/`lint-imports` がプロジェクトvenvとして使える状態ではなく、
+API/ingestion-worker の全量pytest・ruff・mypyは再実行できなかった。Claude Code 側の全量結果は下表に残す。
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
-| API 構文確認 | `python -m py_compile src/pci/application/backtest.py scripts/backtest_forecast.py tests/unit/application/test_backtest.py` | **成功** |
-| API JSON変換スモーク | `PYTHONPATH=src python -c "..."` | **成功**（`backtest_report_to_dict()` の `json.dumps` を確認） |
-| API 単体（対象） | `python -m pytest tests/unit/application/test_backtest.py -q` | **未実行**: このCodex環境の同梱Pythonに `pytest` が未導入 |
-| API Lint | `ruff check src/ tests/ scripts/` | **未実行**: `ruff` がPATHに存在しない |
-| API 型 | `mypy src/pci/domain/ src/pci/application/ --strict` | **未実行**: `mypy` がPATHに存在しない |
-| import境界 | `lint-imports` | **未実行**: `lint-imports` がPATHに存在しない |
-| API Client型 | `npm.cmd run typecheck --workspace=@pci/api-client` | **成功** |
-| Web 単体 | `npm.cmd run test` | **55 passed** |
-| Web 型 | `npm.cmd run typecheck` | **成功** |
-| Web build | `npm.cmd run build` | **成功** |
+| 競合マーカー確認 | `rg -n "<<<<<<<|=======|>>>>>>>"` | **該当なし** |
+| API 構文確認 | `python.exe -m py_compile src\pci\application\backtest.py scripts\backtest_forecast.py tests\unit\application\test_backtest.py`（Codex bundled Python） | **成功** |
+| api-client 型 | `npm.cmd run typecheck --workspace=@pci/api-client` | **成功** |
+| Web 型 | `npm.cmd run typecheck`（apps/web） | **成功** |
+| Web 単体 | `npm.cmd run test`（apps/web） | **65 passed** |
+| Web build | `npm.cmd run build`（apps/web） | **成功** |
 
-API側の単体テスト・lint・型チェックは、Claude Code側またはユーザーのローカルPython環境で最初に再実行すること。
-今回の変更は `apps/api/src/pci/application/backtest.py` と `apps/api/scripts/backtest_forecast.py` に集中しているため、
-最低限 `python -m pytest tests/unit/application/test_backtest.py -q` を優先する。
-
-### 前回セッションの確認結果（OpenAI Codex / 2026-07-12）
+補足: Codexローカルの `144ebfd` は同目的のJSON保存を先に実装していたが、リモート `03bc005` の
+`report_to_dict`/`--output` 実装が既に存在したため、競合ファイルはリモート版を採用した。
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
-| API 単体+契約 | `python -m pytest tests/unit/ tests/contract/ -q` | **380 passed** |
-| API Lint | `ruff check src/ tests/` | **成功** |
-| API 型 | `mypy src/pci/domain/ src/pci/application/ --strict` | **成功（28 files）** |
-| import境界 | `lint-imports` | **2 kept, 0 broken** |
-| API Client型 | `npm run typecheck --workspace=@pci/api-client` | **成功** |
-| Web 単体 | `cd apps/web && npm run test` | **55 passed** |
-| Web 型 | `npm run typecheck` | **成功** |
-| Web build | `npm run build` | **成功**（全4ルート生成） |
-| 実DB判定 | entries 278件を読取 | **確定112件=true / 未確定166件=false** |
-| 実DB脚質比較 | 枠順確定済み20レース266頭 | **自在 139頭(52.3%) → 40頭(15.0%)** |
+| **API 単体+契約** | `.venv/bin/python -m pytest tests/unit/ tests/contract/ -q`（要 venv・下記注意事項） | **436 passed** |
+| API Lint | `.venv/bin/ruff check src/ tests/ scripts/` | 既存 `scripts/seed_dev.py` 10件のみ（未編集ファイル・無関係。新規0） |
+| API import境界 | `.venv/bin/lint-imports` | **2 kept, 0 broken** |
+| API 型（全体） | `.venv/bin/python -m mypy src/ --strict` | 既存 `lgbm_forecaster.py:58` unused-ignore 1件のみ（当環境のlightgbm差異・無関係。新規0） |
+| OpenAPI同期 | `test_committed_openapi_is_in_sync` | **成功**（`export_openapi.py`で再生成済み） |
+| api-client 型 | `npm run typecheck`（packages/api-client） | **成功** |
+| Web 単体 / 型 / build | `npm run test` / `typecheck` / `build`（apps/web） | **65 passed** / **成功** / **成功** |
+| **ingestion-worker 単体** | `.venv/bin/python -m pytest tests/ -q`（要 3.12 venv） | **185 passed** |
+| ingestion-worker Lint | `.venv/bin/ruff check src/ tests/` | 既存18件のみ（`windows_client.py`/`locate_corners.py`/`test_batch_e2e.py`等・未編集ファイル。新規0） |
+| ingestion-worker 型 | `.venv/bin/python -m mypy src/ --strict` | 既存25件のみ（pymysqlスタブ欠如・`mykeibadb_client.py`のtuple-concatパターン・`batch.py`の`ingest_masters`。新規0） |
 
-未実行: integration（Docker/testcontainers前提）。ブラウザ操作プラグインは実行環境の初期化エラーで
-利用できず、スクリーンショットによる視覚QAは未実施。typecheckとproduction buildで代替確認した。
-
-### 引き継ぎ前の再確認（OpenAI Codex / 2026-07-12）
-
-今回の区切り作業では新規実装は行わず、既存の未コミット差分も存在しなかった。再確認結果は以下。
-
-| 対象 | コマンド | 結果 |
-|---|---|---|
-| Git状態 | `git status --short --branch` | clean / `claude/sweet-einstein-ilnaov...origin/claude/sweet-einstein-ilnaov` |
-| Web単体 | `npm.cmd run test` | **55 passed** |
-| Web型 | `npm.cmd run typecheck` | **成功** |
-| Web build | `npm.cmd run build` | **成功**（Next.js production build / 全3ページ生成） |
-| API単体+契約 | `python -m pytest tests/unit/ tests/contract/ -q` | **未実行**: このCodex環境では `python` / `py` がPATHに存在せず、同梱Pythonにも `pytest` が未導入 |
-| API Lint | `ruff check src/ tests/ scripts/` | **未実行**: `ruff` がPATHに存在しない |
-| API型 | `mypy src/pci/domain/ src/pci/application/ --strict` | **未実行**: `mypy` がPATHに存在しない |
-| import境界 | `lint-imports` | **未実行**: `lint-imports` がPATHに存在しない |
-
-補足:
-- `npm.cmd run test` はサンドボックス内では esbuild が親ディレクトリを読めず `Access is denied` で失敗したため、通常権限で再実行して成功。
-- `npm.cmd run typecheck` は `.next/types` 生成前に実行すると TS6053 で失敗する。`npm.cmd run build` 後に再実行すると成功。
-- API側は前回セッションで `380 passed` / ruff / mypy / import-linter 成功を確認済み。ただし今回の引き継ぎ前再確認ではツール不足により再現できていないため、Claude Code側で最初に再実行すること。
+未実行: integration（Docker/testcontainers前提）。実DB依存の検証はこのクラウド環境から不可。
 
 ---
 
 ## 注意事項
 
-- **`pytest`単体コマンドはこの実行環境では `uv tool` の隔離環境（fastapi未インストール）を
-  指す場合がある。** `python -m pytest` を使うこと（プロジェクトの依存関係が正しく解決される）。
-  `which pytest` が `/root/.local/bin/pytest` を指す場合はこの問題に当たっている可能性が高い。
-- 今回はローカルPostgreSQLへ読み取り接続できた。mykeibadb MySQLの再取り込みやWindows固有処理は、
-  引き続きユーザー環境での実行が必要。
+- **新コンテナでは apps/api も依存未インストール。** 素の `python` に pytest/fastapi 等が無く、
+  `pytest`/`mypy` は `uv tool` の隔離環境（プロジェクト依存なし）を指すことがある。
+  **apps/api でも venv を作ること**: `cd apps/api && python -m venv .venv && .venv/bin/pip install -e ".[dev]"`、
+  以降 `.venv/bin/python -m pytest` / `.venv/bin/python -m mypy src/ --strict` / `.venv/bin/ruff` /
+  `.venv/bin/lint-imports` を使う（`.venv` は gitignore 済み）。ingestion-worker は 3.12 venv（別項）。
+  **2026-07-12判明**: 「mypy全体でスタブ未導入エラー多数」は誤りで、venv経由なら実質0エラー
+  （当環境で残る `lgbm_forecaster.py:58` unused-ignore 1件は lightgbm のバージョン差由来で無害）。
+- このクラウド実行環境からは本番相当DB（mykeibadb蓄積データ）に**接続できない**。
+  実データに依存する検証（バックテスト・実運用での鮮度判定・Webhook到達確認等）は
+  ユーザーに手元（Windows機）で実行してもらい、出力を貼ってもらって分析する進め方になる。
 - `backtest_forecast.py` の track別内訳表示は予測を2回実行するため、`--limit` を大きくすると
-  実行時間が伸びる（上記「完了した作業」1.の既知のトレードオフ参照）。
+  実行時間が伸びる（上記「完了した作業」14.の既知のトレードオフ参照）。
 - UI（Next.js）には PCI/RPCI/PAI の実数値を出さない方針（`docs/PROJECT_RULES.md §5`）。
   ただし CLI診断ツール（`backtest_forecast.py`等）は開発者向けであり、この方針の対象外
-  （実数値をprintするのは意図的な挙動）。
+  （実数値をprintするのは意図的な挙動）。取り込み鮮度監視の失敗詳細（エラー要約）も、
+  対象がPCI/RPCI等の指標ではなく運用ログのため同ルールの対象外（運用者本人向け情報）。
+- `batch.py --mode mykeibadb` の `entries`/`results` と `special-entries` は**別のmykeibadbテーブル**
+  （前者はRA/SE、後者はTOKUBETSU_TOROKUBA系）を読む独立ステップ。`--step all` は
+  masters/entries/resultsのみで special-entries は含まれない。「取り込みが動いている」ことと
+  「特別登録も含めて動いている」ことは別。今後この領域を触る際は両方を意識すること
+  （2026-07-13、自動同期スクリプトの呼び出し漏れとして発見）。
+- **`frame_no`（枠番）は`horse_no`（馬番）と別概念で、確定タイミングも異なる**。特別登録段階
+  （枠順確定前）では`frame_no=0`かつ`horse_no`が`ingest_entries()`の暫定連番の場合がある。
+  新しく馬単位の出力を追加する際は、`frame_no`（0=未確定/1〜8=確定）で判定してから`horse_no`を
+  「確定馬番」として扱うこと。既存の判定基準は`formation.has_confirmed_draw()`
+  （レース全体で1つの判定）と`lib/pace.ts`の`horseNumberLabel()`（表示ラベル）の2箇所
+  （2026-07-13、`HorseFitOutput`の表示バグ修正で追加）。
+- **`apps/ingestion-worker`はPython 3.12専用**（`pyproject.toml`の`requires-python`）。
+  このクラウド環境の既定Pythonは3.11で、かつ最初はpytest等が一切インストールされていない
+  （apps/apiと違い事前セットアップ済みの環境ではない）。テストを実行する際は
+  `cd apps/ingestion-worker && python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"`
+  で環境を作り、`.venv/bin/python -m pytest tests/`を使うこと（2026-07-20判明）。
+- **mykeibadbの列マッピング関連の不具合は「無いのではなく、値の意味が合わない」形で起きやすい**。
+  過去に列名不一致で確定成績が全件消えた回帰
+  （`test_iter_se_records_parses_results_from_wmykeibadb_columns`）があり、今回のDATA_KUBUN
+  修正もその変種（列は存在するが値の意味づけが期待と異なる）。mykeibadb連携で「取り込みは
+  成功するのにデータが空/古いまま」という報告を受けたら、まずこの種の暗黙の前提のズレを疑う
+  こと（2026-07-20）。
 
 ---
 
-## Claude Code が最初に読むべきファイル（順番）
+## 次の担当者が最初に読むべきファイル（順番）
 
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
-3. `AGENTS.md` — Codex 固有の指示
-4. `tasks/current.md` — 進行中タスク（現在は空。次候補は本ファイル「次に実施すべき作業」参照）
-5. `docs/SPEC.md` — 確定/未確定仕様の区別
-6. `docs/DECISIONS.md` — 直近の設計判断（特に2026-07-11の2件）
+3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
+4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了は統合順位予想 Phase1〜2〜UI刷新）
+5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v2 を記載）
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-21（2）: UI刷新（印→タグ）＋Phase2（ability-v2）。
+   2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、確定成績未反映の解決。
+   2026-07-20（2）: 切り分け診断ツール導入。
+   2026-07-13の2件: 展開恩恵馬frame_noガード追加・自動同期special-entries追加。
+   2026-07-12の4件: ingest-status鮮度監視・style-advantage-v1・formation-v1・
+   running-style-v2-distance）
 7. 必要に応じて `docs/ARCHITECTURE.md`, `docs/adr/0005-rpci-forecast-strategy.md`
 
-## Claude Code が最初に実行すべきコマンド
+## 次の担当者が最初に実行すべきコマンド
 
 ```bash
 # 1. 最新化・状態確認
@@ -252,16 +525,24 @@ git fetch origin && git checkout claude/sweet-einstein-ilnaov && git pull origin
 git log --oneline -10
 git status   # クリーンであるはず
 
-# 2. API 健全性確認（pytest ではなく python -m pytest を使うこと）
+# 2. API 健全性確認（新コンテナは依存未インストール。venvを作り .venv/bin 経由で実行する）
 cd apps/api
-python -m pytest tests/unit/application/test_backtest.py -q
-python -m pytest tests/unit/ tests/contract/ -q
-ruff check src/ tests/ scripts/
-lint-imports
-mypy src/pci/domain/ src/pci/application/ --strict
+python -m venv .venv && .venv/bin/pip install -e ".[dev]"
+.venv/bin/python -m pytest tests/unit/ tests/contract/ -q   # 436 passed
+.venv/bin/ruff check src/ tests/
+.venv/bin/lint-imports
+.venv/bin/python -m mypy src/ --strict   # 既存 lgbm 1件のみ（無害）・新規0が基準
 
-# 3. Web 健全性確認
-cd ../web
-npm run test
-npm run typecheck
+# 3. api-client 型 + Web 健全性確認（新コンテナは node_modules 未インストール）
+cd ../../packages/api-client && npm install && npm run typecheck
+cd ../../apps/web && npm install && npm run test && npm run typecheck && npm run build
+
+# 4. ingestion-worker 健全性確認（Python 3.12専用。3.12でvenvを作る）
+cd ../ingestion-worker
+python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+.venv/bin/python -m pytest tests/ -q   # 185 passed
 ```
+
+**統合順位予想 Phase2（人気・本賞金）を実データで反映する場合**: ユーザーが Windows 機で
+`alembic upgrade head`（migration 003）＋ 過去 results の再取込が必要（`MANUAL_SYNC_GUIDE.md §7.5`）。
+未実施でも壊れない（ability-v2 は該当データが無い成分を自動で除外し v1 相当へ縮退する）。

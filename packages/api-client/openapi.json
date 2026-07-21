@@ -332,6 +332,16 @@
             "title": "Horses",
             "type": "array"
           },
+          "integrated_ranking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntegratedRankingSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "model_version": {
             "title": "Model Version",
             "type": "string"
@@ -355,6 +365,16 @@
           "scenario_headline": {
             "title": "Scenario Headline",
             "type": "string"
+          },
+          "style_advantage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StyleAdvantageSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -535,11 +555,15 @@
         "type": "object"
       },
       "HorseFitSchema": {
-        "description": "馬単位の展開適性（PAI）。",
+        "description": "馬単位の展開適性（PAI）。\n\nframe_no=0 は枠順未確定（特別登録段階）。horse_no はその場合、\n確定した公式馬番ではない可能性がある（FormationHorseSchema と同じ判定基準）。",
         "properties": {
           "fit_label": {
             "title": "Fit Label",
             "type": "string"
+          },
+          "frame_no": {
+            "title": "Frame No",
+            "type": "integer"
           },
           "horse_name": {
             "anyOf": [
@@ -577,6 +601,7 @@
         },
         "required": [
           "horse_no",
+          "frame_no",
           "running_style",
           "pai",
           "fit_label"
@@ -656,6 +681,40 @@
           "horse_no"
         ],
         "title": "HorsePaceAnalysisSchema",
+        "type": "object"
+      },
+      "IngestFailureSchema": {
+        "description": "直近の取り込み失敗1件。",
+        "properties": {
+          "batch_date": {
+            "title": "Batch Date",
+            "type": "string"
+          },
+          "error_summary": {
+            "title": "Error Summary",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_date",
+          "step",
+          "mode",
+          "started_at",
+          "error_summary"
+        ],
+        "title": "IngestFailureSchema",
         "type": "object"
       },
       "IngestLogBody": {
@@ -752,6 +811,159 @@
           "accepted"
         ],
         "title": "IngestResponse",
+        "type": "object"
+      },
+      "IngestStatusSchema": {
+        "description": "取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。\n\nhas_history=False は「ログが無い（開発/fixture環境等）」を表し、異常を意味しない。",
+        "properties": {
+          "days_since_last_success": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Since Last Success"
+          },
+          "has_history": {
+            "title": "Has History",
+            "type": "boolean"
+          },
+          "is_stale": {
+            "default": false,
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "last_attempt_failed": {
+            "default": false,
+            "title": "Last Attempt Failed",
+            "type": "boolean"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "last_success_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success Step"
+          },
+          "recent_failures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IngestFailureSchema"
+            },
+            "title": "Recent Failures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "has_history"
+        ],
+        "title": "IngestStatusSchema",
+        "type": "object"
+      },
+      "IntegratedEntrySchema": {
+        "description": "統合順位予想の1頭分（展開×能力の2軸分類）。\n\nframe_no=0 は枠順未確定（HorseFitSchema と同じ判定基準）。",
+        "properties": {
+          "ability_tier": {
+            "title": "Ability Tier",
+            "type": "string"
+          },
+          "fit_label": {
+            "title": "Fit Label",
+            "type": "string"
+          },
+          "frame_no": {
+            "title": "Frame No",
+            "type": "integer"
+          },
+          "horse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horse Name"
+          },
+          "horse_no": {
+            "title": "Horse No",
+            "type": "integer"
+          },
+          "mark": {
+            "title": "Mark",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "horse_no",
+          "frame_no",
+          "rank",
+          "mark",
+          "ability_tier",
+          "fit_label"
+        ],
+        "title": "IntegratedEntrySchema",
+        "type": "object"
+      },
+      "IntegratedRankingSchema": {
+        "description": "展開適性と能力の2軸統合順位予想（integrated-v1）。",
+        "properties": {
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IntegratedEntrySchema"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model_version"
+        ],
+        "title": "IntegratedRankingSchema",
         "type": "object"
       },
       "JockeyBody": {
@@ -1199,6 +1411,28 @@
             "title": "Horse No",
             "type": "integer"
           },
+          "popularity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Popularity"
+          },
+          "prize_money": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prize Money"
+          },
           "race_time_s": {
             "exclusiveMinimum": 0.0,
             "title": "Race Time S",
@@ -1262,6 +1496,57 @@
           "formula_version"
         ],
         "title": "ResultResponse",
+        "type": "object"
+      },
+      "StyleAdvantageEntrySchema": {
+        "description": "1脚質分の展開有利度（50=互角、大きいほど今回の流れが向く）。",
+        "properties": {
+          "score": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "style": {
+            "title": "Style",
+            "type": "string"
+          }
+        },
+        "required": [
+          "style",
+          "score"
+        ],
+        "title": "StyleAdvantageEntrySchema",
+        "type": "object"
+      },
+      "StyleAdvantageSchema": {
+        "description": "脚質別の展開有利度（style-advantage-v1）。",
+        "properties": {
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StyleAdvantageEntrySchema"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model_version"
+        ],
+        "title": "StyleAdvantageSchema",
         "type": "object"
       },
       "TrainerBody": {
@@ -1331,6 +1616,28 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/ingest-status": {
+      "get": {
+        "description": "直近の取り込みバッチの鮮度・失敗有無を返す（トップ画面の更新状況表示用）。",
+        "operationId": "get_ingest_status_api_v1_ingest_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestStatusSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Ingest Status",
+        "tags": [
+          "status"
+        ]
+      }
+    },
     "/api/v1/races": {
       "get": {
         "description": "新しい順にレース一覧を返す。date 指定時はその日のレースのみ返す。",

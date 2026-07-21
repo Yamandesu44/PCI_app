@@ -3,7 +3,7 @@
 > 現時点で確認できる未着手事項を整理する。**確定タスク**（やると決まっている）と
 > **改善案/検討**（やるかどうか未確定）を区別する。着手したら `tasks/current.md` へ移す。
 
-最終更新: 2026-07-11
+最終更新: 2026-07-21
 
 ---
 
@@ -15,16 +15,35 @@
 - [x] ~~P1 `forecast_accuracy` のフロント表示~~ → 完了（コミット `e65f919`）。
 - [x] ~~P2 backtest_forecast.py の PAI希釈対策（track別内訳表示）~~ → 完了（2026-07-11、
   `group_races_by_track` + `_print_track_breakdown`）。
-- [x] ~~P2 バックテスト結果の可視化/保存~~ → 完了（2026-07-21、
-  `backtest_report_to_dict` + `backtest_forecast.py --output <path>`）。DB化は将来の推移分析が
-  必要になった段階で再検討。
-- [ ] **P2 Windows ワーカー運用の監視強化**（design/07）。`ingest_log` は導入済み。失敗の可視化・
-  再実行導線・Webhook 通知の定着（`NOTIFY_WEBHOOK_URL`）。
+- [x] ~~P2 バックテスト結果の可視化/保存~~ → 完了（2026-07-12、`report_to_dict` + `--output`）。
+  JSON保存のみ実装。DBテーブル化は見送り（的中率推移ダッシュボードが要る段階で再検討）。
+- [x] ~~P2 Windows ワーカー運用の監視強化（失敗の可視化）~~ → 完了（2026-07-12、
+  `GET /api/v1/ingest-status` + `IngestStatusBanner`）。**残課題**: `NOTIFY_WEBHOOK_URL`
+  によるWebhook通知が実際に届くかは、Windows実行機での実地確認が必要（このクラウド環境から不可）。
+  再実行導線（画面からの手動再実行トリガー）は未着手（要判断: ボタン一発で本当に安全に
+  再実行できるか、多重実行防止をどうするか）。
+- [ ] **P2 取り込み監視を「実行成否」から「データ完全性」へ拡張**（2026-07-20 確定成績未反映事件の
+  再発防止提案・未着手）。現状の`evaluate_freshness`（`domain/ops/ingest_log.py`）は batch実行の
+  ok/経過日数のみを見ており、「過去日なのに確定成績が未反映のまま残ったレース」は検知できない。
+  当時ユーザーが目視していた「成績未取込レース」一覧（`page.tsx`のレスキュー表示）を、レース側から
+  能動的にスキャンして自動アラート化できれば、同種の問題が今後1週間以上気づかれないことを防げる。
+  ユーザーは2026-07-21時点で②統合順位予想を優先したため未着手。再提案候補（最初に推奨した項目）。
 
 ## B. 改善候補（やるか未確定・要判断）
 
+- [x] ~~P1 展開＋絶対能力の統合順位予想（Phase1）~~ → **2026-07-21 実装済み**（ability-v1 ×
+  integrated-v1、`docs/SPEC.md §3.6`・`docs/DECISIONS.md` 2026-07-21）。現データのみ・2軸分類。
+- [x] ~~P1 統合順位予想 Phase2: 人気・本賞金の永続化（ability-v2）~~ → **2026-07-21 実装済み**
+  （`docs/DECISIONS.md` 2026-07-21（2）・`docs/SPEC.md §3.6`）。人気(TANSHO_NINKIJUN)・本賞金
+  (KAKUTOKU_HONSHOKIN)を永続化し ability-v2 でブレンド。運用は `MANUAL_SYNC_GUIDE §7.5`。
+- [ ] **P1 統合順位予想 Phase2 残: 馬体重・grade の永続化と重み検証**。
+  本賞金でクラス限界は緩和したが、馬体重(BATAIJU)・grade の追加余地あり。実 JV-Data の
+  人気/賞金オフセット（jvlink 実 COM 用）の検証も未（現状 mykeibadb 合成専用の予約offset）。
+  実データで ability-v2 の的中傾向・`AbilityWeights`🧪 を検証してから着手判断。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
-  `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)。実データ検証後に確定（独断で確定しない）。
+  `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
+  `DistanceStyleWeights`(running-style-v2-distance)・`StyleAdvantageWeights`(style-advantage-v1)・
+  `STALE_AFTER_DAYS`(ingest_log鮮度監視)。実データ・実運用での検証後に確定（独断で確定しない）。
 - [ ] 脚質判定ルールの最適化（design/07 C9・データ蓄積後）。
 - [ ] 展開コメントの LLM（Gemini）本採用可否と品質基準（ADR-0008）。数値はドメイン確定・表現のみ LLM。
 - [ ] PAI 正式定義の確定（design/07 C10・実運用検証後）。
@@ -35,12 +54,28 @@
 
 ## C. 技術的負債・環境
 
-- [ ] `mypy src/ --strict` を全体で通すための SQLAlchemy/Pydantic/FastAPI スタブ導入 or 設定
-  （infrastructure/presentation で多数エラー・現状は domain/application のみ strict 確認）。
-- [ ] 旧 `docs/handoff-claude-code-2026-06-25.md` の記載ファイル名が現構成と不一致。
-  歴史資料として残置するか、`docs/ARCHITECTURE.md` へ吸収して削除するか要判断。
+- [x] ~~`mypy src/ --strict` を全体で通すための SQLAlchemy/Pydantic/FastAPI スタブ導入 or 設定~~
+  → **2026-07-12 判明・対応済み**: スタブ不足ではなく、素の `mypy` コマンドが `uv tool` 等の
+  隔離環境（プロジェクト依存関係が入っていない）を指していた誤検知だった。
+  `python -m mypy src/ --strict` で実行すると **56ファイル全体で0エラー**（キャッシュ削除後も再現）。
+  `CLAUDE.md`/`AGENTS.md`/`docs/PROJECT_RULES.md`/`docs/ARCHITECTURE.md`/`apps/api/README.md`の
+  誤記載を訂正し、DoDも「domain・applicationのみ」から「全体で0エラー」へ引き上げ。
+- [x] ~~旧 `docs/handoff-claude-code-2026-06-25.md` の記載ファイル名が現構成と不一致~~
+  → **2026-07-13 削除**: 内容を精査した結果、全項目が (a) 現構成と食い違う誤情報
+  （`domain/services.py`・`infrastructure/repositories.py` は現存しない旧パス、
+  「次に推奨する作業」は全項目完了済み）か、(b) 既存資料で完全に上書き済み
+  （ローカル起動手順→`apps/api|web/README.md`、mykeibadb `.env`→`.env.example`、
+  同期手順→`MANUAL_SYNC_GUIDE.md`、ディレクトリ構成→`docs/ARCHITECTURE.md`）であり、
+  「吸収すべき未収録の情報」が残っていなかったため削除（`docs/ARCHITECTURE.md`への吸収は不要）。
+  Git履歴には残るため復元可能。
 - [ ] 統合テスト（testcontainers-postgres）の日常実行環境（CI/ローカル Docker）整備。
-- [ ] JV-Data バイトオフセットの JV-Link 新バージョン追従手順の明文化（`jv_spec.py`）。
+- [x] ~~JV-Data バイトオフセットの JV-Link 新バージョン追従手順の明文化（`jv_spec.py`）~~
+  → **2026-07-13 手順書作成**: `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` を新規作成。
+  `dump_records.py`→`verify_layout.py`→`locate_haron.py`/`locate_corners.py`→`jv_spec.py`更新の
+  流れと安全策を明文化。副次的に、UM/KS/CH（`master_parsers.py`）はVer.3.0.0→Ver.4.9移行を
+  実データで確認済みだが、RA/SE（`jv_spec.py`）は README.md/common.py が「Ver.3.0準拠」表記の
+  まま未確認という具体的なギャップを発見（`docs/SPEC.md §9`-8）。**手順の明文化は完了、
+  実際の再検証実施はWindows実行機（JV-Link必須）が必要なため引き続き未着手。**
 
 ## D. 将来スコープ（MVP 外・design/07 参照）
 

@@ -181,7 +181,30 @@ def parse_se_result(record: str) -> ResultRecord | None:
         corner_2=_corner_pos(raw, 358, 360),
         corner_3=_corner_pos(raw, 360, 362),
         corner_4=_corner_pos(raw, 362, 364),
+        popularity=_popularity(raw),
+        prize_money=_prize_money(raw),
     )
+
+
+# 人気・本賞金（Phase2・ability-v2 用）。mykeibadb 合成の予約オフセット（jv_spec 参照）から
+# 読む。jvlink 実レコードには書かれておらず妥当性チェックで弾く（未検証領域のため）。
+_POPULARITY_MAX = 28  # 単勝人気順の上限（フルゲート18頭＋除外等の余裕）
+
+
+def _popularity(raw: bytes) -> int | None:
+    s = _bs(raw, 541, 543).strip()
+    if not s.isdigit():
+        return None
+    n = int(s)
+    return n if 1 <= n <= _POPULARITY_MAX else None
+
+
+def _prize_money(raw: bytes) -> int | None:
+    s = _bs(raw, 543, 552).strip()
+    if not s.isdigit():
+        return None
+    n = int(s)
+    return n if n > 0 else None
 
 
 def get_horse_info_from_se(record: str) -> tuple[str, str, str | None]:

@@ -27,6 +27,9 @@ class RaceEntry:
     corner_4: int | None = field(default=None)  # 脚質判定に使用
     pci_actual: float | None = field(default=None)  # formula_version は mart 層で管理
     running_style: str | None = field(default=None)  # RunningStyleLabel の値
+    # Phase2（能力指数 ability-v2 用・確定後）。未取得は None。
+    popularity: int | None = field(default=None)  # 単勝人気順（1=1番人気）
+    prize_money: int | None = field(default=None)  # 獲得本賞金（円）
 
     @property
     def corner4_position(self) -> int | None:

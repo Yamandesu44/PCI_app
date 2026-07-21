@@ -89,6 +89,9 @@ class RaceEntryModel(Base):
     corner_4: Mapped[int | None] = mapped_column(Integer)
     pci_actual: Mapped[float | None] = mapped_column(Float)
     running_style: Mapped[str | None] = mapped_column(String(10))
+    # Phase2（能力指数 ability-v2 用・確定後）
+    popularity: Mapped[int | None] = mapped_column(Integer)
+    prize_money: Mapped[int | None] = mapped_column(Integer)
 
 
 class IngestLogModel(Base):

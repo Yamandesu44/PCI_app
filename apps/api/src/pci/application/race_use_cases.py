@@ -115,6 +115,8 @@ class RecordRaceResultUseCase:
                     corner_3=r.corner_3,
                     corner_4=r.corner_4,
                     pci_actual=pci_val,
+                    popularity=r.popularity,
+                    prize_money=r.prize_money,
                 )
             )
             pci_values.append(pci_val)
@@ -157,6 +159,8 @@ class RecordRaceResultUseCase:
                     corner_4=entry.corner_4,
                     pci_actual=entry.pci_actual,
                     running_style=running_style,
+                    popularity=entry.popularity,
+                    prize_money=entry.prize_money,
                 )
             )
 

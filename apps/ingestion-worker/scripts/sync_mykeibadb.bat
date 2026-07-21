@@ -3,7 +3,7 @@ REM mykeibadb sync - run from Windows Task Scheduler Fri/Sat 10:00, Sun 18:00.
 REM Task name: PCI_Sync_Mykeibadb
 REM
 REM What it does: mykeibadb.exe (JV-Link -> MySQL) then batch.py (MySQL -> PostgreSQL,
-REM entries + results).
+REM entries + results + special-entries).
 REM Manual run: scripts\sync_mykeibadb.bat
 REM Setup: run scripts\setup_task_scheduler.ps1 as Administrator.
 REM Requires: MYKEIBADB_EXE_PATH (full path to mykeibadb.exe) set in .env.

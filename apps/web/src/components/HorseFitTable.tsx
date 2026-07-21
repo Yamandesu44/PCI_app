@@ -1,5 +1,5 @@
 import { ReasonList } from "@/components/ReasonList";
-import { fitTone, paiBarWidth, sortByPai } from "@/lib/pace";
+import { fitTone, horseNumberLabel, paiBarWidth, sortByPai } from "@/lib/pace";
 import type { HorseFit } from "@pci/api-client";
 
 /** 各馬の展開適性（PAI）を、合致度の高い順にバーで可視化する。 */
@@ -13,8 +13,8 @@ export function HorseFitTable({ horses }: { horses: HorseFit[] }) {
         return (
           <li key={h.horse_no} className={`horse fit-${tone}`}>
             <div className="horse-head">
-              <span className="horse-no">{h.horse_no}</span>
-              <span className="horse-style">{h.horse_name ?? `馬番 ${h.horse_no}`}</span>
+              <span className="horse-no">{horseNumberLabel(h)}</span>
+              <span className="horse-style">{h.horse_name ?? horseNumberLabel(h)}</span>
               <span className="horse-style">{h.running_style}</span>
               <span className={`fit-badge fit-${tone}`}>{h.fit_label}</span>
               <span className="pai-value">PAI {h.pai.toFixed(0)}</span>

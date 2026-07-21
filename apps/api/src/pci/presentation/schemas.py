@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from pci.application.dto import (
     CommentOutput,
     ForecastOutput,
+    IngestStatusOutput,
     PaceAnalysisOutput,
     RaceDetailOutput,
     RaceSummaryOutput,
@@ -44,13 +45,57 @@ class CommentSchema(BaseModel):
 
 
 class HorseFitSchema(BaseModel):
-    """馬単位の展開適性（PAI）。"""
+    """馬単位の展開適性（PAI）。
+
+    frame_no=0 は枠順未確定（特別登録段階）。horse_no はその場合、
+    確定した公式馬番ではない可能性がある（FormationHorseSchema と同じ判定基準）。
+    """
 
     horse_no: int
+    frame_no: int
     horse_name: str | None = None
     running_style: str
     pai: float = Field(ge=0.0, le=100.0)
     fit_label: str
+    reasons: list[ReasonSchema] = []
+
+
+class StyleAdvantageEntrySchema(BaseModel):
+    """1脚質分の展開有利度（50=互角、大きいほど今回の流れが向く）。"""
+
+    style: str
+    score: float = Field(ge=0.0, le=100.0)
+
+
+class StyleAdvantageSchema(BaseModel):
+    """脚質別の展開有利度（style-advantage-v1）。"""
+
+    model_version: str
+    entries: list[StyleAdvantageEntrySchema] = []
+    reasons: list[ReasonSchema] = []
+
+
+class IntegratedEntrySchema(BaseModel):
+    """統合順位予想の1頭分（展開×能力の2軸分類）。
+
+    frame_no=0 は枠順未確定（HorseFitSchema と同じ判定基準）。
+    """
+
+    horse_no: int
+    frame_no: int
+    horse_name: str | None = None
+    rank: int
+    mark: str  # 本命 / 対抗 / 穴 / 危険 / 無印
+    ability_tier: str  # 上位 / 中位 / 下位 / 評価難
+    fit_label: str  # 合致 / 中立 / 不利
+    reasons: list[ReasonSchema] = []
+
+
+class IntegratedRankingSchema(BaseModel):
+    """展開適性と能力の2軸統合順位予想（integrated-v1）。"""
+
+    model_version: str
+    entries: list[IntegratedEntrySchema] = []
     reasons: list[ReasonSchema] = []
 
 
@@ -96,6 +141,8 @@ class ForecastSchema(BaseModel):
     forecast_reasons: list[ReasonSchema] = []
     comment: CommentSchema | None = None
     formation: FormationSchema | None = None
+    style_advantage: StyleAdvantageSchema | None = None
+    integrated_ranking: IntegratedRankingSchema | None = None
 
     @classmethod
     def from_dto(cls, dto: ForecastOutput) -> ForecastSchema:
@@ -112,6 +159,7 @@ class ForecastSchema(BaseModel):
             horses=[
                 HorseFitSchema(
                     horse_no=h.horse_no,
+                    frame_no=h.frame_no,
                     horse_name=h.horse_name,
                     running_style=h.running_style,
                     pai=h.pai,
@@ -145,6 +193,39 @@ class ForecastSchema(BaseModel):
                     ],
                 )
                 if dto.formation
+                else None
+            ),
+            style_advantage=(
+                StyleAdvantageSchema(
+                    model_version=dto.style_advantage.model_version,
+                    entries=[
+                        StyleAdvantageEntrySchema(style=entry.style, score=entry.score)
+                        for entry in dto.style_advantage.entries
+                    ],
+                    reasons=[ReasonSchema(**vars(r)) for r in dto.style_advantage.reasons],
+                )
+                if dto.style_advantage
+                else None
+            ),
+            integrated_ranking=(
+                IntegratedRankingSchema(
+                    model_version=dto.integrated_ranking.model_version,
+                    entries=[
+                        IntegratedEntrySchema(
+                            horse_no=entry.horse_no,
+                            frame_no=entry.frame_no,
+                            horse_name=entry.horse_name,
+                            rank=entry.rank,
+                            mark=entry.mark,
+                            ability_tier=entry.ability_tier,
+                            fit_label=entry.fit_label,
+                            reasons=[ReasonSchema(**vars(r)) for r in entry.reasons],
+                        )
+                        for entry in dto.integrated_ranking.entries
+                    ],
+                    reasons=[ReasonSchema(**vars(r)) for r in dto.integrated_ranking.reasons],
+                )
+                if dto.integrated_ranking
                 else None
             ),
         )
@@ -296,6 +377,43 @@ class PaceAnalysisSchema(BaseModel):
                 if dto.forecast_accuracy
                 else None
             ),
+        )
+
+
+class IngestFailureSchema(BaseModel):
+    """直近の取り込み失敗1件。"""
+
+    batch_date: str
+    step: str
+    mode: str
+    started_at: str
+    error_summary: str
+
+
+class IngestStatusSchema(BaseModel):
+    """取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。
+
+    has_history=False は「ログが無い（開発/fixture環境等）」を表し、異常を意味しない。
+    """
+
+    has_history: bool
+    last_success_at: str | None = None
+    last_success_step: str | None = None
+    last_attempt_failed: bool = False
+    days_since_last_success: int | None = None
+    is_stale: bool = False
+    recent_failures: list[IngestFailureSchema] = []
+
+    @classmethod
+    def from_dto(cls, dto: IngestStatusOutput) -> IngestStatusSchema:
+        return cls(
+            has_history=dto.has_history,
+            last_success_at=dto.last_success_at,
+            last_success_step=dto.last_success_step,
+            last_attempt_failed=dto.last_attempt_failed,
+            days_since_last_success=dto.days_since_last_success,
+            is_stale=dto.is_stale,
+            recent_failures=[IngestFailureSchema(**vars(f)) for f in dto.recent_failures],
         )
 
 

@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/ingest-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ingest Status
+         * @description 直近の取り込みバッチの鮮度・失敗有無を返す（トップ画面の更新状況表示用）。
+         */
+        get: operations["get_ingest_status_api_v1_ingest_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/races": {
         parameters: {
             query?: never;
@@ -395,6 +415,7 @@ export interface components {
              * @default []
              */
             horses: components["schemas"]["HorseFitSchema"][];
+            integrated_ranking?: components["schemas"]["IntegratedRankingSchema"] | null;
             /** Model Version */
             model_version: string;
             /** Pace Label */
@@ -407,6 +428,7 @@ export interface components {
             scenario_detail: string;
             /** Scenario Headline */
             scenario_headline: string;
+            style_advantage?: components["schemas"]["StyleAdvantageSchema"] | null;
         };
         /**
          * FormationGroupSchema
@@ -484,10 +506,15 @@ export interface components {
         /**
          * HorseFitSchema
          * @description 馬単位の展開適性（PAI）。
+         *
+         *     frame_no=0 は枠順未確定（特別登録段階）。horse_no はその場合、
+         *     確定した公式馬番ではない可能性がある（FormationHorseSchema と同じ判定基準）。
          */
         HorseFitSchema: {
             /** Fit Label */
             fit_label: string;
+            /** Frame No */
+            frame_no: number;
             /** Horse Name */
             horse_name?: string | null;
             /** Horse No */
@@ -524,6 +551,22 @@ export interface components {
             pci?: number | null;
             /** Running Style */
             running_style?: string | null;
+        };
+        /**
+         * IngestFailureSchema
+         * @description 直近の取り込み失敗1件。
+         */
+        IngestFailureSchema: {
+            /** Batch Date */
+            batch_date: string;
+            /** Error Summary */
+            error_summary: string;
+            /** Mode */
+            mode: string;
+            /** Started At */
+            started_at: string;
+            /** Step */
+            step: string;
         };
         /**
          * IngestLogBody
@@ -565,6 +608,82 @@ export interface components {
              * @default ok
              */
             message: string;
+        };
+        /**
+         * IngestStatusSchema
+         * @description 取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。
+         *
+         *     has_history=False は「ログが無い（開発/fixture環境等）」を表し、異常を意味しない。
+         */
+        IngestStatusSchema: {
+            /** Days Since Last Success */
+            days_since_last_success?: number | null;
+            /** Has History */
+            has_history: boolean;
+            /**
+             * Is Stale
+             * @default false
+             */
+            is_stale: boolean;
+            /**
+             * Last Attempt Failed
+             * @default false
+             */
+            last_attempt_failed: boolean;
+            /** Last Success At */
+            last_success_at?: string | null;
+            /** Last Success Step */
+            last_success_step?: string | null;
+            /**
+             * Recent Failures
+             * @default []
+             */
+            recent_failures: components["schemas"]["IngestFailureSchema"][];
+        };
+        /**
+         * IntegratedEntrySchema
+         * @description 統合順位予想の1頭分（展開×能力の2軸分類）。
+         *
+         *     frame_no=0 は枠順未確定（HorseFitSchema と同じ判定基準）。
+         */
+        IntegratedEntrySchema: {
+            /** Ability Tier */
+            ability_tier: string;
+            /** Fit Label */
+            fit_label: string;
+            /** Frame No */
+            frame_no: number;
+            /** Horse Name */
+            horse_name?: string | null;
+            /** Horse No */
+            horse_no: number;
+            /** Mark */
+            mark: string;
+            /** Rank */
+            rank: number;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
+        };
+        /**
+         * IntegratedRankingSchema
+         * @description 展開適性と能力の2軸統合順位予想（integrated-v1）。
+         */
+        IntegratedRankingSchema: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["IntegratedEntrySchema"][];
+            /** Model Version */
+            model_version: string;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
         };
         /** JockeyBody */
         JockeyBody: {
@@ -709,6 +828,10 @@ export interface components {
             finish_pos: number;
             /** Horse No */
             horse_no: number;
+            /** Popularity */
+            popularity?: number | null;
+            /** Prize Money */
+            prize_money?: number | null;
             /** Race Time S */
             race_time_s: number;
         };
@@ -729,6 +852,34 @@ export interface components {
             race_key: string;
             /** Rpci */
             rpci: number | null;
+        };
+        /**
+         * StyleAdvantageEntrySchema
+         * @description 1脚質分の展開有利度（50=互角、大きいほど今回の流れが向く）。
+         */
+        StyleAdvantageEntrySchema: {
+            /** Score */
+            score: number;
+            /** Style */
+            style: string;
+        };
+        /**
+         * StyleAdvantageSchema
+         * @description 脚質別の展開有利度（style-advantage-v1）。
+         */
+        StyleAdvantageSchema: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["StyleAdvantageEntrySchema"][];
+            /** Model Version */
+            model_version: string;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
         };
         /** TrainerBody */
         TrainerBody: {
@@ -759,6 +910,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_ingest_status_api_v1_ingest_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestStatusSchema"];
+                };
+            };
+        };
+    };
     list_races_api_v1_races_get: {
         parameters: {
             query?: {

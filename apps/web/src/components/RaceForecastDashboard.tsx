@@ -11,6 +11,7 @@ import {
 
 import { HorseFitTable } from "@/components/HorseFitTable";
 import { FormationView } from "@/components/FormationView";
+import { IntegratedRankingView } from "@/components/IntegratedRankingView";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { PaceProfileChart } from "@/components/PaceProfileChart";
 import { ReasonList } from "@/components/ReasonList";
@@ -23,11 +24,12 @@ import {
   confidenceInsight,
   discountRecommendation,
   forecastDecisionChecklist,
+  horseNumberLabel,
   paceSpeedFromIndex,
-  paiBarWidth,
   sanitizeBeginnerComment,
   sortDiscountCandidates,
   sortByPai,
+  styleAdvantageScores,
 } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 
@@ -36,46 +38,12 @@ interface RaceForecastDashboardProps {
   forecast: Forecast;
 }
 
-interface StyleScore {
-  key: "front" | "stalker" | "closer" | "deep";
-  label: string;
-  value: number;
-  description: string;
-}
-
 function confidencePct(confidence: number): number {
   return Math.max(0, Math.min(100, Math.round(confidence * 100)));
 }
 
-function styleKey(style: string): StyleScore["key"] | null {
-  if (style.includes("逃")) return "front";
-  if (style.includes("先")) return "stalker";
-  if (style.includes("差")) return "closer";
-  if (style.includes("追")) return "deep";
-  return null;
-}
-
-function buildStyleScores(horses: HorseFit[]): StyleScore[] {
-  const base: StyleScore[] = [
-    { key: "front", label: "逃げ", value: 0, description: "前半から主導権を取る馬" },
-    { key: "stalker", label: "先行", value: 0, description: "好位で流れに乗る馬" },
-    { key: "closer", label: "差し", value: 0, description: "中団から末脚を伸ばす馬" },
-    { key: "deep", label: "追込", value: 0, description: "後方待機で直線勝負の馬" },
-  ];
-
-  for (const horse of horses) {
-    const key = styleKey(horse.running_style);
-    const target = base.find((item) => item.key === key);
-    if (target) {
-      target.value = Math.max(target.value, paiBarWidth(horse.pai));
-    }
-  }
-
-  return base;
-}
-
 function horseDisplayName(horse: HorseFit): string {
-  return horse.horse_name ?? `馬番 ${horse.horse_no}`;
+  return horse.horse_name ?? horseNumberLabel(horse);
 }
 
 function toneClass(index: number): string {
@@ -118,11 +86,14 @@ function confidenceClass(tone: ReturnType<typeof confidenceInsight>["tone"]): st
 
 export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardProps) {
   const horses = forecast.horses ?? [];
+  const frameNoByHorseNo = new Map(horses.map((horse) => [horse.horse_no, horse.frame_no]));
   const topHorses = sortByPai(horses).slice(0, 5);
   const discountHorses = sortDiscountCandidates(horses)
     .filter((horse) => horse.fit_label === "不利" || horse.pai < 60)
     .slice(0, 3);
-  const styleScores = buildStyleScores(horses);
+  const styleScores = forecast.style_advantage
+    ? styleAdvantageScores(forecast.style_advantage)
+    : [];
   const confidence = confidencePct(forecast.confidence);
   const confidenceMeta = confidenceInsight(forecast.confidence);
   const course = `${race.track_type}${race.distance_m}m`;
@@ -213,6 +184,10 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
         </div>
       </section>
 
+      {forecast.integrated_ranking ? (
+        <IntegratedRankingView ranking={forecast.integrated_ranking} />
+      ) : null}
+
       {forecast.formation ? <FormationView formation={forecast.formation} /> : null}
 
       {forecast.comment ? (
@@ -246,14 +221,29 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
               <TrendingUp className="h-4 w-4" />
               展開分析
             </CardTitle>
-            <CardDescription>脚質別に、今回の流れがどれだけ向きやすいかを示します。</CardDescription>
+            <CardDescription>
+              脚質別に、今回の想定ペースがどれだけ向くかを示します（50=互角）。
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             {styleScores.map((score) => (
               <div key={score.key} className="rounded-lg border border-border p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-slate-950">{score.label}有利度</p>
+                    <p className="font-semibold text-slate-950">
+                      {score.label}
+                      <span
+                        className={`ml-2 rounded px-1.5 py-0.5 text-xs font-semibold ${
+                          score.value > 54
+                            ? "bg-emerald-100 text-emerald-800"
+                            : score.value < 46
+                              ? "bg-rose-100 text-rose-800"
+                              : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {score.verdict}
+                      </span>
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">{score.description}</p>
                   </div>
                   <span className="font-mono text-lg font-semibold">{score.value}</span>
@@ -324,7 +314,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
                 </div>
                 <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
                 <p className="mt-1 text-sm opacity-80">
-                  馬番 {horse.horse_no} ・ {horse.running_style}
+                  {horseNumberLabel(horse)} ・ {horse.running_style}
                 </p>
                 <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
                   <div>
@@ -373,7 +363,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
                   </div>
                   <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
                   <p className="mt-1 text-sm opacity-80">
-                    馬番 {horse.horse_no} ・ {horse.running_style} ・ {horse.fit_label}
+                    {horseNumberLabel(horse)} ・ {horse.running_style} ・ {horse.fit_label}
                   </p>
                   <p className="mt-4 text-sm leading-6 opacity-90">{discount.reason}</p>
                 </article>
@@ -414,7 +404,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
                   key={horseNo}
                   className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold"
                 >
-                  馬番 {horseNo}
+                  {horseNumberLabel({ horse_no: horseNo, frame_no: frameNoByHorseNo.get(horseNo) ?? 0 })}
                 </span>
               ))}
             </div>
