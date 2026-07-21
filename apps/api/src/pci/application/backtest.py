@@ -27,7 +27,13 @@ from typing import Any
 
 from pci.application.dto import ForecastOutput
 from pci.application.forecast_use_cases import ForecastRaceUseCase
-from pci.domain.pace.ability import AbilityScorer
+from pci.domain.pace.ability import (
+    DEFAULT_WEIGHTS as DEFAULT_ABILITY_WEIGHTS,
+)
+from pci.domain.pace.ability import (
+    AbilityScorer,
+    AbilityWeights,
+)
 from pci.domain.pace.affinity import is_good_run
 from pci.domain.pace.commentary import CommentGenerator
 from pci.domain.pace.rpci_forecast import PaceLabel, RpciForecaster, classify_pace
@@ -197,6 +203,50 @@ class IntegratedAccuracy:
 
 
 @dataclass(frozen=True)
+class AbilityWeightProfile:
+    """実DB比較に使う能力重みの候補。本番設定は書き換えない。"""
+
+    name: str
+    description: str
+    weights: AbilityWeights
+
+
+DEFAULT_ABILITY_WEIGHT_PROFILES: tuple[AbilityWeightProfile, ...] = (
+    AbilityWeightProfile(
+        name="current",
+        description="現行重み",
+        weights=DEFAULT_ABILITY_WEIGHTS,
+    ),
+    AbilityWeightProfile(
+        name="form-only",
+        description="近走内容のみ（Phase 1相当）",
+        weights=AbilityWeights(weight_form=1.0, weight_prize=0.0, weight_popularity=0.0),
+    ),
+    AbilityWeightProfile(
+        name="form-heavy",
+        description="近走内容を重視",
+        weights=AbilityWeights(weight_form=0.70, weight_prize=0.20, weight_popularity=0.10),
+    ),
+    AbilityWeightProfile(
+        name="market-aware",
+        description="人気の市場支持をやや重視",
+        weights=AbilityWeights(weight_form=0.45, weight_prize=0.30, weight_popularity=0.25),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class AbilityWeightComparison:
+    """同一対象レースでの候補重みと現行重みの差。"""
+
+    profile: AbilityWeightProfile
+    accuracy: IntegratedAccuracy | None
+    delta_top1_win_rate: float | None
+    delta_top1_good_rate: float | None
+    delta_top3_good_capture_rate: float | None
+
+
+@dataclass(frozen=True)
 class BacktestReport:
     """バックテスト全体の結果。"""
 
@@ -295,6 +345,55 @@ def summarize_integrated_accuracy(
     )
 
 
+def compare_ability_weight_reports(
+    reports: dict[str, BacktestReport],
+    profiles: tuple[AbilityWeightProfile, ...] = DEFAULT_ABILITY_WEIGHT_PROFILES,
+    *,
+    baseline_name: str = "current",
+) -> list[AbilityWeightComparison]:
+    """同一対象で実行した重み別レポートを現行重みと比較する。"""
+    baseline_report = reports.get(baseline_name)
+    if baseline_report is None:
+        raise ValueError(f"基準プロファイルがありません: {baseline_name}")
+    baseline = baseline_report.integrated
+    comparisons: list[AbilityWeightComparison] = []
+    for profile in profiles:
+        report = reports.get(profile.name)
+        if report is None:
+            raise ValueError(f"比較レポートがありません: {profile.name}")
+        accuracy = report.integrated
+        if (
+            baseline is not None
+            and accuracy is not None
+            and (accuracy.n_races, accuracy.n_horses)
+            != (baseline.n_races, baseline.n_horses)
+        ):
+            raise ValueError(
+                f"比較サンプル数が現行重みと一致しません: {profile.name}"
+            )
+        if baseline is None or accuracy is None:
+            deltas: tuple[float | None, float | None, float | None] = (None, None, None)
+        else:
+            deltas = (
+                round(accuracy.top1_win_rate - baseline.top1_win_rate, 4),
+                round(accuracy.top1_good_rate - baseline.top1_good_rate, 4),
+                round(
+                    accuracy.top3_good_capture_rate - baseline.top3_good_capture_rate,
+                    4,
+                ),
+            )
+        comparisons.append(
+            AbilityWeightComparison(
+                profile=profile,
+                accuracy=accuracy,
+                delta_top1_win_rate=deltas[0],
+                delta_top1_good_rate=deltas[1],
+                delta_top3_good_capture_rate=deltas[2],
+            )
+        )
+    return comparisons
+
+
 def group_races_by_track(races: Iterable[Race]) -> dict[str, list[Race]]:
     """レース群をコース種別ごとにグルーピングする。
 
@@ -353,6 +452,30 @@ def _pai_lift_to_dict(lift: PaiLift | None) -> dict[str, Any] | None:
             for b in lift.bands
         ],
     }
+
+
+def ability_weight_comparisons_to_dict(
+    comparisons: list[AbilityWeightComparison],
+) -> list[dict[str, Any]]:
+    """重み比較結果をJSON保存用の辞書へ変換する。"""
+    return [
+        {
+            "name": item.profile.name,
+            "description": item.profile.description,
+            "weights": {
+                "form": item.profile.weights.weight_form,
+                "prize": item.profile.weights.weight_prize,
+                "popularity": item.profile.weights.weight_popularity,
+            },
+            "integrated": _integrated_accuracy_to_dict(item.accuracy),
+            "delta_vs_current": {
+                "top1_win_rate": item.delta_top1_win_rate,
+                "top1_good_rate": item.delta_top1_good_rate,
+                "top3_good_capture_rate": item.delta_top3_good_capture_rate,
+            },
+        }
+        for item in comparisons
+    ]
 
 
 def _integrated_accuracy_to_dict(
@@ -446,6 +569,39 @@ def format_report(report: BacktestReport) -> str:
         lines.append("\n■ 統合順位予想: 有効サンプルなし")
 
     return "\n".join(lines)
+
+
+def format_ability_weight_comparison(comparisons: list[AbilityWeightComparison]) -> str:
+    """重み候補の比較をCLI向けの表に整形する。"""
+    lines = [
+        "=" * 88,
+        "能力重みの同一期間比較（候補は自動採用しません）",
+        "候補              form 賞金 人気   1位勝率(差)   1位好走率(差)   TOP3捕捉率(差)",
+        "-" * 88,
+    ]
+    for item in comparisons:
+        weights = item.profile.weights
+        if item.accuracy is None:
+            metrics = "有効サンプルなし"
+        else:
+            accuracy = item.accuracy
+            metrics = (
+                f"{accuracy.top1_win_rate:6.1%}({_format_delta(item.delta_top1_win_rate)})  "
+                f"{accuracy.top1_good_rate:6.1%}({_format_delta(item.delta_top1_good_rate)})  "
+                f"{accuracy.top3_good_capture_rate:6.1%}"
+                f"({_format_delta(item.delta_top3_good_capture_rate)})"
+            )
+        lines.append(
+            f"{item.profile.name:<18} "
+            f"{weights.weight_form:4.2f} {weights.weight_prize:4.2f} "
+            f"{weights.weight_popularity:4.2f}   {metrics}"
+        )
+    lines.append("=" * 88)
+    return "\n".join(lines)
+
+
+def _format_delta(value: float | None) -> str:
+    return "   n/a" if value is None else f"{value:+6.1%}"
 
 
 def _point_biserial(samples: list[HorseSample]) -> float:

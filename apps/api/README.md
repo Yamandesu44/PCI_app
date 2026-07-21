@@ -44,6 +44,22 @@ ruff check src/ tests/                         # Lint
 lint-imports                                   # レイヤー依存方向の検証
 ```
 
+## 能力重みの実DB比較
+
+Phase 2の`AbilityWeights`候補を同じ確定レースで比較する。現行重みは自動変更しない。
+
+```bash
+python -m scripts.backtest_forecast \
+  --date-from 2025-07-01 --date-to 2026-06-30 \
+  --limit 2000 --sample-every 5 \
+  --compare-ability-weights \
+  --output results/ability-weights.json
+```
+
+比較対象は現行、近走内容のみ、近走重視、市場支持重視の4候補。出力は1位馬勝率・
+1位馬好走率・TOP3好走捕捉率と現行差。異なる期間で改善が再現した場合のみ、
+`AbilityWeights`の変更を別タスクで判断する。
+
 ## レイヤー構成（依存は一方向・import-linter で強制）
 
 ```

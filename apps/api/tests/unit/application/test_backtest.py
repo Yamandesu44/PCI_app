@@ -9,16 +9,23 @@ from __future__ import annotations
 import datetime
 import json
 
+import pytest
+
 from pci.application.backtest import (
+    DEFAULT_ABILITY_WEIGHT_PROFILES,
     BacktestReport,
     ForecastBacktester,
     HorseSample,
+    IntegratedAccuracy,
     IntegratedSample,
     PaiBand,
     PaiLift,
     RpciAccuracy,
     RpciSample,
     _AsOfRaceRepository,
+    ability_weight_comparisons_to_dict,
+    compare_ability_weight_reports,
+    format_ability_weight_comparison,
     format_report,
     group_races_by_track,
     report_to_dict,
@@ -136,6 +143,77 @@ class TestSummarizeIntegratedAccuracy:
         assert result.top1_win_rate == 0.5
         assert result.top1_good_rate == 1.0
         assert result.top3_good_capture_rate == 1.0
+
+
+class TestAbilityWeightComparison:
+    @staticmethod
+    def _report(
+        win_rate: float, good_rate: float, capture_rate: float
+    ) -> BacktestReport:
+        return BacktestReport(
+            model_version="rule-v4",
+            n_races=100,
+            n_horses=1200,
+            skipped=0,
+            rpci=None,
+            pai=None,
+            integrated=IntegratedAccuracy(
+                n_races=100,
+                n_horses=1200,
+                top1_win_rate=win_rate,
+                top1_good_rate=good_rate,
+                top3_good_capture_rate=capture_rate,
+            ),
+        )
+
+    def test_compares_each_profile_with_current(self) -> None:
+        reports = {
+            profile.name: self._report(0.20, 0.45, 0.60)
+            for profile in DEFAULT_ABILITY_WEIGHT_PROFILES
+        }
+        reports["form-heavy"] = self._report(0.23, 0.44, 0.65)
+
+        comparisons = compare_ability_weight_reports(reports)
+
+        form_heavy = next(item for item in comparisons if item.profile.name == "form-heavy")
+        assert form_heavy.delta_top1_win_rate == 0.03
+        assert form_heavy.delta_top1_good_rate == -0.01
+        assert form_heavy.delta_top3_good_capture_rate == 0.05
+
+    def test_missing_baseline_raises(self) -> None:
+        with pytest.raises(ValueError, match="基準プロファイル"):
+            compare_ability_weight_reports({})
+
+    def test_rejects_different_sample_sizes(self) -> None:
+        reports = {
+            profile.name: self._report(0.20, 0.45, 0.60)
+            for profile in DEFAULT_ABILITY_WEIGHT_PROFILES
+        }
+        reports["market-aware"] = BacktestReport(
+            model_version="rule-v4",
+            n_races=99,
+            n_horses=1188,
+            skipped=1,
+            rpci=None,
+            pai=None,
+            integrated=IntegratedAccuracy(99, 1188, 0.20, 0.45, 0.60),
+        )
+
+        with pytest.raises(ValueError, match="比較サンプル数"):
+            compare_ability_weight_reports(reports)
+
+    def test_json_and_text_include_weights_and_deltas(self) -> None:
+        reports = {
+            profile.name: self._report(0.20, 0.45, 0.60)
+            for profile in DEFAULT_ABILITY_WEIGHT_PROFILES
+        }
+        comparisons = compare_ability_weight_reports(reports)
+
+        payload = ability_weight_comparisons_to_dict(comparisons)
+        assert payload[0]["name"] == "current"
+        assert payload[0]["weights"] == {"form": 0.55, "prize": 0.30, "popularity": 0.15}
+        assert payload[0]["delta_vs_current"]["top1_win_rate"] == 0.0
+        assert "候補は自動採用しません" in format_ability_weight_comparison(comparisons)
 
 
 class TestGroupRacesByTrack:

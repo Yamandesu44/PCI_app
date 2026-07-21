@@ -119,8 +119,11 @@
   SE合成レコードの予約領域（jv_spec `Ninki`[541:543]/`Honsyokin`[543:552]・**mykeibadb合成専用・未検証**）→
   `parse_se_result`→Ingest API→`race_entries.popularity/prize_money`（migration `003`）へ。
   **運用: `alembic upgrade head` と過去分の results 再取込が必要**（`MANUAL_SYNC_GUIDE.md`）。
-- 🔎 **検証残**: 実データで `AbilityWeights` を比較する。バックテストは統合順位の1位馬勝率・
-  1位馬好走率・TOP3好走捕捉率を出力する。実JV-Dataの人気/賞金予約オフセット検証も残る。
+- ✅ **重み比較機能**: `backtest_forecast.py --compare-ability-weights`で、現行・近走のみ・
+  近走重視・市場支持重視を同一期間で実行し、1位馬勝率・1位馬好走率・
+  TOP3好走捕捉率と現行差をCLI/JSONへ出力する。候補は自動採用しない。
+- 🔎 **検証残**: 本番相当DBで期間を分けて比較を実行し、改善の再現性を確認する。
+  実JV-Dataの人気/賞金予約オフセット検証も残る。
 
 ---
 
@@ -307,5 +310,6 @@ ADR-0005 §5.2 の大規模バックテスト（芝 MAE 9.472/一致率76.0%/相
 16. 🧪 **能力指数 ability-v3 の仮係数**（`AbilityWeights`、§3.6）。新しさ減衰・クラス係数・score基準に
     加え、Phase2で **成分ブレンド重み（form0.55/本賞金0.30/人気0.15）・本賞金の対数レンジ(1e5〜1e8円)・
     人気span(18)** を追加。いずれも暫定で、実データでの的中傾向の検証後に確定（独断で確定しない）。
-    gradeは直接利用するよう改善済み。馬体重は永続化のみで能力加点しない。実DBバックテストによる
-    重み比較と実JV-Dataの人気/賞金オフセット検証（jvlink用）は残課題（`tasks/backlog.md` B節）。
+    gradeは直接利用するよう改善済み。馬体重は永続化のみで能力加点しない。
+    4候補の同一期間比較CLIは実装済み。本番相当DBでの実行・再現性確認と実JV-Dataの
+    人気/賞金オフセット検証（jvlink用）は残課題（`tasks/backlog.md` B節）。

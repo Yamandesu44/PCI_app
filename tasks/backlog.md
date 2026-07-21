@@ -3,7 +3,7 @@
 > 現時点で確認できる未着手事項を整理する。**確定タスク**（やると決まっている）と
 > **改善案/検討**（やるかどうか未確定）を区別する。着手したら `tasks/current.md` へ移す。
 
-最終更新: 2026-07-21
+最終更新: 2026-07-22
 
 ---
 
@@ -39,8 +39,10 @@
 - [x] ~~P1 統合順位予想 Phase2 残: 馬体重・grade の永続化~~ → **2026-07-21 実装済み**。
   確定馬体重は既存 `race_entries.weight` へresults再取込時にも更新。gradeはRA GradeCD[615]を公式コード
   から変換し、ability-v3のクラス補正で直接利用。馬体重は根拠不足のため能力加点には使わない。
-- [ ] **P1 AbilityWeightsの実DB比較検証**。バックテストに1位馬勝率・1位馬好走率・TOP3好走捕捉率を
-  追加済み。現行重みと候補重みを同一期間で比較し、改善が再現した場合のみ正式化する。
+- [x] ~~P1 AbilityWeightsの同一期間比較機能~~ → **2026-07-22 実装済み**。
+  `--compare-ability-weights`で4候補の指標と現行差をCLI/JSON出力。本番重みは自動変更しない。
+- [ ] **P1 AbilityWeightsの実DB実行・採用判断**。本番相当DBで期間を分けて上記CLIを実行し、
+  改善が再現した場合のみ正式化する。
 - [ ] **P2 実JV-Dataの人気/賞金予約オフセット検証**（jvlink実COM用）。現状はmykeibadb合成専用。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・

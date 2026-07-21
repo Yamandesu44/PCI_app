@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-21（統合順位予想 Phase 2 完成） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（AbilityWeights比較CLI完成） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,14 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P1 AbilityWeightsの同一期間比較CLI**（本セッション・OpenAI Codex）
+  - `backtest_forecast.py --compare-ability-weights`を追加し、現行・近走のみ・近走重視・
+    市場支持重視の4候補を同じ対象レースで比較。
+  - 1位馬勝率・1位馬好走率・TOP3好走捕捉率と現行差を表示し、`--output`のJSONにも保存。
+  - 候補は検証専用で、`DEFAULT_WEIGHTS`は自動更新しない。実DB実行と採用判断はbacklog。
+  - 検証: API unit+contract 444 passed（関連は40 passed）、変更対象Ruff、
+    mypy strict 58ファイル成功、CLI `--help`成功。
 
 - [x] ✅ **P1 統合順位予想 Phase 2 完成（grade・確定馬体重・検証指標）**（本セッション・OpenAI Codex）
   - grade: RA `GradeCD[615]` を公式コードから名称へ変換し、mykeibadb→API→`races.grade`へ保存。

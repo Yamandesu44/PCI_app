@@ -16,6 +16,9 @@ pci.application.backtest に集約。本スクリプトは DB 配線と対象選
     # 結果をJSONに保存し、的中率の推移を後日比較できるようにする
     python -m scripts.backtest_forecast --limit 200 --output results/2026-07-12.json
 
+    # 能力指数の重み候補を同じ対象レースで比較する
+    python -m scripts.backtest_forecast --limit 200 --compare-ability-weights
+
 対象は status="result" かつ rpci_actual を持つレース。1レースの予測は
 数百クエリを伴うため、既定は新しい順 200 レースに絞る（--limit で調整）。
 lookahead は backtest 側でレース当日カットオフして防止する。
@@ -41,15 +44,23 @@ import sys
 sys.path.insert(0, "src")
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from pci.application.backtest import (
+    DEFAULT_ABILITY_WEIGHT_PROFILES,
+    AbilityWeightComparison,
     BacktestReport,
     ForecastBacktester,
+    ability_weight_comparisons_to_dict,
+    compare_ability_weight_reports,
+    format_ability_weight_comparison,
     format_report,
     group_races_by_track,
     report_to_dict,
 )
 from pci.config.settings import get_settings
+from pci.domain.pace.ability import AbilityScorer
+from pci.domain.pace.rpci_forecast import RpciForecaster
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import RaceModel
@@ -97,10 +108,15 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="結果をJSONファイルへ保存するパス（print出力は維持）",
     )
+    p.add_argument(
+        "--compare-ability-weights",
+        action="store_true",
+        help="能力指数の検証用重み4候補を同一対象で比較する",
+    )
     return p.parse_args()
 
 
-def _select_targets(session, args: argparse.Namespace) -> list[Race]:
+def _select_targets(session: Session, args: argparse.Namespace) -> list[Race]:
     stmt = select(RaceModel.race_key).where(
         RaceModel.status == str(RaceStatus.RESULT),
         RaceModel.rpci_actual.is_not(None),
@@ -159,8 +175,40 @@ def main() -> None:
     if args.track_type is None:
         track_reports = _print_track_breakdown(backtester, targets)
 
+    weight_comparisons: list[AbilityWeightComparison] = []
+    if args.compare_ability_weights:
+        weight_comparisons = _run_ability_weight_comparison(
+            repo,
+            forecaster,
+            targets,
+            current_report=report,
+        )
+        print(f"\n{format_ability_weight_comparison(weight_comparisons)}")
+
     if args.output:
-        _write_output(args.output, report, track_reports)
+        _write_output(args.output, report, track_reports, weight_comparisons)
+
+
+def _run_ability_weight_comparison(
+    repo: SqlAlchemyRaceRepository,
+    forecaster: RpciForecaster | None,
+    targets: list[Race],
+    *,
+    current_report: BacktestReport,
+) -> list[AbilityWeightComparison]:
+    """現行レポートを再利用し、残りの候補だけを同一対象で実行する。"""
+    reports = {"current": current_report}
+    for profile in DEFAULT_ABILITY_WEIGHT_PROFILES:
+        if profile.name == "current":
+            continue
+        print(f"\n能力重み候補「{profile.name}」を検証中…")
+        candidate_backtester = ForecastBacktester(
+            repo,
+            forecaster=forecaster,
+            ability_scorer=AbilityScorer(profile.weights),
+        )
+        reports[profile.name] = candidate_backtester.run(targets)
+    return compare_ability_weight_reports(reports)
 
 
 def _print_track_breakdown(
@@ -185,13 +233,20 @@ def _print_track_breakdown(
 
 
 def _write_output(
-    path: str, report: BacktestReport, track_reports: dict[str, BacktestReport]
+    path: str,
+    report: BacktestReport,
+    track_reports: dict[str, BacktestReport],
+    weight_comparisons: list[AbilityWeightComparison] | None = None,
 ) -> None:
     payload: dict[str, object] = {"combined": report_to_dict(report)}
     if track_reports:
         payload["by_track"] = {
             track: report_to_dict(track_report) for track, track_report in track_reports.items()
         }
+    if weight_comparisons:
+        payload["ability_weight_comparison"] = ability_weight_comparisons_to_dict(
+            weight_comparisons
+        )
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     print(f"\n結果を {path} に保存しました。")

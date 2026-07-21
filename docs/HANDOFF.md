@@ -9,18 +9,21 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-21（更新15回目・**Claude Code への引き継ぎ**。Codex が統合順位予想 Phase 2残件を実装） |
+| 更新日時 | 2026-07-22（更新16回目・Codex がAbilityWeights同一期間比較CLIを実装） |
 | 作業担当AI | OpenAI Codex |
-| 直前の担当AI | OpenAI Codex（grade・確定馬体重・統合順位バックテスト指標を実装） |
+| 直前の担当AI | OpenAI Codex（AbilityWeights比較CLI・JSON出力を実装） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット作成前は `ad19dbe`） |
-| 作業ツリー | Phase 2完成差分をコミット後にクリーン化する前提 |
+| 最新コミット | `HEAD`（本セッションのコミット作成前は `845e0fd`） |
+| 作業ツリー | AbilityWeights比較差分をコミット後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、統合順位予想 Phase 2の残件（grade・確定馬体重・重み検証基盤）を完成させた。**
+**ユーザー指示により、Phase 2の次の推奨項目としてAbilityWeightsの同一期間比較CLIを実装した。**
+
+`--compare-ability-weights`で検証用4候補を同一レース集合に適用し、統合順位の3指標と
+現行差をCLI/JSONに出力する。本番重みは書き換えず、実DBでの再現性確認後に別途判断する。
 
 gradeはJRA-VAN公式コードをRA `GradeCD[615]`から読み、ability-v3のクラス補正で優先利用する。
 馬体重は既存`race_entries.weight`へ、results単独再取込でも確定値を更新する。体格の大小は能力へ
@@ -81,6 +84,15 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ---
 
 ## 完了した作業（直近セッション）
+
+0B. **AbilityWeightsの同一期間比較CLI**（本セッション・OpenAI Codex）
+   - `DEFAULT_ABILITY_WEIGHT_PROFILES`に現行・近走のみ・近走重視・市場支持重視を定義。
+   - `compare_ability_weight_reports()`で現行差を計算し、`format_ability_weight_comparison()`と
+     `ability_weight_comparisons_to_dict()`でCLI/JSONへ出力。
+   - `scripts/backtest_forecast.py --compare-ability-weights`を追加。現行レポートは再利用し、
+     残り3候補だけを追加実行する。候補は自動採用しない。
+   - API unit+contract 444 passed（関連は40 passed）、変更対象Ruff、mypy strict 58ファイル、
+     CLI `--help`成功。実DBでの実行は未実施。
 
 0A. **統合順位予想 Phase 2完成（grade・確定馬体重・検証指標）**（本セッション・OpenAI Codex）
    - ingestion: RA `GradeCD[615]`を公式コードから名称化。mykeibadb合成RAにも同位置へ書き込み。
@@ -302,7 +314,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 - **確定成績未反映は解決済み**（上記「完了した作業」2.）。残る関連事項は障害競走の成績が別途
   未反映（ユーザー保留）のみ。
-- **統合順位予想 Phase2の機能実装は完了**。残る検証は、実DBでの`AbilityWeights`候補比較と、
+- **統合順位予想 Phase2とAbilityWeights比較CLIの機能実装は完了**。残る検証は、
+  実DBでの比較CLI実行・期間再現性確認・採用判断と、
   実JV-Link COMにおけるGradeCD[615]および人気/賞金予約オフセットの確認（`tasks/backlog.md` B節）。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
@@ -330,8 +343,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
    本丸。現状の鮮度監視(`evaluate_freshness`)は batch-log の ok/経過日数のみ見ており、「過去日なのに
    未確定のまま残ったレース」を検知できない（ユーザーが目視していた「成績未取込」を自動アラート化＝
    高レバレッジ）。ユーザーは今回②統合順位予想を優先したため未着手。再提案候補。
-1. **P1 AbilityWeightsの実DB比較検証**。`scripts/backtest_forecast.py --output`で同一期間を評価し、
-   1位馬勝率・1位馬好走率・TOP3好走捕捉率を現行重みと候補重みで比較する。改善が再現した場合のみ変更。
+1. **P1 AbilityWeightsの実DB実行・採用判断**。`--compare-ability-weights --output`で
+   学習相当期間と検証相当期間を分けて実行し、3指標の改善が再現した場合のみ変更する。
    grade・確定馬体重の反映には過去results再取込が必要（`MANUAL_SYNC_GUIDE.md §7.5`）。
 2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
    `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`STALE_AFTER_DAYS`・
