@@ -12,26 +12,31 @@
 
 ## 進行中
 
-- [ ] 🔄 **P0 確定成績が反映されない件（解析はできている＝原因は「送信」段階に判明）**
-  - 経緯: 2026-07-12以降1週間以上、確定成績が反映されない（特別登録は正常）。
-  - 第1仮説（DATA_KUBUN）→ **空振り**（`af922a5`、再同期しても改善せず）。
-  - 診断ツール（`diagnose_results`）の実行結果（2026-07-20、ユーザー提供）で**決定的に判明**:
-    - SE 1463行読込・**確定成績453件は正しく解析できる**。生DATA_KUBUNも既に'7'。
-      → つまり「mykeibadbからの読み取り・解析」は**正常**。列名不一致でもバイト配置バグでもない。
-    - よって原因は**解析より下流＝APIへの送信/登録段階**にある。`RecordRaceResultUseCase`は
-      対象レースが未登録だと`ValueError("レースが見つかりません")`を投げ、`batch.py`はそれを
-      **per-raceでcatchして握りつぶし、stepはexit 0**（＝失敗が見えない）だった。
-  - 対応（本セッション3巡目）: (1) `ingest_results`に送信成功/失敗の件数ログを追加
-    （「確定成績送信 …: 成功 X / 失敗 Y」。全滅時WARNING）。(2) 診断ツールにRA突き合わせを追加
-    （確定成績はあるがRAが無い＝出走表未登録でrecord_resultsが失敗するレースを検出）。
-  - **次アクション（ユーザー依頼中）**: 最新をpullして results ステップを再実行し、
-    `logs\<日付>-results.log` の「確定成績送信 …: 成功 X / 失敗 Y」行と「成績送信エラー …」の
-    内容を共有。失敗理由が「レースが見つかりません」なら出走表(entries)未登録＝RA取得/登録の
-    問題、HTTP/接続エラーなら`API_BASE_URL`がWeb側DBと別を指している疑い、を切り分ける。
+（現在、進行中の未完了タスクはなし。直近の大タスクは下記「最近完了したタスク」参照。）
 
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P1 統合順位予想（能力×展開）Phase1 実装**（本セッション・ユーザー選択のB節要望を再開）
+  - 判断: データ範囲=現データのみ / 統合=2軸分類（本命/対抗/穴/危険）（ユーザー選択・`docs/DECISIONS.md` 2026-07-21）。
+  - domain: `pace/ability.py`（ability-v1: 出走頭数正規化着順×クラス係数の新しさ加重平均）、
+    `pace/integrated_ranking.py`（integrated-v1: 能力相対順位×展開適性の2軸分類・決定的表示順）。
+    いずれも純粋・reasons付き・model_version付き。🧪仮係数は `AbilityWeights`（`docs/SPEC.md §9`-16）。
+  - 結線: `forecast_use_cases`（近走+過去レースからability構築→統合）, `dto.py`, `schemas.py`,
+    OpenAPI再生成（`openapi.json`+`schema.d.ts`）, `api-client/src/index.ts`（型追加）。
+  - web: `IntegratedRankingView.tsx`（新規・◎○▲△と能力上位/中位・展開向く/向きにくいを言葉表示、
+    実数値は非表示）を `RaceForecastDashboard` の隊列予想の前に配置。
+  - 既知の限界: `grade`未永続化のためクラス係数は`race_class`文字列のbest-effort（重賞のステークス名
+    のみは中立化）。事実上「クラス補正付き近走充実度」。Phase2（人気・賞金・馬体重の永続化）はbacklog。
+  - 検証: API 432 passed（+新規domain16・contract1）、Web 65 passed、api/web typecheck・build・
+    ruff・lint-imports・mypy --strict すべてclean（既存のlgbm 1件は当環境固有・無関係）。
+
+- [x] ✅ **P0 確定成績未反映を解決**（本セッション・§9-15）
+  - 診断で「解析は正常（453件解析可・DATA_KUBUN='7'）」→原因は解析より下流と特定。`batch.py`が
+    `record_results`失敗をexit 0に握りつぶしていた欠陥を修正し、送信成功/失敗の件数ログを常設。
+    ユーザーが最新コードでresultsステップを再実行→全レース送信成功しアプリに反映（解決）。
+  - 残: 障害競走の成績が別途未反映（ユーザー保留）。`DaysBack`既定 7→10 済み。
 
 - [x] ✅ **P0 確定成績未反映の切り分け診断ツール＋件数ログ＋日付窓修正**（本セッション2巡目）
   - 契機: DATA_KUBUN修正（`af922a5`）投入後もユーザー環境で確定成績が反映されず、同期ログは

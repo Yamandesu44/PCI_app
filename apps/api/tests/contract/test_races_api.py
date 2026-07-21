@@ -21,9 +21,22 @@ FORECAST_KEYS = {
     "comment",
     "formation",
     "style_advantage",
+    "integrated_ranking",
 }
 
 HORSE_KEYS = {"horse_no", "frame_no", "horse_name", "running_style", "pai", "fit_label", "reasons"}
+
+INTEGRATED_KEYS = {"model_version", "entries", "reasons"}
+INTEGRATED_ENTRY_KEYS = {
+    "horse_no",
+    "frame_no",
+    "horse_name",
+    "rank",
+    "mark",
+    "ability_tier",
+    "fit_label",
+    "reasons",
+}
 
 COMMENT_KEYS = {"headline", "body", "model_version", "reasons"}
 
@@ -206,6 +219,19 @@ class TestForecastEndpoint:
             assert set(entry.keys()) == STYLE_ADVANTAGE_ENTRY_KEYS
             assert 0 <= entry["score"] <= 100
         assert advantage["reasons"], "説明可能性: 有利度の根拠は必須"
+
+    def test_integrated_ranking_contract(self, client: TestClient) -> None:
+        ranking = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast").json()["integrated_ranking"]
+        assert set(ranking.keys()) == INTEGRATED_KEYS
+        assert ranking["model_version"] == "integrated-v1"
+        assert len(ranking["entries"]) == 6
+        ranks = sorted(e["rank"] for e in ranking["entries"])
+        assert ranks == [1, 2, 3, 4, 5, 6]
+        for entry in ranking["entries"]:
+            assert set(entry.keys()) == INTEGRATED_ENTRY_KEYS
+            assert entry["mark"] in ("本命", "対抗", "穴", "危険", "無印")
+            assert entry["ability_tier"] in ("上位", "中位", "下位", "評価難")
+            assert entry["reasons"], "説明可能性: 各馬の分類根拠は必須"
 
     def test_unknown_race_returns_404(self, client: TestClient) -> None:
         resp = client.get("/api/v1/races/9999999999999999/forecast")

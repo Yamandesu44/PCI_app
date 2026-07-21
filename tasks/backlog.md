@@ -25,11 +25,13 @@
 
 ## B. 改善候補（やるか未確定・要判断）
 
-- [ ] ⏸ **P1 展開＋絶対能力の統合順位予想**（ユーザー要望 2026-07-12、`docs/SPEC.md §9`-12）。
-  **2026-07-12 ユーザー判断で保留**: 「何らかの基準を基に作成される指数」を利用する方向性は
-  良さそうだが、その指数の算出方法自体の模索が必要なため一旦保留。
-  再開時はまず能力指数の定義案（クラス実績・持ち時計・上がり順位・近走着順等の合成）を
-  ユーザーへ提示して合意を取ってから着手する（独断で仕様化しない）。
+- [x] ~~P1 展開＋絶対能力の統合順位予想（Phase1）~~ → **2026-07-21 実装済み**（ability-v1 ×
+  integrated-v1、`docs/SPEC.md §3.6`・`docs/DECISIONS.md` 2026-07-21）。現データのみ・2軸分類。
+- [ ] **P1 統合順位予想 Phase2: 能力指数の強化（市場・賞金指標の永続化）**。
+  Phase1の能力指数は現データ（着順・field_size・race_class）のみで、`grade`未永続化のため
+  クラス補正がbest-effort。人気(TANSHO_NINKIJUN)・獲得賞金(KAKUTOKU_HONSHOKIN)・馬体重(BATAIJU)・
+  grade を ingestion で永続化（固定長合成→APIスキーマ→Alembic→再取込）すれば能力指数を強化できる。
+  実データでPhase1の的中傾向を検証してから着手判断（`AbilityWeights`🧪の検証と併せて）。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
   `DistanceStyleWeights`(running-style-v2-distance)・`StyleAdvantageWeights`(style-advantage-v1)・

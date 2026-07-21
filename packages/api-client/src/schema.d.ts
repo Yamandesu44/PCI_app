@@ -415,6 +415,7 @@ export interface components {
              * @default []
              */
             horses: components["schemas"]["HorseFitSchema"][];
+            integrated_ranking?: components["schemas"]["IntegratedRankingSchema"] | null;
             /** Model Version */
             model_version: string;
             /** Pace Label */
@@ -638,6 +639,51 @@ export interface components {
              * @default []
              */
             recent_failures: components["schemas"]["IngestFailureSchema"][];
+        };
+        /**
+         * IntegratedEntrySchema
+         * @description 統合順位予想の1頭分（展開×能力の2軸分類）。
+         *
+         *     frame_no=0 は枠順未確定（HorseFitSchema と同じ判定基準）。
+         */
+        IntegratedEntrySchema: {
+            /** Ability Tier */
+            ability_tier: string;
+            /** Fit Label */
+            fit_label: string;
+            /** Frame No */
+            frame_no: number;
+            /** Horse Name */
+            horse_name?: string | null;
+            /** Horse No */
+            horse_no: number;
+            /** Mark */
+            mark: string;
+            /** Rank */
+            rank: number;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
+        };
+        /**
+         * IntegratedRankingSchema
+         * @description 展開適性と能力の2軸統合順位予想（integrated-v1）。
+         */
+        IntegratedRankingSchema: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["IntegratedEntrySchema"][];
+            /** Model Version */
+            model_version: string;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ReasonSchema"][];
         };
         /** JockeyBody */
         JockeyBody: {

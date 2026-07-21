@@ -75,6 +75,30 @@ class StyleAdvantageSchema(BaseModel):
     reasons: list[ReasonSchema] = []
 
 
+class IntegratedEntrySchema(BaseModel):
+    """統合順位予想の1頭分（展開×能力の2軸分類）。
+
+    frame_no=0 は枠順未確定（HorseFitSchema と同じ判定基準）。
+    """
+
+    horse_no: int
+    frame_no: int
+    horse_name: str | None = None
+    rank: int
+    mark: str  # 本命 / 対抗 / 穴 / 危険 / 無印
+    ability_tier: str  # 上位 / 中位 / 下位 / 評価難
+    fit_label: str  # 合致 / 中立 / 不利
+    reasons: list[ReasonSchema] = []
+
+
+class IntegratedRankingSchema(BaseModel):
+    """展開適性と能力の2軸統合順位予想（integrated-v1）。"""
+
+    model_version: str
+    entries: list[IntegratedEntrySchema] = []
+    reasons: list[ReasonSchema] = []
+
+
 class FormationHorseSchema(BaseModel):
     """隊列予想に表示する1頭分の配置。"""
 
@@ -118,6 +142,7 @@ class ForecastSchema(BaseModel):
     comment: CommentSchema | None = None
     formation: FormationSchema | None = None
     style_advantage: StyleAdvantageSchema | None = None
+    integrated_ranking: IntegratedRankingSchema | None = None
 
     @classmethod
     def from_dto(cls, dto: ForecastOutput) -> ForecastSchema:
@@ -180,6 +205,27 @@ class ForecastSchema(BaseModel):
                     reasons=[ReasonSchema(**vars(r)) for r in dto.style_advantage.reasons],
                 )
                 if dto.style_advantage
+                else None
+            ),
+            integrated_ranking=(
+                IntegratedRankingSchema(
+                    model_version=dto.integrated_ranking.model_version,
+                    entries=[
+                        IntegratedEntrySchema(
+                            horse_no=entry.horse_no,
+                            frame_no=entry.frame_no,
+                            horse_name=entry.horse_name,
+                            rank=entry.rank,
+                            mark=entry.mark,
+                            ability_tier=entry.ability_tier,
+                            fit_label=entry.fit_label,
+                            reasons=[ReasonSchema(**vars(r)) for r in entry.reasons],
+                        )
+                        for entry in dto.integrated_ranking.entries
+                    ],
+                    reasons=[ReasonSchema(**vars(r)) for r in dto.integrated_ranking.reasons],
+                )
+                if dto.integrated_ranking
                 else None
             ),
         )

@@ -147,6 +147,29 @@ class FormationOutput:
 
 
 @dataclass
+class IntegratedEntryOutput:
+    """統合順位予想における1頭分（展開×能力の2軸分類）。"""
+
+    horse_no: int
+    frame_no: int
+    horse_name: str | None
+    rank: int
+    mark: str  # 本命 / 対抗 / 穴 / 危険 / 無印
+    ability_tier: str  # 上位 / 中位 / 下位 / 評価難
+    fit_label: str  # 合致 / 中立 / 不利
+    reasons: list[ReasonOutput] = field(default_factory=list)
+
+
+@dataclass
+class IntegratedRankingOutput:
+    """展開適性と能力の2軸統合順位予想（integrated-v1）。"""
+
+    model_version: str
+    entries: list[IntegratedEntryOutput] = field(default_factory=list)
+    reasons: list[ReasonOutput] = field(default_factory=list)
+
+
+@dataclass
 class ForecastOutput:
     """ForecastRaceUseCase の出力（想定RPCI + 展開シナリオ + 各馬 PAI）。"""
 
@@ -164,6 +187,7 @@ class ForecastOutput:
     comment: CommentOutput | None = None
     formation: FormationOutput | None = None
     style_advantage: StyleAdvantageOutput | None = None
+    integrated_ranking: IntegratedRankingOutput | None = None
 
 
 @dataclass

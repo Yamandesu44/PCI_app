@@ -23,6 +23,8 @@ export type HorsePaceAnalysis = components["schemas"]["HorsePaceAnalysisSchema"]
 export type ForecastAccuracy = components["schemas"]["ForecastAccuracySchema"];
 export type StyleAdvantage = components["schemas"]["StyleAdvantageSchema"];
 export type StyleAdvantageEntry = components["schemas"]["StyleAdvantageEntrySchema"];
+export type IntegratedRanking = components["schemas"]["IntegratedRankingSchema"];
+export type IntegratedEntry = components["schemas"]["IntegratedEntrySchema"];
 export type IngestStatus = components["schemas"]["IngestStatusSchema"];
 export type IngestFailure = components["schemas"]["IngestFailureSchema"];
 

@@ -11,6 +11,7 @@ import {
 
 import { HorseFitTable } from "@/components/HorseFitTable";
 import { FormationView } from "@/components/FormationView";
+import { IntegratedRankingView } from "@/components/IntegratedRankingView";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { PaceProfileChart } from "@/components/PaceProfileChart";
 import { ReasonList } from "@/components/ReasonList";
@@ -182,6 +183,10 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
           ))}
         </div>
       </section>
+
+      {forecast.integrated_ranking ? (
+        <IntegratedRankingView ranking={forecast.integrated_ranking} />
+      ) : null}
 
       {forecast.formation ? <FormationView formation={forecast.formation} /> : null}
 

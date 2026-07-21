@@ -14,10 +14,13 @@ from pci.application.dto import (
     FormationHorseOutput,
     FormationOutput,
     HorseFitOutput,
+    IntegratedEntryOutput,
+    IntegratedRankingOutput,
     ReasonOutput,
     StyleAdvantageEntryOutput,
     StyleAdvantageOutput,
 )
+from pci.domain.pace.ability import AbilityRaceResult, AbilityScore, AbilityScorer
 from pci.domain.pace.adaptability import HorsePaceProfile, PaceAdaptabilityScorer, PaiResult
 from pci.domain.pace.affinity import (
     HorsePaceAffinityProfile,
@@ -36,6 +39,7 @@ from pci.domain.pace.formation import (
     FormationPrediction,
     predict_formation,
 )
+from pci.domain.pace.integrated_ranking import IntegratedRanking, build_integrated_ranking
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import (
     FrontRunnerPaceSample,
@@ -71,12 +75,14 @@ class ForecastRaceUseCase:
         scorer: PaceAdaptabilityScorer | None = None,
         mart_repo: MartRepository | None = None,
         comment_generator: CommentGenerator | None = None,
+        ability_scorer: AbilityScorer | None = None,
     ) -> None:
         self._repo = repo
         self._forecaster = forecaster or RuleBasedRpciForecaster()
         self._scorer = scorer or PaceAdaptabilityScorer()
         self._mart_repo = mart_repo
         self._commenter = comment_generator or RuleBasedCommentGenerator()
+        self._ability_scorer = ability_scorer or AbilityScorer()
 
     def execute(self, race_key_str: str) -> ForecastOutput:
         key = RaceKey(race_key_str)
@@ -160,6 +166,11 @@ class ForecastRaceUseCase:
             for p in profiles
         ]
 
+        abilities = tuple(
+            self._build_ability_score(e.horse_no, e.ketto_num, race) for e in entries
+        )
+        integrated = build_integrated_ranking(abilities, tuple(fit_results))
+
         comment_input = ForecastCommentInput(
             distance_m=race.distance_m,
             track_type=race.track_type,
@@ -189,6 +200,9 @@ class ForecastRaceUseCase:
             comment=comment,
             formation=_to_formation_output(formation_prediction, name_map, ketto_by_no),
             style_advantage=_to_style_advantage_output(style_advantage),
+            integrated_ranking=_to_integrated_ranking_output(
+                integrated, name_map, ketto_by_no, frame_no_by_no
+            ),
         )
 
     def _resolve_style_evidence(
@@ -285,6 +299,32 @@ class ForecastRaceUseCase:
             as_of=target_race.race_date,
         )
 
+    def _build_ability_score(
+        self, horse_no: int, ketto_num: str, target_race: Race
+    ) -> AbilityScore:
+        """近走の着順・クラス・新しさから能力指数(ability-v1)を算出する。"""
+        if not ketto_num:
+            return self._ability_scorer.score(horse_no, ())
+        recent = self._repo.find_horse_recent_entries(
+            ketto_num,
+            limit=5,
+            before=target_race.race_date,
+        )
+        results: list[AbilityRaceResult] = []
+        for entry in recent:
+            past_race = self._repo.find_by_key(entry.race_key)
+            if past_race is None:
+                continue
+            results.append(
+                AbilityRaceResult(
+                    finish_pos=entry.finish_pos,
+                    field_size=past_race.field_size,
+                    race_class=past_race.race_class,
+                    days_ago=(target_race.race_date - past_race.race_date).days,
+                )
+            )
+        return self._ability_scorer.score(horse_no, tuple(results))
+
 
 _FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
 
@@ -322,6 +362,31 @@ def _to_style_advantage_output(advantage: StyleAdvantage) -> StyleAdvantageOutpu
             for entry in advantage.entries
         ],
         reasons=_to_reason_outputs(advantage.reasons),
+    )
+
+
+def _to_integrated_ranking_output(
+    ranking: IntegratedRanking,
+    name_map: dict[str, str],
+    ketto_by_no: dict[int, str],
+    frame_no_by_no: dict[int, int],
+) -> IntegratedRankingOutput:
+    return IntegratedRankingOutput(
+        model_version=ranking.model_version,
+        entries=[
+            IntegratedEntryOutput(
+                horse_no=e.horse_no,
+                frame_no=frame_no_by_no.get(e.horse_no, 0),
+                horse_name=name_map.get(ketto_by_no.get(e.horse_no, "")),
+                rank=e.rank,
+                mark=str(e.mark),
+                ability_tier=str(e.ability_tier),
+                fit_label=str(e.fit_label),
+                reasons=_to_reason_outputs(e.reasons),
+            )
+            for e in ranking.entries
+        ],
+        reasons=_to_reason_outputs(ranking.reasons),
     )
 
 

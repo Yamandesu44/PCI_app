@@ -332,6 +332,16 @@
             "title": "Horses",
             "type": "array"
           },
+          "integrated_ranking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntegratedRankingSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "model_version": {
             "title": "Model Version",
             "type": "string"
@@ -866,6 +876,94 @@
           "has_history"
         ],
         "title": "IngestStatusSchema",
+        "type": "object"
+      },
+      "IntegratedEntrySchema": {
+        "description": "統合順位予想の1頭分（展開×能力の2軸分類）。\n\nframe_no=0 は枠順未確定（HorseFitSchema と同じ判定基準）。",
+        "properties": {
+          "ability_tier": {
+            "title": "Ability Tier",
+            "type": "string"
+          },
+          "fit_label": {
+            "title": "Fit Label",
+            "type": "string"
+          },
+          "frame_no": {
+            "title": "Frame No",
+            "type": "integer"
+          },
+          "horse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horse Name"
+          },
+          "horse_no": {
+            "title": "Horse No",
+            "type": "integer"
+          },
+          "mark": {
+            "title": "Mark",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "horse_no",
+          "frame_no",
+          "rank",
+          "mark",
+          "ability_tier",
+          "fit_label"
+        ],
+        "title": "IntegratedEntrySchema",
+        "type": "object"
+      },
+      "IntegratedRankingSchema": {
+        "description": "展開適性と能力の2軸統合順位予想（integrated-v1）。",
+        "properties": {
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IntegratedEntrySchema"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReasonSchema"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model_version"
+        ],
+        "title": "IntegratedRankingSchema",
         "type": "object"
       },
       "JockeyBody": {
