@@ -9,22 +9,27 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-21（更新12回目・統合順位予想 Phase1+Phase2+UI刷新／確定成績未反映は解決） |
+| 更新日時 | 2026-07-21（更新13回目・**Codex への引き継ぎ**。統合順位予想 Phase1+Phase2+UI刷新／確定成績未反映は解決、いずれもpush済み） |
 | 作業担当AI | Claude Code |
 | 直前の担当AI | OpenAI Codex（`4d9e5b5`〜`81ddb9d`の3実装+引き継ぎ文書を実施。検証済み・不整合なし） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | 本更新をコミットする直前は `8cda3bb` feat(forecast): add integrated ranking — ability × pace-fit |
-| 作業ツリー | Phase2（人気・本賞金→ability-v2）＋UI刷新（印→タグ）＋関連ドキュメントがコミット前（下記「変更対象ファイル」参照） |
+| 最新コミット | `7997931` feat(forecast): tag-based ranking UI + Phase 2 ability-v2（`origin`にpush済み・作業ツリーclean） |
+| 作業ツリー | クリーン。未コミットの変更なし（本セッションはドキュメント確認・引き継ぎ準備のみ） |
 
 ---
 
 ## 現在の作業目的
 
-**最新（2026-07-21）**: (1) 確定成績未反映の件は**解決**。診断で「解析は正常（453件解析可）」と特定し、
+**Codex への引き継ぎのため、本セッションは新規実装を行わずクローズ作業のみ実施した**
+（git差分確認・テスト/型/lint再実行・本ファイル/`tasks/current.md`更新。いずれも直前セッションの
+続きで、コードは既にコミット・push済み。作業ツリーはクリーン）。
+
+**直前セッションの要約**: (1) 確定成績未反映の件は**解決**。診断で「解析は正常（453件解析可）」と特定し、
 `batch.py`が`record_results`失敗をexit 0に握りつぶしていた欠陥を可視化（件数ログ常設）。ユーザーが
-最新コードでresultsステップを再実行→全レース送信成功しアプリに反映。(2) 続けてユーザーが選んだ改善
-「**統合順位予想（展開＋能力）**」の Phase1 を実装（ability-v1 × integrated-v1、2軸分類 本命/対抗/穴/
-危険）。現データのみ・人気/賞金は未使用。詳細は下記「完了した作業」1.〜2.、`docs/DECISIONS.md` 2026-07-21。
+最新コードでresultsステップを再実行→全レース送信成功しアプリに反映。(2) ユーザーが選んだ改善
+「**統合順位予想（展開＋能力）**」を Phase1（ability-v1 × integrated-v1）→ ユーザーFB受けてUI刷新
+（◎○▲△の印を廃止しタグ＋順位主役へ）→ Phase2（人気・本賞金の永続化でability-v2）まで実装済み。
+詳細は下記「完了した作業」0.〜2.、`docs/DECISIONS.md` 2026-07-21（2件）。
 
 （以下は本セッションに至るまでの経緯。）
 
@@ -67,7 +72,7 @@
 
 ## 完了した作業（直近セッション）
 
-0. **統合順位予想: UI刷新（印→タグ）＋ Phase2（人気・本賞金→ability-v2）**（本セッション・未コミット）
+0. **統合順位予想: UI刷新（印→タグ）＋ Phase2（人気・本賞金→ability-v2）**（前セッション・`7997931`）
    - **UI（ユーザーFB「印よりタグが分かりやすい・順位を明確に」）**: `IntegratedRankingView` 刷新。
      ◎○▲△の印を廃止、総合順位（1位…）を主役に、分類は言葉タグ（本命/対抗/穴（妙味）/人気でも注意/
      能力上位・中位/展開が向く・向きにくい）。プレゼン層のみ（`8cda3bb` のドメイン/スキーマは不変）。
@@ -277,8 +282,9 @@
 
 - **確定成績未反映は解決済み**（上記「完了した作業」2.）。残る関連事項は障害競走の成績が別途
   未反映（ユーザー保留）のみ。
-- **統合順位予想 Phase2**（人気・獲得賞金・馬体重・grade を ingestion で永続化して能力指数を強化）。
-  Phase1は現データのみで実装済み。実データでPhase1の的中傾向を検証してから着手判断（`tasks/backlog.md` B節）。
+- **統合順位予想 Phase2 残**（馬体重・grade の追加永続化、実 JV-Data の人気/賞金オフセット検証）。
+  人気・獲得賞金の永続化＋ability-v2 は実装済み（上記「完了した作業」0.）。ユーザーが migration 003＋
+  過去成績再取込後、ability-v2 の的中傾向を実データで見てから着手判断（`tasks/backlog.md` B節）。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
   自動同期スクリプト自体がWindows実行機で問題なく動くかも未確認。
@@ -288,12 +294,12 @@
   RA/SEが実際にVer.3.0.0/Ver.4.9のどちらの出力を元に校正されたかも未確認のまま、`docs/SPEC.md §9`-8）。
 - 展開コメント自然文（`scenario.py`）内の「馬番 N」表記が枠順未確定時を区別できない件
   （`docs/SPEC.md §9`-14）。domain層拡張が必要な既知の残課題として記録のみ、対応は未着手。
-- それ以外はなし。本セッションの変更はこれからコミットする。
+- それ以外はなし。本セッション（Codexへの引き継ぎ作業）でのコード変更はなし。
 
 ## 現在止まっている箇所
 
-**特になし**（確定成績未反映は解決、統合順位予想 Phase1 は実装完了・コミット待ち）。
-次はユーザーの新規指示、または下記「次に実施すべき作業」から着手可否を確認して進める。
+**特になし**（確定成績未反映は解決、統合順位予想 Phase1〜Phase2〜UI刷新まで実装完了・`7997931`まで
+push済み）。次はユーザーの新規指示、または下記「次に実施すべき作業」から着手可否を確認して進める。
 
 ---
 
@@ -309,21 +315,20 @@
 1. **P1 統合順位予想 Phase2 は実装済み**（人気・本賞金→ability-v2）。**残**は馬体重/grade の永続化、
    実 JV-Data の人気/賞金オフセット検証（jvlink用）、`AbilityWeights`🧪 の実データ検証（`tasks/backlog.md` B節）。
    まずはユーザーが migration 003＋再取込した上で ability-v2 の的中傾向を見てから判断。
-
-1. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
-   `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`STALE_AFTER_DAYS` 等）
+2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
+   `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`STALE_AFTER_DAYS`・
+   `AbilityWeights` 等）
    - 実データ・実運用での検証が前提のため、想定RPCI検証と同様「ユーザーが実DBでスクリプト実行/
      しばらく運用→結果を分析」の進め方になる可能性が高い。着手前にどの定数を対象にするか確認する。
-2. **P3 技術的負債（残件: 統合テスト環境整備のみ）**
-   - `mypy --strict` 全体化・旧handoffファイル整理・JV-Dataオフセット追従手順明文化は本セッションで
-     完了（`tasks/backlog.md` C節）。統合テスト環境整備はDocker前提（このクラウド環境からは不可）。
+3. **P3 技術的負債（残件: 統合テスト環境整備のみ）**
+   - `mypy --strict` 全体化・旧handoffファイル整理・JV-Dataオフセット追従手順明文化は完了済み
+     （`tasks/backlog.md` C節）。統合テスト環境整備はDocker前提（このクラウド環境からは不可）。
      着手前にユーザーに確認。
 
 **保留・確認待ちの項目**:
-- **P1 展開＋絶対能力の統合順位予想**（`tasks/backlog.md` B節・ユーザー要望2026-07-12）
-  — ユーザー判断で保留中。再開の合図があれば、能力指数の定義案（例: 直近N走の着順/クラス/
-  持ち時計/上がり順位の合成）を提示するところから始める。
 - 画面からの手動再実行導線（`tasks/backlog.md` A節）— 要判断（安全性・多重実行防止の設計）。
+- 当初のクリティカル提案①「取り込み監視をデータ完全性へ」（上記「次に実施すべき作業」0.）
+  — ユーザーは②統合順位予想を優先したため未着手のまま。再提案候補。
 
 **見直し条件つきで保留中の項目**（`docs/DECISIONS.md` 参照。トリガーが来るまでは着手しない）:
 - ダート特徴量追加・学習データ拡張（2026-07-11決定） — `forecast_accuracy` 蓄積が増える、
@@ -331,8 +336,9 @@
 
 ---
 
-## 変更対象ファイル（本セッション・Phase2＋UI刷新・コミット前）
+## 変更対象ファイル（直近セッション・すべて push 済み。Codex は git log/diff で確認可能）
 
+`7997931`（Phase2＋UI刷新）で変更したファイル:
 - ingestion: `models.py`（ResultRecord+人気/賞金）, `parser/jv_spec.py`（SE予約offset Ninki/Honsyokin）,
   `parser/se_parser.py`（読取+妥当性ゲート）, `client/mykeibadb_client.py`（列→合成書込）,
   `ingest_api.py`（payload）, `tests/test_mykeibadb_client.py`（round-trip +2）
@@ -346,7 +352,8 @@
 - ドキュメント: `docs/SPEC.md`（§3.6 ability-v2化・§9-16更新）, `docs/DECISIONS.md`（2026-07-21（2））,
   `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`（§7.5 migration+再取込手順）,
   `tasks/current.md`, `tasks/backlog.md`, `docs/HANDOFF.md`
-- 前コミット `8cda3bb`（統合順位予想 Phase1: ability-v1/integrated-v1・domain+app+schema+web+contract）。
+
+`8cda3bb`（統合順位予想 Phase1: ability-v1/integrated-v1・domain+app+schema+web+contract）で変更:
   `e286d94`（送信失敗可視化+RA突き合わせ）, `ccd6dc2`（診断ツール）, `af922a5`（DATA_KUBUN・空振り）。
 
 （展開恩恵馬frame_noガード追加はコミット `e2f0b3c`、自動同期special-entries修正は `c49ce05`、
@@ -408,18 +415,20 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 ---
 
-## テスト状況（2026-07-21・統合順位予想 Phase1+Phase2+UI刷新）
+## テスト状況（2026-07-21・引き継ぎ前の全量再検証。統合順位予想 Phase1+Phase2+UI刷新 反映後）
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
-| **API 単体+契約** | `.venv/bin/python -m pytest tests/unit/ tests/contract/ -q`（要 venv・下記注意事項） | **436 passed**（Phase1 domain16+contract1・Phase2 ability-v2 4） |
-| **ingestion-worker** | `.venv/bin/python -m pytest tests/ -q` | **185 passed**（+2 人気/賞金 round-trip） |
+| **API 単体+契約** | `.venv/bin/python -m pytest tests/unit/ tests/contract/ -q`（要 venv・下記注意事項） | **436 passed** |
+| API Lint | `.venv/bin/ruff check src/ tests/ scripts/` | 既存 `scripts/seed_dev.py` 10件のみ（未編集ファイル・無関係。新規0） |
+| API import境界 | `.venv/bin/lint-imports` | **2 kept, 0 broken** |
 | API 型（全体） | `.venv/bin/python -m mypy src/ --strict` | 既存 `lgbm_forecaster.py:58` unused-ignore 1件のみ（当環境のlightgbm差異・無関係。新規0） |
-| API Lint / import境界 | `.venv/bin/ruff check src/ tests/` / `.venv/bin/lint-imports` | **成功** / **2 kept, 0 broken** |
 | OpenAPI同期 | `test_committed_openapi_is_in_sync` | **成功**（`export_openapi.py`で再生成済み） |
 | api-client 型 | `npm run typecheck`（packages/api-client） | **成功** |
 | Web 単体 / 型 / build | `npm run test` / `typecheck` / `build`（apps/web） | **65 passed** / **成功** / **成功** |
-| ingestion-worker（前回・変更なし） | `.venv/bin/python -m pytest tests/ -q` | 183 passed |
+| **ingestion-worker 単体** | `.venv/bin/python -m pytest tests/ -q`（要 3.12 venv） | **185 passed** |
+| ingestion-worker Lint | `.venv/bin/ruff check src/ tests/` | 既存18件のみ（`windows_client.py`/`locate_corners.py`/`test_batch_e2e.py`等・未編集ファイル。新規0） |
+| ingestion-worker 型 | `.venv/bin/python -m mypy src/ --strict` | 既存25件のみ（pymysqlスタブ欠如・`mykeibadb_client.py`のtuple-concatパターン・`batch.py`の`ingest_masters`。新規0） |
 
 未実行: integration（Docker/testcontainers前提）。実DB依存の検証はこのクラウド環境から不可。
 
@@ -473,10 +482,11 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
-4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了は統合順位予想 Phase1）
-5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想を新設）
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、
-   確定成績未反映の解決。2026-07-20（2）: 切り分け診断ツール導入。
+4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了は統合順位予想 Phase1〜2〜UI刷新）
+5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v2 を記載）
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-21（2）: UI刷新（印→タグ）＋Phase2（ability-v2）。
+   2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、確定成績未反映の解決。
+   2026-07-20（2）: 切り分け診断ツール導入。
    2026-07-13の2件: 展開恩恵馬frame_noガード追加・自動同期special-entries追加。
    2026-07-12の4件: ingest-status鮮度監視・style-advantage-v1・formation-v1・
    running-style-v2-distance）
@@ -493,7 +503,7 @@ git status   # クリーンであるはず
 # 2. API 健全性確認（新コンテナは依存未インストール。venvを作り .venv/bin 経由で実行する）
 cd apps/api
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/unit/ tests/contract/ -q   # 432 passed
+.venv/bin/python -m pytest tests/unit/ tests/contract/ -q   # 436 passed
 .venv/bin/ruff check src/ tests/
 .venv/bin/lint-imports
 .venv/bin/python -m mypy src/ --strict   # 既存 lgbm 1件のみ（無害）・新規0が基準
@@ -505,7 +515,9 @@ cd ../../apps/web && npm install && npm run test && npm run typecheck && npm run
 # 4. ingestion-worker 健全性確認（Python 3.12専用。3.12でvenvを作る）
 cd ../ingestion-worker
 python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/ -q   # 183 passed
+.venv/bin/python -m pytest tests/ -q   # 185 passed
 ```
-(B)列名不一致なら `mykeibadb_client.py` の `_FINISH_POS_COLUMNS`/`_RACE_TIME_COLUMNS`/
-`_AGARI_3F_*` 等へ実列名を追加、(C)バイト配置バグなら未解析サンプルの合成byte値から修正する。
+
+**統合順位予想 Phase2（人気・本賞金）を実データで反映する場合**: ユーザーが Windows 機で
+`alembic upgrade head`（migration 003）＋ 過去 results の再取込が必要（`MANUAL_SYNC_GUIDE.md §7.5`）。
+未実施でも壊れない（ability-v2 は該当データが無い成分を自動で除外し v1 相当へ縮退する）。

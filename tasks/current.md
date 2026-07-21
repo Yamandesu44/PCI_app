@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-20 / 担当: Claude Code / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-21（Codexへの引き継ぎ準備） / 担当: Claude Code / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -294,15 +294,19 @@
   - ブロック要因: Webhook通知の動作確認にはユーザーの実行環境（Windows機）が必要。
 
 - [ ] **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・上がり3F妥当範囲・`RuleWeights`・`PaiWeights`・
-  `FormationWeights`・`DistanceStyleWeights`）
+  `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`AbilityWeights`）
   - 状態: ⬜未着手
   - 背景: `docs/SPEC.md §9` に記載の仮仕様。実データ検証後に確定する方針（独断で確定しない）。
     `FormationWeights`（脚質70%/近走序盤位置30%・4ゾーン境界）と`DistanceStyleWeights`
     （距離スケール・新しさ減衰・先行距離補正）は2026-07-12にCodexが追加した仮係数
-    （`docs/SPEC.md §9`-10, `docs/DECISIONS.md` 2026-07-12参照）。
+    （`docs/SPEC.md §9`-10, `docs/DECISIONS.md` 2026-07-12参照）。`AbilityWeights`
+    （近走内容0.55/本賞金0.30/人気0.15のブレンド比・新しさ減衰・本賞金対数レンジ等）は
+    2026-07-21にability-v2として追加（`docs/SPEC.md §9`-16）。
   - 完了条件: 対象定数ごとに実データでの妥当性検証結果を記録し、確定 or 調整の判断を
     `docs/DECISIONS.md` に残す。formation-v1については隊列ゾーン一致率（実際の後方カメラ等の
-    確定データがあれば）での再検証が望ましいが、現状データで可能な範囲でよい。
+    確定データがあれば）での再検証が望ましいが、現状データで可能な範囲でよい。`AbilityWeights`は
+    migration 003 適用＋過去成績再取込（`MANUAL_SYNC_GUIDE §7.5`）後でないと人気/本賞金データが
+    無く検証できない点に注意。
   - ブロック要因: 実DBアクセスが必要（このクラウド環境からは接続不可。想定RPCI検証と同様、
     ユーザーに手元でスクリプト実行→結果を貼ってもらう進め方になる見込み）。着手前にどの定数を
     対象にするかユーザーに確認。
