@@ -33,6 +33,8 @@ class ResultInput:
     corner_2: int | None = None
     corner_3: int | None = None
     corner_4: int | None = None
+    popularity: int | None = None  # 単勝人気順（Phase2）
+    prize_money: int | None = None  # 獲得本賞金（円・Phase2）
 
 
 @dataclass(frozen=True)

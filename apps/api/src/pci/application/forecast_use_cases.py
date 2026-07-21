@@ -321,6 +321,8 @@ class ForecastRaceUseCase:
                     field_size=past_race.field_size,
                     race_class=past_race.race_class,
                     days_ago=(target_race.race_date - past_race.race_date).days,
+                    popularity=entry.popularity,
+                    prize_money=entry.prize_money,
                 )
             )
         return self._ability_scorer.score(horse_no, tuple(results))

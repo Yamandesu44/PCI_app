@@ -19,11 +19,12 @@ UI へは実数値を出さず、統合層で言葉・記号（◎○▲△）�
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "ability-v1"
+MODEL_VERSION = "ability-v2"
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,9 @@ class AbilityRaceResult:
     field_size: int
     race_class: str | None
     days_ago: int
+    # Phase2（ability-v2）。未取得は None（旧データ）→ 該当成分を使わず form のみへ縮退。
+    popularity: int | None = None  # 単勝人気順（1=1番人気）
+    prize_money: int | None = None  # 獲得本賞金（円・入着時のみ正値）
 
 
 @dataclass(frozen=True)
@@ -57,6 +61,16 @@ class AbilityWeights:
     class_unknown: float = 1.0
     # score 正規化基準（contribution=finish_rate×class_coef の想定最大値）
     score_reference: float = 1.5
+    # ability-v2 の成分ブレンド重み（🧪暫定）。データが無い成分は自動的に除外し、
+    # 残りの重みで再正規化する（旧データは form のみ＝v1 相当へ縮退）。
+    weight_form: float = 0.55
+    weight_prize: float = 0.30
+    weight_popularity: float = 0.15
+    # 本賞金の対数正規化レンジ（円）。base=下限, top=上限（G1級の入着賞金相当）。
+    prize_log_base: float = 100_000.0
+    prize_log_top: float = 100_000_000.0
+    # 人気サポートの正規化上限（この人気以下を 0 とみなす）。
+    popularity_span: int = 18
 
 
 DEFAULT_WEIGHTS = AbilityWeights()
@@ -103,24 +117,52 @@ class AbilityScorer:
                 ),
             )
 
-        weighted_sum = 0.0
-        weight_total = 0.0
+        # 成分1: 近走内容（着順×クラス）。常に算出する。
+        form_sum = 0.0
+        form_wt = 0.0
+        prize_sum = 0.0
+        prize_wt = 0.0
+        pop_sum = 0.0
+        pop_wt = 0.0
         best: tuple[float, AbilityRaceResult, str] | None = None
         for r in usable:
             assert r.finish_pos is not None  # usable 条件で保証
+            recency = _recency_weight(r.days_ago, w)
             finish_rate = (r.field_size - r.finish_pos) / (r.field_size - 1)
             class_coef, class_label = _class_coefficient(r.race_class, w)
-            recency = _recency_weight(r.days_ago, w)
             contribution = finish_rate * class_coef
-            weighted_sum += contribution * recency
-            weight_total += recency
+            form_sum += min(contribution / w.score_reference, 1.0) * recency
+            form_wt += recency
             if best is None or contribution > best[0]:
                 best = (contribution, r, class_label)
+            # 成分2: 本賞金（入着時のみ正値。対数正規化）。
+            if r.prize_money is not None and r.prize_money > 0:
+                prize_sum += _prize_score(float(r.prize_money), w) * recency
+                prize_wt += recency
+            # 成分3: 人気サポート（1番人気=1.0）。
+            if r.popularity is not None and r.popularity >= 1:
+                pop_sum += _popularity_score(r.popularity, w) * recency
+                pop_wt += recency
 
-        avg = weighted_sum / weight_total if weight_total > 0 else 0.0
-        score = round(min(max(avg / w.score_reference, 0.0), 1.0) * 100.0, 1)
+        components: list[tuple[float, float]] = []
+        if form_wt > 0:
+            components.append((w.weight_form, form_sum / form_wt))
+        if prize_wt > 0:
+            components.append((w.weight_prize, prize_sum / prize_wt))
+        if pop_wt > 0:
+            components.append((w.weight_popularity, pop_sum / pop_wt))
 
-        reasons = _build_reasons(usable, best, score)
+        weight_total = sum(weight for weight, _ in components)
+        blended = (
+            sum(weight * value for weight, value in components) / weight_total
+            if weight_total > 0
+            else 0.0
+        )
+        score = round(min(max(blended, 0.0), 1.0) * 100.0, 1)
+
+        used_prize = prize_wt > 0
+        used_pop = pop_wt > 0
+        reasons = _build_reasons(usable, best, score, used_prize=used_prize, used_pop=used_pop)
         return AbilityScore(
             horse_no=horse_no,
             score=score,
@@ -136,6 +178,19 @@ def _recency_weight(days_ago: int, w: AbilityWeights) -> float:
     if days_ago <= 365:
         return w.decay_within_365d
     return w.decay_beyond_365d
+
+
+def _prize_score(prize: float, w: AbilityWeights) -> float:
+    """本賞金を対数スケールで 0〜1 へ正規化する（高額入着ほど高い）。"""
+    lo = math.log10(w.prize_log_base)
+    hi = math.log10(w.prize_log_top)
+    x = math.log10(max(prize, 1.0))
+    return min(max((x - lo) / (hi - lo), 0.0), 1.0)
+
+
+def _popularity_score(popularity: int, w: AbilityWeights) -> float:
+    """人気サポートを 0〜1 へ（1番人気=1.0、下位人気=0）。"""
+    return min(max((w.popularity_span - popularity) / (w.popularity_span - 1), 0.0), 1.0)
 
 
 def _class_coefficient(race_class: str | None, w: AbilityWeights) -> tuple[float, str]:
@@ -170,14 +225,20 @@ def _build_reasons(
     usable: list[AbilityRaceResult],
     best: tuple[float, AbilityRaceResult, str] | None,
     score: float,
+    *,
+    used_prize: bool,
+    used_pop: bool,
 ) -> tuple[Reason, ...]:
     reasons: list[Reason] = []
+    signals = ["近走の着順内容"]
+    if used_prize:
+        signals.append("獲得賞金")
+    if used_pop:
+        signals.append("人気")
     reasons.append(
         Reason(
             code="ability_form",
-            description=(
-                f"直近{len(usable)}走の着順内容から地力を評価しています。"
-            ),
+            description=f"直近{len(usable)}走の{'・'.join(signals)}から地力を評価しています。",
         )
     )
     if best is not None:

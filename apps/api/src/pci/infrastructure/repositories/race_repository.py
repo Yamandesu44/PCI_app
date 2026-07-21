@@ -175,6 +175,8 @@ class SqlAlchemyRaceRepository:
             corner_4=m.corner_4,
             pci_actual=m.pci_actual,
             running_style=m.running_style,
+            popularity=m.popularity,
+            prize_money=m.prize_money,
         )
 
     def save_horse(self, horse: Horse) -> None:
@@ -256,4 +258,6 @@ class SqlAlchemyRaceRepository:
             corner_4=e.corner_4,
             pci_actual=e.pci_actual,
             running_style=e.running_style,
+            popularity=e.popularity,
+            prize_money=e.prize_money,
         )

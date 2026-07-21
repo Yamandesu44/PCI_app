@@ -1411,6 +1411,28 @@
             "title": "Horse No",
             "type": "integer"
           },
+          "popularity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Popularity"
+          },
+          "prize_money": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prize Money"
+          },
           "race_time_s": {
             "exclusiveMinimum": 0.0,
             "title": "Race Time S",

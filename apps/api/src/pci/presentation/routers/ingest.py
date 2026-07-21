@@ -94,6 +94,8 @@ class ResultItem(BaseModel):
     corner_2: int | None = None
     corner_3: int | None = None
     corner_4: int | None = None
+    popularity: int | None = None  # 単勝人気順（Phase2・ability-v2）
+    prize_money: int | None = None  # 獲得本賞金（円・Phase2・ability-v2）
 
 
 class ResultBody(BaseModel):
@@ -236,6 +238,8 @@ def ingest_results(
             corner_2=r.corner_2,
             corner_3=r.corner_3,
             corner_4=r.corner_4,
+            popularity=r.popularity,
+            prize_money=r.prize_money,
         )
         for r in body.results
     ]

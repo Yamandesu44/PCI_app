@@ -415,6 +415,80 @@ def test_race_time_mssf_handles_sub_minute_time() -> None:
     assert _race_time_to_mssf("94.4") == "1344"
 
 
+def test_iter_se_records_roundtrips_popularity_and_prize() -> None:
+    """Phase2: 人気(TANSHO_NINKIJUN)・本賞金(KAKUTOKU_HONSHOKIN)が SE 合成→解析で往復する。"""
+
+    class _PrizeConnection(_Connection):
+        se = [
+            {
+                "DATA_KUBUN": "7",
+                "KAISAI_NEN": "2026",
+                "KAISAI_GAPPI": "0712",
+                "KEIBAJO_CODE": "02",
+                "KAISAI_KAIJI": "01",
+                "KAISAI_NICHIJI": "03",
+                "RACE_BANGO": "09",
+                "WAKUBAN": "1",
+                "UMABAN": "01",
+                "KETTO_TOROKU_BANGO": "2021100001",
+                "BAMEI": "テストホース",
+                "SEIBETSU_CODE": "1",
+                "CHOKYOSHI_CODE": "01001",
+                "KISHU_CODE": "02001",
+                "BATAIJU": "480",
+                "KAKUTEI_CHAKUJUN": "01",
+                "SOHA_TIME": "1344",
+                "KOHAN_3F": "345",
+                "TANSHO_NINKIJUN": "3",
+                "KAKUTOKU_HONSHOKIN": "12000000",
+            }
+        ]
+
+    client = MyKeibaDbClient(connection=_PrizeConnection())
+    record = next(client.iter_se_records("20260712", "20260712"))
+
+    result = parse_se_result(record)
+    assert result is not None
+    assert result.popularity == 3
+    assert result.prize_money == 12000000
+
+
+def test_parse_se_result_ignores_implausible_popularity_and_prize() -> None:
+    """人気・本賞金が無い（予約領域が空白の）合成レコードでは None を返す。"""
+
+    class _NoPrizeConnection(_Connection):
+        se = [
+            {
+                "DATA_KUBUN": "7",
+                "KAISAI_NEN": "2026",
+                "KAISAI_GAPPI": "0712",
+                "KEIBAJO_CODE": "02",
+                "KAISAI_KAIJI": "01",
+                "KAISAI_NICHIJI": "03",
+                "RACE_BANGO": "09",
+                "WAKUBAN": "1",
+                "UMABAN": "01",
+                "KETTO_TOROKU_BANGO": "2021100001",
+                "BAMEI": "テストホース",
+                "SEIBETSU_CODE": "1",
+                "CHOKYOSHI_CODE": "01001",
+                "KISHU_CODE": "02001",
+                "BATAIJU": "480",
+                "KAKUTEI_CHAKUJUN": "01",
+                "SOHA_TIME": "1344",
+                "KOHAN_3F": "345",
+            }
+        ]
+
+    client = MyKeibaDbClient(connection=_NoPrizeConnection())
+    record = next(client.iter_se_records("20260712", "20260712"))
+
+    result = parse_se_result(record)
+    assert result is not None
+    assert result.popularity is None
+    assert result.prize_money is None
+
+
 def test_iter_master_records_build_from_mysql_rows() -> None:
     client = MyKeibaDbClient(connection=_Connection())
 

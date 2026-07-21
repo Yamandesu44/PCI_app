@@ -828,6 +828,10 @@ export interface components {
             finish_pos: number;
             /** Horse No */
             horse_no: number;
+            /** Popularity */
+            popularity?: number | null;
+            /** Prize Money */
+            prize_money?: number | null;
             /** Race Time S */
             race_time_s: number;
         };

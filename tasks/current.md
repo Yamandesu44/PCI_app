@@ -18,6 +18,21 @@
 
 ## 最近完了したタスク
 
+- [x] ✅ **P1 統合順位予想: 印→タグUI・順位明確化 ＋ Phase2（人気・本賞金→ability-v2）**（本セッション）
+  - UI（ユーザーFB）: `IntegratedRankingView` を刷新。◎○▲△の印を廃止し、総合順位（1位…）を主役に、
+    分類は言葉タグ（本命/対抗/穴（妙味）/人気でも注意/能力上位・中位/展開が向く・向きにくい）で表示。
+    プレゼン層のみ（ドメイン/スキーマ不変）。
+  - Phase2 データ: 人気(TANSHO_NINKIJUN)・獲得本賞金(KAKUTOKU_HONSHOKIN)を永続化。
+    ingestion（models/se_parser/jv_spec 予約offset/mykeibadb_client/ingest_api）→ API（ingest schema・
+    ResultInput・RaceEntry・use case・ORM・repository・migration 003）→ ability-v2。
+  - ability-v2: form0.55＋本賞金(対数正規化)0.30＋人気0.15 を新しさ加重ブレンド。データ無し成分は
+    除外し再正規化 → 旧データは form のみ＝v1相当へ安全に縮退。本賞金がクラス係数 best-effort の限界を緩和。
+  - **運用（ユーザー作業）**: `alembic upgrade head`（migration 003）＋過去 results の再取込が必要
+    （`MANUAL_SYNC_GUIDE §7.5`）。やらなくても壊れない（縮退）。
+  - 検証: API 436 passed（+ability-v2 4件・parser round-trip等）、ingestion 185 passed（+2）、
+    Web 65 passed・typecheck・build clean、ruff/lint-imports/mypy clean（既存lgbm/tuple-concat debtのみ・新規0）。
+  - 残（Phase2）: 馬体重・grade の永続化、実 JV-Data の人気/賞金オフセット検証（jvlink 用）。`tasks/backlog.md` B節。
+
 - [x] ✅ **P1 統合順位予想（能力×展開）Phase1 実装**（本セッション・ユーザー選択のB節要望を再開）
   - 判断: データ範囲=現データのみ / 統合=2軸分類（本命/対抗/穴/危険）（ユーザー選択・`docs/DECISIONS.md` 2026-07-21）。
   - domain: `pace/ability.py`（ability-v1: 出走頭数正規化着順×クラス係数の新しさ加重平均）、

@@ -444,6 +444,9 @@ _RACE_TIME_COLUMNS = ("SOHA_TIME", "race_time_s", "time", "走破タイム", "�
 _AGARI_3F_COLUMNS = ("agari_3f_s", "harontimel3", "上り3f", "上がり3f", "後3f")
 # 生値の上り3F列（KOHAN_3F は 1/10 秒単位の3桁 "345"=34.5秒）。出力と同形式のため直接書く。
 _AGARI_3F_RAW_COLUMNS = ("KOHAN_3F", "kohan_3f")
+# Phase2（ability-v2）: 人気・本賞金。mykeibadb 列から SE 合成レコードの予約領域へ書く。
+_POPULARITY_COLUMNS = ("TANSHO_NINKIJUN", "tansho_ninki", "単勝人気", "人気")
+_PRIZE_COLUMNS = ("KAKUTOKU_HONSHOKIN", "honshokin", "本賞金", "獲得本賞金", "獲得賞金")
 _CORNER_1_COLUMNS = ("CORNER1_JUNI", "corner_1", "jyuni1c", "1角", "第1コーナー")
 _CORNER_2_COLUMNS = ("CORNER2_JUNI", "corner_2", "jyuni2c", "2角", "第2コーナー")
 _CORNER_3_COLUMNS = ("CORNER3_JUNI", "corner_3", "jyuni3c", "3角", "第3コーナー")
@@ -673,6 +676,13 @@ def _build_se_record(row: dict[str, Any]) -> str:
         _put_cp932(buf, 390, agari_raw.zfill(3)[-3:])
     else:
         _put_tenths(buf, 390, agari_seconds)
+    # Phase2（ability-v2）: 人気[541:543]・本賞金[543:552] を予約領域へ書く（jv_spec 参照）。
+    popularity = _int_or_none(_pick(row, _POPULARITY_COLUMNS))
+    if popularity and 1 <= popularity <= 28:
+        _put_cp932(buf, 541, f"{popularity:02d}"[-2:])
+    prize = _int_or_none(_pick(row, _PRIZE_COLUMNS))
+    if prize and prize > 0:
+        _put_cp932(buf, 543, f"{min(prize, 999999999):09d}")
     return buf.decode("cp932")
 
 

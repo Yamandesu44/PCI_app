@@ -14,12 +14,16 @@ def _run(
     field_size: int,
     days_ago: int,
     race_class: str | None = None,
+    popularity: int | None = None,
+    prize_money: int | None = None,
 ) -> AbilityRaceResult:
     return AbilityRaceResult(
         finish_pos=finish_pos,
         field_size=field_size,
         race_class=race_class,
         days_ago=days_ago,
+        popularity=popularity,
+        prize_money=prize_money,
     )
 
 
@@ -74,3 +78,29 @@ class TestAbilityScorer:
         """根拠は言葉ベース（内部scoreの数値をそのまま出さない）。"""
         result = AbilityScorer().score(1, (_run(2, 10, 30, "2勝クラス"),))
         assert all(str(result.score) not in r.description for r in result.reasons)
+
+    def test_v2_falls_back_to_form_when_no_prize_or_popularity(self) -> None:
+        """旧データ（人気・賞金なし）は v1 相当の form のみ。model_version は v2。"""
+        result = AbilityScorer().score(1, (_run(1, 10, 30, "2勝クラス"),))
+        assert result.model_version == "ability-v2"
+        assert not any("賞金" in r.description or "人気" in r.description for r in result.reasons)
+
+    def test_v2_prize_lifts_score(self) -> None:
+        """同じ着順内容でも、高額賞金の入着があれば地力評価が上がる。"""
+        with_prize = AbilityScorer().score(
+            1, (_run(3, 10, 30, "オープン", prize_money=30_000_000),)
+        )
+        without = AbilityScorer().score(2, (_run(3, 10, 30, "オープン"),))
+        assert with_prize.score > without.score
+        assert any("賞金" in r.description for r in with_prize.reasons)
+
+    def test_v2_popularity_support_lifts_score(self) -> None:
+        """人気（市場の支持）が高い近走があれば地力評価が上がる。"""
+        backed = AbilityScorer().score(1, (_run(3, 10, 30, "2勝クラス", popularity=1),))
+        unbacked = AbilityScorer().score(2, (_run(3, 10, 30, "2勝クラス", popularity=16),))
+        assert backed.score > unbacked.score
+
+    def test_v2_higher_prize_scores_higher(self) -> None:
+        big = AbilityScorer().score(1, (_run(2, 12, 40, "G3", prize_money=50_000_000),))
+        small = AbilityScorer().score(2, (_run(2, 12, 40, "G3", prize_money=1_000_000),))
+        assert big.score > small.score

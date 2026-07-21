@@ -9,12 +9,12 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-21（更新11回目・確定成績未反映を解決＋統合順位予想 Phase1 実装） |
+| 更新日時 | 2026-07-21（更新12回目・統合順位予想 Phase1+Phase2+UI刷新／確定成績未反映は解決） |
 | 作業担当AI | Claude Code |
 | 直前の担当AI | OpenAI Codex（`4d9e5b5`〜`81ddb9d`の3実装+引き継ぎ文書を実施。検証済み・不整合なし） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | 本更新をコミットする直前は `e286d94` feat(ingestion): surface result-send failures and add RA cross-check |
-| 作業ツリー | 統合順位予想(ability-v1/integrated-v1)一式＋関連ドキュメントがコミット前（下記「変更対象ファイル」参照） |
+| 最新コミット | 本更新をコミットする直前は `8cda3bb` feat(forecast): add integrated ranking — ability × pace-fit |
+| 作業ツリー | Phase2（人気・本賞金→ability-v2）＋UI刷新（印→タグ）＋関連ドキュメントがコミット前（下記「変更対象ファイル」参照） |
 
 ---
 
@@ -67,7 +67,25 @@
 
 ## 完了した作業（直近セッション）
 
-1. **統合順位予想（能力×展開）Phase1 を実装**（本セッション・未コミット）
+0. **統合順位予想: UI刷新（印→タグ）＋ Phase2（人気・本賞金→ability-v2）**（本セッション・未コミット）
+   - **UI（ユーザーFB「印よりタグが分かりやすい・順位を明確に」）**: `IntegratedRankingView` 刷新。
+     ◎○▲△の印を廃止、総合順位（1位…）を主役に、分類は言葉タグ（本命/対抗/穴（妙味）/人気でも注意/
+     能力上位・中位/展開が向く・向きにくい）。プレゼン層のみ（`8cda3bb` のドメイン/スキーマは不変）。
+   - **Phase2 データ永続化**: 人気(TANSHO_NINKIJUN)・獲得本賞金(KAKUTOKU_HONSHOKIN)を追加。経路=
+     mykeibadb列 → SE合成の**予約offset**（jv_spec `Ninki`[541:543]/`Honsyokin`[543:552]・mykeibadb合成
+     専用・未検証。jvlink実COMでは書かれず読み側で弾く）→ `parse_se_result`（妥当性ゲート）→ Ingest API
+     （ResultItem/ResultInput）→ `RaceEntry`＋ORM＋repository＋**migration 003** → `race_entries.popularity/
+     prize_money`。ingest_api の results payload にも追加。
+   - **ability-v2**（`domain/pace/ability.py`）: form(近走着順×クラス)0.55＋本賞金(対数正規化)0.30＋
+     人気0.15 を新しさ加重ブレンド。**データ無し成分は除外し重み再正規化 → 旧データは form のみ＝v1相当へ
+     安全に縮退**（再取込まで壊れない）。本賞金が「入着時の稼ぎ＝相手クラス」を連続量で捉え、grade未永続化
+     によるクラス係数 best-effort の限界を緩和。🧪重みは §9-16。
+   - **運用（ユーザー作業・必須）**: `alembic upgrade head`（003）＋過去 results 再取込で人気/賞金が埋まる
+     （`MANUAL_SYNC_GUIDE §7.5`）。未実施でも縮退動作で壊れない。
+   - 検証: API 436 passed、ingestion 185 passed（+2 round-trip）、Web 65 passed・typecheck・build clean、
+     ruff/lint-imports/mypy clean（既存 lgbm・ingestion tuple-concat debt のみ・新規0）。OpenAPI/schema.d.ts 再生成。
+
+1. **統合順位予想（能力×展開）Phase1 を実装**（本セッション・`8cda3bb`）
    - 経緯: ユーザー要望「展開＋絶対能力の統合順位予想」（2026-07-12保留）を再開。独断で仕様化しない
      方針に従い、データ範囲と統合の見せ方をユーザーに選択提示 → **現データのみでPhase1** ＋
      **2軸分類（本命/対抗/穴/危険）** を採用（`docs/DECISIONS.md` 2026-07-21）。
@@ -288,8 +306,9 @@
    本丸。現状の鮮度監視(`evaluate_freshness`)は batch-log の ok/経過日数のみ見ており、「過去日なのに
    未確定のまま残ったレース」を検知できない（ユーザーが目視していた「成績未取込」を自動アラート化＝
    高レバレッジ）。ユーザーは今回②統合順位予想を優先したため未着手。再提案候補。
-1. **P1 統合順位予想 Phase2**（市場・賞金指標の永続化で能力指数を強化、`tasks/backlog.md` B節）。
-   Phase1の実データ的中傾向の検証と併せて着手判断。
+1. **P1 統合順位予想 Phase2 は実装済み**（人気・本賞金→ability-v2）。**残**は馬体重/grade の永続化、
+   実 JV-Data の人気/賞金オフセット検証（jvlink用）、`AbilityWeights`🧪 の実データ検証（`tasks/backlog.md` B節）。
+   まずはユーザーが migration 003＋再取込した上で ability-v2 の的中傾向を見てから判断。
 
 1. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
    `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`STALE_AFTER_DAYS` 等）
@@ -312,22 +331,23 @@
 
 ---
 
-## 変更対象ファイル（本セッション・統合順位予想 Phase1・コミット前）
+## 変更対象ファイル（本セッション・Phase2＋UI刷新・コミット前）
 
-- 新規（domain・コード）: `apps/api/src/pci/domain/pace/ability.py`（ability-v1）,
-  `apps/api/src/pci/domain/pace/integrated_ranking.py`（integrated-v1）,
-  `apps/api/tests/unit/domain/pace/test_ability.py`（+9）, `.../test_integrated_ranking.py`（+7）
-- 更新（app/presentation）: `application/dto.py`（Integrated*Output）,
-  `application/forecast_use_cases.py`（ability構築＋統合）, `presentation/schemas.py`（Integrated*Schema）,
-  `tests/contract/test_races_api.py`（FORECAST_KEYS・contract +1）
-- 更新（型/web）: `packages/api-client/openapi.json`+`src/schema.d.ts`（再生成）,
-  `packages/api-client/src/index.ts`（型追加）, `apps/web/src/components/IntegratedRankingView.tsx`（新規）,
-  `apps/web/src/components/RaceForecastDashboard.tsx`（挿入）
-- 更新（ドキュメント）: `docs/SPEC.md`（§3.6新設・§9-15解決/§9-16追加・§6解決）,
-  `docs/DECISIONS.md`（2026-07-21 2件）, `tasks/current.md`, `tasks/backlog.md`, `docs/HANDOFF.md`
-- 前コミット `e286d94`（送信失敗の可視化＋RA突き合わせ）: `batch.py`（送信件数ログ）,
-  `diagnose_results.py`（RA突き合わせ）, `test_diagnose_results.py` ほか。
-  `ccd6dc2`（診断ツール新設・件数ログ・DaysBack）, `af922a5`（DATA_KUBUN・空振り・残置）。
+- ingestion: `models.py`（ResultRecord+人気/賞金）, `parser/jv_spec.py`（SE予約offset Ninki/Honsyokin）,
+  `parser/se_parser.py`（読取+妥当性ゲート）, `client/mykeibadb_client.py`（列→合成書込）,
+  `ingest_api.py`（payload）, `tests/test_mykeibadb_client.py`（round-trip +2）
+- API: `presentation/routers/ingest.py`（ResultItem）, `application/dto.py`（ResultInput）,
+  `application/race_use_cases.py`（RecordRaceResult 反映）, `domain/racing/race_entry.py`（フィールド）,
+  `infrastructure/database/models.py`（ORM列）, `infrastructure/repositories/race_repository.py`（read/write）,
+  `alembic/versions/003_add_entry_popularity_prize.py`（新規migration）,
+  `domain/pace/ability.py`（ability-v2 ブレンド）, `tests/unit/domain/pace/test_ability.py`（+4）
+- 型/web: `packages/api-client/openapi.json`+`src/schema.d.ts`（再生成）,
+  `apps/web/src/components/IntegratedRankingView.tsx`（印→タグ・順位主役に全面刷新）
+- ドキュメント: `docs/SPEC.md`（§3.6 ability-v2化・§9-16更新）, `docs/DECISIONS.md`（2026-07-21（2））,
+  `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`（§7.5 migration+再取込手順）,
+  `tasks/current.md`, `tasks/backlog.md`, `docs/HANDOFF.md`
+- 前コミット `8cda3bb`（統合順位予想 Phase1: ability-v1/integrated-v1・domain+app+schema+web+contract）。
+  `e286d94`（送信失敗可視化+RA突き合わせ）, `ccd6dc2`（診断ツール）, `af922a5`（DATA_KUBUN・空振り）。
 
 （展開恩恵馬frame_noガード追加はコミット `e2f0b3c`、自動同期special-entries修正は `c49ce05`、
 JV-Data仕様追従ガイド新規作成は `24731ed`、旧handoffファイル削除は `f2a8ea6`、
@@ -388,11 +408,12 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 ---
 
-## テスト状況（2026-07-21・統合順位予想 Phase1）
+## テスト状況（2026-07-21・統合順位予想 Phase1+Phase2+UI刷新）
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
-| **API 単体+契約** | `.venv/bin/python -m pytest tests/unit/ tests/contract/ -q`（要 venv・下記注意事項） | **432 passed**（+新規domain16・contract1） |
+| **API 単体+契約** | `.venv/bin/python -m pytest tests/unit/ tests/contract/ -q`（要 venv・下記注意事項） | **436 passed**（Phase1 domain16+contract1・Phase2 ability-v2 4） |
+| **ingestion-worker** | `.venv/bin/python -m pytest tests/ -q` | **185 passed**（+2 人気/賞金 round-trip） |
 | API 型（全体） | `.venv/bin/python -m mypy src/ --strict` | 既存 `lgbm_forecaster.py:58` unused-ignore 1件のみ（当環境のlightgbm差異・無関係。新規0） |
 | API Lint / import境界 | `.venv/bin/ruff check src/ tests/` / `.venv/bin/lint-imports` | **成功** / **2 kept, 0 broken** |
 | OpenAPI同期 | `test_committed_openapi_is_in_sync` | **成功**（`export_openapi.py`で再生成済み） |

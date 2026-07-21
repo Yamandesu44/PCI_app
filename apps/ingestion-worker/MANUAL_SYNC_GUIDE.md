@@ -299,6 +299,25 @@ apps/ingestion-worker/
 
 ---
 
+## 7.5 Phase2（能力指数 ability-v2）反映のための一度きりの作業（2026-07-21）
+
+統合順位予想の能力指数が「人気・獲得本賞金」も使うようになった。既存データにはこれらの列が無いため、
+**一度だけ** 次を実施する（やらなくても壊れないが、能力指数は従来どおり近走着順のみで動く＝縮退）。
+
+1. DBにカラムを追加（migration 003）:
+   ```powershell
+   cd C:\Users\yuuta\PCI_app\apps\api
+   .venv\Scripts\python -m alembic upgrade head
+   ```
+2. 過去分の確定成績を再取込（人気・本賞金を埋める）。反映したい期間を指定して results を回す:
+   ```powershell
+   cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
+   python -m ingestion.batch --mode mykeibadb --step results --date 20250101 --date-to 20261231
+   ```
+   （既存レースは上書き更新される。以後の通常同期でも自動的に埋まる。）
+
+---
+
 ## 8. 更新履歴
 
 | 日付 | 内容 |
@@ -308,3 +327,5 @@ apps/ingestion-worker/
   が `--step special-entries` を一度も呼んでいなかったバグを発見・修正（6.8節）。 |
 | 2026-07-20 | 確定成績が1週間以上未反映の件で、`batch.py` に件数ログを追加し、切り分け診断ツール
   `ingestion.diagnose_results` を新設（6.8(b)節）。`DaysBack` 既定を 7→10 に変更。 |
+| 2026-07-21 | 統合順位予想の能力指数 Phase2: 人気・獲得本賞金を永続化（ability-v2）。migration 003 適用と
+  過去成績の再取込が必要（7.5節）。 |
