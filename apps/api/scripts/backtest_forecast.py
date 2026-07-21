@@ -32,13 +32,22 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import sys
+from pathlib import Path
 
 sys.path.insert(0, "src")
 
 from sqlalchemy import select
 
-from pci.application.backtest import ForecastBacktester, format_report, group_races_by_track
+from pci.application.backtest import (
+    BacktestReport,
+    ForecastBacktester,
+    JsonValue,
+    backtest_report_to_dict,
+    format_report,
+    group_races_by_track,
+)
 from pci.config.settings import get_settings
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
@@ -80,6 +89,12 @@ def _parse_args() -> argparse.Namespace:
         choices=["芝", "ダート", "障害"],
         default=None,
         help="コース種別フィルター（芝/ダート/障害）。未指定=全種別",
+    )
+    p.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="バックテスト結果をJSONで保存するパス。標準出力は従来どおり表示する",
     )
     return p.parse_args()
 
@@ -136,25 +151,76 @@ def main() -> None:
     repo = SqlAlchemyRaceRepository(session)
     forecaster = load_best_forecaster()
     backtester = ForecastBacktester(repo, forecaster=forecaster)
-    print(format_report(backtester.run(targets)))
+    report = backtester.run(targets)
+    print(format_report(report))
 
+    track_reports: dict[str, BacktestReport] = {}
     if args.track_type is None:
-        _print_track_breakdown(backtester, targets)
+        track_reports = _print_track_breakdown(backtester, targets)
+
+    if args.output is not None:
+        _write_output(args.output, args, targets, report, track_reports)
 
 
-def _print_track_breakdown(backtester: ForecastBacktester, targets: list[Race]) -> None:
+def _print_track_breakdown(
+    backtester: ForecastBacktester, targets: list[Race]
+) -> dict[str, BacktestReport]:
     """--track-type 未指定時、芝/ダート別の内訳も追加表示する。
 
     コース混合のみの集計だと PAI の point-biserial 相関が希釈されて見える落とし穴があるため
     （docs/adr/0005-rpci-forecast-strategy.md §5.4）、常に track 別内訳も併記して誤読を防ぐ。
     """
+    reports: dict[str, BacktestReport] = {}
     by_track = group_races_by_track(targets)
     if len(by_track) <= 1:
-        return
+        return reports
     for track_type in sorted(by_track):
         races = by_track[track_type]
         print(f"\n{'#' * 60}\nコース別内訳: {track_type}（{len(races)}レース）\n{'#' * 60}")
-        print(format_report(backtester.run(races)))
+        report = backtester.run(races)
+        reports[track_type] = report
+        print(format_report(report))
+    return reports
+
+
+def _write_output(
+    path: Path,
+    args: argparse.Namespace,
+    targets: list[Race],
+    report: BacktestReport,
+    track_reports: dict[str, BacktestReport],
+) -> None:
+    """CLIの結果を後続分析用のJSONとして保存する。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = _build_output_payload(args, targets, report, track_reports)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"\nJSON結果を保存しました: {path}")
+
+
+def _build_output_payload(
+    args: argparse.Namespace,
+    targets: list[Race],
+    report: BacktestReport,
+    track_reports: dict[str, BacktestReport],
+) -> dict[str, JsonValue]:
+    return {
+        "generated_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        "filters": {
+            "limit": args.limit,
+            "date_from": args.date_from.isoformat() if args.date_from is not None else None,
+            "date_to": args.date_to.isoformat() if args.date_to is not None else None,
+            "sample_every": args.sample_every,
+            "rpci_min": args.rpci_min,
+            "rpci_max": args.rpci_max,
+            "track_type": args.track_type,
+        },
+        "target_race_keys": [str(race.race_key) for race in targets],
+        "overall": backtest_report_to_dict(report),
+        "by_track": {
+            track_type: backtest_report_to_dict(track_report)
+            for track_type, track_report in track_reports.items()
+        },
+    }
 
 
 if __name__ == "__main__":

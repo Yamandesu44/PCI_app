@@ -15,8 +15,9 @@
 - [x] ~~P1 `forecast_accuracy` のフロント表示~~ → 完了（コミット `e65f919`）。
 - [x] ~~P2 backtest_forecast.py の PAI希釈対策（track別内訳表示）~~ → 完了（2026-07-11、
   `group_races_by_track` + `_print_track_breakdown`）。
-- [ ] **P2 バックテスト結果の可視化/保存**（現状 `backtest_forecast.py` は print のみ・永続化なし）。
-  的中率の推移を見たいフェーズで DB 化 or レポート出力を検討。
+- [x] ~~P2 バックテスト結果の可視化/保存~~ → 完了（2026-07-21、
+  `backtest_report_to_dict` + `backtest_forecast.py --output <path>`）。DB化は将来の推移分析が
+  必要になった段階で再検討。
 - [ ] **P2 Windows ワーカー運用の監視強化**（design/07）。`ingest_log` は導入済み。失敗の可視化・
   再実行導線・Webhook 通知の定着（`NOTIFY_WEBHOOK_URL`）。
 

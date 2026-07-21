@@ -17,6 +17,7 @@ from pci.application.backtest import (
     RpciAccuracy,
     RpciSample,
     _AsOfRaceRepository,
+    backtest_report_to_dict,
     format_report,
     group_races_by_track,
     summarize_pai_lift,
@@ -346,3 +347,68 @@ class TestFormatReport:
         text = format_report(report)
         assert "(不明)" in text
         assert "有効サンプルなし" in text
+
+
+class TestBacktestReportToDict:
+    def test_serializes_summary_and_samples(self) -> None:
+        """後続の可視化で使える機械可読JSON形へ変換できる。"""
+        report = BacktestReport(
+            model_version="rule-v4",
+            n_races=1,
+            n_horses=1,
+            skipped=0,
+            rpci=RpciAccuracy(
+                n=1,
+                mae=1.5,
+                rmse=1.5,
+                bias=-1.5,
+                label_accuracy=1.0,
+                per_label_accuracy={str(HIGH): 1.0},
+            ),
+            pai=PaiLift(
+                n=1,
+                baseline_rate=1.0,
+                bands=[PaiBand(80, 100, 1, 1)],
+                point_biserial=0.0,
+                top_band_lift=1.0,
+            ),
+            rpci_samples=[_rpci(48.5, 50.0, AVERAGE, AVERAGE)],
+            horse_samples=[HorseSample("2026010105010101", 1, 82.5, True)],
+        )
+
+        payload = backtest_report_to_dict(report)
+
+        assert payload["model_version"] == "rule-v4"
+        assert payload["rpci"] == {
+            "n": 1,
+            "mae": 1.5,
+            "rmse": 1.5,
+            "bias": -1.5,
+            "label_accuracy": 1.0,
+            "per_label_accuracy": {str(HIGH): 1.0},
+        }
+        assert payload["pai"] == {
+            "n": 1,
+            "baseline_rate": 1.0,
+            "bands": [{"lo": 80, "hi": 100, "n": 1, "good_runs": 1, "good_rate": 1.0}],
+            "point_biserial": 0.0,
+            "top_band_lift": 1.0,
+        }
+        assert payload["rpci_samples"] == [
+            {
+                "race_key": "2026010105010101",
+                "predicted": 48.5,
+                "actual": 50.0,
+                "error": -1.5,
+                "predicted_label": str(AVERAGE),
+                "actual_label": str(AVERAGE),
+            }
+        ]
+        assert payload["horse_samples"] == [
+            {
+                "race_key": "2026010105010101",
+                "horse_no": 1,
+                "pai": 82.5,
+                "good_run": True,
+            }
+        ]

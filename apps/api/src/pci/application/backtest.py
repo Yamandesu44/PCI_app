@@ -23,6 +23,7 @@ import datetime
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import cast
 
 from pci.application.dto import ForecastOutput
 from pci.application.forecast_use_cases import ForecastRaceUseCase
@@ -36,6 +37,8 @@ from pci.domain.racing.repository import RaceRepository
 from pci.domain.shared.race_key import RaceKey
 
 DEFAULT_BAND_EDGES: tuple[int, ...] = (0, 20, 40, 60, 80, 100)
+JsonScalar = str | int | float | bool | None
+JsonValue = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 
 
 class _AsOfRaceRepository:
@@ -294,6 +297,86 @@ def format_report(report: BacktestReport) -> str:
         lines.append("\n■ PAI: 有効サンプルなし")
 
     return "\n".join(lines)
+
+
+def backtest_report_to_dict(report: BacktestReport) -> dict[str, JsonValue]:
+    """バックテスト結果をJSON保存しやすい辞書へ変換する。
+
+    CLIの表示文言とは独立した機械可読フォーマットにして、後続の可視化や
+    時系列比較で再利用できるようにする。
+    """
+    rpci_samples: list[JsonValue] = [
+        _rpci_sample_to_dict(sample) for sample in report.rpci_samples
+    ]
+    horse_samples: list[JsonValue] = [
+        _horse_sample_to_dict(sample) for sample in report.horse_samples
+    ]
+    return {
+        "model_version": report.model_version,
+        "n_races": report.n_races,
+        "n_horses": report.n_horses,
+        "skipped": report.skipped,
+        "rpci": _rpci_accuracy_to_dict(report.rpci),
+        "pai": _pai_lift_to_dict(report.pai),
+        "rpci_samples": rpci_samples,
+        "horse_samples": horse_samples,
+    }
+
+
+def _rpci_accuracy_to_dict(value: RpciAccuracy | None) -> dict[str, JsonValue] | None:
+    if value is None:
+        return None
+    return {
+        "n": value.n,
+        "mae": value.mae,
+        "rmse": value.rmse,
+        "bias": value.bias,
+        "label_accuracy": value.label_accuracy,
+        "per_label_accuracy": cast(JsonValue, value.per_label_accuracy),
+    }
+
+
+def _pai_lift_to_dict(value: PaiLift | None) -> dict[str, JsonValue] | None:
+    if value is None:
+        return None
+    bands: list[JsonValue] = [_pai_band_to_dict(band) for band in value.bands]
+    return {
+        "n": value.n,
+        "baseline_rate": value.baseline_rate,
+        "bands": bands,
+        "point_biserial": value.point_biserial,
+        "top_band_lift": value.top_band_lift,
+    }
+
+
+def _pai_band_to_dict(value: PaiBand) -> dict[str, JsonValue]:
+    return {
+        "lo": value.lo,
+        "hi": value.hi,
+        "n": value.n,
+        "good_runs": value.good_runs,
+        "good_rate": round(value.good_rate, 4),
+    }
+
+
+def _rpci_sample_to_dict(value: RpciSample) -> dict[str, JsonValue]:
+    return {
+        "race_key": value.race_key,
+        "predicted": value.predicted,
+        "actual": value.actual,
+        "error": value.error,
+        "predicted_label": str(value.predicted_label),
+        "actual_label": str(value.actual_label),
+    }
+
+
+def _horse_sample_to_dict(value: HorseSample) -> dict[str, JsonValue]:
+    return {
+        "race_key": value.race_key,
+        "horse_no": value.horse_no,
+        "pai": value.pai,
+        "good_run": value.good_run,
+    }
 
 
 def _point_biserial(samples: list[HorseSample]) -> float:

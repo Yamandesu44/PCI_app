@@ -9,27 +9,36 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-12（OpenAI Codex→Claude Code 引き継ぎ） |
+| 更新日時 | 2026-07-21（OpenAI Codex→Claude Code 引き継ぎ） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD` docs: prepare handoff for Claude Code |
-| 最新実装コミット | `2b083ba` fix(forecast): resolve mixed running styles by distance |
-| 作業ツリー | Claude Codeへ安全に引き継ぐため、Git状態・差分・検証結果を整理する |
-| 新規実装 | 隊列予想の混在型脚質を対象距離に応じて具体化（running-style-v2-distance） |
+| 最新コミット | `HEAD` feat(backtest): export reports as json |
+| 最新実装コミット | `HEAD` feat(backtest): export reports as json |
+| 作業ツリー | バックテスト結果保存を実装し、検証・文書更新後にクリーン化する |
+| 新規実装 | `backtest_forecast.py --output <path>` によるバックテスト結果JSON保存 |
 
 ---
 
 ## 現在の作業目的
 
-隊列予想で「自在」が過半数となる原因を実DBで特定し、明確な脚質定義を壊さず、
-混在型だけを今回の距離に応じて具体化する。
+`tasks/current.md` の最優先未完了タスク「バックテスト結果の可視化/保存」に対応する。
+既存の標準出力を維持しつつ、後続の可視化・時系列比較に使えるJSONレポートを保存できるようにする。
 
 ---
 
 ## 完了した作業（直近セッション、すべてコミット・プッシュ済み）
 
-1. **混在型脚質の距離対応予測**（`2b083ba`）
+1. **バックテスト結果のJSON保存**（`HEAD`）
+   - `apps/api/src/pci/application/backtest.py` に `backtest_report_to_dict()` を追加。
+   - `apps/api/scripts/backtest_forecast.py` に `--output <path>` を追加。
+   - 保存JSONには実行条件、対象race_key、全体集計、track別内訳、RPCIサンプル、PAIサンプルを含める。
+   - 既存の標準出力は後方互換で維持。DBテーブル化は将来の推移ダッシュボードが必要になった段階で再検討。
+   - テスト追加: `apps/api/tests/unit/application/test_backtest.py::TestBacktestReportToDict`。
+   - 検証: `py_compile` 成功。API pytest/ruff/mypy/import-linter はこのCodex環境にPython devツールが無く未実行。
+     Web `npm.cmd run test` / `typecheck` / `build` は成功。
+
+2. **混在型脚質の距離対応予測**（`2b083ba`）
    - 直近20レース266頭を調査し、旧自在139頭のうち99頭が60%未満の混在、40頭が履歴なしと確認。
    - 明確な `running-style-v1` 判定は維持し、混在型だけ `running-style-v2-distance` で再判定。
    - 過去5走の4角位置、対象距離との距離差、近走順を使用。先行・差し同数時の距離規則を追加。
@@ -37,7 +46,7 @@
    - 同じ266頭で自在を139頭（52.3%）から40頭（15.0%）へ削減。履歴なしは参考のまま維持。
    - API 380件、Web 55件、ruff/mypy/import-linter/typecheck/buildがすべて成功。
 
-2. **枠順確定後の隊列予想**（`c679e09`）
+3. **枠順確定後の隊列予想**（`c679e09`）
    - `domain/pace/formation.py` に枠順確定判定と formation-v1 を追加。
    - 全馬の枠番が1〜8、馬番が正かつ一意の場合のみ予想し、特別登録（frame_no=0）は `null`。
    - 脚質70%・近走の1角（欠損時4角）位置30%で先頭/好位/中団/後方へ配置。
@@ -46,7 +55,7 @@
    - 契約テストの予測器をルールベースへ固定し、WindowsのLightGBMネイティブabortを回避。
    - 実DBで entries 278件、枠順確定112件は生成、未確定166件は非生成を確認。
 
-3. **レース分析UIの刷新**（`4d9e5b5`）
+4. **レース分析UIの刷新**（`4d9e5b5`）
    - `AppHeader` を追加し、全画面でブランドとレース一覧への導線を固定。
    - レース一覧を最大幅拡張し、統計、開催日カレンダー、日付・競馬場別レースを2カラム化。
    - 展開予想と確定後回顧へ共通のダークヒーローとエメラルドのアクセントを導入。
@@ -56,7 +65,7 @@
 
 以下は以前の完了作業:
 
-4. **`backtest_forecast.py` の track別内訳を既定表示に追加**（`d840e66`）
+5. **`backtest_forecast.py` の track別内訳を既定表示に追加**（`d840e66`）
    - `apps/api/src/pci/application/backtest.py` に純粋関数 `group_races_by_track(races) -> dict[str, list[Race]]` を追加。
    - `apps/api/scripts/backtest_forecast.py` に `_print_track_breakdown()` を追加。
      `--track-type` 未指定時、混合集計に加えて芝/ダート別の再集計も自動表示する。
@@ -67,24 +76,23 @@
      （キャッシュ済みサンプルの再集計ではなく、予測をもう一度回す）。DB再クエリ（対象選定）は
      発生しないが、予測処理自体は2倍実行される。`--limit` が大きい（例: 2000+）場合は
      実行時間がおよそ2倍になる点に注意。
-5. **想定RPCI 受入基準の未達方針を決定**（`docs/DECISIONS.md` 2026-07-11、`d840e66`）
+6. **想定RPCI 受入基準の未達方針を決定**（`docs/DECISIONS.md` 2026-07-11、`d840e66`）
    - 判断: 現行モデル（lgbm-turf-v1/lgbm-dirt-v1）のまま運用継続。MAE≤1.5 を追う追加投資は今は行わない。
    - 詳細な理由・不採用案・見直し条件は `docs/DECISIONS.md` の該当エントリを参照。
-6. **想定RPCI 精度の検証**（`c94f708`、コード変更なし）
+7. **想定RPCI 精度の検証**（`c94f708`、コード変更なし）
    - ユーザーが実DB（mykeibadb蓄積データ）で `python -m scripts.backtest_forecast --limit 200` を
      3パターン（混合／芝／ダート）実行、結果を `docs/SPEC.md §8/§9` と `docs/adr/0005 §5.4` に記録。
    - 結果概要: MAE≤1.5 は構造的に未達（混合7.848/芝8.861/ダート8.332）。ラベル一致率≥60% は
      芝(73.5%)・混合(61.0%)は達成、ダート(42.5%)は未達。混合サンプルだと PAI point-biserial が
      希釈されて見える（+0.009）が track別だと正の相関（芝+0.084/ダート+0.032）に戻る新知見あり。
-7. **`forecast_accuracy` の UI 表示**（`e65f919`）: pace-analysis 画面に想定的中/相違を言葉と色で表示。
-8. **AI 引き継ぎ基盤整備**（`004aead`）、**予測フィードバックループ**（`9712fd2`）ほか、
+8. **`forecast_accuracy` の UI 表示**（`e65f919`）: pace-analysis 画面に想定的中/相違を言葉と色で表示。
+9. **AI 引き継ぎ基盤整備**（`004aead`）、**予測フィードバックループ**（`9712fd2`）ほか、
    それ以前の完了作業は `tasks/current.md`「最近完了したタスク」参照。
 
 ## 未完了の作業
 
-**なし。** 直近の依頼（枠順確定後の隊列予想）は実装・検証・コミット済み。
-`tasks/current.md`「進行中」「次に着手する候補」はいずれも空。次の作業はユーザー指示、または
-下記候補から選ぶ形になる。
+**なし。** 直近の依頼（`tasks/current.md` の最優先未完了タスク実装）は完了済み。
+`tasks/current.md`「進行中」は空。次の作業はユーザー指示、または下記候補から選ぶ形になる。
 
 ## 現在止まっている箇所
 
@@ -99,23 +107,17 @@
 （A節が方針決定済み、B節は着手可否に判断が必要、C節は技術的負債）。**どれを選ぶかは
 ユーザー確認を推奨**（`docs/PROJECT_RULES.md` の「独断で正式仕様化しない」方針に沿う）。
 
-1. **P2 バックテスト結果の可視化/保存**（`tasks/backlog.md` A節）
-   - 現状 `apps/api/scripts/backtest_forecast.py` は `print()` のみで結果を永続化しない。
-   - 手順例: (a) `apps/api/src/pci/application/backtest.py` の `BacktestReport` をJSON化する
-     関数を追加する、(b) `scripts/backtest_forecast.py` に `--output <path>` オプションを追加し
-     結果をファイル保存できるようにする、(c) 的中率の推移を見たい場合はDBテーブル化も検討
-     （ただし新テーブルはスコープが大きいため先にユーザーと方針確認）。
-2. **P2 Windows ワーカー運用の監視強化**（`tasks/backlog.md` A節）
+1. **P2 Windows ワーカー運用の監視強化**（`tasks/backlog.md` A節）
    - `ingest_log`（migration 002）は導入済みだが、失敗の可視化・再実行導線・
      `NOTIFY_WEBHOOK_URL` 通知の定着が未完了。
    - 手順例: (a) `apps/api/src/pci/presentation/routers/ingest.py` の `/internal/ingest/log`
      エンドポイントを使って直近の失敗一覧を返すエンドポイントを追加する案を検討、
      (b) `apps/ingestion-worker/src/ingestion/batch.py` の `_notify_failure()` が実際に
      Webhook通知するか手元で確認する。
-3. **B節: 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO` 等）
+2. **B節: 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO` 等）
    - 実データ検証が前提のため、想定RPCI検証と同様「ユーザーが実DBでスクリプト実行→結果を分析」の
      進め方になる可能性が高い。着手前にどの定数を対象にするかユーザーに確認する。
-4. **C節: 技術的負債**（`mypy --strict` 全体化・統合テスト環境整備・旧handoffファイル整理等）
+3. **C節: 技術的負債**（`mypy --strict` 全体化・統合テスト環境整備・旧handoffファイル整理等）
    - 優先度は相対的に低い。着手前にユーザーに確認。
 
 **見直し条件つきで保留中の項目**（`docs/DECISIONS.md` 2026-07-11 参照。トリガーが来るまでは着手しない）:
@@ -124,14 +126,12 @@
 
 ---
 
-## 変更対象ファイル（直近セッション、コミット `2b083ba`）
+## 変更対象ファイル（直近セッション、コミット `HEAD`）
 
-- Domain/Application: `apps/api/src/pci/domain/pace/running_style.py`, `formation.py`,
-  `apps/api/src/pci/application/forecast_use_cases.py`
-- Tests: `apps/api/tests/unit/domain/pace/test_running_style.py`,
-  `apps/api/tests/unit/application/test_forecast_use_cases.py`
-- 文書: `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`,
-  `docs/HANDOFF.md`, `tasks/current.md`
+- Application: `apps/api/src/pci/application/backtest.py`
+- CLI: `apps/api/scripts/backtest_forecast.py`
+- Tests: `apps/api/tests/unit/application/test_backtest.py`
+- 文書: `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md`, `tasks/current.md`, `tasks/backlog.md`
 
 ---
 
@@ -160,7 +160,26 @@
 
 ---
 
-## テスト状況（OpenAI Codexが2026-07-12に再実行）
+## テスト状況（OpenAI Codexが2026-07-21に再実行）
+
+| 対象 | コマンド | 結果 |
+|---|---|---|
+| API 構文確認 | `python -m py_compile src/pci/application/backtest.py scripts/backtest_forecast.py tests/unit/application/test_backtest.py` | **成功** |
+| API JSON変換スモーク | `PYTHONPATH=src python -c "..."` | **成功**（`backtest_report_to_dict()` の `json.dumps` を確認） |
+| API 単体（対象） | `python -m pytest tests/unit/application/test_backtest.py -q` | **未実行**: このCodex環境の同梱Pythonに `pytest` が未導入 |
+| API Lint | `ruff check src/ tests/ scripts/` | **未実行**: `ruff` がPATHに存在しない |
+| API 型 | `mypy src/pci/domain/ src/pci/application/ --strict` | **未実行**: `mypy` がPATHに存在しない |
+| import境界 | `lint-imports` | **未実行**: `lint-imports` がPATHに存在しない |
+| API Client型 | `npm.cmd run typecheck --workspace=@pci/api-client` | **成功** |
+| Web 単体 | `npm.cmd run test` | **55 passed** |
+| Web 型 | `npm.cmd run typecheck` | **成功** |
+| Web build | `npm.cmd run build` | **成功** |
+
+API側の単体テスト・lint・型チェックは、Claude Code側またはユーザーのローカルPython環境で最初に再実行すること。
+今回の変更は `apps/api/src/pci/application/backtest.py` と `apps/api/scripts/backtest_forecast.py` に集中しているため、
+最低限 `python -m pytest tests/unit/application/test_backtest.py -q` を優先する。
+
+### 前回セッションの確認結果（OpenAI Codex / 2026-07-12）
 
 | 対象 | コマンド | 結果 |
 |---|---|---|
@@ -235,6 +254,7 @@ git status   # クリーンであるはず
 
 # 2. API 健全性確認（pytest ではなく python -m pytest を使うこと）
 cd apps/api
+python -m pytest tests/unit/application/test_backtest.py -q
 python -m pytest tests/unit/ tests/contract/ -q
 ruff check src/ tests/ scripts/
 lint-imports
