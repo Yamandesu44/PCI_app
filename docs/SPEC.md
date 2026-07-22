@@ -149,6 +149,7 @@
 - ✅ `GET /api/v1/races`（一覧・limit/date）, `/races/dates`, `/races/{key}`,
   `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`, `/health`。
 - ✅ 内部取り込み `POST /internal/ingest/{horses,jockeys,trainers,entries,results,log}`,
+  `POST /internal/ingest/forecasts/precompute`,
   `DELETE /internal/ingest/races/{key}`。`X-Ingest-Token` 認証（未設定時はスキップ=開発モード）。
 - 🟡 `pace-analysis` に `forecast_accuracy`（predicted/actual RPCI・label・error・label_hit・model_version）を追加。
   mart に想定RPCI が保存済みのレースのみ非 null（本セッションで追加）。
@@ -161,7 +162,7 @@
 
 ## 6. 取り込み（ingestion-worker）
 
-- ✅ `--mode fixture|jvlink|mykeibadb`、`--step masters|entries|results|special-entries|all`、`--date/--date-to`、`--chunk-days`。
+- ✅ `--mode fixture|jvlink|mykeibadb`、`--step masters|entries|results|special-entries|forecasts|all`、`--date/--date-to`、`--chunk-days`。
 - ✅ mykeibadb: RA/SE/UM/KS/CH + 特別登録テーブルを読み、Ingest API へ投入。列名は候補リストで吸収。
 - ✅ **2026-07-20〜21 確定成績未反映を解決**（§9-15）: 診断ツール`diagnose_results`で「解析は正常
   （453件解析可・DATA_KUBUN='7'）」と判明→原因は解析より下流と特定。`batch.py`が`record_results`
@@ -182,6 +183,8 @@
   advance entry、別mykeibadbテーブル）を呼んでおらず自動実行から常に漏れていたバグを発見・修正
   （`docs/DECISIONS.md` 2026-07-13）。entries/resultsのみ実行という認識だった場合、本行の従来の
   記載も不正確だったことになる。
+- ✅ 同期の最後に`--step forecasts`を実行し、今日以降の出走前レースだけ予想martを事前生成する。
+  過去レースへの後付け予想は行わず、一覧APIには欠損時の計算フォールバックを残す（2026-07-22）。
 - 🔎 JV-Data バイトオフセットは実データ校正済みだが、JV-Link バージョン差で要再確認。（jv_spec.py, se_parser.py）
   具体的には、UM/KS/CH（master_parsers.py）は Ver.3.0.0→Ver.4.9 の実データ差分を確認・反映済みだが、
   RA/SE（jv_spec.py）は README.md/common.py が「Ver.3.0準拠」と書いたまま未確認（§9-8）。

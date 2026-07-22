@@ -185,6 +185,23 @@ class TestDeleteRace:
         assert "/internal/ingest/races/2026062809011111" in url
 
 
+class TestPrecomputeForecasts:
+    def test_sends_date_range_and_returns_summary(self) -> None:
+        http = _make_http_client({"scanned": 12, "generated": 10, "skipped": 2})
+        api = IngestApiClient("http://api", token="secret", http_client=http)
+
+        result = api.precompute_forecasts("2026-07-22", "2026-07-26")
+
+        assert result == {"scanned": 12, "generated": 10, "skipped": 2}
+        call = http.post.call_args
+        assert "/internal/ingest/forecasts/precompute" in call.args[0]
+        assert call.kwargs["json"] == {
+            "date_from": "2026-07-22",
+            "date_to": "2026-07-26",
+        }
+        assert call.kwargs["timeout"] == 300.0
+
+
 class TestLogBatch:
     def test_sends_to_log_endpoint(self) -> None:
         http = _make_http_client({"id": 42})

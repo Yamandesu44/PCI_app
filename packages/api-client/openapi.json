@@ -273,6 +273,49 @@
         "title": "ForecastAccuracySchema",
         "type": "object"
       },
+      "ForecastPrecomputeBody": {
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "ForecastPrecomputeBody",
+        "type": "object"
+      },
+      "ForecastPrecomputeResponse": {
+        "properties": {
+          "generated": {
+            "title": "Generated",
+            "type": "integer"
+          },
+          "scanned": {
+            "title": "Scanned",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scanned",
+          "generated",
+          "skipped"
+        ],
+        "title": "ForecastPrecomputeResponse",
+        "type": "object"
+      },
       "ForecastSchema": {
         "description": "レース展開予想（想定RPCI + 展開シナリオ + 各馬 PAI）。",
         "properties": {
@@ -2150,6 +2193,66 @@
           }
         },
         "summary": "Ingest Entries",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/forecasts/precompute": {
+      "post": {
+        "description": "今後の出走前レースの予想martを、画面表示より先に生成する。",
+        "operationId": "precompute_forecasts_internal_ingest_forecasts_precompute_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastPrecomputeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastPrecomputeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Precompute Forecasts",
         "tags": [
           "ingest"
         ]

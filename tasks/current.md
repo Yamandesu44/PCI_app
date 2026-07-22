@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（予想martの最新世代選択） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（今後のレース予想を同期後に事前生成） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,14 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P1 同期完了後に今後のレース予想を事前生成**
+  - 認証付き`POST /internal/ingest/forecasts/precompute`と`--step forecasts`を追加。
+  - 自動同期をentries/results/special-entries/forecastsの順にし、一覧初回表示での全レース計算を回避。
+  - 過去レースは後付け予想せず、今日以降・出走前・出走馬ありだけを再生成する。
+  - ボードAPIの欠損時フォールバックは残し、事前生成失敗時も閲覧可能性を維持。
+  - 検証: API非統合472 passed、worker194 passed、Web68 passed/build、API Ruff、
+    変更対象mypy strict、api-client/Web typecheck成功。worker全体Ruff/mypyには既知違反が残る。
 
 - [x] ✅ **P2 予想martのモデル世代選択を生成日時ベースへ変更**
   - Alembic `004`で`predicted_pace`と`pace_fit`へ`generated_at`を追加。

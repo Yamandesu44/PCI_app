@@ -116,6 +116,7 @@ python -m ingestion.batch --mode mykeibadb --date 20260627 --date-to 20260628 --
 python -m ingestion.batch --mode fixture --step masters   # マスタのみ
 python -m ingestion.batch --mode fixture --step entries   # 出走表のみ
 python -m ingestion.batch --mode fixture --step results   # 確定成績のみ
+python -m ingestion.batch --mode fixture --step forecasts # 今日以降の予想martを事前生成
 ```
 
 `--mode jvlink` では、同一プロセス内で取得した RACE / DIFF レコードを再利用します。

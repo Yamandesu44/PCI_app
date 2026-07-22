@@ -8,9 +8,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pci.application.dto import EntryInput, RaceInfo
+from pci.application.forecast_precompute_use_cases import ForecastPrecomputeOutput
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
 from pci.presentation.app import create_app
-from pci.presentation.dependencies import get_race_repository, get_session
+from pci.presentation.dependencies import (
+    get_precompute_forecasts_use_case,
+    get_race_repository,
+    get_session,
+)
 from tests.unit.application.fake_repository import FakeRaceRepository
 
 RACE_KEY = "2026062005010101"
@@ -254,6 +259,33 @@ class TestIngestResults:
         bad = {**RESULTS_PAYLOAD, "race_key": "9999999999999999"}
         resp = client.post("/internal/ingest/results", json=bad)
         assert resp.status_code in (400, 404, 422, 500)
+
+
+class TestPrecomputeForecasts:
+    def test_returns_generation_summary(self, client: TestClient) -> None:
+        use_case = MagicMock()
+        use_case.execute.return_value = ForecastPrecomputeOutput(
+            scanned=12,
+            generated=10,
+            skipped=2,
+        )
+        client.app.dependency_overrides[get_precompute_forecasts_use_case] = lambda: use_case
+
+        resp = client.post(
+            "/internal/ingest/forecasts/precompute",
+            json={"date_from": "2026-07-22", "date_to": "2026-07-26"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {"scanned": 12, "generated": 10, "skipped": 2}
+
+    def test_rejects_more_than_32_days(self, client: TestClient) -> None:
+        resp = client.post(
+            "/internal/ingest/forecasts/precompute",
+            json={"date_from": "2026-07-01", "date_to": "2026-08-02"},
+        )
+
+        assert resp.status_code == 422
 
 
 class TestIngestAuth:

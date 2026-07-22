@@ -13,6 +13,7 @@
        entries (TOKUBETSU_TOROKUBA/TOKUBETSU_TOROKUBAGOTO_JOHO tables) for next week's races.
        This reads a different mykeibadb table than step 2, so it was silently never run
        by this script until 2026-07-13 -- see docs/DECISIONS.md.
+    5. batch.py --step forecasts -> precomputes upcoming forecasts after all entry updates.
 
     Intended to be run from Windows Task Scheduler on a JRA-calendar-aware
     schedule (Fri/Sat 10:00, Sun 18:00 -- see setup_task_scheduler.ps1).
@@ -105,7 +106,7 @@ if ($proc.ExitCode -ne 0) {
     Write-Log "mykeibadb.exe finished (exit code 0)"
 }
 
-# --- Step 2/3/4: batch.py (local MySQL -> PostgreSQL) ---
+# --- Step 2/3/4/5: batch.py (local MySQL -> PostgreSQL -> forecast mart) ---
 $RunBatch = Join-Path $PSScriptRoot "run_batch.ps1"
 $DateFrom = (Get-Date).AddDays(-$DaysBack).ToString("yyyyMMdd")
 $DateTo   = (Get-Date).AddDays($DaysForward).ToString("yyyyMMdd")
@@ -122,9 +123,13 @@ Write-Log "--- special-entries sync (batch.py --mode mykeibadb --step special-en
 & $RunBatch -Step special-entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
 $specialEntriesExit = $LASTEXITCODE
 
-Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit results=$resultsExit special-entries=$specialEntriesExit) ==="
+Write-Log "--- forecast precompute (batch.py --step forecasts, $DateFrom to $DateTo) ---"
+& $RunBatch -Step forecasts -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+$forecastsExit = $LASTEXITCODE
 
-if ($entriesExit -ne 0 -or $resultsExit -ne 0 -or $specialEntriesExit -ne 0) {
+Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit results=$resultsExit special-entries=$specialEntriesExit forecasts=$forecastsExit) ==="
+
+if ($entriesExit -ne 0 -or $resultsExit -ne 0 -or $specialEntriesExit -ne 0 -or $forecastsExit -ne 0) {
     exit 1
 }
 exit 0

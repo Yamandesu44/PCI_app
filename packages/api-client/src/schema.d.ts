@@ -181,6 +181,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/ingest/forecasts/precompute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Precompute Forecasts
+         * @description 今後の出走前レースの予想martを、画面表示より先に生成する。
+         */
+        post: operations["precompute_forecasts_internal_ingest_forecasts_precompute_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/ingest/horses": {
         parameters: {
             query?: never;
@@ -405,6 +425,28 @@ export interface components {
             predicted_label: string;
             /** Predicted Rpci */
             predicted_rpci: number;
+        };
+        /** ForecastPrecomputeBody */
+        ForecastPrecomputeBody: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+        };
+        /** ForecastPrecomputeResponse */
+        ForecastPrecomputeResponse: {
+            /** Generated */
+            generated: number;
+            /** Scanned */
+            scanned: number;
+            /** Skipped */
+            skipped: number;
         };
         /**
          * ForecastSchema
@@ -1237,6 +1279,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IngestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    precompute_forecasts_internal_ingest_forecasts_precompute_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForecastPrecomputeBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastPrecomputeResponse"];
                 };
             };
             /** @description Validation Error */

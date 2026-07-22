@@ -387,6 +387,24 @@ def _to_iso_date(yyyymmdd: str) -> str:
     return datetime.datetime.strptime(yyyymmdd, "%Y%m%d").date().isoformat()
 
 
+def precompute_forecasts(
+    api: IngestApiClient,
+    date_from: str,
+    date_to: str,
+    *,
+    today: datetime.date | None = None,
+) -> dict[str, int]:
+    """同期範囲のうち今日以降だけをAPIへ事前生成依頼する。"""
+    start = datetime.datetime.strptime(date_from, "%Y%m%d").date()
+    end = datetime.datetime.strptime(date_to, "%Y%m%d").date()
+    current_date = today or datetime.date.today()
+    effective_start = max(start, current_date)
+    if effective_start > end:
+        _log.info("予想事前生成対象なし: %s→%s", date_from, date_to)
+        return {"scanned": 0, "generated": 0, "skipped": 0}
+    return api.precompute_forecasts(effective_start.isoformat(), end.isoformat())
+
+
 def iter_date_chunks(date_from: str, date_to: str, chunk_days: int) -> list[tuple[str, str]]:
     """長期取り込みを、指定日数ごとの範囲に分割する。"""
     if chunk_days <= 0:
@@ -441,7 +459,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--step",
-        choices=["all", "masters", "entries", "results", "special-entries"],
+        choices=["all", "masters", "entries", "results", "special-entries", "forecasts"],
         default="all",
         help="実行ステップ（デフォルト: all）",
     )
@@ -485,20 +503,33 @@ def main() -> None:
     started_at = datetime.datetime.now(datetime.UTC)
 
     try:
-        if args.mode == "mykeibadb":
-            if args.step == "special-entries":
-                _log.info("--- mykeibadb 特別登録取り込み ---")
-                ingest_mykeibadb_special_entries(api, date_from, date_to)
-                _log.info("=== ingestion-worker 完了 ===")
-                api.log_batch(
-                    batch_date=_to_iso_date(date_from),
-                    step=args.step,
-                    mode=args.mode,
-                    started_at=started_at.isoformat(),
-                    finished_at=datetime.datetime.now(datetime.UTC).isoformat(),
-                    status="ok",
-                )
-                return
+        if args.step == "forecasts":
+            _log.info("--- 今後のレース予想を事前生成 ---")
+            precompute_forecasts(api, date_from, date_to)
+            _log.info("=== ingestion-worker 完了 ===")
+            api.log_batch(
+                batch_date=_to_iso_date(date_from),
+                step=args.step,
+                mode=args.mode,
+                started_at=started_at.isoformat(),
+                finished_at=datetime.datetime.now(datetime.UTC).isoformat(),
+                status="ok",
+            )
+            return
+
+        if args.mode == "mykeibadb" and args.step == "special-entries":
+            _log.info("--- mykeibadb 特別登録取り込み ---")
+            ingest_mykeibadb_special_entries(api, date_from, date_to)
+            _log.info("=== ingestion-worker 完了 ===")
+            api.log_batch(
+                batch_date=_to_iso_date(date_from),
+                step=args.step,
+                mode=args.mode,
+                started_at=started_at.isoformat(),
+                finished_at=datetime.datetime.now(datetime.UTC).isoformat(),
+                status="ok",
+            )
+            return
 
         client = _build_client(args.mode, race_option=args.race_option)
 

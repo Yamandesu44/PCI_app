@@ -98,10 +98,11 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 
 ### 取り込み（確定前・確定後）
 1. `mykeibadb.exe`（別ツール）が JV-Link → ローカル MySQL を最新化（現運用の主経路）。
-2. `batch.py --mode mykeibadb --step entries/results` が MySQL を読み、固定長レコードへ整形。
+2. `batch.py --mode mykeibadb --step entries/results/special-entries` が MySQL を読み、固定長レコードへ整形。
 3. `IngestApiClient` が `POST /internal/ingest/{horses,jockeys,trainers,entries,results}` へ送信。
 4. API 側ユースケース（`RegisterRaceEntriesUseCase` / `RecordRaceResultUseCase`）が
    PCI 算出・RPCI/PCI3 集計・脚質判定を行い core 層へ保存。実行ログは `ingest_log` に記録。
+5. `batch.py --step forecasts`が内部APIへ今後のレースの事前生成を依頼し、予想martを更新。
 
 ### 予測（出走前）
 - `GET /api/v1/races/{key}/forecast` → `ForecastRaceUseCase` が想定RPCI（rule-v4）・PAI・展開コメントを算出。
@@ -111,6 +112,8 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
   特別登録（`frame_no=0`）では `formation=null` とし、Webも非表示にする。
 - 結果は mart 層 `predicted_pace` / `pace_fit` に `model_version`・`generated_at`付きで
   **永続化**（upsert）。参照時は最後に生成された世代を選ぶ。
+- 通常は取り込み同期の最後に事前生成する。一覧APIはmart欠損時だけ同期計算し、運用障害時の
+  フォールバックとして機能する。
 
 ### 回顧（確定後）と答え合わせ
 - `GET /api/v1/races/{key}/pace-analysis` → `GetPaceAnalysisUseCase` が確定 PCI/RPCI/PCI3 を再集計し、

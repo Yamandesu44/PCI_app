@@ -20,6 +20,7 @@ from ingestion.batch import (
     ingest_masters,
     ingest_results,
     iter_date_chunks,
+    precompute_forecasts,
 )
 from ingestion.client.fixture_client import (
     FixtureJvLinkClient,
@@ -76,6 +77,39 @@ class TestToIsoDate:
     def test_rejects_malformed_input(self) -> None:
         with pytest.raises(ValueError):
             _to_iso_date("2026-07-06")
+
+
+class TestPrecomputeForecasts:
+    def test_clamps_start_to_today(self) -> None:
+        api = _mock_api()
+        api.precompute_forecasts.return_value = {
+            "scanned": 12,
+            "generated": 10,
+            "skipped": 2,
+        }
+
+        result = precompute_forecasts(
+            api,
+            "20260701",
+            "20260726",
+            today=__import__("datetime").date(2026, 7, 22),
+        )
+
+        assert result["generated"] == 10
+        api.precompute_forecasts.assert_called_once_with("2026-07-22", "2026-07-26")
+
+    def test_skips_range_entirely_in_past(self) -> None:
+        api = _mock_api()
+
+        result = precompute_forecasts(
+            api,
+            "20260701",
+            "20260702",
+            today=__import__("datetime").date(2026, 7, 22),
+        )
+
+        assert result == {"scanned": 0, "generated": 0, "skipped": 0}
+        api.precompute_forecasts.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

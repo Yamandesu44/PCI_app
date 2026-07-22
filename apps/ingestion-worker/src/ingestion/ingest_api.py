@@ -22,6 +22,7 @@ from ingestion.models import (
 _log = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30.0
+_FORECAST_PRECOMPUTE_TIMEOUT = 300.0
 _BATCH_SIZE = 100  # マスタデータの一括送信サイズ
 
 
@@ -47,9 +48,23 @@ class IngestApiClient:
             h["X-Ingest-Token"] = self._token
         return h
 
-    def _post(self, path: str, payload: Any) -> dict[str, Any]:
+    def _post(
+        self,
+        path: str,
+        payload: Any,
+        *,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         url = f"{self._base_url}{path}"
-        resp = self._http.post(url, json=payload, headers=self._headers())
+        request_options: dict[str, Any] = {}
+        if timeout is not None:
+            request_options["timeout"] = timeout
+        resp = self._http.post(
+            url,
+            json=payload,
+            headers=self._headers(),
+            **request_options,
+        )
         if resp.is_error:
             # エラー時はレスポンスボディ(detail)を含めて原因を明示する
             raise RuntimeError(f"Ingest API エラー {resp.status_code} {path}: {resp.text[:1000]}")
@@ -185,6 +200,26 @@ class IngestApiClient:
         accepted = int(result.get("accepted", 0))
         _log.info("レース削除 %s: %d 件", race_key, accepted)
         return accepted
+
+    def precompute_forecasts(self, date_from: str, date_to: str) -> dict[str, int]:
+        """今後のレース予想をAPI側で事前生成する。"""
+        result = self._post(
+            "/internal/ingest/forecasts/precompute",
+            {"date_from": date_from, "date_to": date_to},
+            timeout=_FORECAST_PRECOMPUTE_TIMEOUT,
+        )
+        summary = {
+            "scanned": int(result.get("scanned", 0)),
+            "generated": int(result.get("generated", 0)),
+            "skipped": int(result.get("skipped", 0)),
+        }
+        _log.info(
+            "予想事前生成: 対象 %d / 生成 %d / スキップ %d",
+            summary["scanned"],
+            summary["generated"],
+            summary["skipped"],
+        )
+        return summary
 
     def log_batch(
         self,

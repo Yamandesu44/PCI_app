@@ -39,6 +39,7 @@ cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
 3. `batch.py --mode mykeibadb --step results`（同期間の確定成績）
 4. `batch.py --mode mykeibadb --step special-entries`（同期間の重賞等特別登録。
    2026-07-13まで自動実行から漏れていた。詳細は`docs/DECISIONS.md`参照）
+5. `batch.py --step forecasts`（今日以降の出走前レース予想を事前生成）
 
 ログは `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log` に出力される。
 
@@ -74,13 +75,16 @@ python -m ingestion.batch --mode mykeibadb --step results --date 20260704 --date
 # 重賞等の特別登録だけ（来週分を先取りしたい時。--step all には含まれないので単独指定が必要）
 python -m ingestion.batch --mode mykeibadb --step special-entries --date 20260704 --date-to 20260718
 
+# 取り込み済みの今後のレース予想だけを事前生成
+python -m ingestion.batch --mode mykeibadb --step forecasts --date 20260704 --date-to 20260718
+
 # 出走表・成績まとめて（--step all、日付省略時は今日1日のみ）
 python -m ingestion.batch --mode mykeibadb --step all --date 20260704 --date-to 20260705
 ```
 
 `--date` のみ指定して `--date-to` を省略すると、その1日だけが対象になる。
-**注意**: `--step all` は masters/entries/results のみで、`special-entries` は含まれない
-（別のmykeibadbテーブルを読むため独立ステップ。上記のように単独で指定する）。
+**注意**: `--step all` は masters/entries/results のみで、`special-entries`と`forecasts`は含まれない。
+手動同期ではデータ取込後に上記の順で個別実行する。通常の自動同期スクリプトは両方を実行する。
 
 ---
 

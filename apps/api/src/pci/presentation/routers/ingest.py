@@ -22,7 +22,7 @@ from pci.application.ingest_use_cases import (
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
 from pci.config.settings import get_settings
 from pci.domain.shared.race_key import RaceKey
-from pci.presentation.dependencies import RepositoryDep, SessionDep
+from pci.presentation.dependencies import PrecomputeForecastsUseCaseDep, RepositoryDep, SessionDep
 
 router = APIRouter(prefix="/internal/ingest", tags=["ingest"])
 
@@ -138,6 +138,17 @@ class IngestLogBody(BaseModel):
 
 class IngestLogResponse(BaseModel):
     id: int
+
+
+class ForecastPrecomputeBody(BaseModel):
+    date_from: datetime.date
+    date_to: datetime.date
+
+
+class ForecastPrecomputeResponse(BaseModel):
+    scanned: int
+    generated: int
+    skipped: int
 
 
 # ----- エンドポイント -----
@@ -287,6 +298,38 @@ def write_ingest_log(
     session.commit()
     session.refresh(log)
     return IngestLogResponse(id=log.id)
+
+
+@router.post(
+    "/forecasts/precompute",
+    response_model=ForecastPrecomputeResponse,
+    status_code=status.HTTP_200_OK,
+)
+def precompute_forecasts(
+    body: ForecastPrecomputeBody,
+    use_case: PrecomputeForecastsUseCaseDep,
+    session: SessionDep,
+    _auth: AuthDep,
+) -> ForecastPrecomputeResponse:
+    """今後の出走前レースの予想martを、画面表示より先に生成する。"""
+    if body.date_from > body.date_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_from は date_to 以前にしてください。",
+        )
+    if (body.date_to - body.date_from).days > 31:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="事前生成は32日以内の範囲を指定してください。",
+        )
+
+    output = use_case.execute(body.date_from, body.date_to)
+    session.commit()
+    return ForecastPrecomputeResponse(
+        scanned=output.scanned,
+        generated=output.generated,
+        skipped=output.skipped,
+    )
 
 
 @router.delete("/races/{race_key}", response_model=IngestResponse, status_code=status.HTTP_200_OK)

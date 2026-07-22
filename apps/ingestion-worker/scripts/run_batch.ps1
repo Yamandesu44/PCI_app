@@ -8,7 +8,7 @@
     final failure. Logs are written per-date under logs\.
 
 .PARAMETER Step
-    Step to run: all | masters | entries | results | special-entries
+    Step to run: all | masters | entries | results | special-entries | forecasts
 
 .PARAMETER Mode
     Data source: jvlink | fixture | mykeibadb (default: jvlink)

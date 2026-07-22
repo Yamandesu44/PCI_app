@@ -9,38 +9,41 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新24回目・Codex が予想martの最新世代選択を追加） |
+| 更新日時 | 2026-07-22（更新25回目・Codex が予想の同期後事前生成を追加） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（予想martを生成日時ベースの世代選択へ変更） |
+| 直前の担当AI | OpenAI Codex（今後のレース予想を同期後に事前生成） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `4059e7e`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `899147b`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、次の推奨項目として予想martの最新世代選択を実装した。**
+**ユーザー指示により、次の推奨項目として今後のレース予想の事前生成を実装した。**
 
-Alembic `004_add_mart_generated_at.py`で`predicted_pace`と`pace_fit`へtimezone付き
-`generated_at`を追加した。`save_predicted_pace()` / `save_pace_fit()`は再計算時にも時刻を更新する。
-`find_predicted_pace()`は最新の想定展開を返し、`find_race_board_forecasts()`は最新PAI世代内だけで
-最上位馬を選ぶ。既存行はmigration適用時刻で補完され、同時刻時だけモデル名をタイブレークに使う。
+`PrecomputeUpcomingForecastsUseCase`と認証付き`POST /internal/ingest/forecasts/precompute`を追加した。
+workerには`--step forecasts`を追加し、`run_mykeibadb_full_sync.ps1`がentries、results、
+special-entriesの後に実行する。対象は日本時間の今日以降、`status=entries`、出走馬ありのレースだけ。
+過去レースへの後付け予想は行わない。ボードAPIのmart欠損時フォールバックは維持している。
 
-テスト結果: API非統合467 passed、PostgreSQL統合21 passed、Web68 passed、ruff clean、
-変更対象2ファイルのmypy strict、api-client/Web typecheck成功。
+テスト結果: API非統合472 passed、worker全体194 passed、Web68 passed/build成功、API Ruff成功、
+変更対象APIのmypy strict、api-client/Web typecheck成功。worker全体Ruffは既存18件、全体mypyは
+既存4件（`batch.py`のマスタ変数型）で失敗するが、今回対象のRuffは成功。
 
-Claude Codeが最初に確認するファイル: `apps/api/alembic/versions/004_add_mart_generated_at.py`,
-`apps/api/src/pci/infrastructure/database/models.py`,
-`apps/api/src/pci/infrastructure/repositories/mart_repository.py`,
-`apps/api/tests/integration/test_mart_repository.py`, `docs/DECISIONS.md`, `tasks/current.md`。
+Claude Codeが最初に確認するファイル:
+`apps/api/src/pci/application/forecast_precompute_use_cases.py`,
+`apps/api/src/pci/presentation/routers/ingest.py`,
+`apps/ingestion-worker/src/ingestion/batch.py`,
+`apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`, `docs/DECISIONS.md`, `tasks/current.md`。
 最初に実行するコマンド: `git status --short --branch`、続いて
-`cd apps/api && alembic upgrade head`、`python -m pytest -m "not integration" -q`。
+`cd apps/api && python -m pytest -m "not integration" -q` と
+`cd ../ingestion-worker && python -m pytest tests/test_ingest_api.py tests/test_batch_e2e.py -q`。
 
-未完了・既知事項: active modelを先読みして未生成世代を自動計算する機能ではない。新モデルを
-生成した後、その結果が最新として選ばれる。非同期生成へ移行する場合は、複数martテーブルを束ねる
-`generation_id`を検討する。ローカル既存DBでは起動前に`alembic upgrade head`が必要。
+未完了・既知事項: 事前生成は同期HTTPリクエスト内で直列実行する（worker側タイムアウトは5分）。
+今後レースが大幅に増えて5分を超える場合はジョブキュー化する。ローカル既存DBでは前タスクのmigration適用のため
+API起動前に`cd apps/api && alembic upgrade head`が必要。
 
 ---
 
