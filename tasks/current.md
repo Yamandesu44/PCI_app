@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（取り込みデータ完全性監視を追加） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（LightGBM Windows改行破損修正・AbilityWeights実DB判断） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -18,6 +18,16 @@
 
 ## 最近完了したタスク
 
+- [x] ✅ **P1 LightGBMモデルのWindows改行破損修正・AbilityWeights実DB採用判断**
+  - `.gitattributes`で`apps/api/models/*.txt`をLF固定。LightGBMの`tree_sizes`がCRLF変換で
+    壊れ、実モデルを読めなくなる問題を修正した。既存clone向けにローダーでもLFへ自己修復する。
+  - モデル読込失敗時のフォールバックを警告ログへ記録し、追跡中の芝・ダートモデルを実際に
+    ロード・予測する回帰テストを追加。
+  - 実DBを2025年後半212レース、2026年前半97レースに分けて4候補を比較。
+    全3指標が両期間で改善する候補はなく、現行重み（0.55/0.30/0.15）を維持する。
+  - 検証: API非統合449 passed、LightGBM関連31 passed、ruff、実DBバックテストCLI成功。
+    mypyはローカルNumPy型定義とPython 3.11設定の不整合で対象コード解析前に停止。
+
 - [x] ✅ **P2 取り込み監視をデータ完全性へ拡張**（本セッション・OpenAI Codex）
   - 前日以前のレースが `status=entries` のまま残っている件数と代表20件を、
     `GET /api/v1/ingest-status` で返すようにした。
@@ -30,7 +40,7 @@
   - `backtest_forecast.py --compare-ability-weights`を追加し、現行・近走のみ・近走重視・
     市場支持重視の4候補を同じ対象レースで比較。
   - 1位馬勝率・1位馬好走率・TOP3好走捕捉率と現行差を表示し、`--output`のJSONにも保存。
-  - 候補は検証専用で、`DEFAULT_WEIGHTS`は自動更新しない。実DB実行と採用判断はbacklog。
+  - 候補は検証専用で、`DEFAULT_WEIGHTS`は自動更新しない。実DB実行と採用判断は上記タスクで完了。
   - 検証: API unit+contract 444 passed（関連は40 passed）、変更対象Ruff、
     mypy strict 58ファイル成功、CLI `--help`成功。
 

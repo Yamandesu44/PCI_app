@@ -10,6 +10,7 @@ RpciForecaster プロトコルを満たし、ForecastRaceUseCase に DI で注�
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -50,17 +51,25 @@ _CLOSER_STYLES = (RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER)
 _CONDITION_ORD: dict[str, int] = {"良": 0, "稍重": 1, "重": 2, "不良": 3}
 _RPCI_MIN = 35.0
 _RPCI_MAX = 65.0
+_logger = logging.getLogger(__name__)
 
 
 def _load_lgb_booster(model_path: str | Path) -> Any:
-    """lightgbm.Booster をロードして返す。"""
+    """改行をLFへ正規化してlightgbm.Boosterをロードする。"""
     try:
         import lightgbm as lgb  # type: ignore[import-not-found]
     except ImportError as exc:
         raise ImportError(
             "LightGBMRpciForecaster には lightgbm が必要です: pip install lightgbm"
         ) from exc
-    return lgb.Booster(model_file=str(model_path))
+    path = Path(model_path)
+    raw_model = path.read_bytes()
+    if b"\r\n" in raw_model:
+        _logger.warning(
+            "LightGBMモデルのCRLF改行をLFへ補正して読み込みます: %s", path
+        )
+    model_text = raw_model.decode("utf-8").replace("\r\n", "\n")
+    return lgb.Booster(model_str=model_text)
 
 
 def _make_forecast(
@@ -166,16 +175,22 @@ def load_best_forecaster(
         try:
             forecaster: RpciForecaster = SplitLightGBMRpciForecaster(turf_path, dirt_path)
             return forecaster
-        except Exception:
-            pass
+        except Exception as exc:
+            _logger.warning(
+                "芝・ダート別LightGBMモデルを読み込めません。統合モデルへ切り替えます: %s",
+                exc,
+            )
 
     unified_path = model_path or _DEFAULT_MODEL_PATH
     if unified_path.exists():
         try:
             forecaster = LightGBMRpciForecaster(unified_path)
             return forecaster
-        except Exception:
-            pass
+        except Exception as exc:
+            _logger.warning(
+                "統合LightGBMモデルを読み込めません。ルールベースへ切り替えます: %s",
+                exc,
+            )
 
     return RuleBasedRpciForecaster()
 

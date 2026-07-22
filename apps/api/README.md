@@ -60,6 +60,16 @@ python -m scripts.backtest_forecast \
 1位馬好走率・TOP3好走捕捉率と現行差。異なる期間で改善が再現した場合のみ、
 `AbilityWeights`の変更を別タスクで判断する。
 
+2026-07-22に2025年後半212レース・2026年前半97レースで比較し、全3指標が両期間で
+改善する候補は無かったため、現行重みを維持した。
+
+### LightGBMモデルの改行
+
+`models/*.txt`は内部の`tree_sizes`にバイト長を保持するため、必ずLFで扱う。
+`.gitattributes`でWindows checkout時のCRLF変換を禁止している。モデルを追加する場合も
+この属性の対象内へ配置し、`test_lgbm_forecaster.py::TestCommittedModels`を実行すること。
+既存cloneにCRLFファイルが残っていても、ローダーがLFへ正規化してから読み込む。
+
 ## レイヤー構成（依存は一方向・import-linter で強制）
 
 ```

@@ -38,8 +38,8 @@
   から変換し、ability-v3のクラス補正で直接利用。馬体重は根拠不足のため能力加点には使わない。
 - [x] ~~P1 AbilityWeightsの同一期間比較機能~~ → **2026-07-22 実装済み**。
   `--compare-ability-weights`で4候補の指標と現行差をCLI/JSON出力。本番重みは自動変更しない。
-- [ ] **P1 AbilityWeightsの実DB実行・採用判断**。本番相当DBで期間を分けて上記CLIを実行し、
-  改善が再現した場合のみ正式化する。
+- [x] ~~P1 AbilityWeightsの実DB実行・採用判断~~ → **2026-07-22 完了**。2025年後半212レースと
+  2026年前半97レースで独立比較したが、全3指標が両期間で改善する候補は無かったため現行重みを維持。
 - [ ] **P2 実JV-Dataの人気/賞金予約オフセット検証**（jvlink実COM用）。現状はmykeibadb合成専用。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
@@ -69,7 +69,9 @@
   同期手順→`MANUAL_SYNC_GUIDE.md`、ディレクトリ構成→`docs/ARCHITECTURE.md`）であり、
   「吸収すべき未収録の情報」が残っていなかったため削除（`docs/ARCHITECTURE.md`への吸収は不要）。
   Git履歴には残るため復元可能。
-- [ ] 統合テスト（testcontainers-postgres）の日常実行環境（CI/ローカル Docker）整備。
+- [x] ~~統合テスト（testcontainers-postgres）の日常実行環境（CI/ローカル Docker）整備~~ →
+  `.github/workflows/ci-api.yml`の`test-integration`で既に実装済みと2026-07-22に再確認。
+  ローカルDockerでもRepository統合テストを実行可能。
 - [x] ~~JV-Data バイトオフセットの JV-Link 新バージョン追従手順の明文化（`jv_spec.py`）~~
   → **2026-07-13 手順書作成**: `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` を新規作成。
   `dump_records.py`→`verify_layout.py`→`locate_haron.py`/`locate_corners.py`→`jv_spec.py`更新の

@@ -9,19 +9,40 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新17回目・Codex が取り込みデータ完全性監視を実装） |
+| 更新日時 | 2026-07-22（更新18回目・Codex がLightGBM Windows破損修正と実DB重み判断を実施） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（取り込みデータ完全性監視を実装） |
+| 直前の担当AI | OpenAI Codex（LightGBMモデルLF固定・AbilityWeights実DB採用判断） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `5dd8c98`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `5faaa86`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、次の推奨項目として取り込み監視をデータ完全性へ拡張した。**
+**ユーザー指示により、次の推奨項目としてAbilityWeightsの実DB採用判断まで完了した。**
+
+比較開始時にWindowsのGit改行変換でLightGBMモデルが破損していることを発見した。
+`.gitattributes`でモデルをLF固定し、実モデル読込回帰テストとフォールバック警告ログを追加。
+その後、2025年後半212レース・2026年前半97レースを独立比較し、全3指標が両期間で改善する
+候補が無かったため、`DEFAULT_WEIGHTS`は変更せず現行0.55/0.30/0.15を維持した。
+
+テスト結果: API非統合449 passed、LightGBM関連31 passed、ruff clean、実DBバックテストCLI
+（2025年後半212レース・2026年前半97レース、および最終スモーク1レース）成功。
+Webコードは変更していないためWebテスト・ビルドは今回未実行。mypyはローカルNumPy型定義が
+Python 3.11設定で解釈できず、対象コードの型解析前に停止した。
+
+Claude Codeが最初に確認するファイル: `.gitattributes`,
+`apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`,
+`apps/api/tests/unit/infrastructure/pace/test_lgbm_forecaster.py`, `docs/DECISIONS.md`,
+`tasks/current.md`。最初に実行するコマンド: `git status --short --branch`、続いて
+`cd apps/api && python -m pytest tests/unit/infrastructure/pace/test_lgbm_forecaster.py -q` と
+`python -m pytest -m "not integration" -q`。
+
+---
+
+### 直前タスク（取り込みデータ完全性監視）
 
 `GET /api/v1/ingest-status` は従来のバッチ成否・鮮度に加え、日本時間の前日以前で
 `races.status=entries` のまま残るレースを集計する。Webトップは件数を警告し、代表20件への
@@ -40,7 +61,7 @@ Claude Codeが最初に確認するファイル: `apps/api/src/pci/application/i
 
 ---
 
-### 直前タスク（AbilityWeights比較CLI）
+### 以前のタスク（AbilityWeights比較CLI）
 
 `--compare-ability-weights`で検証用4候補を同一レース集合に適用し、統合順位の3指標と
 現行差をCLI/JSONに出力する。本番重みは書き換えず、実DBでの再現性確認後に別途判断する。
@@ -104,6 +125,19 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ---
 
 ## 完了した作業（直近セッション）
+
+0D. **LightGBM Windows改行破損修正・AbilityWeights実DB採用判断**（本セッション）
+   - `.gitattributes`: `apps/api/models/*.txt text eol=lf`を追加。Git blobとWindows作業ファイルの
+     サイズ差（芝398,640→400,397 bytes）からCRLF変換による`tree_sizes`破損を特定した。
+   - `lgbm_forecaster.py`: 読込前にCRLFをLFへ自己修復し、既存cloneも再checkout不要で救済。
+     split/unifiedモデルの読込失敗を黙殺せず、フォールバック先と例外を警告する。
+   - `TestCommittedModels`: 追跡中の芝・ダートモデルを実ロードし、両コースを予測する回帰テスト。
+   - 実DB比較: 2025-07-01〜12-31を212レース、2026-01-01〜07-21を97レースで評価。
+     全3指標が両期間で改善する候補はなく、`DEFAULT_WEIGHTS`は変更しないと決定。
+   - 仮実装・未確定仕様: なし。成分重み以外の減衰・正規化定数は引き続き未確定。
+   - 既知の不具合: なし。mypyのみローカルNumPy型定義とPython 3.11設定の不整合で、
+     対象コードの型解析前に停止する。
+   - テスト: API非統合449 passed、LightGBM関連31 passed、ruff、実DBバックテストCLI成功。
 
 0C. **取り込み監視をデータ完全性へ拡張**（本セッション・OpenAI Codex）
    - domain: `RaceCompletenessRepository`を追加。既存の汎用`RaceRepository`は変更せず、
@@ -351,8 +385,7 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 - **確定成績未反映は解決済み**（上記「完了した作業」2.）。残る関連事項は障害競走の成績が別途
   未反映（ユーザー保留）のみ。
-- **統合順位予想 Phase2とAbilityWeights比較CLIの機能実装は完了**。残る検証は、
-  実DBでの比較CLI実行・期間再現性確認・採用判断と、
+- **統合順位予想 Phase2・AbilityWeights比較CLI・実DB採用判断は完了**。残る検証は、
   実JV-Link COMにおけるGradeCD[615]および人気/賞金予約オフセットの確認（`tasks/backlog.md` B節）。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
@@ -376,27 +409,18 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ユーザーからの新規指示がない場合、以下の優先順で `tasks/backlog.md` から着手を検討する。
 **どれを選ぶかはユーザー確認を推奨**（`docs/PROJECT_RULES.md` の「独断で正式仕様化しない」方針）。
 
-0. **（当初のクリティカル提案①・未着手）取り込み監視を「データ完全性」へ**。今回の一件の再発防止の
-   本丸。現状の鮮度監視(`evaluate_freshness`)は batch-log の ok/経過日数のみ見ており、「過去日なのに
-   未確定のまま残ったレース」を検知できない（ユーザーが目視していた「成績未取込」を自動アラート化＝
-   高レバレッジ）。ユーザーは今回②統合順位予想を優先したため未着手。再提案候補。
-1. **P1 AbilityWeightsの実DB実行・採用判断**。`--compare-ability-weights --output`で
-   学習相当期間と検証相当期間を分けて実行し、3指標の改善が再現した場合のみ変更する。
-   grade・確定馬体重の反映には過去results再取込が必要（`MANUAL_SYNC_GUIDE.md §7.5`）。
-2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
+0. **P2 実JV-Dataの人気/賞金予約オフセット検証**。Windows実行機のJV-Link COMが必要。
+   `JV_SPEC_MAINTENANCE_GUIDE.md`の手順に従い、実レコードの位置を確認してから正式化する。
+1. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
    `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`STALE_AFTER_DAYS`・
-   `AbilityWeights` 等）
+   `AbilityWeights`の成分重み以外）
    - 実データ・実運用での検証が前提のため、想定RPCI検証と同様「ユーザーが実DBでスクリプト実行/
      しばらく運用→結果を分析」の進め方になる可能性が高い。着手前にどの定数を対象にするか確認する。
-3. **P3 技術的負債（残件: 統合テスト環境整備のみ）**
-   - `mypy --strict` 全体化・旧handoffファイル整理・JV-Dataオフセット追従手順明文化は完了済み
-     （`tasks/backlog.md` C節）。統合テスト環境整備はDocker前提（このクラウド環境からは不可）。
-     着手前にユーザーに確認。
+2. **画面からの手動再実行導線の設計**。Windowsワーカーとの接続方法、多重実行防止、認証を
+   先に確定し、APIサーバーからローカルプロセスを安易に起動しないこと。
 
 **保留・確認待ちの項目**:
 - 画面からの手動再実行導線（`tasks/backlog.md` A節）— 要判断（安全性・多重実行防止の設計）。
-- 当初のクリティカル提案①「取り込み監視をデータ完全性へ」（上記「次に実施すべき作業」0.）
-  — ユーザーは②統合順位予想を優先したため未着手のまま。再提案候補。
 
 **見直し条件つきで保留中の項目**（`docs/DECISIONS.md` 参照。トリガーが来るまでは着手しない）:
 - ダート特徴量追加・学習データ拡張（2026-07-11決定） — `forecast_accuracy` 蓄積が増える、
@@ -585,9 +609,10 @@ API/ingestion-worker の全量pytest・ruff・mypyは再実行できなかった
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
-4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了は統合順位予想 Phase1〜2〜UI刷新）
+4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了はLightGBMモデル修正と実DB重み判断）
 5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v3 を記載）
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-21（3）: grade優先のability-v3・確定馬体重の永続化・検証指標。
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: LightGBMモデルLF固定・現行AbilityWeights維持。
+   2026-07-21（3）: grade優先のability-v3・確定馬体重の永続化・検証指標。
    2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、確定成績未反映の解決。
    2026-07-20（2）: 切り分け診断ツール導入。
    2026-07-13の2件: 展開恩恵馬frame_noガード追加・自動同期special-entries追加。
@@ -606,10 +631,11 @@ git status   # クリーンであるはず
 # 2. API 健全性確認（新コンテナは依存未インストール。venvを作り .venv/bin 経由で実行する）
 cd apps/api
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/unit/ tests/contract/ -q   # 436 passed
+.venv/bin/python -m pytest -m "not integration" -q   # 449 passed
+.venv/bin/python -m pytest tests/unit/infrastructure/pace/test_lgbm_forecaster.py -q   # 31 passed
 .venv/bin/ruff check src/ tests/
 .venv/bin/lint-imports
-.venv/bin/python -m mypy src/ --strict   # 既存 lgbm 1件のみ（無害）・新規0が基準
+.venv/bin/python -m mypy src/ --strict   # ローカルNumPy型定義とPython 3.11設定の不整合に注意
 
 # 3. api-client 型 + Web 健全性確認（新コンテナは node_modules 未インストール）
 cd ../../packages/api-client && npm install && npm run typecheck

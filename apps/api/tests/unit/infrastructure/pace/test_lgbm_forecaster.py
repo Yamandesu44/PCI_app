@@ -310,7 +310,9 @@ class TestLoadBestForecaster:
             )
         assert isinstance(result, LightGBMRpciForecaster)
 
-    def test_all_load_failures_fall_back_to_rule_based(self, tmp_path: Path) -> None:
+    def test_all_load_failures_fall_back_to_rule_based(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """全モデルのロードに失敗しても RuleBasedRpciForecaster で安全に動作する。"""
         from pci.domain.pace.rpci_forecast import RuleBasedRpciForecaster
 
@@ -330,6 +332,8 @@ class TestLoadBestForecaster:
                 dirt_model_path=dirt,
             )
         assert isinstance(result, RuleBasedRpciForecaster)
+        assert "芝・ダート別LightGBMモデルを読み込めません" in caplog.text
+        assert "統合LightGBMモデルを読み込めません" in caplog.text
 
     def test_rule_based_fallback_is_functional(self, tmp_path: Path) -> None:
         """フォールバック先の RuleBasedRpciForecaster が正常に予測できる。"""
@@ -342,3 +346,35 @@ class TestLoadBestForecaster:
         result = forecaster.forecast(ctx)
         assert result.model_version == "rule-v4"
         assert result.value >= 35.0
+
+
+class TestCommittedModels:
+    """追跡中のモデルがcheckout後も実際にロード・予測できることを検証する。"""
+
+    def test_split_models_are_loadable(self) -> None:
+        models_dir = Path(__file__).resolve().parents[4] / "models"
+        forecaster = load_best_forecaster(
+            model_path=models_dir / "rpci_lgbm_v1.txt",
+            turf_model_path=models_dir / "rpci_lgbm_turf_v1.txt",
+            dirt_model_path=models_dir / "rpci_lgbm_dirt_v1.txt",
+        )
+
+        assert isinstance(forecaster, SplitLightGBMRpciForecaster)
+        turf = forecaster.forecast(_ctx((FRONT,) * 5 + (STALKER,) * 5, track_type="芝"))
+        dirt = forecaster.forecast(_ctx((FRONT,) * 5 + (STALKER,) * 5, track_type="ダート"))
+        assert turf.model_version == MODEL_VERSION_TURF
+        assert dirt.model_version == MODEL_VERSION_DIRT
+
+    def test_crlf_model_is_normalized_before_loading(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        models_dir = Path(__file__).resolve().parents[4] / "models"
+        source = models_dir / "rpci_lgbm_v1.txt"
+        crlf_model = tmp_path / "rpci_lgbm_v1_crlf.txt"
+        crlf_model.write_bytes(source.read_bytes().replace(b"\n", b"\r\n"))
+
+        forecaster = LightGBMRpciForecaster(crlf_model)
+        result = forecaster.forecast(_ctx((FRONT,) * 5 + (STALKER,) * 5))
+
+        assert result.model_version == MODEL_VERSION
+        assert "CRLF改行をLFへ補正" in caplog.text

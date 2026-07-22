@@ -1,0 +1,2 @@
+# LightGBMのテキストモデルはtree_sizesにバイト長を保持するため、改行変換を禁止する。
+apps/api/models/*.txt text eol=lf
