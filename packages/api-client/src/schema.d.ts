@@ -670,6 +670,8 @@ export interface components {
              * @default []
              */
             recent_failures: components["schemas"]["IngestFailureSchema"][];
+            /** Recommended Sync Days Back */
+            recommended_sync_days_back: number;
         };
         /**
          * IntegratedEntrySchema

@@ -320,6 +320,7 @@ class IngestStatusOutput:
     """
 
     has_history: bool
+    recommended_sync_days_back: int
     last_success_at: str | None = None
     last_success_step: str | None = None
     last_attempt_failed: bool = False

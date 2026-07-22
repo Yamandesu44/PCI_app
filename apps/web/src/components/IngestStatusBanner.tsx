@@ -1,6 +1,7 @@
 import { CheckCircle2, TriangleAlert, XCircle } from "lucide-react";
 import Link from "next/link";
 
+import { IngestRecoveryCommand } from "@/components/IngestRecoveryCommand";
 import { ingestStatusMeta } from "@/lib/ingestStatus";
 import type { IngestStatus } from "@pci/api-client";
 
@@ -83,6 +84,16 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                   ほか{status.incomplete_race_count - meta.incompleteRaces.length}件
                 </p>
               ) : null}
+            </details>
+          ) : null}
+
+          {meta.recoveryCommand ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
+                再同期コマンド
+              </summary>
+              <p className="m-0 mt-2 text-xs text-slate-500">リポジトリ直下で実行</p>
+              <IngestRecoveryCommand command={meta.recoveryCommand} />
             </details>
           ) : null}
         </div>

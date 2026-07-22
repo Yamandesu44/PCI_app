@@ -922,10 +922,15 @@
             },
             "title": "Recent Failures",
             "type": "array"
+          },
+          "recommended_sync_days_back": {
+            "title": "Recommended Sync Days Back",
+            "type": "integer"
           }
         },
         "required": [
-          "has_history"
+          "has_history",
+          "recommended_sync_days_back"
         ],
         "title": "IngestStatusSchema",
         "type": "object"

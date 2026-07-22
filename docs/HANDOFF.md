@@ -9,33 +9,33 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新21回目・Codex が展開コメント生成をゼロコスト既定化） |
+| 更新日時 | 2026-07-22（更新22回目・Codex が安全な手動再同期コマンド導線を追加） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（展開コメント生成の外部API利用を二段階オプトイン化） |
+| 直前の担当AI | OpenAI Codex（成績未取込警告から安全な再同期コマンドを提示） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `7fbc151`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `72bcf31`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、次の推奨項目として展開コメント生成をゼロコスト既定モードへ変更した。**
+**ユーザー指示により、次の推奨項目として安全な手動再同期コマンド導線を追加した。**
 
-`COMMENT_GENERATOR_MODE=rule`を既定とし、環境にGemini APIキーが残っていても外部APIを
-呼ばないようにした。Geminiは`COMMENT_GENERATOR_MODE=gemini`と`GEMINI_API_KEY`の両方を
-明示した場合だけ有効になる。Gemini指定時のキー欠損・初期化失敗は`comment-v2`へ
-フォールバックするため、通常運用の外部API費用は設定値でゼロへ固定できる。
+`RaceCompletenessRepository`で最古の成績未取込日をDB集計し、標準10日以上でその日を含む
+`recommended_sync_days_back`を`GET /api/v1/ingest-status`へ追加した。Webの警告バナーは
+`run_mykeibadb_full_sync.ps1 -DaysBack N`を生成し、コマンドプロンプト用にコピーできる。
+正常時は表示せず、Web/APIからWindowsプロセスを直接起動しない。
 
-テスト結果: API非統合463 passed、関連29 passed、ruff clean、変更対象2ファイルのmypy strict成功。
-実Gemini APIは呼び出していない。Webコード・公開スキーマは変更していないためWebテスト・
-ビルドは未実行。import-linterはローカルPythonに未導入。全体mypyは既知のNumPy型定義と
-Python 3.11設定の不整合で対象コード解析前に停止した。
+テスト結果: API非統合464 passed、関連12 passed、Repository統合1 passed、Web67 passed、
+ruff clean、変更対象5ファイルのmypy strict、api-client/Web typecheck、Web build成功。
+全体mypyとimport-linterの既知環境制約は前回と同じ。
 
-Claude Codeが最初に確認するファイル: `apps/api/src/pci/config/settings.py`,
-`apps/api/src/pci/presentation/dependencies.py`, `apps/api/tests/unit/test_settings.py`,
-`apps/api/tests/unit/presentation/test_dependencies.py`, `docs/DECISIONS.md`, `tasks/current.md`。
+Claude Codeが最初に確認するファイル: `apps/api/src/pci/application/ingest_status_use_cases.py`,
+`apps/api/src/pci/infrastructure/repositories/race_repository.py`,
+`apps/web/src/lib/ingestStatus.ts`, `apps/web/src/components/IngestRecoveryCommand.tsx`,
+`apps/web/src/components/IngestStatusBanner.tsx`, `docs/DECISIONS.md`, `tasks/current.md`。
 最初に実行するコマンド: `git status --short --branch`、続いて
 `cd apps/api && python -m pytest -m "not integration" -q`。
 
@@ -124,6 +124,18 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ---
 
 ## 完了した作業（直近セッション）
+
+0H. **成績未取込警告から安全な手動再同期コマンドを提示**（本セッション）
+   - domain/infrastructure: `RaceCompletenessRepository`へ最古未取込日取得を追加し、SQLの`min()`で
+     全件をロードせず集計する。代表20件の範囲外も再同期対象に含められる。
+   - application/API: 標準10日と最古未取込日までの日数の大きい方を
+     `recommended_sync_days_back`として返す。OpenAPI/api-client型を再生成した。
+   - Web: 警告・失敗・鮮度低下時だけ、リポジトリ直下から実行するPowerShellコマンドを提示。
+     コピー成功・失敗をアイコン状態で伝える。正常時は表示しない。
+   - 安全性: APIからWindowsプロセスは起動しない。直接起動は認証・ジョブキュー・多重実行防止が
+     整うまで不採用とした。
+   - テスト: API非統合464 passed、関連12 passed、Repository統合1 passed、Web67 passed、
+     ruff、変更対象mypy、api-client/Web typecheck、Web build成功。
 
 0G. **展開コメント生成をゼロコスト既定モードへ変更**（本セッション）
    - config: `COMMENT_GENERATOR_MODE`を`rule | gemini`のLiteral設定として追加。既定は`rule`で、
@@ -339,7 +351,7 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
    - ログが1件も無い環境（開発/fixture等）は `has_history=False` とし「異常」ではなく
      「監視対象外」として扱い、誤警告を防ぐ。
    - **未実施（ユーザー環境でのみ確認可能）**: `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に
-     届くかの実地確認。画面からの手動再実行導線も未着手（`tasks/backlog.md` A節に残課題として記録）。
+     届くかの実地確認。再同期コマンド提示は0Hで実装済み。APIからの直接起動は安全要件未整備のため不採用。
 
 9. **脚質別有利度の修正（style-advantage-v1）**（`3d3131e`）
    - 原因: web が「その脚質の最大PAI」を有利度に流用しており、スコアが60〜96に高止まり。
@@ -415,7 +427,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
   自動同期スクリプト自体がWindows実行機で問題なく動くかも未確認。
-- 画面からの手動再実行導線は未着手（`tasks/backlog.md` A節。多重実行防止等の設計が必要）。
+- 画面からの安全な再同期コマンド提示は完了。直接実行ボタンは認証・ジョブキュー・多重実行防止が
+  未整備のため意図的に実装していない。
 - **JV-Data仕様追従の実施自体は未着手**（`apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md`で
   手順は明文化したが、実データ取得にはWindows実行機＋JV-Linkが必要でこのクラウド環境からは不可。
   RA/SEが実際にVer.3.0.0/Ver.4.9のどちらの出力を元に校正されたかも未確認のまま、`docs/SPEC.md §9`-8）。
@@ -439,11 +452,10 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
    `AbilityWeights`の成分重み以外）
    - 実データ・実運用での検証が前提のため、想定RPCI検証と同様「ユーザーが実DBでスクリプト実行/
      しばらく運用→結果を分析」の進め方になる可能性が高い。着手前にどの定数を対象にするか確認する。
-2. **画面からの手動再実行導線の設計**。Windowsワーカーとの接続方法、多重実行防止、認証を
-   先に確定し、APIサーバーからローカルプロセスを安易に起動しないこと。
+2. **Webhook通知のWindows実地確認**。`NOTIFY_WEBHOOK_URL`を設定し、失敗時に通知が届くか確認する。
 
 **保留・確認待ちの項目**:
-- 画面からの手動再実行導線（`tasks/backlog.md` A節）— 要判断（安全性・多重実行防止の設計）。
+- APIからの直接再実行ボタン化 — 認証・ジョブキュー・多重実行防止・Windows接続方式が整うまで保留。
 
 **見直し条件つきで保留中の項目**（`docs/DECISIONS.md` 参照。トリガーが来るまでは着手しない）:
 - ダート特徴量追加・学習データ拡張（2026-07-11決定） — `forecast_accuracy` 蓄積が増える、
@@ -452,6 +464,17 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ---
 
 ## 変更対象ファイル（直近セッション・すべて push 済み。Codex は git log/diff で確認可能）
+
+安全な手動再同期支援で変更したファイル:
+- API: `domain/racing/repository.py`, `application/dto.py`, `application/ingest_status_use_cases.py`,
+  `infrastructure/repositories/race_repository.py`, `presentation/schemas.py`
+- Web: `apps/web/src/lib/ingestStatus.ts`, `apps/web/src/components/IngestStatusBanner.tsx`,
+  `apps/web/src/components/IngestRecoveryCommand.tsx`
+- 型: `packages/api-client/openapi.json`, `packages/api-client/src/schema.d.ts`
+- テスト: API unit/contract/integrationの取り込み監視・Repositoryテスト、
+  `apps/web/src/lib/ingestStatus.test.ts`
+- 文書: `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/SPEC.md`,
+  `docs/DECISIONS.md`, `tasks/current.md`, `tasks/backlog.md`, `docs/HANDOFF.md`
 
 Geminiモデル移行で変更したファイル:
 - API: `apps/api/src/pci/config/settings.py`,
@@ -654,9 +677,9 @@ API/ingestion-worker の全量pytest・ruff・mypyは再実行できなかった
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
-4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了はゼロコスト既定モード）
+4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了は安全な手動再同期支援）
 5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v3 を記載）
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: 展開コメントのゼロコスト既定化、
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: 安全な再同期コマンド提示、展開コメントのゼロコスト既定化、
    Gemini 3.5 Flash移行・環境変数化、comment-v2の馬番号表示、LightGBMモデルLF固定・現行AbilityWeights維持。
    2026-07-21（3）: grade優先のability-v3・確定馬体重の永続化・検証指標。
    2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、確定成績未反映の解決。
@@ -677,7 +700,7 @@ git status   # クリーンであるはず
 # 2. API 健全性確認（新コンテナは依存未インストール。venvを作り .venv/bin 経由で実行する）
 cd apps/api
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest -m "not integration" -q   # 463 passed
+.venv/bin/python -m pytest -m "not integration" -q   # 464 passed
 .venv/bin/ruff check src/ tests/
 .venv/bin/lint-imports
 .venv/bin/python -m mypy src/ --strict   # ローカルNumPy型定義とPython 3.11設定の不整合に注意

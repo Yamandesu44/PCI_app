@@ -258,6 +258,7 @@ class TestFindIncompletePastRaces:
 
         before = datetime.date(2026, 6, 19)
         assert repo.count_incomplete_past_races(before) == 2
+        assert repo.find_oldest_incomplete_past_race_date(before) == datetime.date(2026, 6, 17)
         assert [str(race.race_key) for race in repo.find_incomplete_past_races(before)] == [
             "2026061805010101",
             "2026061705010101",

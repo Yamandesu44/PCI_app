@@ -70,6 +70,10 @@ class RaceCompletenessRepository(Protocol):
 
     def count_incomplete_past_races(self, before: datetime.date) -> int: ...
 
+    def find_oldest_incomplete_past_race_date(
+        self, before: datetime.date
+    ) -> datetime.date | None: ...
+
     def find_incomplete_past_races(
         self, before: datetime.date, limit: int = 20
     ) -> list[Race]: ...

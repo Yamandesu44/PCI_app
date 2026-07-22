@@ -35,18 +35,31 @@ cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
 これで以下が順番に実行される。
 
 1. `mykeibadb.exe` 実行（JV-Link → ローカルMySQL、最大10分待機）
-2. `batch.py --mode mykeibadb --step entries`（過去7日〜未来14日分の出走表）
+2. `batch.py --mode mykeibadb --step entries`（過去10日〜未来14日分の出走表）
 3. `batch.py --mode mykeibadb --step results`（同期間の確定成績）
 4. `batch.py --mode mykeibadb --step special-entries`（同期間の重賞等特別登録。
    2026-07-13まで自動実行から漏れていた。詳細は`docs/DECISIONS.md`参照）
 
 ログは `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log` に出力される。
 
+### 1.1 Webトップに成績未取込警告が出た場合
+
+警告内の「再同期コマンド」を開くと、DB内の最古の未取込日まで遡る`DaysBack`付きコマンドを
+コピーできる。コマンドプロンプトでリポジトリ直下へ移動して実行する。
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+powershell -ExecutionPolicy Bypass -File apps\ingestion-worker\scripts\run_mykeibadb_full_sync.ps1 -DaysBack 21
+```
+
+`21`の部分は画面がデータ状況から算出するため、表示されたコマンドをそのまま使用する。
+Web/APIはスクリプトを直接起動せず、実行判断は運用者に残す。
+
 ---
 
 ## 2. 特定の日付範囲だけ取得したい場合
 
-`sync_mykeibadb.bat` は毎回「過去7日〜未来14日」固定だが、特定の期間だけ
+`sync_mykeibadb.bat` は毎回「過去10日〜未来14日」固定だが、特定の期間だけ
 ピンポイントで取得・再取得したいときは `batch.py` を直接呼ぶ。
 
 ```powershell

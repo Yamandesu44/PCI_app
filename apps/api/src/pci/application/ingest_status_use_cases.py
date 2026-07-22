@@ -12,6 +12,7 @@ _HISTORY_LOOKBACK = 20
 _RECENT_FAILURES_LIMIT = 5
 _ERROR_SUMMARY_MAX_LEN = 200
 _INCOMPLETE_RACES_LIMIT = 20
+_DEFAULT_SYNC_DAYS_BACK = 10
 _JRA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=9), name="JST")
 
 
@@ -32,9 +33,18 @@ class GetIngestStatusUseCase:
         freshness = evaluate_freshness(entries, now)
         race_date_today = now.astimezone(_JRA_TIMEZONE).date()
         incomplete_count = self._race_repo.count_incomplete_past_races(race_date_today)
+        oldest_incomplete_date = self._race_repo.find_oldest_incomplete_past_race_date(
+            race_date_today
+        )
         incomplete_races = self._race_repo.find_incomplete_past_races(
             race_date_today, limit=_INCOMPLETE_RACES_LIMIT
         )
+        recommended_sync_days_back = _DEFAULT_SYNC_DAYS_BACK
+        if oldest_incomplete_date is not None:
+            recommended_sync_days_back = max(
+                _DEFAULT_SYNC_DAYS_BACK,
+                (race_date_today - oldest_incomplete_date).days,
+            )
 
         failures = [
             IngestFailureOutput(
@@ -61,6 +71,7 @@ class GetIngestStatusUseCase:
             recent_failures=failures,
             has_incomplete_races=incomplete_count > 0,
             incomplete_race_count=incomplete_count,
+            recommended_sync_days_back=recommended_sync_days_back,
             incomplete_races=[
                 IncompleteRaceOutput(
                     race_key=str(race.race_key),

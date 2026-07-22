@@ -117,7 +117,26 @@ class TestGetIngestStatusUseCase:
         output = self._execute([_entry(days_ago=0)])
         assert output.has_incomplete_races is False
         assert output.incomplete_race_count == 0
+        assert output.recommended_sync_days_back == 10
         assert output.incomplete_races == []
+
+    def test_sync_range_reaches_oldest_incomplete_race(self) -> None:
+        repo = FakeRaceRepository()
+        repo.save_race(
+            Race(
+                race_key=RaceKey("2026070105010101"),
+                race_date=datetime.date(2026, 7, 1),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=12,
+                status=RaceStatus.ENTRIES,
+            )
+        )
+
+        output = self._execute([_entry(days_ago=0)], repo)
+
+        assert output.recommended_sync_days_back == 21
 
     def test_completeness_uses_jra_local_date(self) -> None:
         repo = FakeRaceRepository()

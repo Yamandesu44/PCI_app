@@ -14,6 +14,7 @@ STATUS_KEYS = {
     "recent_failures",
     "has_incomplete_races",
     "incomplete_race_count",
+    "recommended_sync_days_back",
     "incomplete_races",
 }
 
@@ -37,6 +38,7 @@ def test_ingest_status_reflects_recent_success(client: TestClient) -> None:
     assert body["recent_failures"] == []
     assert body["has_incomplete_races"] is True
     assert body["incomplete_race_count"] == 1
+    assert body["recommended_sync_days_back"] >= 10
     assert body["incomplete_races"][0]["race_key"] == "2026062005010101"
 
 

@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（展開コメント生成のゼロコスト既定モード） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（安全な手動再同期コマンド導線） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,14 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P2 成績未取込警告から安全な手動再同期コマンドを提示**
+  - DBで最古の未取込日を集計し、標準10日以上の`recommended_sync_days_back`をAPIへ追加。
+  - Web警告バナーに`run_mykeibadb_full_sync.ps1 -DaysBack N`のコピーUIを追加。正常時は非表示。
+  - APIからWindowsプロセスを直接起動せず、認証・多重実行・配置差のリスクを回避。
+  - OpenAPIとapi-client型を再生成。
+  - 検証: API非統合464 passed、Repository統合1 passed、Web67 passed、Ruff、変更対象mypy、
+    api-client/Web typecheck、Web build成功。
 
 - [x] ✅ **P1 展開コメント生成をゼロコスト既定モードへ変更**
   - `COMMENT_GENERATOR_MODE=rule`を既定とし、APIキーが環境に残っていても外部APIを呼ばない。

@@ -50,6 +50,12 @@ class FakeRaceRepository:
     def count_incomplete_past_races(self, before: datetime.date) -> int:
         return len(self.find_incomplete_past_races(before, limit=len(self._races)))
 
+    def find_oldest_incomplete_past_race_date(
+        self, before: datetime.date
+    ) -> datetime.date | None:
+        races = self.find_incomplete_past_races(before, limit=len(self._races))
+        return min((race.race_date for race in races), default=None)
+
     def find_incomplete_past_races(
         self, before: datetime.date, limit: int = 20
     ) -> list[Race]:

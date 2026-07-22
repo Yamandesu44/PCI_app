@@ -76,6 +76,16 @@ class SqlAlchemyRaceRepository:
         )
         return int(self._s.scalar(stmt) or 0)
 
+    def find_oldest_incomplete_past_race_date(
+        self, before: datetime.date
+    ) -> datetime.date | None:
+        """再同期範囲の算出に使う、結果未反映レースの最古開催日を返す。"""
+        stmt = select(func.min(RaceModel.race_date)).where(
+            RaceModel.race_date < before,
+            RaceModel.status == str(RaceStatus.ENTRIES),
+        )
+        return self._s.scalar(stmt)
+
     def find_incomplete_past_races(
         self, before: datetime.date, limit: int = 20
     ) -> list[Race]:

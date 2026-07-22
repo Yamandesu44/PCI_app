@@ -407,6 +407,7 @@ class IngestStatusSchema(BaseModel):
     """
 
     has_history: bool
+    recommended_sync_days_back: int
     last_success_at: str | None = None
     last_success_step: str | None = None
     last_attempt_failed: bool = False
@@ -429,6 +430,7 @@ class IngestStatusSchema(BaseModel):
             recent_failures=[IngestFailureSchema(**vars(f)) for f in dto.recent_failures],
             has_incomplete_races=dto.has_incomplete_races,
             incomplete_race_count=dto.incomplete_race_count,
+            recommended_sync_days_back=dto.recommended_sync_days_back,
             incomplete_races=[IncompleteRaceSchema(**vars(r)) for r in dto.incomplete_races],
         )
 

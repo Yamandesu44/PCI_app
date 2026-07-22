@@ -31,6 +31,7 @@ export interface IngestStatusMeta {
   color: string;
   failures: IngestFailureMeta[];
   incompleteRaces: IncompleteRaceMeta[];
+  recoveryCommand: string | null;
 }
 
 const TONE_COLOR: Record<IngestStatusTone, string> = {
@@ -63,6 +64,18 @@ function buildIncompleteRaces(status: IngestStatus): IncompleteRaceMeta[] {
   }));
 }
 
+export function buildIngestRecoveryCommand(daysBack: number): string {
+  const safeDaysBack = Math.max(10, Math.ceil(daysBack));
+  return (
+    "powershell -ExecutionPolicy Bypass -File " +
+    `apps\\ingestion-worker\\scripts\\run_mykeibadb_full_sync.ps1 -DaysBack ${safeDaysBack}`
+  );
+}
+
+function recoveryCommand(status: IngestStatus): string {
+  return buildIngestRecoveryCommand(status.recommended_sync_days_back);
+}
+
 const HIDDEN: IngestStatusMeta = {
   visible: false,
   tone: "ok",
@@ -71,6 +84,7 @@ const HIDDEN: IngestStatusMeta = {
   color: TONE_COLOR.ok,
   failures: [],
   incompleteRaces: [],
+  recoveryCommand: null,
 };
 
 export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
@@ -89,6 +103,7 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       color: TONE_COLOR.error,
       failures: buildFailures(status),
       incompleteRaces: buildIncompleteRaces(status),
+      recoveryCommand: recoveryCommand(status),
     };
   }
 
@@ -101,6 +116,7 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       color: TONE_COLOR.warning,
       failures: buildFailures(status),
       incompleteRaces: buildIncompleteRaces(status),
+      recoveryCommand: recoveryCommand(status),
     };
   }
 
@@ -117,6 +133,7 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       color: TONE_COLOR.warning,
       failures: buildFailures(status),
       incompleteRaces: [],
+      recoveryCommand: recoveryCommand(status),
     };
   }
 
@@ -128,5 +145,6 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
     color: TONE_COLOR.ok,
     failures: [],
     incompleteRaces: [],
+    recoveryCommand: null,
   };
 }

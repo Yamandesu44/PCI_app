@@ -14,6 +14,7 @@ function status(overrides: Partial<IngestStatus>): IngestStatus {
     recent_failures: [],
     has_incomplete_races: false,
     incomplete_race_count: 0,
+    recommended_sync_days_back: 10,
     incomplete_races: [],
     ...overrides,
   };
@@ -53,6 +54,7 @@ describe("ingestStatusMeta", () => {
         href: "/races/2026072005010111/forecast",
       },
     ]);
+    expect(meta.recoveryCommand).toContain("-DaysBack 10");
   });
 
   it("正常時は ok トーンで、失敗一覧を出さない", () => {
@@ -63,6 +65,7 @@ describe("ingestStatusMeta", () => {
     expect(meta.tone).toBe("ok");
     expect(meta.headline).toContain("最新");
     expect(meta.failures).toEqual([]);
+    expect(meta.recoveryCommand).toBeNull();
   });
 
   it("直近の取り込みが失敗していれば error トーンにする", () => {
@@ -114,5 +117,20 @@ describe("ingestStatusMeta", () => {
       status({ last_attempt_failed: true, last_success_at: null }),
     );
     expect(neverSucceeded.detail).toContain("一度も成功していません");
+  });
+
+  it("最古の未取込レースを含む遡及日数で再同期コマンドを作る", () => {
+    const meta = ingestStatusMeta(
+      status({
+        has_incomplete_races: true,
+        incomplete_race_count: 25,
+        recommended_sync_days_back: 32,
+      }),
+    );
+
+    expect(meta.recoveryCommand).toBe(
+      "powershell -ExecutionPolicy Bypass -File " +
+        "apps\\ingestion-worker\\scripts\\run_mykeibadb_full_sync.ps1 -DaysBack 32",
+    );
   });
 });
