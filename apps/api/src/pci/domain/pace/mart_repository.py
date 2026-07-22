@@ -25,6 +25,19 @@ class PredictedPaceRecord:
     confidence: float
 
 
+@dataclass(frozen=True)
+class RaceBoardForecastRecord:
+    """レース一覧向けに絞った保存済み予想の読取モデル。"""
+
+    race_key: str
+    pace_label: str
+    confidence: float
+    top_horse_no: int
+    top_horse_name: str | None
+    top_pai: float
+    top_fit_label: str
+
+
 class MartRepository(Protocol):
     """mart 層（predicted_pace / pace_fit）の読み書きインターフェース（ADR-0006）。
 
@@ -46,3 +59,7 @@ class MartRepository(Protocol):
     ) -> None: ...
 
     def find_predicted_pace(self, race_key: str) -> PredictedPaceRecord | None: ...
+
+    def find_race_board_forecasts(
+        self, race_keys: list[str]
+    ) -> dict[str, RaceBoardForecastRecord]: ...

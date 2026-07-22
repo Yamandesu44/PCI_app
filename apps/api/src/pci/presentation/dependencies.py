@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.ingest_status_use_cases import GetIngestStatusUseCase
+from pci.application.race_board_use_cases import ListRaceBoardUseCase
 from pci.application.race_query_use_cases import (
     GetPaceAnalysisUseCase,
     GetRaceDetailUseCase,
@@ -85,6 +86,8 @@ def get_session() -> Iterator[Session]:
     session = _session_maker()()
     try:
         yield session
+        # 予想martを含むユースケース内の変更をリクエスト単位で確定する。
+        session.commit()
     except Exception:
         # 失敗したトランザクションを巻き戻し、コネクションをクリーンにプールへ返す。
         # これを怠ると後続リクエストが壊れたセッションを掴み接続リセットになり得る。
@@ -133,6 +136,14 @@ def get_list_races_use_case(repo: RepositoryDep) -> ListRacesUseCase:
     return ListRacesUseCase(repo)
 
 
+def get_list_race_board_use_case(
+    repo: RepositoryDep,
+    mart_repo: MartRepositoryDep,
+    forecast_use_case: ForecastUseCaseDep,
+) -> ListRaceBoardUseCase:
+    return ListRaceBoardUseCase(repo, mart_repo, forecast_use_case)
+
+
 def get_list_race_dates_use_case(repo: RepositoryDep) -> ListRaceDatesUseCase:
     return ListRaceDatesUseCase(repo)
 
@@ -167,5 +178,8 @@ ForecastUseCaseDep = Annotated[ForecastRaceUseCase, Depends(get_forecast_use_cas
 RaceDetailUseCaseDep = Annotated[GetRaceDetailUseCase, Depends(get_race_detail_use_case)]
 PaceAnalysisUseCaseDep = Annotated[GetPaceAnalysisUseCase, Depends(get_pace_analysis_use_case)]
 ListRacesUseCaseDep = Annotated[ListRacesUseCase, Depends(get_list_races_use_case)]
+ListRaceBoardUseCaseDep = Annotated[
+    ListRaceBoardUseCase, Depends(get_list_race_board_use_case)
+]
 ListRaceDatesUseCaseDep = Annotated[ListRaceDatesUseCase, Depends(get_list_race_dates_use_case)]
 IngestStatusUseCaseDep = Annotated[GetIngestStatusUseCase, Depends(get_ingest_status_use_case)]

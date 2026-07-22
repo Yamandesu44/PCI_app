@@ -13,6 +13,7 @@ from pci.application.dto import (
     ForecastOutput,
     IngestStatusOutput,
     PaceAnalysisOutput,
+    RaceBoardItemOutput,
     RaceDetailOutput,
     RaceSummaryOutput,
 )
@@ -432,6 +433,33 @@ class IngestStatusSchema(BaseModel):
             incomplete_race_count=dto.incomplete_race_count,
             recommended_sync_days_back=dto.recommended_sync_days_back,
             incomplete_races=[IncompleteRaceSchema(**vars(r)) for r in dto.incomplete_races],
+        )
+
+
+class RaceBoardForecastSchema(BaseModel):
+    """一覧用の軽量予想。PCI/RPCIの内部実数値は含めない。"""
+
+    pace_label: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    top_horse_no: int
+    top_horse_name: str | None = None
+    top_fit_label: str
+    top_fit_strength: str
+
+
+class RaceBoardItemSchema(BaseModel):
+    """レースボードの1件分。"""
+
+    race: RaceSummarySchema
+    forecast: RaceBoardForecastSchema | None = None
+
+    @classmethod
+    def from_dto(cls, dto: RaceBoardItemOutput) -> RaceBoardItemSchema:
+        return cls(
+            race=RaceSummarySchema.from_dto(dto.race),
+            forecast=(
+                RaceBoardForecastSchema(**vars(dto.forecast)) if dto.forecast else None
+            ),
         )
 
 

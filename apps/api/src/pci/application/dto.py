@@ -243,6 +243,26 @@ class RaceSummaryOutput:
     race_class: str | None = None
 
 
+@dataclass(frozen=True)
+class RaceBoardForecastOutput:
+    """一覧表示に必要な最小限の展開予想。内部PCI実数値は公開しない。"""
+
+    pace_label: str
+    confidence: float
+    top_horse_no: int
+    top_horse_name: str | None
+    top_fit_label: str
+    top_fit_strength: str
+
+
+@dataclass(frozen=True)
+class RaceBoardItemOutput:
+    """レース基本情報と、存在する場合だけ軽量予想を返す。"""
+
+    race: RaceSummaryOutput
+    forecast: RaceBoardForecastOutput | None = None
+
+
 @dataclass
 class HorsePaceAnalysisOutput:
     """確定後の馬単位ペース分析（各馬 PCI）。"""

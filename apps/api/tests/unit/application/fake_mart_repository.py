@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pci.domain.pace.adaptability import PaiResult
-from pci.domain.pace.mart_repository import PredictedPaceRecord
+from pci.domain.pace.mart_repository import PredictedPaceRecord, RaceBoardForecastRecord
 from pci.domain.pace.rpci_forecast import RpciForecast
 
 
@@ -31,3 +31,28 @@ class FakeMartRepository:
                     confidence=forecast.confidence,
                 )
         return None
+
+    def find_race_board_forecasts(
+        self, race_keys: list[str]
+    ) -> dict[str, RaceBoardForecastRecord]:
+        result: dict[str, RaceBoardForecastRecord] = {}
+        for race_key in race_keys:
+            predicted = self.find_predicted_pace(race_key)
+            fits = [
+                (horse_no, fit)
+                for (key, horse_no, _version), fit in self.pace_fit.items()
+                if key == race_key
+            ]
+            if predicted is None or not fits:
+                continue
+            horse_no, top = max(fits, key=lambda item: item[1].pai)
+            result[race_key] = RaceBoardForecastRecord(
+                race_key=race_key,
+                pace_label=predicted.pace_label,
+                confidence=predicted.confidence,
+                top_horse_no=horse_no,
+                top_horse_name=None,
+                top_pai=top.pai,
+                top_fit_label=str(top.fit_label),
+            )
+        return result

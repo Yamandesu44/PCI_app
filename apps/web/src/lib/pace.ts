@@ -45,6 +45,14 @@ export function paceMeta(label: string): PaceMeta {
   return PACE_META[label] ?? FALLBACK_PACE;
 }
 
+/** 内部指数を使わず、3分類の展開ラベルを初心者向けの表現へ変換する。 */
+export function beginnerPaceLabel(label: string): string {
+  if (label === "ハイ") return "速い流れ";
+  if (label === "スロー") return "落ち着いた流れ";
+  if (label === "平均") return "平均的な流れ";
+  return "判断材料が不足";
+}
+
 export type PaceSpeedLevel =
   | "veryHigh"
   | "high"
@@ -249,13 +257,20 @@ export function raceSpotlight({
   confidence,
   fieldSize,
   horses,
+  topPai: suppliedTopPai,
+  topFitStrength,
 }: {
   confidence: number;
   fieldSize: number;
-  horses: HorseFit[];
+  horses?: HorseFit[];
+  topPai?: number;
+  topFitStrength?: "strong" | "notable" | "normal" | string;
 }): RaceSpotlight {
-  const topHorse = sortByPai(horses)[0];
-  const topPai = topHorse?.pai ?? 0;
+  const topHorse = sortByPai(horses ?? [])[0];
+  const topPai = suppliedTopPai
+    ?? (topFitStrength === "strong" ? 80 : topFitStrength === "notable" ? 70 : undefined)
+    ?? topHorse?.pai
+    ?? 0;
 
   if (confidence >= 0.7 && topPai >= 80) {
     return {

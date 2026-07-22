@@ -107,6 +107,15 @@ RACE_SUMMARY_KEYS = {
     "race_class",
 }
 
+RACE_BOARD_FORECAST_KEYS = {
+    "pace_label",
+    "confidence",
+    "top_horse_no",
+    "top_horse_name",
+    "top_fit_label",
+    "top_fit_strength",
+}
+
 
 class TestListRacesEndpoint:
     def test_returns_200(self, client: TestClient) -> None:
@@ -150,6 +159,30 @@ class TestListRacesEndpoint:
     def test_limit_over_max_returns_422(self, client: TestClient) -> None:
         resp = client.get("/api/v1/races?limit=1001")
         assert resp.status_code == 422
+
+
+class TestRaceBoardEndpoint:
+    def test_returns_lightweight_forecast_for_requested_date(self, client: TestClient) -> None:
+        resp = client.get("/api/v1/races/board?date=2026-06-20")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 1
+        assert set(body[0]) == {"race", "forecast"}
+        assert set(body[0]["race"]) == RACE_SUMMARY_KEYS
+        assert set(body[0]["forecast"]) == RACE_BOARD_FORECAST_KEYS
+        assert "predicted_rpci" not in body[0]["forecast"]
+        assert "top_pai" not in body[0]["forecast"]
+        assert body[0]["forecast"]["top_horse_name"]
+        assert body[0]["forecast"]["top_fit_strength"] in ("strong", "notable", "normal")
+
+    def test_confirmed_race_has_no_forecast_preview(self, client: TestClient) -> None:
+        body = client.get("/api/v1/races/board?date=2026-06-17").json()
+        assert len(body) == 1
+        assert body[0]["race"]["race_key"] == CONFIRMED_KEY
+        assert body[0]["forecast"] is None
+
+    def test_date_is_required(self, client: TestClient) -> None:
+        assert client.get("/api/v1/races/board").status_code == 422
 
 
 class TestForecastEndpoint:

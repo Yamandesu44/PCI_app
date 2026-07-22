@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（安全な手動再同期コマンド導線） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（レースボード一括API） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,15 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P1 レース一覧の予想取得N+1を一括APIへ移行**
+  - `GET /api/v1/races/board?date=YYYY-MM-DD`で、レース情報と軽量予想を一括返却。
+  - 一覧契約は展開ラベル・信頼度・最上位候補に限定し、PCI/RPCI/PAI実数値を非公開。
+  - 初回だけ未作成予想を計算し、以後は`predicted_pace`/`pace_fit`を一括読取。成功時の
+    リクエスト単位commitを追加し、従来は破棄されていた予想martを永続化。
+  - 出走馬・馬番・枠の変更時だけキャッシュを無効化し、結果更新時は答え合わせ用に保持。
+  - 検証: API非統合467 passed、契約33 passed、mart統合2 passed、Web68 passed、Ruff、
+    api-client/Web typecheck、Web build成功。全体mypyは既知のNumPy型定義問題、import-linter未導入。
 
 - [x] ✅ **P2 成績未取込警告から安全な手動再同期コマンドを提示**
   - DBで最古の未取込日を集計し、標準10日以上の`recommended_sync_days_back`をAPIへ追加。

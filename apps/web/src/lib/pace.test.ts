@@ -9,6 +9,7 @@ import {
   forecastDecisionChecklist,
   horseNumberLabel,
   paceMeta,
+  beginnerPaceLabel,
   paceSpeedFromIndex,
   paiBarWidth,
   pciTone,
@@ -30,6 +31,15 @@ describe("paceMeta", () => {
   it("未知ラベルは中立にフォールバックする", () => {
     expect(paceMeta("???").tone).toBe("average");
     expect(paceMeta("???").summary).toContain("中立");
+  });
+});
+
+describe("beginnerPaceLabel", () => {
+  it("展開3分類を実数値なしの自然な表現へ変換する", () => {
+    expect(beginnerPaceLabel("ハイ")).toBe("速い流れ");
+    expect(beginnerPaceLabel("平均")).toBe("平均的な流れ");
+    expect(beginnerPaceLabel("スロー")).toBe("落ち着いた流れ");
+    expect(beginnerPaceLabel("不明")).toBe("判断材料が不足");
   });
 });
 

@@ -9,35 +9,40 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新22回目・Codex が安全な手動再同期コマンド導線を追加） |
+| 更新日時 | 2026-07-22（更新23回目・Codex がレースボード一括APIを追加） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（成績未取込警告から安全な再同期コマンドを提示） |
+| 直前の担当AI | OpenAI Codex（レース一覧の予想取得N+1を解消） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `72bcf31`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `8f1a3b6`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、次の推奨項目として安全な手動再同期コマンド導線を追加した。**
+**ユーザー指示により、次の推奨項目としてレース一覧の予想取得を一括APIへ移行した。**
 
-`RaceCompletenessRepository`で最古の成績未取込日をDB集計し、標準10日以上でその日を含む
-`recommended_sync_days_back`を`GET /api/v1/ingest-status`へ追加した。Webの警告バナーは
-`run_mykeibadb_full_sync.ps1 -DaysBack N`を生成し、コマンドプロンプト用にコピーできる。
-正常時は表示せず、Web/APIからWindowsプロセスを直接起動しない。
+`GET /api/v1/races/board?date=`は指定日のレースと軽量予想を1回で返す。初回は未作成分を生成し、
+2回目以降は`SqlAlchemyMartRepository.find_race_board_forecasts()`で保存済み予想を一括読取する。
+Webトップのレース数分の`api.getForecast()`は廃止した。一覧契約にPCI/RPCI/PAI実数値は含めない。
+枠・馬・馬番変更時は`SqlAlchemyRaceRepository.save_entry()`がmartを無効化し、結果項目だけの更新では
+予想を保持する。`get_session()`は成功時commit、失敗時rollbackとなり、予想martが永続化される。
 
-テスト結果: API非統合464 passed、関連12 passed、Repository統合1 passed、Web67 passed、
-ruff clean、変更対象5ファイルのmypy strict、api-client/Web typecheck、Web build成功。
-全体mypyとimport-linterの既知環境制約は前回と同じ。
+テスト結果: API非統合467 passed、レースAPI契約33 passed、mart PostgreSQL統合2 passed、
+Web68 passed、ruff clean、api-client/Web typecheck、Web build成功。全体mypyはローカルNumPy型定義が
+Python 3.11設定で解釈できず依存解析前に停止。import-linterはローカル環境に未導入。
 
-Claude Codeが最初に確認するファイル: `apps/api/src/pci/application/ingest_status_use_cases.py`,
-`apps/api/src/pci/infrastructure/repositories/race_repository.py`,
-`apps/web/src/lib/ingestStatus.ts`, `apps/web/src/components/IngestRecoveryCommand.tsx`,
-`apps/web/src/components/IngestStatusBanner.tsx`, `docs/DECISIONS.md`, `tasks/current.md`。
+Claude Codeが最初に確認するファイル: `apps/api/src/pci/application/race_board_use_cases.py`,
+`apps/api/src/pci/infrastructure/repositories/mart_repository.py`,
+`apps/api/src/pci/infrastructure/repositories/race_repository.py`, `apps/web/src/app/page.tsx`,
+`docs/DECISIONS.md`, `tasks/current.md`。
 最初に実行するコマンド: `git status --short --branch`、続いて
 `cd apps/api && python -m pytest -m "not integration" -q`。
+
+未完了・既知事項: 同一レースに複数`predicted_pace.model_version`がある場合、現行スキーマに
+生成時刻がないため文字列降順で選択する。通常の1レース1世代運用では問題ない。予測器を頻繁に
+切り替える段階で`created_at`追加またはactive model指定を行う（`tasks/backlog.md`）。
 
 ---
 

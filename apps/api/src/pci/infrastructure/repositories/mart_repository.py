@@ -10,9 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from pci.domain.pace.adaptability import PaiResult
-from pci.domain.pace.mart_repository import PredictedPaceRecord
+from pci.domain.pace.mart_repository import PredictedPaceRecord, RaceBoardForecastRecord
 from pci.domain.pace.rpci_forecast import RpciForecast
-from pci.infrastructure.database.models import PaceFitModel, PredictedPaceModel
+from pci.infrastructure.database.models import (
+    HorseModel,
+    PaceFitModel,
+    PredictedPaceModel,
+    RaceEntryModel,
+)
 
 
 class SqlAlchemyMartRepository:
@@ -71,3 +76,51 @@ class SqlAlchemyMartRepository:
                 reasons=reasons,
             )
         )
+
+    def find_race_board_forecasts(
+        self, race_keys: list[str]
+    ) -> dict[str, RaceBoardForecastRecord]:
+        """一覧対象の保存済み予想と最上位適性馬を一括取得する。"""
+        if not race_keys:
+            return {}
+
+        pace_rows = self._s.execute(
+            select(PredictedPaceModel)
+            .where(PredictedPaceModel.race_key.in_(race_keys))
+            .order_by(PredictedPaceModel.race_key, PredictedPaceModel.model_version.desc())
+        ).scalars()
+        pace_by_race: dict[str, PredictedPaceModel] = {}
+        for row in pace_rows:
+            pace_by_race.setdefault(row.race_key, row)
+
+        fit_rows = self._s.execute(
+            select(PaceFitModel, HorseModel.name)
+            .join(
+                RaceEntryModel,
+                (RaceEntryModel.race_key == PaceFitModel.race_key)
+                & (RaceEntryModel.horse_no == PaceFitModel.horse_no),
+            )
+            .outerjoin(HorseModel, HorseModel.ketto_num == RaceEntryModel.ketto_num)
+            .where(PaceFitModel.race_key.in_(race_keys))
+            .order_by(PaceFitModel.race_key, PaceFitModel.pai.desc())
+        )
+        top_fit_by_race: dict[str, tuple[PaceFitModel, str | None]] = {}
+        for fit, horse_name in fit_rows:
+            top_fit_by_race.setdefault(fit.race_key, (fit, horse_name))
+
+        result: dict[str, RaceBoardForecastRecord] = {}
+        for race_key, pace in pace_by_race.items():
+            top = top_fit_by_race.get(race_key)
+            if top is None:
+                continue
+            fit, horse_name = top
+            result[race_key] = RaceBoardForecastRecord(
+                race_key=race_key,
+                pace_label=pace.pace_label,
+                confidence=pace.confidence,
+                top_horse_no=fit.horse_no,
+                top_horse_name=horse_name,
+                top_pai=fit.pai,
+                top_fit_label=fit.fit_label,
+            )
+        return result

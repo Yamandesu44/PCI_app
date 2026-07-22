@@ -1128,6 +1128,76 @@
         "title": "PaceAnalysisSchema",
         "type": "object"
       },
+      "RaceBoardForecastSchema": {
+        "description": "一覧用の軽量予想。PCI/RPCIの内部実数値は含めない。",
+        "properties": {
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "pace_label": {
+            "title": "Pace Label",
+            "type": "string"
+          },
+          "top_fit_label": {
+            "title": "Top Fit Label",
+            "type": "string"
+          },
+          "top_fit_strength": {
+            "title": "Top Fit Strength",
+            "type": "string"
+          },
+          "top_horse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Horse Name"
+          },
+          "top_horse_no": {
+            "title": "Top Horse No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pace_label",
+          "confidence",
+          "top_horse_no",
+          "top_fit_label",
+          "top_fit_strength"
+        ],
+        "title": "RaceBoardForecastSchema",
+        "type": "object"
+      },
+      "RaceBoardItemSchema": {
+        "description": "レースボードの1件分。",
+        "properties": {
+          "forecast": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RaceBoardForecastSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "race": {
+            "$ref": "#/components/schemas/RaceSummarySchema"
+          }
+        },
+        "required": [
+          "race"
+        ],
+        "title": "RaceBoardItemSchema",
+        "type": "object"
+      },
       "RaceDetailSchema": {
         "description": "レース詳細（core 層の情報 + 確定指標）。",
         "properties": {
@@ -1785,6 +1855,56 @@
           }
         },
         "summary": "List Races",
+        "tags": [
+          "races"
+        ]
+      }
+    },
+    "/api/v1/races/board": {
+      "get": {
+        "description": "指定日の一覧情報と軽量な展開予想を一括で返す。",
+        "operationId": "list_race_board_api_v1_races_board_get",
+        "parameters": [
+          {
+            "description": "開催日（YYYY-MM-DD）",
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "description": "開催日（YYYY-MM-DD）",
+              "format": "date",
+              "title": "Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RaceBoardItemSchema"
+                  },
+                  "title": "Response List Race Board Api V1 Races Board Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Race Board",
         "tags": [
           "races"
         ]

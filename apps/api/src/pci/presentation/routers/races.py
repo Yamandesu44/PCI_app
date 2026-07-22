@@ -9,6 +9,7 @@ from fastapi import APIRouter, Path, Query
 
 from pci.presentation.dependencies import (
     ForecastUseCaseDep,
+    ListRaceBoardUseCaseDep,
     ListRaceDatesUseCaseDep,
     ListRacesUseCaseDep,
     PaceAnalysisUseCaseDep,
@@ -17,6 +18,7 @@ from pci.presentation.dependencies import (
 from pci.presentation.schemas import (
     ForecastSchema,
     PaceAnalysisSchema,
+    RaceBoardItemSchema,
     RaceDetailSchema,
     RaceSummarySchema,
 )
@@ -27,6 +29,7 @@ router = APIRouter(prefix="/api/v1/races", tags=["races"])
 RaceKeyPath = Annotated[str, Path(pattern=r"^\d{16}$", description="16桁のレースキー")]
 LimitQuery = Annotated[int, Query(ge=1, le=1000, description="取得件数の上限")]
 DateQuery = Annotated[datetime.date | None, Query(description="絞り込む開催日（YYYY-MM-DD）")]
+RequiredDateQuery = Annotated[datetime.date, Query(description="開催日（YYYY-MM-DD）")]
 
 
 @router.get("/dates", response_model=list[str])
@@ -43,6 +46,15 @@ def list_races(
 ) -> list[RaceSummarySchema]:
     """新しい順にレース一覧を返す。date 指定時はその日のレースのみ返す。"""
     return [RaceSummarySchema.from_dto(r) for r in use_case.execute(limit, date)]
+
+
+@router.get("/board", response_model=list[RaceBoardItemSchema])
+def list_race_board(
+    use_case: ListRaceBoardUseCaseDep,
+    date: RequiredDateQuery,
+) -> list[RaceBoardItemSchema]:
+    """指定日の一覧情報と軽量な展開予想を一括で返す。"""
+    return [RaceBoardItemSchema.from_dto(item) for item in use_case.execute(date)]
 
 
 @router.get("/{race_key}/forecast", response_model=ForecastSchema)

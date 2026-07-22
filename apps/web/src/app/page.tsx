@@ -14,12 +14,9 @@ import { RaceDateCalendar } from "@/components/RaceDateCalendar";
 
 import { api } from "@/lib/api";
 import {
+  beginnerPaceLabel,
   confidenceInsight,
-  horseNumberLabel,
-  paceSpeedFromIndex,
   raceSpotlight,
-  sanitizeBeginnerComment,
-  sortByPai,
   type RaceSpotlightTone,
 } from "@/lib/pace";
 import { isForecastRace, isRaceInRange, weekendRange } from "@/lib/raceSchedule";
@@ -35,14 +32,20 @@ import {
   statusLabel,
   statusTone,
 } from "@/lib/races";
-import { ApiError, type Forecast, type IngestStatus, type RaceSummary } from "@pci/api-client";
+import {
+  ApiError,
+  type IngestStatus,
+  type RaceBoardForecast,
+  type RaceBoardItem,
+  type RaceSummary,
+} from "@pci/api-client";
 
 // レース一覧は実行時にバックエンドへ問い合わせる（ビルド時フェッチを避ける）。
 export const dynamic = "force-dynamic";
 
 interface RaceListItem {
   race: RaceSummary;
-  forecast: Forecast | null;
+  forecast: RaceBoardForecast | null;
 }
 
 interface RaceVenueItemGroup {
@@ -73,6 +76,18 @@ async function loadRaces(date?: string): Promise<{ races: RaceSummary[]; error: 
   }
 }
 
+async function loadRaceBoard(
+  date: string,
+): Promise<{ items: RaceBoardItem[]; error: string | null }> {
+  try {
+    return { items: await api.listRaceBoard(date), error: null };
+  } catch (err) {
+    const detail =
+      err instanceof ApiError ? `APIエラー (${err.status})` : "APIに接続できませんでした";
+    return { items: [], error: detail };
+  }
+}
+
 async function loadAllRaceDates(): Promise<string[]> {
   try {
     return await api.listRaceDates();
@@ -90,34 +105,13 @@ async function loadIngestStatus(): Promise<IngestStatus | null> {
   }
 }
 
-async function enrichForecasts(
-  races: RaceSummary[],
-  shouldFetchForecast: (race: RaceSummary) => boolean,
-): Promise<RaceListItem[]> {
-  return Promise.all(
-    races.map(async (race) => {
-      if (!shouldFetchForecast(race)) {
-        return { race, forecast: null };
-      }
-
-      try {
-        return { race, forecast: await api.getForecast(race.race_key) };
-      } catch {
-        return { race, forecast: null };
-      }
-    }),
-  );
-}
-
 function raceActionLabel(race: RaceSummary): string {
   return statusTone(race.status) === "confirmed" ? "ペース分析へ" : "展開予想へ";
 }
 
-function topHorseLabel(forecast: Forecast): string | null {
-  const top = sortByPai(forecast.horses ?? [])[0];
-  if (!top) return null;
-  const name = top.horse_name ?? horseNumberLabel(top);
-  return `${name} / ${top.running_style}`;
+function topHorseLabel(forecast: RaceBoardForecast): string {
+  const name = forecast.top_horse_name ?? `${forecast.top_horse_no}番`;
+  return `${name} / ${forecast.top_fit_label}`;
 }
 
 function groupRaceItemsByDateAndVenue(items: RaceListItem[]): RaceDateItemGroup[] {
@@ -164,15 +158,13 @@ function spotlightClass(tone: RaceSpotlightTone): string {
 function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featured?: boolean }) {
   const { race, forecast } = item;
   const tone = statusTone(race.status);
-  const speed = forecast ? paceSpeedFromIndex(forecast.predicted_rpci) : null;
   const confidence = forecast ? confidenceInsight(forecast.confidence) : null;
   const topHorse = forecast ? topHorseLabel(forecast) : null;
-  const headline = forecast?.comment?.headline ? sanitizeBeginnerComment(forecast.comment.headline) : null;
   const spotlight = forecast
     ? raceSpotlight({
         confidence: forecast.confidence,
         fieldSize: race.field_size,
-        horses: forecast.horses ?? [],
+        topFitStrength: forecast.top_fit_strength,
       })
     : null;
   const showSpotlight = spotlight !== null && spotlight.tone !== "normal";
@@ -230,11 +222,11 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
           </div>
         </div>
 
-        {forecast && speed ? (
+        {forecast ? (
           <div className="mt-2 grid gap-1 text-xs text-slate-600">
             <div className="flex flex-wrap gap-x-3 gap-y-1">
               <span>
-                展開: <span className="font-semibold text-slate-950">{speed.beginnerLabel}</span>
+                展開: <span className="font-semibold text-slate-950">{beginnerPaceLabel(forecast.pace_label)}</span>
               </span>
               <span>
                 信頼度: <span className="font-semibold text-slate-950">{confidence?.label}</span>
@@ -242,7 +234,6 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
             </div>
             {topHorse ? <span className="truncate">候補: {topHorse}</span> : null}
             {showSpotlight ? <span className="truncate text-slate-500">{spotlight.reason}</span> : null}
-            {headline ? <span className="truncate text-slate-500">{headline}</span> : null}
           </div>
         ) : (
           <p className="m-0 mt-2 text-xs text-slate-500">
@@ -374,16 +365,24 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const selectedDate = selectRaceDate(allDates, params?.date, weekend);
 
   // 選択日のレースを取得（過去日付でも正確に取得できるよう日付指定フェッチを使う）。
-  const { races, error } = await loadRaces(selectedDate ?? undefined);
-  const sortedRaces = [...races].sort(compareRaceSummary);
+  const boardResult = selectedDate
+    ? await loadRaceBoard(selectedDate)
+    : { items: [] as RaceBoardItem[], error: null };
+  const fallbackResult = selectedDate ? null : await loadRaces();
+  const error = boardResult.error ?? fallbackResult?.error ?? null;
+  const boardItems: RaceListItem[] = boardResult.items.length > 0
+    ? boardResult.items.map((item) => ({
+        race: item.race,
+        forecast: item.forecast ?? null,
+      }))
+    : (fallbackResult?.races ?? []).map((race) => ({ race, forecast: null }));
+  const sortedRaces = boardItems.map((item) => item.race).sort(compareRaceSummary);
   const dates = allDates.length > 0 ? allDates : raceDates(sortedRaces);
   const visibleRaces = sortedRaces;
-  const visibleItems = error
+  const itemByRaceKey = new Map(boardItems.map((item) => [item.race.race_key, item]));
+  const visibleItems: RaceListItem[] = error
     ? []
-    : await enrichForecasts(
-        visibleRaces,
-        (race) => isForecastRace(race) && race.race_date >= today,
-      );
+    : visibleRaces.map((race) => itemByRaceKey.get(race.race_key) ?? { race, forecast: null });
 
   const weekendItems = visibleItems.filter(
     ({ race }) => isForecastRace(race) && isRaceInRange(race, weekend),

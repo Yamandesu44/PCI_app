@@ -140,6 +140,19 @@ class SqlAlchemyRaceRepository:
         self._s.merge(self._from_race(race))
 
     def save_entry(self, entry: RaceEntry) -> None:
+        race_key = str(entry.race_key)
+        existing = self._s.get(RaceEntryModel, (race_key, entry.horse_no))
+        # 出走馬・馬番・枠の変更時だけ予想を破棄する。結果項目の更新では、
+        # 出走前予想を確定後の答え合わせに残す。
+        if (
+            existing is None
+            or existing.frame_no != entry.frame_no
+            or existing.ketto_num != entry.ketto_num
+        ):
+            self._s.execute(delete(PaceFitModel).where(PaceFitModel.race_key == race_key))
+            self._s.execute(
+                delete(PredictedPaceModel).where(PredictedPaceModel.race_key == race_key)
+            )
         self._s.merge(self._from_entry(entry))
 
     def delete_race(self, key: RaceKey) -> bool:

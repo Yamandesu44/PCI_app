@@ -17,6 +17,8 @@ export type FormationHorse = components["schemas"]["FormationHorseSchema"];
 export type Forecast = components["schemas"]["ForecastSchema"];
 export type RaceDetail = components["schemas"]["RaceDetailSchema"];
 export type RaceSummary = components["schemas"]["RaceSummarySchema"];
+export type RaceBoardItem = components["schemas"]["RaceBoardItemSchema"];
+export type RaceBoardForecast = components["schemas"]["RaceBoardForecastSchema"];
 export type EntryDetail = components["schemas"]["EntryDetailSchema"];
 export type PaceAnalysis = components["schemas"]["PaceAnalysisSchema"];
 export type HorsePaceAnalysis = components["schemas"]["HorsePaceAnalysisSchema"];
@@ -51,6 +53,7 @@ export interface ApiClientOptions {
 
 export interface ApiClient {
   listRaces(limit?: number, date?: string): Promise<RaceSummary[]>;
+  listRaceBoard(date: string): Promise<RaceBoardItem[]>;
   listRaceDates(): Promise<string[]>;
   getForecast(raceKey: string): Promise<Forecast>;
   getRaceDetail(raceKey: string): Promise<RaceDetail>;
@@ -77,6 +80,10 @@ export function createClient(options: ApiClientOptions): ApiClient {
       if (date != null) params.set("date", date);
       const qs = params.toString();
       return getJson<RaceSummary[]>(`/api/v1/races${qs ? `?${qs}` : ""}`);
+    },
+    listRaceBoard: (date) => {
+      const params = new URLSearchParams({ date });
+      return getJson<RaceBoardItem[]>(`/api/v1/races/board?${params.toString()}`);
     },
     listRaceDates: () => getJson<string[]>("/api/v1/races/dates"),
     getForecast: (raceKey) =>

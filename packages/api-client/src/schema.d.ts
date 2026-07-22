@@ -44,6 +44,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/races/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Race Board
+         * @description 指定日の一覧情報と軽量な展開予想を一括で返す。
+         */
+        get: operations["list_race_board_api_v1_races_board_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/races/dates": {
         parameters: {
             query?: never;
@@ -756,6 +776,32 @@ export interface components {
             sample_size: number;
         };
         /**
+         * RaceBoardForecastSchema
+         * @description 一覧用の軽量予想。PCI/RPCIの内部実数値は含めない。
+         */
+        RaceBoardForecastSchema: {
+            /** Confidence */
+            confidence: number;
+            /** Pace Label */
+            pace_label: string;
+            /** Top Fit Label */
+            top_fit_label: string;
+            /** Top Fit Strength */
+            top_fit_strength: string;
+            /** Top Horse Name */
+            top_horse_name?: string | null;
+            /** Top Horse No */
+            top_horse_no: number;
+        };
+        /**
+         * RaceBoardItemSchema
+         * @description レースボードの1件分。
+         */
+        RaceBoardItemSchema: {
+            forecast?: components["schemas"]["RaceBoardForecastSchema"] | null;
+            race: components["schemas"]["RaceSummarySchema"];
+        };
+        /**
          * RaceDetailSchema
          * @description レース詳細（core 層の情報 + 確定指標）。
          */
@@ -988,6 +1034,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RaceSummarySchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_race_board_api_v1_races_board_get: {
+        parameters: {
+            query: {
+                /** @description 開催日（YYYY-MM-DD） */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RaceBoardItemSchema"][];
                 };
             };
             /** @description Validation Error */
