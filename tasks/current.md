@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（Gemini既定モデル移行・環境変数化） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（展開コメント生成のゼロコスト既定モード） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,14 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P1 展開コメント生成をゼロコスト既定モードへ変更**
+  - `COMMENT_GENERATOR_MODE=rule`を既定とし、APIキーが環境に残っていても外部APIを呼ばない。
+  - Geminiは`COMMENT_GENERATOR_MODE=gemini`と`GEMINI_API_KEY`の両方を明示した場合だけ有効化。
+  - Gemini指定時のキー欠損・初期化失敗は`comment-v2`へフォールバックする。
+  - 公開APIスキーマ・コメント計算・Web表示は変更なし。
+  - 検証: API非統合463 passed、関連29 passed、ruff成功、変更対象2ファイルのmypy strict成功。
+    全体mypyは既知のNumPy型定義とPython 3.11設定の不整合で解析前に停止。import-linterは未導入。
 
 - [x] ✅ **P2 Gemini既定モデルを3.5 Flashへ移行し、環境変数化**
   - 提供終了した`gemini-2.0-flash`から`gemini-3.5-flash`へ既定モデルを更新。

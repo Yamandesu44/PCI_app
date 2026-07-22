@@ -35,12 +35,14 @@ ADR-0008）を含み、生成根拠を `reasons` で説明する。
 
 ### Gemini 展開コメント（任意）
 
-`GEMINI_API_KEY` を設定すると、ドメインで確定した指標を Gemini が自然文へ変換する
-`comment-gemini-v3` を使用する。既定モデルは `gemini-3.5-flash` で、必要な場合だけ
-`GEMINI_MODEL` で変更できる。APIキーが未設定、またはGemini APIの呼び出しに失敗した場合は、
-外部APIを使わない決定論的な `comment-v2` へフォールバックする。
+既定の`COMMENT_GENERATOR_MODE=rule`では、APIキーが環境に残っていても外部APIを呼ばず、
+決定論的な`comment-v2`を使用する。Geminiは`COMMENT_GENERATOR_MODE=gemini`と
+`GEMINI_API_KEY`の両方を明示した場合だけ有効になる。既定モデルは`gemini-3.5-flash`で、
+必要な場合だけ`GEMINI_MODEL`で変更できる。APIキー未設定、またはGemini APIの呼び出しに
+失敗した場合は`comment-v2`へフォールバックする。
 
 ```dotenv
+COMMENT_GENERATOR_MODE=gemini
 GEMINI_API_KEY=your-api-key
 # GEMINI_MODEL=gemini-3.5-flash
 ```
@@ -48,8 +50,8 @@ GEMINI_API_KEY=your-api-key
 Gemini APIの無料枠・課金条件・提供モデルはGoogle側で変更される可能性があるため、運用前に
 [公式料金表](https://ai.google.dev/gemini-api/docs/pricing?hl=en)と
 [モデル情報](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash)を確認する。
-**外部API費用を確実にゼロにする運用では`GEMINI_API_KEY`を設定しない。** この場合も
-`comment-v2`で展開コメント機能は利用できる。
+**外部API費用を確実にゼロにする運用では`COMMENT_GENERATOR_MODE=rule`を維持する。**
+この場合も`comment-v2`で展開コメント機能は利用できる。
 
 ## テスト
 

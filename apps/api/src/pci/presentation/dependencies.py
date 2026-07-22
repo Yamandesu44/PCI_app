@@ -50,9 +50,9 @@ def _get_forecaster() -> RpciForecaster:
 
 @lru_cache
 def _get_comment_generator() -> CommentGenerator:
-    """GEMINI_API_KEY が設定されていれば Gemini 、なければルールベースを返す。"""
+    """明示的にGeminiを選択し、APIキーもある場合だけ外部API生成器を返す。"""
     settings = get_settings()
-    if settings.gemini_api_key:
+    if settings.comment_generator_mode == "gemini" and settings.gemini_api_key:
         try:
             from pci.infrastructure.llm_comment_generator import GeminiCommentGenerator
 
@@ -66,6 +66,11 @@ def _get_comment_generator() -> CommentGenerator:
             logging.getLogger(__name__).warning(
                 "GeminiCommentGenerator 初期化失敗 → rule-based にフォールバック: %s", exc
             )
+    elif settings.comment_generator_mode == "gemini":
+        _logger.warning(
+            "COMMENT_GENERATOR_MODE=gemini ですがGEMINI_API_KEYが未設定のため、"
+            "rule-basedを使用します"
+        )
     return RuleBasedCommentGenerator()
 
 

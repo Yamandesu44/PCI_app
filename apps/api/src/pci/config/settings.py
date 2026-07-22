@@ -1,8 +1,10 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+CommentGeneratorMode = Literal["rule", "gemini"]
 
 
 class Settings(BaseSettings):
@@ -12,6 +14,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "postgresql+pg8000://pci:pci_dev@localhost:5432/pci_dev"
+    comment_generator_mode: CommentGeneratorMode = "rule"
     gemini_api_key: str | None = None
     gemini_model: str = DEFAULT_GEMINI_MODEL
     ingest_token: str | None = None  # Bearer token for /internal/ingest/* endpoints

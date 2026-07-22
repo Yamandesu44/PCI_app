@@ -136,8 +136,9 @@
 - 🟡 **回顧の答え合わせ文言**（本セッションで追加）: 出走前の想定と実績を比較し
   「事前の想定「X」が的中しました」/「事前の想定は「X」でしたが、実際は「Y」…」を付す。
   予測未保存なら従来通り出さない（後方互換）。（commentary.py）
-- ✅ LLM（Gemini）は同一IFの任意実装として利用可能。`GEMINI_API_KEY`設定時は
-  `comment-gemini-v3`、既定`gemini-3.5-flash`を使用し、`GEMINI_MODEL`で変更できる。
+- ✅ LLM（Gemini）は同一IFの任意実装として利用可能。既定`COMMENT_GENERATOR_MODE=rule`は
+  APIキーが残っていても外部通信しない。`gemini`モードと`GEMINI_API_KEY`を両方設定した場合だけ
+  `comment-gemini-v3`を使用する。既定モデルは`gemini-3.5-flash`で、`GEMINI_MODEL`で変更可能。
   未設定・呼出失敗時は`comment-v2`へフォールバックする。（ADR-0008）
 - 🧪 Geminiを正式運用とする品質基準・費用上限・モデル更新手順は未確定。
 

@@ -9,34 +9,33 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新20回目・Codex がGemini既定モデルを移行・環境変数化） |
+| 更新日時 | 2026-07-22（更新21回目・Codex が展開コメント生成をゼロコスト既定化） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（Gemini既定モデルを3.5 Flashへ移行・環境変数化） |
+| 直前の担当AI | OpenAI Codex（展開コメント生成の外部API利用を二段階オプトイン化） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `201e349`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `7fbc151`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、次の推奨項目として提供終了したGemini既定モデルを移行した。**
+**ユーザー指示により、次の推奨項目として展開コメント生成をゼロコスト既定モードへ変更した。**
 
-`gemini-2.0-flash`の提供終了に対応し、既定を`gemini-3.5-flash`へ更新した。
-`GEMINI_MODEL`環境変数を追加してDIから生成器へ渡し、将来のモデル変更をコード修正なしで
-行えるようにした。Gemini出力は`comment-gemini-v3`へ更新し、`reasons`には実際に使用した
-モデル名を記録する。APIキー未設定・呼出失敗時の`comment-v2`フォールバックは維持する。
-費用を確実にゼロにする運用では`GEMINI_API_KEY`を設定せず、ルールベースを使用する。
+`COMMENT_GENERATOR_MODE=rule`を既定とし、環境にGemini APIキーが残っていても外部APIを
+呼ばないようにした。Geminiは`COMMENT_GENERATOR_MODE=gemini`と`GEMINI_API_KEY`の両方を
+明示した場合だけ有効になる。Gemini指定時のキー欠損・初期化失敗は`comment-v2`へ
+フォールバックするため、通常運用の外部API費用は設定値でゼロへ固定できる。
 
-テスト結果: API非統合457 passed、関連23 passed、ruff clean、変更対象3ファイルのmypy strict成功。
-実Gemini APIはAPIキーと外部費用を使わないため呼び出していない。Webコード・公開スキーマは
-変更していないためWebテスト・ビルドは未実行。import-linterはローカルPythonに未導入。
+テスト結果: API非統合463 passed、関連29 passed、ruff clean、変更対象2ファイルのmypy strict成功。
+実Gemini APIは呼び出していない。Webコード・公開スキーマは変更していないためWebテスト・
+ビルドは未実行。import-linterはローカルPythonに未導入。全体mypyは既知のNumPy型定義と
+Python 3.11設定の不整合で対象コード解析前に停止した。
 
 Claude Codeが最初に確認するファイル: `apps/api/src/pci/config/settings.py`,
-`apps/api/src/pci/infrastructure/llm_comment_generator.py`,
 `apps/api/src/pci/presentation/dependencies.py`, `apps/api/tests/unit/test_settings.py`,
-`apps/api/tests/unit/infrastructure/test_llm_comment_generator.py`, `docs/DECISIONS.md`, `tasks/current.md`。
+`apps/api/tests/unit/presentation/test_dependencies.py`, `docs/DECISIONS.md`, `tasks/current.md`。
 最初に実行するコマンド: `git status --short --branch`、続いて
 `cd apps/api && python -m pytest -m "not integration" -q`。
 
@@ -125,6 +124,15 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ---
 
 ## 完了した作業（直近セッション）
+
+0G. **展開コメント生成をゼロコスト既定モードへ変更**（本セッション）
+   - config: `COMMENT_GENERATOR_MODE`を`rule | gemini`のLiteral設定として追加。既定は`rule`で、
+     未知の値はPydantic設定読込時に拒否する。
+   - DI: APIキーの有無だけではGeminiを選ばず、`gemini`モードとキーが両方ある場合だけ
+     `GeminiCommentGenerator`を生成する。キー欠損・初期化失敗はルールベースへ縮退する。
+   - テスト: API非統合463 passed、関連29 passed、ruff、変更対象mypy strict成功。
+     全体mypyは既知のNumPy型定義/Python設定不整合、import-linterは未導入のため未達。
+   - 未確認・既知の不具合: なし。外部APIは意図的に呼び出していない。
 
 0F. **Gemini既定モデルを3.5 Flashへ移行し、環境変数化**（本セッション）
    - config: `Settings.gemini_model`を追加。既定は`gemini-3.5-flash`、環境変数
@@ -455,6 +463,15 @@ Geminiモデル移行で変更したファイル:
   `docs/DECISIONS.md`, `docs/adr/0008-commentary-generation-strategy.md`,
   `tasks/current.md`, `tasks/backlog.md`, `docs/HANDOFF.md`
 
+ゼロコスト既定モードで変更したファイル:
+- API: `apps/api/src/pci/config/settings.py`, `apps/api/src/pci/presentation/dependencies.py`,
+  `apps/api/.env.example`, `apps/api/README.md`
+- テスト: `apps/api/tests/unit/test_settings.py`,
+  `apps/api/tests/unit/presentation/test_dependencies.py`
+- 文書: `docs/ARCHITECTURE.md`, `docs/SPEC.md`, `docs/DECISIONS.md`,
+  `docs/adr/0008-commentary-generation-strategy.md`, `tasks/current.md`, `tasks/backlog.md`,
+  `docs/HANDOFF.md`
+
 `7997931`（Phase2＋UI刷新）で変更したファイル:
 - ingestion: `models.py`（ResultRecord+人気/賞金）, `parser/jv_spec.py`（SE予約offset Ninki/Honsyokin）,
   `parser/se_parser.py`（読取+妥当性ゲート）, `client/mykeibadb_client.py`（列→合成書込）,
@@ -521,7 +538,7 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 - **未確認（Gemini）**: 実APIキーを用いた疎通は未実施。単体テストではHTTP成功・失敗・
   モデル上書き・ルールフォールバックをモック検証済み。ローカルで疎通する場合は費用条件を
-  公式料金表で確認してから`GEMINI_API_KEY`を設定する。
+  公式料金表で確認してから`COMMENT_GENERATOR_MODE=gemini`と`GEMINI_API_KEY`を設定する。
 - **解決済み**: 確定成績が2026-07-12以降反映されなかった件（上記「完了した作業」2.）。診断で
   解析は正常と判明、`batch.py`が`record_results`失敗をexit 0に握りつぶしていた欠陥を可視化。
   ユーザーが最新コードで再実行→全レース送信成功しアプリに反映。
@@ -637,10 +654,10 @@ API/ingestion-worker の全量pytest・ruff・mypyは再実行できなかった
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
-4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了はGeminiモデル移行）
+4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了はゼロコスト既定モード）
 5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v3 を記載）
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: Gemini 3.5 Flash移行・環境変数化、
-   comment-v2の馬番号表示、LightGBMモデルLF固定・現行AbilityWeights維持。
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: 展開コメントのゼロコスト既定化、
+   Gemini 3.5 Flash移行・環境変数化、comment-v2の馬番号表示、LightGBMモデルLF固定・現行AbilityWeights維持。
    2026-07-21（3）: grade優先のability-v3・確定馬体重の永続化・検証指標。
    2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、確定成績未反映の解決。
    2026-07-20（2）: 切り分け診断ツール導入。
@@ -660,7 +677,7 @@ git status   # クリーンであるはず
 # 2. API 健全性確認（新コンテナは依存未インストール。venvを作り .venv/bin 経由で実行する）
 cd apps/api
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest -m "not integration" -q   # 457 passed
+.venv/bin/python -m pytest -m "not integration" -q   # 463 passed
 .venv/bin/ruff check src/ tests/
 .venv/bin/lint-imports
 .venv/bin/python -m mypy src/ --strict   # ローカルNumPy型定義とPython 3.11設定の不整合に注意

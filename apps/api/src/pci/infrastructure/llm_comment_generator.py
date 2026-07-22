@@ -51,7 +51,7 @@ class GeminiCommentGenerator:
     """Gemini REST API で展開コメントを生成する（comment-gemini-v3）。
 
     ADR-0008: LLM は指標→表現の写像のみを担い、数値・判定はドメインで確定済み。
-    GEMINI_API_KEY が未設定の場合、DI がこのクラスを使わず rule-based を返す。
+    DI はgeminiモードとGEMINI_API_KEYが両方設定された場合だけこのクラスを使う。
     """
 
     def __init__(
