@@ -135,7 +135,7 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 | PostgreSQL | 本体 DB（raw/core/mart） | docker-compose で起動 |
 | Vercel | web デプロイ | vercel.json |
 | Slack 互換 Webhook | バッチ失敗通知（任意） | `NOTIFY_WEBHOOK_URL` |
-| Gemini（LLM） | 展開コメント（任意・疎結合） | `GEMINI_API_KEY` 設定時のみ。未設定はルールベース（推測: 現状ほぼルールベース運用） |
+| Gemini（LLM） | 展開コメント（任意・疎結合） | `GEMINI_API_KEY` 設定時のみ。既定は`gemini-3.5-flash`、`GEMINI_MODEL`で変更可能。未設定・呼出失敗時はルールベースへフォールバック |
 
 ---
 

@@ -9,32 +9,34 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新19回目・Codex が展開コメントの馬番号表示を修正） |
+| 更新日時 | 2026-07-22（更新20回目・Codex がGemini既定モデルを移行・環境変数化） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（枠順未確定時の展開コメント馬番号表示を修正） |
+| 直前の担当AI | OpenAI Codex（Gemini既定モデルを3.5 Flashへ移行・環境変数化） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `9f1aa08`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `201e349`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、次の推奨項目として枠順未確定時の展開コメント表示を修正した。**
+**ユーザー指示により、次の推奨項目として提供終了したGemini既定モデルを移行した。**
 
-特別登録段階の暫定`horse_no`を、詳細シナリオ・やさしい解説・Geminiプロンプトが公式馬番として
-文章化していた。既存`formation-v1`の確定判定を単一の根拠として3経路へ渡し、未確定時は
-「登録順 N（馬番未確定）」、確定後だけ「N番」と表示する。公開APIのフィールド構造は変更なし。
-出力履歴を区別するためルール版を`comment-v2`、Gemini版を`comment-gemini-v2`へ更新した。
+`gemini-2.0-flash`の提供終了に対応し、既定を`gemini-3.5-flash`へ更新した。
+`GEMINI_MODEL`環境変数を追加してDIから生成器へ渡し、将来のモデル変更をコード修正なしで
+行えるようにした。Gemini出力は`comment-gemini-v3`へ更新し、`reasons`には実際に使用した
+モデル名を記録する。APIキー未設定・呼出失敗時の`comment-v2`フォールバックは維持する。
+費用を確実にゼロにする運用では`GEMINI_API_KEY`を設定せず、ルールベースを使用する。
 
-テスト結果: API非統合454 passed、関連74 passed、ruff clean、変更対象5ファイルのmypy strict成功。
-import-linterはローカルPythonに未導入。全体mypyは既知のNumPy型定義とPython 3.11設定の不整合で
-対象コード解析前に停止。Webコード・公開スキーマは変更していないためWebテスト・ビルドは未実行。
+テスト結果: API非統合457 passed、関連23 passed、ruff clean、変更対象3ファイルのmypy strict成功。
+実Gemini APIはAPIキーと外部費用を使わないため呼び出していない。Webコード・公開スキーマは
+変更していないためWebテスト・ビルドは未実行。import-linterはローカルPythonに未導入。
 
-Claude Codeが最初に確認するファイル: `apps/api/src/pci/domain/pace/horse_number_label.py`,
-`apps/api/src/pci/domain/pace/scenario.py`, `apps/api/src/pci/domain/pace/commentary.py`,
-`apps/api/src/pci/application/forecast_use_cases.py`, `docs/DECISIONS.md`, `tasks/current.md`。
+Claude Codeが最初に確認するファイル: `apps/api/src/pci/config/settings.py`,
+`apps/api/src/pci/infrastructure/llm_comment_generator.py`,
+`apps/api/src/pci/presentation/dependencies.py`, `apps/api/tests/unit/test_settings.py`,
+`apps/api/tests/unit/infrastructure/test_llm_comment_generator.py`, `docs/DECISIONS.md`, `tasks/current.md`。
 最初に実行するコマンド: `git status --short --branch`、続いて
 `cd apps/api && python -m pytest -m "not integration" -q`。
 
@@ -123,6 +125,15 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ---
 
 ## 完了した作業（直近セッション）
+
+0F. **Gemini既定モデルを3.5 Flashへ移行し、環境変数化**（本セッション）
+   - config: `Settings.gemini_model`を追加。既定は`gemini-3.5-flash`、環境変数
+     `GEMINI_MODEL`で上書き可能。`.env.example`にも設定例を追加した。
+   - infrastructure/DI: `GeminiCommentGenerator`へ設定値を渡し、`reasons`には実際に
+     使用したモデル名を記録する。Gemini版の世代を`comment-gemini-v3`へ更新した。
+   - フォールバック: `GEMINI_API_KEY`未設定・呼出失敗時は従来どおり`comment-v2`を使用する。
+   - テスト: API非統合457 passed、関連23 passed、ruff、変更対象3ファイルのmypy strict成功。
+   - 未確認: 実API呼び出しはAPIキーと外部費用を使わないため未実施。HTTP経路はモックで検証済み。
 
 0E. **枠順未確定時の展開コメント馬番号表示を修正**（本セッション）
    - domain: `horse_number_label.py`を追加し、確定時「N番」・未確定時
@@ -434,6 +445,16 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 ## 変更対象ファイル（直近セッション・すべて push 済み。Codex は git log/diff で確認可能）
 
+Geminiモデル移行で変更したファイル:
+- API: `apps/api/src/pci/config/settings.py`,
+  `apps/api/src/pci/infrastructure/llm_comment_generator.py`,
+  `apps/api/src/pci/presentation/dependencies.py`, `apps/api/.env.example`
+- テスト: `apps/api/tests/unit/test_settings.py`,
+  `apps/api/tests/unit/infrastructure/test_llm_comment_generator.py`
+- 文書: `apps/api/README.md`, `docs/ARCHITECTURE.md`, `docs/SPEC.md`,
+  `docs/DECISIONS.md`, `docs/adr/0008-commentary-generation-strategy.md`,
+  `tasks/current.md`, `tasks/backlog.md`, `docs/HANDOFF.md`
+
 `7997931`（Phase2＋UI刷新）で変更したファイル:
 - ingestion: `models.py`（ResultRecord+人気/賞金）, `parser/jv_spec.py`（SE予約offset Ninki/Honsyokin）,
   `parser/se_parser.py`（読取+妥当性ゲート）, `client/mykeibadb_client.py`（列→合成書込）,
@@ -467,6 +488,8 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 - ❓ PAI の正式定義・重み（pai-v1 は暫定、`docs/SPEC.md §9`-1）。
 - ❓ 脚質判定ルールの最適化基準、展開コメントのLLM本採用可否、本番認証・課金仕様
   （いずれも `docs/SPEC.md §9` にリストあり、詳細はそちらを参照）。
+- ❓ Geminiの正式運用品質基準・費用上限・モデル更新時の受入手順。任意実装とフォールバックは
+  完成しているが、無料枠・料金・提供モデルはGoogle側で変更され得る。
 - 🔎 formation-v1 の脚質70%・近走序盤位置30%と4ゾーン境界は実データ評価前の仮仕様
   （`tasks/current.md` の「暫定定数の検証と正式化」に追跡タスクあり）。
 - 🔎 `STALE_AFTER_DAYS=4`（取り込み鮮度監視の暫定閾値）が実運用（週3回同期）に対して
@@ -496,6 +519,9 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 ## 既知の不具合
 
+- **未確認（Gemini）**: 実APIキーを用いた疎通は未実施。単体テストではHTTP成功・失敗・
+  モデル上書き・ルールフォールバックをモック検証済み。ローカルで疎通する場合は費用条件を
+  公式料金表で確認してから`GEMINI_API_KEY`を設定する。
 - **解決済み**: 確定成績が2026-07-12以降反映されなかった件（上記「完了した作業」2.）。診断で
   解析は正常と判明、`batch.py`が`record_results`失敗をexit 0に握りつぶしていた欠陥を可視化。
   ユーザーが最新コードで再実行→全レース送信成功しアプリに反映。
@@ -611,10 +637,10 @@ API/ingestion-worker の全量pytest・ruff・mypyは再実行できなかった
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
-4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了は展開コメント馬番号表示修正）
+4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了はGeminiモデル移行）
 5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v3 を記載）
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: comment-v2の馬番号表示・
-   LightGBMモデルLF固定・現行AbilityWeights維持。
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: Gemini 3.5 Flash移行・環境変数化、
+   comment-v2の馬番号表示、LightGBMモデルLF固定・現行AbilityWeights維持。
    2026-07-21（3）: grade優先のability-v3・確定馬体重の永続化・検証指標。
    2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、確定成績未反映の解決。
    2026-07-20（2）: 切り分け診断ツール導入。
@@ -634,7 +660,7 @@ git status   # クリーンであるはず
 # 2. API 健全性確認（新コンテナは依存未インストール。venvを作り .venv/bin 経由で実行する）
 cd apps/api
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest -m "not integration" -q   # 454 passed
+.venv/bin/python -m pytest -m "not integration" -q   # 457 passed
 .venv/bin/ruff check src/ tests/
 .venv/bin/lint-imports
 .venv/bin/python -m mypy src/ --strict   # ローカルNumPy型定義とPython 3.11設定の不整合に注意

@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（枠順未確定時の展開コメント馬番号表示を修正） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（Gemini既定モデル移行・環境変数化） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,13 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P2 Gemini既定モデルを3.5 Flashへ移行し、環境変数化**
+  - 提供終了した`gemini-2.0-flash`から`gemini-3.5-flash`へ既定モデルを更新。
+  - `GEMINI_MODEL`でモデルを上書き可能にし、DIから`GeminiCommentGenerator`へ渡す。
+  - Gemini出力を`comment-gemini-v3`へ更新し、`reasons`には実際に使用したモデル名を記録。
+  - APIキー未設定・呼出失敗時の`comment-v2`フォールバックは維持。実APIは呼び出していない。
+  - 検証: API非統合457 passed、関連23 passed、ruff成功、変更対象3ファイルのmypy strict成功。
 
 - [x] ✅ **P2 枠順未確定時の展開コメント馬番号表示を修正（comment-v2）**
   - `formation-v1`と同じ枠順確定判定をscenario・ルールコメント・Geminiプロンプトへ結線。

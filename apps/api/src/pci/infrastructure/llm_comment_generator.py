@@ -1,4 +1,4 @@
-"""Gemini REST API を使った展開コメント生成器（comment-gemini-v2・ADR-0008）。
+"""Gemini REST API を使った展開コメント生成器（comment-gemini-v3・ADR-0008）。
 
 google-genai パッケージは不要。httpx で Gemini v1beta REST エンドポイントを
 直接呼び出すため、C拡張依存ゼロで動作する。
@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from pci.config.settings import DEFAULT_GEMINI_MODEL
 from pci.domain.pace.commentary import (
     Commentary,
     ForecastCommentInput,
@@ -27,8 +28,8 @@ from pci.domain.shared.reason import Reason
 
 _log = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-2.0-flash"
-GEMINI_COMMENTARY_VERSION = "comment-gemini-v2"
+GEMINI_MODEL = DEFAULT_GEMINI_MODEL
+GEMINI_COMMENTARY_VERSION = "comment-gemini-v3"
 
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -47,7 +48,7 @@ _DECIMAL_VALUE = re.compile(r"\d+\.\d+")
 
 
 class GeminiCommentGenerator:
-    """Gemini REST API で展開コメントを生成する（comment-gemini-v2）。
+    """Gemini REST API で展開コメントを生成する（comment-gemini-v3）。
 
     ADR-0008: LLM は指標→表現の写像のみを担い、数値・判定はドメインで確定済み。
     GEMINI_API_KEY が未設定の場合、DI がこのクラスを使わず rule-based を返す。
@@ -90,7 +91,7 @@ class GeminiCommentGenerator:
             headline=_sanitize_beginner_comment(headline),
             body=tuple(_sanitize_beginner_comment(p) for p in body),
             model_version=GEMINI_COMMENTARY_VERSION,
-            reasons=_forecast_reasons(data),
+            reasons=_forecast_reasons(data, self._model),
         )
 
     def _generate_review(self, data: ReviewCommentInput) -> Commentary:
@@ -103,7 +104,7 @@ class GeminiCommentGenerator:
             headline=_sanitize_beginner_comment(headline),
             body=tuple(_sanitize_beginner_comment(p) for p in body),
             model_version=GEMINI_COMMENTARY_VERSION,
-            reasons=_review_reasons(data),
+            reasons=_review_reasons(data, self._model),
         )
 
     def _call_api(self, prompt: str) -> dict[str, Any]:
@@ -223,7 +224,7 @@ def _sanitize_beginner_comment(text: str) -> str:
 # ----- reasons 生成 -----
 
 
-def _forecast_reasons(data: ForecastCommentInput) -> tuple[Reason, ...]:
+def _forecast_reasons(data: ForecastCommentInput, model: str) -> tuple[Reason, ...]:
     return (
         Reason(
             code="comment_basis",
@@ -234,12 +235,12 @@ def _forecast_reasons(data: ForecastCommentInput) -> tuple[Reason, ...]:
         ),
         Reason(
             code="comment_model",
-            description=f"Gemini API 生成（{GEMINI_COMMENTARY_VERSION}・{GEMINI_MODEL}）",
+            description=f"Gemini API 生成（{GEMINI_COMMENTARY_VERSION}・{model}）",
         ),
     )
 
 
-def _review_reasons(data: ReviewCommentInput) -> tuple[Reason, ...]:
+def _review_reasons(data: ReviewCommentInput, model: str) -> tuple[Reason, ...]:
     rpci = data.rpci_actual if data.rpci_actual is not None else "—"
     pci3 = data.pci3_actual if data.pci3_actual is not None else "—"
     return (
@@ -252,6 +253,6 @@ def _review_reasons(data: ReviewCommentInput) -> tuple[Reason, ...]:
         ),
         Reason(
             code="comment_model",
-            description=f"Gemini API 生成（{GEMINI_COMMENTARY_VERSION}・{GEMINI_MODEL}）",
+            description=f"Gemini API 生成（{GEMINI_COMMENTARY_VERSION}・{model}）",
         ),
     )

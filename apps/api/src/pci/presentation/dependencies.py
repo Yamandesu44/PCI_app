@@ -56,7 +56,10 @@ def _get_comment_generator() -> CommentGenerator:
         try:
             from pci.infrastructure.llm_comment_generator import GeminiCommentGenerator
 
-            return GeminiCommentGenerator(api_key=settings.gemini_api_key)
+            return GeminiCommentGenerator(
+                api_key=settings.gemini_api_key,
+                model=settings.gemini_model,
+            )
         except Exception as exc:
             import logging
 

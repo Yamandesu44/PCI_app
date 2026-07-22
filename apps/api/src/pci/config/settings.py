@@ -2,6 +2,8 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -11,6 +13,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+pg8000://pci:pci_dev@localhost:5432/pci_dev"
     gemini_api_key: str | None = None
+    gemini_model: str = DEFAULT_GEMINI_MODEL
     ingest_token: str | None = None  # Bearer token for /internal/ingest/* endpoints
 
 

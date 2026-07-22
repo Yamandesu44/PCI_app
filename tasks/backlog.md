@@ -42,6 +42,9 @@
   2026年前半97レースで独立比較したが、全3指標が両期間で改善する候補は無かったため現行重みを維持。
 - [x] ~~P2 枠順未確定時の展開コメント馬番号表示~~ → **2026-07-22 完了**。
   scenario・ルールコメント・Geminiプロンプトを同じ枠順確定判定へ結線し、comment-v2へ更新。
+- [x] ~~P2 提供終了Geminiモデルの移行と環境変数化~~ → **2026-07-22 完了**。
+  既定を`gemini-3.5-flash`へ更新し、`GEMINI_MODEL`で変更可能にした。Gemini版は
+  `comment-gemini-v3`とし、生成根拠には実際に使用したモデル名を記録する。
 - [ ] **P2 実JV-Dataの人気/賞金予約オフセット検証**（jvlink実COM用）。現状はmykeibadb合成専用。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・

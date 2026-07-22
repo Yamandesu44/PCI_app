@@ -33,6 +33,24 @@ uvicorn pci.presentation.app:app --reload
 `forecast` / `pace-analysis` は指標を自然文へ翻訳した `comment`（model_version=comment-v2・
 ADR-0008）を含み、生成根拠を `reasons` で説明する。
 
+### Gemini 展開コメント（任意）
+
+`GEMINI_API_KEY` を設定すると、ドメインで確定した指標を Gemini が自然文へ変換する
+`comment-gemini-v3` を使用する。既定モデルは `gemini-3.5-flash` で、必要な場合だけ
+`GEMINI_MODEL` で変更できる。APIキーが未設定、またはGemini APIの呼び出しに失敗した場合は、
+外部APIを使わない決定論的な `comment-v2` へフォールバックする。
+
+```dotenv
+GEMINI_API_KEY=your-api-key
+# GEMINI_MODEL=gemini-3.5-flash
+```
+
+Gemini APIの無料枠・課金条件・提供モデルはGoogle側で変更される可能性があるため、運用前に
+[公式料金表](https://ai.google.dev/gemini-api/docs/pricing?hl=en)と
+[モデル情報](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash)を確認する。
+**外部API費用を確実にゼロにする運用では`GEMINI_API_KEY`を設定しない。** この場合も
+`comment-v2`で展開コメント機能は利用できる。
+
 ## テスト
 
 ```bash

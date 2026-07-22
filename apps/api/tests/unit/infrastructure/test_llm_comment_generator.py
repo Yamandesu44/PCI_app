@@ -18,6 +18,7 @@ from pci.domain.pace.commentary import (
 from pci.domain.pace.rpci_forecast import PaceLabel
 from pci.infrastructure.llm_comment_generator import (
     GEMINI_COMMENTARY_VERSION,
+    GEMINI_MODEL,
     GeminiCommentGenerator,
 )
 
@@ -132,6 +133,8 @@ class TestForecastComment:
         result = gen.forecast_comment(_forecast_input())
         model_reason = next(r for r in result.reasons if r.code == "comment_model")
         assert "Gemini" in model_reason.description
+        assert GEMINI_MODEL == "gemini-3.5-flash"
+        assert GEMINI_MODEL in model_reason.description
 
     def test_falls_back_to_rule_based_on_http_error(self) -> None:
         client = _make_error_client(httpx.NetworkError("接続失敗"))
@@ -168,10 +171,19 @@ class TestForecastComment:
 
     def test_model_override_used_in_url(self) -> None:
         client = _make_http_client("見出し", ["本文"])
-        gen = GeminiCommentGenerator("fake", model="gemini-1.5-flash", http_client=client)
+        gen = GeminiCommentGenerator("fake", model="gemini-2.5-flash", http_client=client)
         gen.forecast_comment(_forecast_input())
         url: str = client.post.call_args.args[0]
-        assert "gemini-1.5-flash" in url
+        assert "gemini-2.5-flash" in url
+
+    def test_model_override_is_recorded_in_reason(self) -> None:
+        client = _make_http_client("見出し", ["本文"])
+        gen = GeminiCommentGenerator("fake", model="gemini-2.5-flash-lite", http_client=client)
+
+        result = gen.forecast_comment(_forecast_input())
+
+        model_reason = next(r for r in result.reasons if r.code == "comment_model")
+        assert "gemini-2.5-flash-lite" in model_reason.description
 
     def test_low_confidence_prompts_caveat_in_call(self) -> None:
         """確信度 < 0.5 のとき、プロンプトに逆展開の注意書き指示が含まれる。"""
