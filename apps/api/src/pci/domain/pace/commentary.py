@@ -4,7 +4,7 @@
 自然文の「解説」へ翻訳する。本プロダクトのコアバリュー
 「PCI を理解していない競馬ファンでも展開予想を活用できる」を担う最終出力のひとつ。
 
-MVP は決定論的なルールベース実装 `RuleBasedCommentGenerator`（comment-v1）を既定とし、
+MVP は決定論的なルールベース実装 `RuleBasedCommentGenerator`（comment-v2）を既定とし、
 将来の LLM 実装は同一の `CommentGenerator` インターフェースを満たすことで、
 application 層を無変更のまま差し替えられる（ADR-0005 の RPCI 予測と同じ疎結合方針）。
 
@@ -16,10 +16,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from pci.domain.pace.horse_number_label import horse_number_label
 from pci.domain.pace.rpci_forecast import PaceLabel
 from pci.domain.shared.reason import Reason
 
-COMMENTARY_VERSION = "comment-v1"
+COMMENTARY_VERSION = "comment-v2"
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,7 @@ class ForecastCommentInput:
     confidence: float
     front_runners: tuple[int, ...]
     beneficiaries: tuple[BeneficiaryRef, ...]
+    horse_numbers_confirmed: bool
 
 
 @dataclass(frozen=True)
@@ -97,7 +99,7 @@ class CommentGenerator(Protocol):
     def review_comment(self, data: ReviewCommentInput) -> Commentary: ...
 
 
-# ----- ルールベース実装（comment-v1） -----
+# ----- ルールベース実装（comment-v2） -----
 
 # 展開ラベルごとの「結論」見出し。初心者向け表示では指標名・実数値を出さない。
 _FORECAST_HEADLINE: dict[PaceLabel, str] = {
@@ -139,7 +141,7 @@ _BETTING_HINT: dict[PaceLabel, str] = {
 
 
 class RuleBasedCommentGenerator:
-    """ルールベース展開コメント生成器（comment-v1・テンプレート NLG）。
+    """ルールベース展開コメント生成器（comment-v2・テンプレート NLG）。
 
     指標を決定論的に自然文へ写像する。LLM を使わないため再現性が高く、
     生成根拠（どの指標から何を述べたか）を reasons に明示できる。
@@ -155,7 +157,12 @@ class RuleBasedCommentGenerator:
             f"{data.field_size}頭立てで{front_clause}、全体としては{pace_word}になりそうです。"
         )
         body.append(_FORECAST_CONSEQUENCE[data.pace_label])
-        body.append(_beneficiary_sentence(data.beneficiaries))
+        body.append(
+            _beneficiary_sentence(
+                data.beneficiaries,
+                horse_numbers_confirmed=data.horse_numbers_confirmed,
+            )
+        )
         body.append(_BETTING_HINT[data.pace_label])
 
         if data.confidence < 0.5:
@@ -228,17 +235,20 @@ def _front_clause(n_front: int) -> str:
     return f"前に行きたい馬が{n_front}頭そろい"
 
 
-def _beneficiary_sentence(beneficiaries: tuple[BeneficiaryRef, ...]) -> str:
+def _beneficiary_sentence(
+    beneficiaries: tuple[BeneficiaryRef, ...], *, horse_numbers_confirmed: bool
+) -> str:
     if not beneficiaries:
         return "突出して展開が向く馬は少なく、力関係どおりに決まりそうです。"
     top = beneficiaries[0]
+    top_label = horse_number_label(top.horse_no, confirmed=horse_numbers_confirmed)
     if len(beneficiaries) == 1:
         return (
-            f"この流れで注目したいのは{top.horse_no}番です。"
+            f"この流れで注目したいのは{top_label}です。"
             "展開がかみ合えば力を出しやすい一頭です。"
         )
     return (
-        f"この流れで特に注目したいのが{top.horse_no}番です。"
+        f"この流れで特に注目したいのが{top_label}です。"
         f"同じように流れが向きそうな馬も複数います。"
     )
 

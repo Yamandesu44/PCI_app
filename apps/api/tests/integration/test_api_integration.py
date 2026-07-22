@@ -150,7 +150,7 @@ def test_pace_analysis_through_real_db(client: TestClient, db_session: Session) 
     assert len(body["horses"]) == 1
     assert body["horses"][0]["pci"] == pytest.approx(53.5)
     assert body["horses"][0]["is_pci3_contributor"] is True
-    assert body["comment"]["model_version"] == "comment-v1"
+    assert body["comment"]["model_version"] == "comment-v2"
     assert body["comment"]["body"]
 
 
@@ -167,7 +167,7 @@ def test_forecast_persists_to_mart(client: TestClient, db_session: Session) -> N
 
     resp = client.get(f"/api/v1/races/{UPCOMING_RACE_KEY}/forecast")
     assert resp.status_code == 200
-    assert resp.json()["comment"]["model_version"] == "comment-v1"
+    assert resp.json()["comment"]["model_version"] == "comment-v2"
 
     pp_rows = db_session.scalars(
         select(PredictedPaceModel).where(PredictedPaceModel.race_key == UPCOMING_RACE_KEY)

@@ -209,11 +209,33 @@ class TestForecastRaceUseCase:
 
     def test_formation_is_hidden_before_draw_confirmation(self) -> None:
         repo = FakeRaceRepository()
-        _register_upcoming(repo, n=6, draw_confirmed=False)
+        _register_upcoming(repo, n=2, draw_confirmed=False)
+        _seed_history(repo, "2020100001", corner4=1, corner1=1)
 
-        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+        output = ForecastRaceUseCase(
+            repo, forecaster=_FixedForecaster(55.0, PaceLabel.SLOW)
+        ).execute(UPCOMING)
 
         assert output.formation is None
+        assert "登録順 1（馬番未確定）" in output.scenario_detail
+        assert output.comment is not None
+        assert "登録順 1（馬番未確定）" in "".join(output.comment.body)
+        assert "1番" not in output.scenario_detail
+
+    def test_scenario_uses_official_number_after_draw_confirmation(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=2, draw_confirmed=True)
+        _seed_history(repo, "2020100001", corner4=1, corner1=1)
+
+        output = ForecastRaceUseCase(
+            repo, forecaster=_FixedForecaster(55.0, PaceLabel.SLOW)
+        ).execute(UPCOMING)
+
+        assert output.formation is not None
+        assert "1番" in output.scenario_detail
+        assert output.comment is not None
+        assert "1番" in "".join(output.comment.body)
+        assert "登録順" not in output.scenario_detail
 
     def test_horse_fit_frame_no_reflects_draw_confirmation(self) -> None:
         """frame_no は枠順確定状態をそのまま反映する（未確定時は0、馬番を確定扱いしない）。"""
@@ -381,7 +403,7 @@ class TestForecastRaceUseCase:
         assert len(output.horses) == 3
 
     def test_forecast_includes_natural_language_comment(self) -> None:
-        """展開予想に自然文コメント（comment-v1）が付与される。"""
+        """展開予想に自然文コメント（comment-v2）が付与される。"""
         repo = FakeRaceRepository()
         _register_upcoming(repo, n=6)
         output = ForecastRaceUseCase(repo).execute(UPCOMING)
@@ -389,7 +411,7 @@ class TestForecastRaceUseCase:
         assert output.comment is not None
         assert output.comment.headline
         assert output.comment.body  # 段落本文あり
-        assert output.comment.model_version == "comment-v1"
+        assert output.comment.model_version == "comment-v2"
         assert output.comment.reasons  # 説明可能性
 
     def test_high_pace_good_run_gets_higher_fit_when_predicted_high(self) -> None:

@@ -106,7 +106,7 @@ class TestGetPaceAnalysisUseCase:
         assert out.rpci_actual == pytest.approx(expected)
 
     def test_includes_review_comment(self) -> None:
-        """確定後ペース分析に自然文の回顧コメント（comment-v1）が付く。"""
+        """確定後ペース分析に自然文の回顧コメント（comment-v2）が付く。"""
         repo = FakeRaceRepository()
         _seed_confirmed(repo)
         out = GetPaceAnalysisUseCase(repo).execute(CONFIRMED)
@@ -114,7 +114,7 @@ class TestGetPaceAnalysisUseCase:
         assert out.comment is not None
         assert out.comment.headline
         assert out.comment.body
-        assert out.comment.model_version == "comment-v1"
+        assert out.comment.model_version == "comment-v2"
         assert out.comment.reasons
 
     def test_no_pci_data_returns_insufficient_reason(self) -> None:

@@ -1,4 +1,4 @@
-"""展開コメント生成（RuleBasedCommentGenerator / comment-v1）の単体テスト。
+"""展開コメント生成（RuleBasedCommentGenerator / comment-v2）の単体テスト。
 
 決定論的なルールベース生成のため、見出し・本文・説明可能性 reasons を検証する。
 """
@@ -36,6 +36,7 @@ def _forecast_input(
     confidence: float = 0.7,
     front: tuple[int, ...] = (1, 2),
     beneficiaries: tuple[BeneficiaryRef, ...] = (BeneficiaryRef(3, 82.0),),
+    horse_numbers_confirmed: bool = True,
 ) -> ForecastCommentInput:
     return ForecastCommentInput(
         distance_m=1600,
@@ -46,6 +47,7 @@ def _forecast_input(
         confidence=confidence,
         front_runners=front,
         beneficiaries=beneficiaries,
+        horse_numbers_confirmed=horse_numbers_confirmed,
     )
 
 
@@ -112,6 +114,17 @@ class TestForecastComment:
         assert "3番" in joined
         assert "複数" in joined
         _assert_beginner_safe(out)
+
+    def test_unconfirmed_beneficiary_is_described_as_registration_order(self) -> None:
+        out = RuleBasedCommentGenerator().forecast_comment(
+            _forecast_input(
+                beneficiaries=(BeneficiaryRef(7, 88.0),),
+                horse_numbers_confirmed=False,
+            )
+        )
+        joined = "".join(out.body)
+        assert "登録順 7（馬番未確定）" in joined
+        assert "7番" not in joined
 
 
 class TestReviewComment:

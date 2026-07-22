@@ -1,8 +1,8 @@
-"""Gemini REST API を使った展開コメント生成器（comment-gemini-v1・ADR-0008）。
+"""Gemini REST API を使った展開コメント生成器（comment-gemini-v2・ADR-0008）。
 
 google-genai パッケージは不要。httpx で Gemini v1beta REST エンドポイントを
 直接呼び出すため、C拡張依存ゼロで動作する。
-API エラー・パースエラー時はルールベース（comment-v1）にフォールバックし
+API エラー・パースエラー時はルールベース（comment-v2）にフォールバックし
 サービス継続性を確保する。
 """
 
@@ -21,13 +21,14 @@ from pci.domain.pace.commentary import (
     ReviewCommentInput,
     RuleBasedCommentGenerator,
 )
+from pci.domain.pace.horse_number_label import horse_number_label
 from pci.domain.pace.rpci_forecast import PaceLabel
 from pci.domain.shared.reason import Reason
 
 _log = logging.getLogger(__name__)
 
 GEMINI_MODEL = "gemini-2.0-flash"
-GEMINI_COMMENTARY_VERSION = "comment-gemini-v1"
+GEMINI_COMMENTARY_VERSION = "comment-gemini-v2"
 
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -46,7 +47,7 @@ _DECIMAL_VALUE = re.compile(r"\d+\.\d+")
 
 
 class GeminiCommentGenerator:
-    """Gemini REST API で展開コメントを生成する（comment-gemini-v1）。
+    """Gemini REST API で展開コメントを生成する（comment-gemini-v2）。
 
     ADR-0008: LLM は指標→表現の写像のみを担い、数値・判定はドメインで確定済み。
     GEMINI_API_KEY が未設定の場合、DI がこのクラスを使わず rule-based を返す。
@@ -127,7 +128,10 @@ class GeminiCommentGenerator:
 
 def _build_forecast_prompt(data: ForecastCommentInput) -> str:
     beneficiary_text = (
-        "・".join(f"{b.horse_no}番" for b in data.beneficiaries)
+        "・".join(
+            horse_number_label(b.horse_no, confirmed=data.horse_numbers_confirmed)
+            for b in data.beneficiaries
+        )
         if data.beneficiaries
         else "特になし"
     )

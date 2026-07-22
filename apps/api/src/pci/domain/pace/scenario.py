@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pci.domain.pace.adaptability import FitLabel, HorsePaceProfile, PaiResult
+from pci.domain.pace.horse_number_label import horse_number_label, horse_number_list_label
 from pci.domain.pace.rpci_forecast import PaceLabel, RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
@@ -41,6 +42,8 @@ def build_pace_scenario(
     forecast: RpciForecast,
     fit_results: list[PaiResult],
     profiles: list[HorsePaceProfile],
+    *,
+    horse_numbers_confirmed: bool,
 ) -> PaceScenario:
     """想定RPCI と PAI から展開シナリオを生成する。
 
@@ -62,7 +65,12 @@ def build_pace_scenario(
     beneficiaries = tuple(r.horse_no for r in matched)
 
     headline = _HEADLINE[forecast.label]
-    detail = _build_detail(forecast, front_runners, matched)
+    detail = _build_detail(
+        forecast,
+        front_runners,
+        matched,
+        horse_numbers_confirmed=horse_numbers_confirmed,
+    )
 
     reasons = (
         Reason(
@@ -71,9 +79,9 @@ def build_pace_scenario(
         ),
         Reason(
             code="scenario_beneficiaries",
-            description=(
-                f"展開合致馬 {len(beneficiaries)}頭"
-                + (f"（馬番 {list(beneficiaries)}）" if beneficiaries else "（該当なし）")
+            description=_beneficiary_reason(
+                beneficiaries,
+                horse_numbers_confirmed=horse_numbers_confirmed,
             ),
         ),
     )
@@ -88,13 +96,27 @@ def build_pace_scenario(
     )
 
 
+def _beneficiary_reason(
+    beneficiaries: tuple[int, ...], *, horse_numbers_confirmed: bool
+) -> str:
+    suffix = (
+        f"（{horse_number_list_label(beneficiaries, confirmed=horse_numbers_confirmed)}）"
+        if beneficiaries
+        else "（該当なし）"
+    )
+    return f"展開合致馬 {len(beneficiaries)}頭{suffix}"
+
+
 def _build_detail(
     forecast: RpciForecast,
     front_runners: tuple[int, ...],
     matched: list[PaiResult],
+    *,
+    horse_numbers_confirmed: bool,
 ) -> str:
     front_part = (
-        f"先行争いに絡みそうなのは馬番 {list(front_runners)}。"
+        "先行争いに絡みそうなのは"
+        f"{horse_number_list_label(front_runners, confirmed=horse_numbers_confirmed)}。"
         if front_runners
         else "明確な先行馬が見当たらず、ペースは落ち着きやすい。"
     )
@@ -102,7 +124,9 @@ def _build_detail(
     if matched:
         top = matched[0]
         bene_part = (
-            f"この展開で恩恵を受けやすいのは馬番 {top.horse_no}（PAI {top.pai}）を筆頭とする"
+            "この展開で恩恵を受けやすいのは"
+            f"{horse_number_label(top.horse_no, confirmed=horse_numbers_confirmed)}"
+            f"（PAI {top.pai}）を筆頭とする"
             f"{len(matched)}頭。"
         )
     else:

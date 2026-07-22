@@ -54,6 +54,7 @@ def _forecast_input(
     confidence: float = 0.7,
     front_runners: tuple[int, ...] = (1, 3),
     beneficiaries: tuple[BeneficiaryRef, ...] = (BeneficiaryRef(4, 84.5),),
+    horse_numbers_confirmed: bool = True,
 ) -> ForecastCommentInput:
     return ForecastCommentInput(
         distance_m=1800,
@@ -64,6 +65,7 @@ def _forecast_input(
         confidence=confidence,
         front_runners=front_runners,
         beneficiaries=beneficiaries,
+        horse_numbers_confirmed=horse_numbers_confirmed,
     )
 
 
@@ -178,6 +180,15 @@ class TestForecastComment:
         gen.forecast_comment(_forecast_input(confidence=0.3))
         prompt: str = client.post.call_args.kwargs["json"]["contents"][0]["parts"][0]["text"]
         assert "逆" in prompt
+
+    def test_unconfirmed_horse_number_is_registration_order_in_prompt(self) -> None:
+        client = _make_http_client("見出し", ["本文"])
+        gen = GeminiCommentGenerator("fake", http_client=client)
+        gen.forecast_comment(_forecast_input(horse_numbers_confirmed=False))
+
+        prompt: str = client.post.call_args.kwargs["json"]["contents"][0]["parts"][0]["text"]
+        assert "登録順 4（馬番未確定）" in prompt
+        assert "4番" not in prompt
 
 
 # ----- 回顧コメントのテスト -----

@@ -188,7 +188,7 @@ class TestForecastEndpoint:
         assert set(comment.keys()) == COMMENT_KEYS
         assert comment["headline"]
         assert comment["body"], "自然文の段落本文は必須"
-        assert comment["model_version"] == "comment-v1"
+        assert comment["model_version"] == "comment-v2"
         assert comment["reasons"], "説明可能性: コメントの根拠は必須"
 
     def test_formation_contract(self, client: TestClient) -> None:
@@ -297,7 +297,7 @@ class TestPaceAnalysisEndpoint:
         assert set(comment.keys()) == COMMENT_KEYS
         assert comment["headline"]
         assert comment["body"]
-        assert comment["model_version"] == "comment-v1"
+        assert comment["model_version"] == "comment-v2"
         assert comment["reasons"]
 
     def test_unconfirmed_race_returns_409(self, client: TestClient) -> None:

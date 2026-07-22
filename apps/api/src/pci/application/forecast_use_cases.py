@@ -141,7 +141,14 @@ class ForecastRaceUseCase:
             for profile, fit_result in zip(profiles, fit_results, strict=True):
                 self._mart_repo.save_pace_fit(race_key_str, profile.horse_no, fit_result)
 
-        scenario = build_pace_scenario(forecast, fit_results, profiles)
+        formation_prediction = predict_formation(tuple(formation_inputs))
+        horse_numbers_confirmed = formation_prediction is not None
+        scenario = build_pace_scenario(
+            forecast,
+            fit_results,
+            profiles,
+            horse_numbers_confirmed=horse_numbers_confirmed,
+        )
         style_advantage = build_style_advantage(
             forecast.value,
             race.track_type,
@@ -149,7 +156,6 @@ class ForecastRaceUseCase:
         )
 
         name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)
-        formation_prediction = predict_formation(tuple(formation_inputs))
         ketto_by_no = {e.horse_no: e.ketto_num for e in entries}
         frame_no_by_no = {e.horse_no: e.frame_no for e in entries}
         fit_by_no = {r.horse_no: r for r in fit_results}
@@ -182,6 +188,7 @@ class ForecastRaceUseCase:
             beneficiaries=tuple(
                 BeneficiaryRef(horse_no=no, pai=fit_by_no[no].pai) for no in scenario.beneficiaries
             ),
+            horse_numbers_confirmed=horse_numbers_confirmed,
         )
         comment = _to_comment_output(self._commenter.forecast_comment(comment_input))
 

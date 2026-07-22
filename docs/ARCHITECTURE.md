@@ -47,7 +47,7 @@ src/pci/
       adaptability.py  PAI・展開合致（pai-v1）
       affinity.py      過去好走から得意ペースを推定
       formation.py     枠順確定判定 + 4ゾーンの序盤隊列予想（formation-v1）
-      commentary.py    展開コメント生成（戦略IF + comment-v1 ルールベースNLG）
+      commentary.py    展開コメント生成（戦略IF + comment-v2 ルールベースNLG）
       scenario.py      展開シナリオ見出し/詳細
       style_advantage.py 脚質別展開有利度（style-advantage-v1、想定RPCIの中立点からの乖離）
       mart_repository.py mart 層 Repository Protocol（read/write）

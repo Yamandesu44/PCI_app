@@ -142,7 +142,7 @@ class GetPaceAnalysisUseCase:
 
     RPCI/PCI3 は唯一の真実の場所 `aggregate_rpci`（ADR-0004）で再集計し、
     formula_version と説明可能性 reasons を付して返す。
-    自然文の回顧コメントは CommentGenerator（既定 comment-v1）で生成する。
+    自然文の回顧コメントは CommentGenerator（既定 comment-v2）で生成する。
     mart_repo を指定すると、出走前に保存された想定RPCIとの答え合わせ
     （forecast_accuracy）を合わせて返す（未指定・未保存時は None）。
     """

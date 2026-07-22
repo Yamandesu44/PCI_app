@@ -9,36 +9,34 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新18回目・Codex がLightGBM Windows破損修正と実DB重み判断を実施） |
+| 更新日時 | 2026-07-22（更新19回目・Codex が展開コメントの馬番号表示を修正） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（LightGBMモデルLF固定・AbilityWeights実DB採用判断） |
+| 直前の担当AI | OpenAI Codex（枠順未確定時の展開コメント馬番号表示を修正） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `5faaa86`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `9f1aa08`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、次の推奨項目としてAbilityWeightsの実DB採用判断まで完了した。**
+**ユーザー指示により、次の推奨項目として枠順未確定時の展開コメント表示を修正した。**
 
-比較開始時にWindowsのGit改行変換でLightGBMモデルが破損していることを発見した。
-`.gitattributes`でモデルをLF固定し、実モデル読込回帰テストとフォールバック警告ログを追加。
-その後、2025年後半212レース・2026年前半97レースを独立比較し、全3指標が両期間で改善する
-候補が無かったため、`DEFAULT_WEIGHTS`は変更せず現行0.55/0.30/0.15を維持した。
+特別登録段階の暫定`horse_no`を、詳細シナリオ・やさしい解説・Geminiプロンプトが公式馬番として
+文章化していた。既存`formation-v1`の確定判定を単一の根拠として3経路へ渡し、未確定時は
+「登録順 N（馬番未確定）」、確定後だけ「N番」と表示する。公開APIのフィールド構造は変更なし。
+出力履歴を区別するためルール版を`comment-v2`、Gemini版を`comment-gemini-v2`へ更新した。
 
-テスト結果: API非統合449 passed、LightGBM関連31 passed、ruff clean、実DBバックテストCLI
-（2025年後半212レース・2026年前半97レース、および最終スモーク1レース）成功。
-Webコードは変更していないためWebテスト・ビルドは今回未実行。mypyはローカルNumPy型定義が
-Python 3.11設定で解釈できず、対象コードの型解析前に停止した。
+テスト結果: API非統合454 passed、関連74 passed、ruff clean、変更対象5ファイルのmypy strict成功。
+import-linterはローカルPythonに未導入。全体mypyは既知のNumPy型定義とPython 3.11設定の不整合で
+対象コード解析前に停止。Webコード・公開スキーマは変更していないためWebテスト・ビルドは未実行。
 
-Claude Codeが最初に確認するファイル: `.gitattributes`,
-`apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`,
-`apps/api/tests/unit/infrastructure/pace/test_lgbm_forecaster.py`, `docs/DECISIONS.md`,
-`tasks/current.md`。最初に実行するコマンド: `git status --short --branch`、続いて
-`cd apps/api && python -m pytest tests/unit/infrastructure/pace/test_lgbm_forecaster.py -q` と
-`python -m pytest -m "not integration" -q`。
+Claude Codeが最初に確認するファイル: `apps/api/src/pci/domain/pace/horse_number_label.py`,
+`apps/api/src/pci/domain/pace/scenario.py`, `apps/api/src/pci/domain/pace/commentary.py`,
+`apps/api/src/pci/application/forecast_use_cases.py`, `docs/DECISIONS.md`, `tasks/current.md`。
+最初に実行するコマンド: `git status --short --branch`、続いて
+`cd apps/api && python -m pytest -m "not integration" -q`。
 
 ---
 
@@ -125,6 +123,16 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ---
 
 ## 完了した作業（直近セッション）
+
+0E. **枠順未確定時の展開コメント馬番号表示を修正**（本セッション）
+   - domain: `horse_number_label.py`を追加し、確定時「N番」・未確定時
+     「登録順 N（馬番未確定）」を共通化。scenario・commentaryの自然文へ適用。
+   - application: `predict_formation()`の成否を枠順確定の単一判定とし、scenarioと
+     `ForecastCommentInput.horse_numbers_confirmed`へ渡す。
+   - infrastructure: Geminiプロンプト内の展開恩恵馬も同じ表示へ統一。
+   - version: `comment-v2` / `comment-gemini-v2`。API公開スキーマ変更なし。
+   - テスト: API非統合454 passed、関連74 passed、ruff、変更対象mypy strict成功。
+   - 既知の不具合: なし。import-linter未導入と全体mypyのNumPy型定義問題は環境起因。
 
 0D. **LightGBM Windows改行破損修正・AbilityWeights実DB採用判断**（本セッション）
    - `.gitattributes`: `apps/api/models/*.txt text eol=lf`を追加。Git blobとWindows作業ファイルの
@@ -240,10 +248,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
      （トップ画面の中心候補プレビュー）の計5箇所を統一。
    - PAIスコア自体は枠順確定前でも意味があるため、formation-v1のように出力ごと非表示にはせず、
      ラベルの誠実さだけを是正する方針とした（`docs/DECISIONS.md`参照）。
-   - **未対応（既知の残課題）**: `scenario.py`の自然文コメント内「馬番 N」表記は同種の問題が
-     残る（`docs/SPEC.md §9`-14）。`HorsePaceProfile`/`PaiResult`にframe_no相当が無く、対応には
-     domain層拡張が必要なため今回は対象外。露出箇所は「判定根拠データ」アコーディオン内のみで、
-     ユーザー報告の箇所（常時表示カード）とは異なる。
+   - **後続対応**: `scenario.py`を含む自然文コメントの同種問題は2026-07-22の
+     `comment-v2`で解決済み。
    - 検証: API 415 passed（+1）、Web 65 passed（+2）、ruff/mypy --strict/lint-imports/
      typecheck/build すべてclean。
 
@@ -394,8 +400,6 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 - **JV-Data仕様追従の実施自体は未着手**（`apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md`で
   手順は明文化したが、実データ取得にはWindows実行機＋JV-Linkが必要でこのクラウド環境からは不可。
   RA/SEが実際にVer.3.0.0/Ver.4.9のどちらの出力を元に校正されたかも未確認のまま、`docs/SPEC.md §9`-8）。
-- 展開コメント自然文（`scenario.py`）内の「馬番 N」表記が枠順未確定時を区別できない件
-  （`docs/SPEC.md §9`-14）。domain層拡張が必要な既知の残課題として記録のみ、対応は未着手。
 - それ以外はなし。
 
 ## 現在止まっている箇所
@@ -472,9 +476,7 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
   UM/KS/CH（`master_parsers.py`）は既に Ver.4.9 相当への移行を確認済みだが、RA/SEは
   README.md/common.pyが「Ver.3.0準拠」表記のまま。再検証手順は
   `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md` に明文化済み（実施はWindows実行機が必要）。
-- 🔎 展開コメント自然文（`scenario.py`）の「馬番 N」表記は`HorseFitOutput`と異なり枠順未確定時の
-  区別が未対応（`docs/SPEC.md §9`-14、本セッションで発見・対応は未着手）。domain層
-  （`HorsePaceProfile`/`PaiResult`）にframe_no相当が無く、対応にはdomain層拡張が必要。
+- ✅ 展開コメント自然文の枠順未確定表示は`comment-v2`で解決済み。
 - 🔎 **`mykeibadb_client._build_se_record()`のDATA_KUBUN修正（2026-07-20）は実DB未検証**
   （`docs/SPEC.md §9`-15、`docs/DECISIONS.md` 2026-07-20）。コードリーディングのみに基づく
   仮説的な修正で、ユーザーの再同期結果で検証されるまでは「原因はこれで確定」と扱わないこと。
@@ -609,9 +611,10 @@ API/ingestion-worker の全量pytest・ruff・mypyは再実行できなかった
 1. `docs/HANDOFF.md`（このファイル）— 現状把握
 2. `docs/PROJECT_RULES.md` — Claude/Codex 共通の遵守ルール（最重要）
 3. `CLAUDE.md`（Claude Code）または `AGENTS.md`（Codex）— ツール固有の指示
-4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了はLightGBMモデル修正と実DB重み判断）
+4. `tasks/current.md` — 進行中タスク（現在は進行中なし。直近の完了は展開コメント馬番号表示修正）
 5. `docs/SPEC.md` — 確定/未確定仕様の区別（§3.6 に統合順位予想 ability-v3 を記載）
-6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: LightGBMモデルLF固定・現行AbilityWeights維持。
+6. `docs/DECISIONS.md` — 直近の設計判断（2026-07-22: comment-v2の馬番号表示・
+   LightGBMモデルLF固定・現行AbilityWeights維持。
    2026-07-21（3）: grade優先のability-v3・確定馬体重の永続化・検証指標。
    2026-07-21: 統合順位予想 Phase1（2軸分類・現データのみ）、確定成績未反映の解決。
    2026-07-20（2）: 切り分け診断ツール導入。
@@ -631,8 +634,7 @@ git status   # クリーンであるはず
 # 2. API 健全性確認（新コンテナは依存未インストール。venvを作り .venv/bin 経由で実行する）
 cd apps/api
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest -m "not integration" -q   # 449 passed
-.venv/bin/python -m pytest tests/unit/infrastructure/pace/test_lgbm_forecaster.py -q   # 31 passed
+.venv/bin/python -m pytest -m "not integration" -q   # 454 passed
 .venv/bin/ruff check src/ tests/
 .venv/bin/lint-imports
 .venv/bin/python -m mypy src/ --strict   # ローカルNumPy型定義とPython 3.11設定の不整合に注意

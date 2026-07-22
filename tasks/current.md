@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（LightGBM Windows改行破損修正・AbilityWeights実DB判断） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（枠順未確定時の展開コメント馬番号表示を修正） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,14 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P2 枠順未確定時の展開コメント馬番号表示を修正（comment-v2）**
+  - `formation-v1`と同じ枠順確定判定をscenario・ルールコメント・Geminiプロンプトへ結線。
+  - 共通の`horse_number_label.py`で、未確定時は「登録順 N（馬番未確定）」、確定後だけ
+    「N番」と表示する。API公開スキーマは変更していない。
+  - 出力変更を追跡するため、ルール版を`comment-v2`、Gemini版を`comment-gemini-v2`へ更新。
+  - 検証: API非統合454 passed、関連74 passed、ruff成功、変更対象5ファイルのmypy strict成功。
+    import-linterはローカル環境に未導入。全体mypyは既知のNumPy型定義不整合で解析前に停止。
 
 - [x] ✅ **P1 LightGBMモデルのWindows改行破損修正・AbilityWeights実DB採用判断**
   - `.gitattributes`で`apps/api/models/*.txt`をLF固定。LightGBMの`tree_sizes`がCRLF変換で
@@ -158,9 +166,7 @@
     `tests/contract/test_races_api.py`(HORSE_KEYS更新)
   - 検証: API 415 passed（+1）、Web 65 passed（+2）、ruff/mypy --strict/lint-imports/
     typecheck/build すべてclean。
-  - 未対応（既知の残課題）: `scenario.py`の自然文コメント内「馬番 N」表記は同種の問題が残る
-    （`docs/SPEC.md §9`-14）。露出箇所が「判定根拠データ」アコーディオン内に限られ、
-    ユーザー報告の箇所（常時表示カード）とは異なるため今回は対象外。
+  - 後続対応: `scenario.py`を含む自然文コメントの同種問題は2026-07-22の`comment-v2`で解決済み。
 
 - [x] ✅ **P0 自動同期が来週の特別登録を一度も取り込んでいなかったバグを修正**（本セッション）
   - ユーザー報告「月曜なのに土日の結果・来週の特別登録馬が未反映」を受けて

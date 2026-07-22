@@ -30,7 +30,7 @@ uvicorn pci.presentation.app:app --reload
 
 `race_key` は16桁数字（不正値は 422、未登録レースは 404）。
 `pace-analysis` は確定後（status=result）のみ。確定前のレースは 409 を返す。
-`forecast` / `pace-analysis` は指標を自然文へ翻訳した `comment`（model_version=comment-v1・
+`forecast` / `pace-analysis` は指標を自然文へ翻訳した `comment`（model_version=comment-v2・
 ADR-0008）を含み、生成根拠を `reasons` で説明する。
 
 ## テスト

@@ -43,6 +43,10 @@ application / presentation 層は `CommentGenerator` にのみ依存し、具体
 **LLM への差し替えがアプリ側コード変更ゼロで可能**。入力 VO（ForecastCommentInput /
 ReviewCommentInput）は指標スカラに正規化済みで、LLM プロンプト構築にもそのまま使える。
 
+**2026-07-22追記:** 出走前入力に`horse_numbers_confirmed`を追加した。枠順未確定時の暫定連番を
+公式馬番として文章化しないための表示状態で、数値・判定ロジック自体は変更しない。対応版は
+ルールベース`comment-v2`、Gemini`comment-gemini-v2`とする。v1の記載は初期設計の履歴として残す。
+
 ### 2. MVP: ルールベース NLG（`model_version = "comment-v1"`）
 
 説明可能性と再現性を最優先し、指標を決定論的にテンプレート文へ写像する:
