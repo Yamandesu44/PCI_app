@@ -6,6 +6,8 @@ ADR-0006 の mart 層方針に従い、model_version をキーに upsert する�
 
 from __future__ import annotations
 
+import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -39,18 +41,27 @@ class SqlAlchemyMartRepository:
                 pace_label=str(forecast.label),
                 confidence=forecast.confidence,
                 factors=factors,
+                generated_at=datetime.datetime.now(datetime.UTC),
             )
         )
 
     def find_predicted_pace(self, race_key: str) -> PredictedPaceRecord | None:
         """回顧比較用に想定RPCIを1件取得する。
 
-        同一レースに複数 model_version が存在する場合の優先順位は定めていない
-        （通常運用では1レース1 model_version のため実務上問題にならない）。
+        同一レースに複数 model_version が存在する場合は、最後に生成された世代を返す。
         """
-        row = self._s.execute(
-            select(PredictedPaceModel).where(PredictedPaceModel.race_key == race_key)
-        ).scalars().first()
+        row = (
+            self._s.execute(
+                select(PredictedPaceModel)
+                .where(PredictedPaceModel.race_key == race_key)
+                .order_by(
+                    PredictedPaceModel.generated_at.desc(),
+                    PredictedPaceModel.model_version.desc(),
+                )
+            )
+            .scalars()
+            .first()
+        )
         if row is None:
             return None
         return PredictedPaceRecord(
@@ -74,12 +85,11 @@ class SqlAlchemyMartRepository:
                 pai=result.pai,
                 fit_label=str(result.fit_label),
                 reasons=reasons,
+                generated_at=datetime.datetime.now(datetime.UTC),
             )
         )
 
-    def find_race_board_forecasts(
-        self, race_keys: list[str]
-    ) -> dict[str, RaceBoardForecastRecord]:
+    def find_race_board_forecasts(self, race_keys: list[str]) -> dict[str, RaceBoardForecastRecord]:
         """一覧対象の保存済み予想と最上位適性馬を一括取得する。"""
         if not race_keys:
             return {}
@@ -87,7 +97,11 @@ class SqlAlchemyMartRepository:
         pace_rows = self._s.execute(
             select(PredictedPaceModel)
             .where(PredictedPaceModel.race_key.in_(race_keys))
-            .order_by(PredictedPaceModel.race_key, PredictedPaceModel.model_version.desc())
+            .order_by(
+                PredictedPaceModel.race_key,
+                PredictedPaceModel.generated_at.desc(),
+                PredictedPaceModel.model_version.desc(),
+            )
         ).scalars()
         pace_by_race: dict[str, PredictedPaceModel] = {}
         for row in pace_rows:
@@ -102,11 +116,22 @@ class SqlAlchemyMartRepository:
             )
             .outerjoin(HorseModel, HorseModel.ketto_num == RaceEntryModel.ketto_num)
             .where(PaceFitModel.race_key.in_(race_keys))
-            .order_by(PaceFitModel.race_key, PaceFitModel.pai.desc())
         )
-        top_fit_by_race: dict[str, tuple[PaceFitModel, str | None]] = {}
+        fits_by_race_and_version: dict[str, dict[str, list[tuple[PaceFitModel, str | None]]]] = {}
         for fit, horse_name in fit_rows:
-            top_fit_by_race.setdefault(fit.race_key, (fit, horse_name))
+            versions = fits_by_race_and_version.setdefault(fit.race_key, {})
+            versions.setdefault(fit.model_version, []).append((fit, horse_name))
+
+        top_fit_by_race: dict[str, tuple[PaceFitModel, str | None]] = {}
+        for race_key, versions in fits_by_race_and_version.items():
+            _latest_version, latest_rows = max(
+                versions.items(),
+                key=lambda item: (
+                    max(row.generated_at for row, _name in item[1]),
+                    item[0],
+                ),
+            )
+            top_fit_by_race[race_key] = max(latest_rows, key=lambda item: item[0].pai)
 
         result: dict[str, RaceBoardForecastRecord] = {}
         for race_key, pace in pace_by_race.items():

@@ -167,16 +167,19 @@ def test_forecast_persists_to_mart(client: TestClient, db_session: Session) -> N
 
     resp = client.get(f"/api/v1/races/{UPCOMING_RACE_KEY}/forecast")
     assert resp.status_code == 200
-    assert resp.json()["comment"]["model_version"] == "comment-v2"
+    body = resp.json()
+    assert body["comment"]["model_version"] == "comment-v2"
 
     pp_rows = db_session.scalars(
         select(PredictedPaceModel).where(PredictedPaceModel.race_key == UPCOMING_RACE_KEY)
     ).all()
     assert len(pp_rows) == 1
-    assert pp_rows[0].model_version == "rule-v2"
+    # 実行環境で選ばれたルール/ML予測器の世代が、そのままmartへ保存される。
+    assert pp_rows[0].model_version == body["model_version"]
     assert 35.0 <= pp_rows[0].predicted_rpci <= 65.0
     assert pp_rows[0].pace_label in ("ハイ", "平均", "スロー")
     assert isinstance(pp_rows[0].factors, list)
+    assert pp_rows[0].generated_at is not None
 
     pf_rows = db_session.scalars(
         select(PaceFitModel).where(PaceFitModel.race_key == UPCOMING_RACE_KEY)
@@ -186,3 +189,4 @@ def test_forecast_persists_to_mart(client: TestClient, db_session: Session) -> N
     assert 0.0 <= pf_rows[0].pai <= 100.0
     assert pf_rows[0].fit_label in ("合致", "中立", "不利")
     assert isinstance(pf_rows[0].reasons, list)
+    assert pf_rows[0].generated_at is not None

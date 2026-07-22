@@ -222,7 +222,8 @@
 - ✅ `races.status`（entries/result）+ `race_entries` の NULL 許容で確定前後を同一テーブル管理。
 - 🟡 `entries` は特別登録と枠順確定後を内包する。現状は `race_entries.frame_no=0` を枠順未確定、
   1〜8が全馬に入った状態を枠順確定として派生判定する（DB列・status追加なし）。
-- ✅ mart（predicted_pace / pace_fit）は `model_version` 込みで upsert。
+- ✅ mart（predicted_pace / pace_fit）は `model_version` 込みで upsertし、`generated_at`で
+  最新生成世代を選択する。
 - 🟡 `ingest_log`（batch_date/step/mode/started_at/finished_at/status/error_msg）を追加（migration 002）。
 
 ---

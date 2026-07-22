@@ -26,6 +26,8 @@ pytestmark = pytest.mark.integration
 
 def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) -> None:
     race_key = "2026072205010101"
+    old_generated_at = datetime.datetime(2026, 7, 21, 10, 0, tzinfo=datetime.UTC)
+    latest_generated_at = datetime.datetime(2026, 7, 22, 10, 0, tzinfo=datetime.UTC)
     db_session.add(
         RaceModel(
             race_key=race_key,
@@ -66,6 +68,18 @@ def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) ->
             pace_label="ハイ",
             confidence=0.72,
             factors=[],
+            generated_at=latest_generated_at,
+        )
+    )
+    db_session.add(
+        PredictedPaceModel(
+            race_key=race_key,
+            model_version="zzz-old-model",
+            predicted_rpci=55.0,
+            pace_label="スロー",
+            confidence=0.95,
+            factors=[],
+            generated_at=old_generated_at,
         )
     )
     db_session.add_all(
@@ -77,6 +91,7 @@ def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) ->
                 pai=68.0,
                 fit_label="中立",
                 reasons=[],
+                generated_at=latest_generated_at,
             ),
             PaceFitModel(
                 race_key=race_key,
@@ -85,17 +100,30 @@ def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) ->
                 pai=84.0,
                 fit_label="合致",
                 reasons=[],
+                generated_at=latest_generated_at,
+            ),
+            PaceFitModel(
+                race_key=race_key,
+                horse_no=1,
+                model_version="zzz-old-pai",
+                pai=99.0,
+                fit_label="合致",
+                reasons=[],
+                generated_at=old_generated_at,
             ),
         ]
     )
     db_session.flush()
 
     records = SqlAlchemyMartRepository(db_session).find_race_board_forecasts([race_key])
+    predicted = SqlAlchemyMartRepository(db_session).find_predicted_pace(race_key)
 
     assert records[race_key].pace_label == "ハイ"
     assert records[race_key].top_horse_no == 2
     assert records[race_key].top_horse_name == "最上位候補"
     assert records[race_key].top_pai == pytest.approx(84.0)
+    assert predicted is not None
+    assert predicted.model_version == "rule-v4"
 
 
 def test_entry_draw_change_invalidates_saved_forecast(db_session: Session) -> None:

@@ -109,7 +109,8 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
   従来判定で脚質が混在する馬だけ、対象距離と過去走距離を加味した `running-style-v2-distance` で
   今回向けの脚質へ具体化する。履歴なしは自在のまま「参考」とする。
   特別登録（`frame_no=0`）では `formation=null` とし、Webも非表示にする。
-- 結果は mart 層 `predicted_pace` / `pace_fit` に `model_version` 付きで**永続化**（upsert）。
+- 結果は mart 層 `predicted_pace` / `pace_fit` に `model_version`・`generated_at`付きで
+  **永続化**（upsert）。参照時は最後に生成された世代を選ぶ。
 
 ### 回顧（確定後）と答え合わせ
 - `GET /api/v1/races/{key}/pace-analysis` → `GetPaceAnalysisUseCase` が確定 PCI/RPCI/PCI3 を再集計し、

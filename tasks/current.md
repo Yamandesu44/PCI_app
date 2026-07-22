@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（レースボード一括API） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（予想martの最新世代選択） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,13 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P2 予想martのモデル世代選択を生成日時ベースへ変更**
+  - Alembic `004`で`predicted_pace`と`pace_fit`へ`generated_at`を追加。
+  - 回顧は最新の想定展開、レースボードは最新の想定展開と最新PAI世代内の最上位馬を選択。
+  - 同一モデルの再計算でも生成日時を更新し、モデル名の辞書順へ依存しない。
+  - 検証: API非統合467 passed、PostgreSQL統合21 passed、Web68 passed、Ruff、
+    変更対象mypy strict、api-client/Web typecheck成功。
 
 - [x] ✅ **P1 レース一覧の予想取得N+1を一括APIへ移行**
   - `GET /api/v1/races/board?date=YYYY-MM-DD`で、レース情報と軽量予想を一括返却。

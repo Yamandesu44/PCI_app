@@ -13,35 +13,38 @@ class FakeMartRepository:
     def __init__(self) -> None:
         self.predicted_pace: dict[tuple[str, str], RpciForecast] = {}
         self.pace_fit: dict[tuple[str, int, str], PaiResult] = {}
+        self._latest_prediction_version: dict[str, str] = {}
+        self._latest_fit_version: dict[str, str] = {}
 
     def save_predicted_pace(self, race_key: str, forecast: RpciForecast) -> None:
         self.predicted_pace[(race_key, forecast.model_version)] = forecast
+        self._latest_prediction_version[race_key] = forecast.model_version
 
     def save_pace_fit(self, race_key: str, horse_no: int, result: PaiResult) -> None:
         self.pace_fit[(race_key, horse_no, result.model_version)] = result
+        self._latest_fit_version[race_key] = result.model_version
 
     def find_predicted_pace(self, race_key: str) -> PredictedPaceRecord | None:
-        for (key, _model_version), forecast in self.predicted_pace.items():
-            if key == race_key:
-                return PredictedPaceRecord(
-                    race_key=race_key,
-                    model_version=forecast.model_version,
-                    predicted_rpci=forecast.value,
-                    pace_label=str(forecast.label),
-                    confidence=forecast.confidence,
-                )
-        return None
+        version = self._latest_prediction_version.get(race_key)
+        if version is None:
+            return None
+        forecast = self.predicted_pace[(race_key, version)]
+        return PredictedPaceRecord(
+            race_key=race_key,
+            model_version=forecast.model_version,
+            predicted_rpci=forecast.value,
+            pace_label=str(forecast.label),
+            confidence=forecast.confidence,
+        )
 
-    def find_race_board_forecasts(
-        self, race_keys: list[str]
-    ) -> dict[str, RaceBoardForecastRecord]:
+    def find_race_board_forecasts(self, race_keys: list[str]) -> dict[str, RaceBoardForecastRecord]:
         result: dict[str, RaceBoardForecastRecord] = {}
         for race_key in race_keys:
             predicted = self.find_predicted_pace(race_key)
             fits = [
                 (horse_no, fit)
-                for (key, horse_no, _version), fit in self.pace_fit.items()
-                if key == race_key
+                for (key, horse_no, version), fit in self.pace_fit.items()
+                if key == race_key and version == self._latest_fit_version.get(race_key)
             ]
             if predicted is None or not fits:
                 continue

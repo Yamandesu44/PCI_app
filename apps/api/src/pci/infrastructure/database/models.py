@@ -8,7 +8,18 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    BigInteger,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -123,6 +134,12 @@ class PredictedPaceModel(Base):
     pace_label: Mapped[str] = mapped_column(String(10), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     factors: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    generated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        server_default=func.now(),
+    )
 
 
 class PaceFitModel(Base):
@@ -138,3 +155,9 @@ class PaceFitModel(Base):
     pai: Mapped[float] = mapped_column(Float, nullable=False)
     fit_label: Mapped[str] = mapped_column(String(10), nullable=False)
     reasons: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    generated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        server_default=func.now(),
+    )

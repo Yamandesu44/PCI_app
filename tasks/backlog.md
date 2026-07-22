@@ -64,10 +64,9 @@
 
 ## C. 技術的負債・環境
 
-- [ ] **P2 予想martのモデル世代選択を時刻ベースへ変更**。現行`predicted_pace`は
-  `created_at`を持たず、同一レースに複数`model_version`がある場合は文字列降順で1件を選ぶ。
-  通常運用は1世代のため支障はないが、予測器切替を頻繁に行う段階でmigrationと明示的な
-  active model判定を追加する。
+- [x] ~~**P2 予想martのモデル世代選択を時刻ベースへ変更**~~ → **2026-07-22完了**。
+  `predicted_pace`と`pace_fit`へ`generated_at`を追加し、最新生成世代を選択する。
+  active modelの事前判定は行わず、新世代を生成済みの場合に最新結果へ切り替わる。
 
 - [x] ~~`mypy src/ --strict` を全体で通すための SQLAlchemy/Pydantic/FastAPI スタブ導入 or 設定~~
   → **2026-07-12 判明・対応済み**: スタブ不足ではなく、素の `mypy` コマンドが `uv tool` 等の
