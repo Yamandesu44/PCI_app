@@ -33,6 +33,7 @@ from pci.domain.pace.commentary import CommentGenerator, RuleBasedCommentGenerat
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import RpciForecaster
 from pci.domain.racing.repository import RaceCompletenessRepository, RaceRepository
+from pci.infrastructure.database.readiness import DatabaseReadiness, check_database_readiness
 from pci.infrastructure.database.session import build_engine, build_session_maker
 from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster
 from pci.infrastructure.repositories.ingest_log_repository import SqlAlchemyIngestLogRepository
@@ -99,6 +100,15 @@ def get_session() -> Iterator[Session]:
 
 
 SessionDep = Annotated[Session, Depends(get_session)]
+
+
+def get_database_readiness() -> DatabaseReadiness:
+    # readinessは参照専用セッションを独立して閉じ、通常リクエストのcommit処理を通さない。
+    with _session_maker()() as session:
+        return check_database_readiness(session)
+
+
+DatabaseReadinessDep = Annotated[DatabaseReadiness, Depends(get_database_readiness)]
 
 
 def get_race_repository(session: SessionDep) -> RaceRepository:

@@ -1425,6 +1425,55 @@
         "title": "RaceSummarySchema",
         "type": "object"
       },
+      "ReadinessSchema": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "database": {
+            "enum": [
+              "ok",
+              "unavailable",
+              "schema_outdated"
+            ],
+            "title": "Database",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "not_ready"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "database"
+        ],
+        "title": "ReadinessSchema",
+        "type": "object"
+      },
       "ReasonSchema": {
         "description": "説明可能性の根拠（要因コード・説明・寄与度）。",
         "properties": {
@@ -2680,6 +2729,38 @@
         "summary": "Ingest Trainers",
         "tags": [
           "ingest"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "description": "DB接続とマイグレーション適用状態を含む利用可能性を返す。",
+        "operationId": "readiness_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessSchema"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Readiness",
+        "tags": [
+          "health"
         ]
       }
     }

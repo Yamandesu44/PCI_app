@@ -29,6 +29,7 @@ export type IntegratedRanking = components["schemas"]["IntegratedRankingSchema"]
 export type IntegratedEntry = components["schemas"]["IntegratedEntrySchema"];
 export type IngestStatus = components["schemas"]["IngestStatusSchema"];
 export type IngestFailure = components["schemas"]["IngestFailureSchema"];
+export type Readiness = components["schemas"]["ReadinessSchema"];
 
 export type { components, paths } from "./schema";
 
@@ -59,6 +60,7 @@ export interface ApiClient {
   getRaceDetail(raceKey: string): Promise<RaceDetail>;
   getPaceAnalysis(raceKey: string): Promise<PaceAnalysis>;
   getIngestStatus(): Promise<IngestStatus>;
+  getReadiness(): Promise<Readiness>;
 }
 
 export function createClient(options: ApiClientOptions): ApiClient {
@@ -93,5 +95,13 @@ export function createClient(options: ApiClientOptions): ApiClient {
     getPaceAnalysis: (raceKey) =>
       getJson<PaceAnalysis>(`/api/v1/races/${encodeURIComponent(raceKey)}/pace-analysis`),
     getIngestStatus: () => getJson<IngestStatus>("/api/v1/ingest-status"),
+    getReadiness: async () => {
+      const path = "/ready";
+      const res = await doFetch(`${base}${path}`);
+      if (res.status !== 200 && res.status !== 503) {
+        throw new ApiError(res.status, `GET ${path} failed with ${res.status}`);
+      }
+      return (await res.json()) as Readiness;
+    },
   };
 }

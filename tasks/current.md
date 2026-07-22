@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（成績未取り込みと出走馬スナップショット不整合を修復） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（API readinessとDB更新不足の復旧案内を追加） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,14 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P1 DBマイグレーション不足を検出し、正しい復旧手順を表示**
+  - `/health`をlivenessとして維持し、`/ready`でDB接続とORM必須テーブル・列を検査する。
+  - Webは一覧APIの500発生時だけreadinessを確認し、スキーマ不足なら
+    `python -m alembic upgrade head`、DB停止なら接続確認を案内する。
+  - 前タスクで追加したRepositoryメソッドをバックテスト用ラッパーにも委譲し、全体mypyを修復。
+  - 検証: API非統合482 passed、関連33 passed、PostgreSQL統合1 passed、Web71 passed、
+    API Ruff・mypy 62ファイル、api-client/Web typecheck、Web build成功。
 
 - [x] ✅ **P0 成績未取り込み警告と2026-07-19小倉11Rの実データ不整合を修復**
   - 確定出馬表を完全スナップショットとして置換し、結果送信前に必ず同じ出馬表を登録する。

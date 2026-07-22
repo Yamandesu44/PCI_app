@@ -147,7 +147,8 @@
 ## 5. API（presentation）
 
 - ✅ `GET /api/v1/races`（一覧・limit/date）, `/races/dates`, `/races/{key}`,
-  `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`, `/health`。
+  `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`, `/health`, `/ready`。
+  `/health`はプロセス生存確認、`/ready`はDB接続とORM必須列を含む利用可能性確認とする。
 - ✅ 内部取り込み `POST /internal/ingest/{horses,jockeys,trainers,entries,results,log}`,
   `POST /internal/ingest/forecasts/precompute`,
   `DELETE /internal/ingest/races/{key}`。`X-Ingest-Token` 認証（未設定時はスキップ=開発モード）。

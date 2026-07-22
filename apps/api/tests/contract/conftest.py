@@ -18,8 +18,10 @@ from pci.domain.pace.rpci_forecast import RuleBasedRpciForecaster
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
+from pci.infrastructure.database.readiness import DatabaseReadiness
 from pci.presentation.app import create_app
 from pci.presentation.dependencies import (
+    get_database_readiness,
     get_forecast_use_case,
     get_ingest_log_repository,
     get_mart_repository,
@@ -157,5 +159,8 @@ def client(repo: FakeRaceRepository) -> TestClient:
     )
     app.dependency_overrides[get_ingest_log_repository] = lambda: FakeIngestLogRepository(
         [recent_success]
+    )
+    app.dependency_overrides[get_database_readiness] = lambda: DatabaseReadiness(
+        ready=True, database="ok"
     )
     return TestClient(app)

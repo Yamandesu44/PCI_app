@@ -9,19 +9,43 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新26回目・Codex が成績未取り込みと出走馬不整合を修復） |
+| 更新日時 | 2026-07-22（更新27回目・Codex がAPI readinessとDB復旧案内を追加） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（成績未取り込みと2026-07-19小倉11Rを修復） |
+| 直前の担当AI | OpenAI Codex（DBマイグレーション不足の診断と復旧案内を実装） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `899147b`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `4c28c75`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、障害戦を除く成績未取り込み警告と2026-07-19小倉11Rの不整合を修復した。**
+**直前に発生した一覧API 500を契機に、DBマイグレーション不足を明示できるreadinessを実装した。**
+
+`/health`はDBに依存しないlivenessとして維持し、`/ready`はDB接続とSQLAlchemy ORMが必要とする
+全テーブル・列を検査する。不足時は503と`schema_outdated`を返す。Webは一覧APIが500になった場合だけ
+`/ready`を取得し、スキーマ不足なら`python -m alembic upgrade head`、DB停止ならPostgreSQLと
+`DATABASE_URL`の確認を案内する。通常表示時の追加通信はない。
+
+実DBではAlembic 003→004を適用済みで、`/api/v1/races/board?date=2026-07-26`とWebトップの
+200応答を確認した。前タスクで`RaceRepository`へ追加した`delete_entries_not_in`を
+`_AsOfRaceRepository`にも委譲し、API全体mypyを0エラーへ戻した。
+
+Claude Codeが最初に確認するファイル: `apps/api/src/pci/infrastructure/database/readiness.py`,
+`apps/api/src/pci/presentation/routers/health.py`, `apps/web/src/lib/apiError.ts`,
+`packages/api-client/src/index.ts`, `docs/DECISIONS.md`。
+最初に実行するコマンド: `git status --short --branch`、続いて
+`cd apps/api && python -m pytest -m "not integration" -q`、
+`cd ../.. && npm test --workspace=@pci/web`。
+
+テスト結果: API非統合482 passed / 22 deselected、readiness PostgreSQL統合1 passed、関連33 passed、
+Web71 passed、API Ruff、API全体mypy strict（62ファイル）、api-client/Web typecheck、Web build成功。
+import-linterはローカルPythonに未導入のため未実行。既知の機能不具合はない。
+
+---
+
+### 直前タスク（成績未取り込みと出走馬スナップショット不整合の修復）
 
 根本原因は、特別登録の仮馬番を確定出馬表で完全置換せず、結果だけを馬番で重ねていたこと、
 JV障害コードを30番台と誤認していたこと、古い取り込みが誤った開催回・開催日次のレースキーを

@@ -13,6 +13,7 @@ import { IngestStatusBanner } from "@/components/IngestStatusBanner";
 import { RaceDateCalendar } from "@/components/RaceDateCalendar";
 
 import { api } from "@/lib/api";
+import { describeApiError, type ApiErrorDisplay } from "@/lib/apiError";
 import {
   beginnerPaceLabel,
   confidenceInsight,
@@ -33,7 +34,6 @@ import {
   statusTone,
 } from "@/lib/races";
 import {
-  ApiError,
   type IngestStatus,
   type RaceBoardForecast,
   type RaceBoardItem,
@@ -63,28 +63,26 @@ interface HomePageProps {
   searchParams?: Promise<{ date?: string }>;
 }
 
-async function loadRaces(date?: string): Promise<{ races: RaceSummary[]; error: string | null }> {
+async function loadRaces(
+  date?: string,
+): Promise<{ races: RaceSummary[]; error: ApiErrorDisplay | null }> {
   try {
     const races = date != null
       ? await api.listRaces(undefined, date)
       : await api.listRaces(1000);
     return { races, error: null };
   } catch (err) {
-    const detail =
-      err instanceof ApiError ? `APIエラー (${err.status})` : "APIに接続できませんでした";
-    return { races: [], error: detail };
+    return { races: [], error: await describeApiError(err, () => api.getReadiness()) };
   }
 }
 
 async function loadRaceBoard(
   date: string,
-): Promise<{ items: RaceBoardItem[]; error: string | null }> {
+): Promise<{ items: RaceBoardItem[]; error: ApiErrorDisplay | null }> {
   try {
     return { items: await api.listRaceBoard(date), error: null };
   } catch (err) {
-    const detail =
-      err instanceof ApiError ? `APIエラー (${err.status})` : "APIに接続できませんでした";
-    return { items: [], error: detail };
+    return { items: [], error: await describeApiError(err, () => api.getReadiness()) };
   }
 }
 
@@ -441,9 +439,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       {error ? (
         <p className="mb-6 rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-600">
-          レース一覧を取得できませんでした（{error}）。
+          レース一覧を取得できませんでした（{error.summary}）。
           <br />
-          FastAPI バックエンド（<code>API_BASE_URL</code>）が起動しているか確認してください。
+          {error.action}
         </p>
       ) : null}
 

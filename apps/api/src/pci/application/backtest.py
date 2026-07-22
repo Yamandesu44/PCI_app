@@ -87,6 +87,9 @@ class _AsOfRaceRepository:
     def save_entry(self, entry: RaceEntry) -> None:
         self._inner.save_entry(entry)
 
+    def delete_entries_not_in(self, key: RaceKey, horse_nos: set[int]) -> int:
+        return self._inner.delete_entries_not_in(key, horse_nos)
+
     def delete_race(self, key: RaceKey) -> bool:
         return self._inner.delete_race(key)
 

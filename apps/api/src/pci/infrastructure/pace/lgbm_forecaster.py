@@ -57,7 +57,7 @@ _logger = logging.getLogger(__name__)
 def _load_lgb_booster(model_path: str | Path) -> Any:
     """改行をLFへ正規化してlightgbm.Boosterをロードする。"""
     try:
-        import lightgbm as lgb  # type: ignore[import-not-found]
+        import lightgbm as lgb
     except ImportError as exc:
         raise ImportError(
             "LightGBMRpciForecaster には lightgbm が必要です: pip install lightgbm"

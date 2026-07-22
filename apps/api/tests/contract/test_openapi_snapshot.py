@@ -34,3 +34,4 @@ def test_committed_openapi_exposes_core_endpoints() -> None:
     assert "/api/v1/races/{race_key}/forecast" in paths
     assert "/api/v1/races/{race_key}" in paths
     assert "/health" in paths
+    assert "/ready" in paths

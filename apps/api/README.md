@@ -23,7 +23,8 @@ uvicorn pci.presentation.app:app --reload
 
 | メソッド | パス | 概要 |
 |---|---|---|
-| GET | `/health` | ヘルスチェック |
+| GET | `/health` | プロセスの生存確認 |
+| GET | `/ready` | DB接続・必須テーブル/列を含む利用可能性確認 |
 | GET | `/api/v1/races/{race_key}/forecast` | 展開予想（想定RPCI・展開シナリオ・各馬 PAI・展開コメント） |
 | GET | `/api/v1/races/{race_key}/pace-analysis` | 確定後ペース分析（各馬PCI・実績RPCI・PCI3・回顧コメント・formula_version） |
 | GET | `/api/v1/races/{race_key}` | レース詳細（出走馬・確定指標 RPCI/PCI3） |

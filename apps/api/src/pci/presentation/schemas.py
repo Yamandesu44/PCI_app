@@ -6,6 +6,8 @@ domain/application からは独立（presentation 層の詳細）。
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from pci.application.dto import (
@@ -465,3 +467,10 @@ class RaceBoardItemSchema(BaseModel):
 
 class HealthSchema(BaseModel):
     status: str = "ok"
+
+
+class ReadinessSchema(BaseModel):
+    status: Literal["ready", "not_ready"]
+    database: Literal["ok", "unavailable", "schema_outdated"]
+    message: str | None = None
+    action: str | None = None
