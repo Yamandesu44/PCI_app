@@ -248,6 +248,84 @@ def test_iter_ra_records_accepts_wmykeibadb_race_shosai_columns() -> None:
     assert parsed.grade == "G1"
 
 
+def test_iter_ra_records_preserves_hurdle_track_code() -> None:
+    class _HurdleConnection(_Connection):
+        ra = [
+            {
+                "DATA_KUBUN": "7",
+                "KAISAI_NEN": "2026",
+                "KAISAI_GAPPI": "0719",
+                "KEIBAJO_CODE": "10",
+                "KAISAI_KAI": "02",
+                "KAISAI_NICHIME": "08",
+                "RACE_BANGO": "01",
+                "KYORI": "2860",
+                "TRACK_CODE": "54",
+            }
+        ]
+
+    record = next(MyKeibaDbClient(connection=_HurdleConnection()).iter_ra_records(
+        "20260719", "20260719"
+    ))
+    parsed = parse_ra(record)
+
+    assert parsed is not None
+    assert parsed.track_type == "障害"
+
+
+def test_iter_race_records_excludes_non_jra_venues() -> None:
+    class _LocalVenueConnection(_Connection):
+        ra = [
+            {
+                "開催年月日": "20260716",
+                "競馬場コード": "42",
+                "開催回": "04",
+                "開催日次": "04",
+                "レース番号": "09",
+                "距離": "1400",
+                "芝ダ": "ダート",
+            }
+        ]
+        se = [
+            {
+                "開催年月日": "20260716",
+                "競馬場コード": "42",
+                "開催回": "04",
+                "開催日次": "04",
+                "レース番号": "09",
+                "枠番": "1",
+                "馬番": "1",
+                "血統登録番号": "2021100001",
+            }
+        ]
+
+    client = MyKeibaDbClient(connection=_LocalVenueConnection())
+
+    assert list(client.iter_ra_records("20260716", "20260716")) == []
+    assert list(client.iter_se_records("20260716", "20260716")) == []
+
+
+def test_iter_race_records_excludes_zero_meeting_overseas_rows() -> None:
+    class _OverseasConnection(_Connection):
+        ra = [
+            {
+                "KAISAI_NEN": "2026",
+                "KAISAI_GAPPI": "0328",
+                "KEIBAJO_CODE": "07",
+                "KAISAI_KAI": "00",
+                "KAISAI_NICHIME": "00",
+                "RACE_BANGO": "09",
+                "KYORI": "2000",
+                "TRACK_CODE": "24",
+            }
+        ]
+        se = []
+
+    client = MyKeibaDbClient(connection=_OverseasConnection())
+
+    assert list(client.iter_ra_records("20260328", "20260328")) == []
+
+
 def test_iter_se_records_builds_result_record_from_mysql_row() -> None:
     client = MyKeibaDbClient(connection=_Connection())
 

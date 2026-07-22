@@ -2322,6 +2322,60 @@
         ]
       }
     },
+    "/internal/ingest/incomplete-race-keys": {
+      "get": {
+        "description": "再同期対象となる成績未取り込みのJRA平地レースキーを全件返す。",
+        "operationId": "get_incomplete_race_keys_internal_ingest_incomplete_race_keys_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Get Incomplete Race Keys Internal Ingest Incomplete Race Keys Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Incomplete Race Keys",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
     "/internal/ingest/jockeys": {
       "post": {
         "description": "騎手マスタ一括 Upsert。",

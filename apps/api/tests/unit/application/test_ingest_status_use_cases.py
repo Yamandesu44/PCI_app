@@ -113,6 +113,32 @@ class TestGetIngestStatusUseCase:
             "2026072005010101",
         ]
 
+    def test_hurdle_and_non_jra_races_are_not_reported(self) -> None:
+        repo = FakeRaceRepository()
+        for key, jyo_cd, track_type in [
+            ("2026072110010101", "10", "障害"),
+            ("2026072142040109", "42", "ダート"),
+            ("2026072105010102", "05", "芝"),
+        ]:
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(key),
+                    race_date=datetime.date(2026, 7, 21),
+                    jyo_cd=jyo_cd,
+                    distance_m=1600,
+                    track_type=track_type,
+                    field_size=12,
+                    status=RaceStatus.ENTRIES,
+                )
+            )
+
+        output = self._execute([_entry(days_ago=0)], repo)
+
+        assert output.incomplete_race_count == 1
+        assert [race.race_key for race in output.incomplete_races] == [
+            "2026072105010102"
+        ]
+
     def test_no_past_entries_reports_complete(self) -> None:
         output = self._execute([_entry(days_ago=0)])
         assert output.has_incomplete_races is False

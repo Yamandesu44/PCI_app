@@ -265,6 +265,10 @@ class TestCommon:
     def test_decode_track_dirt(self) -> None:
         assert decode_track("2") == "ダート"
 
+    @pytest.mark.parametrize("code", ["52", "54", "56"])
+    def test_decode_track_hurdle_from_jv_codes(self, code: str) -> None:
+        assert decode_track(code) == "障害"
+
     def test_decode_tenko_sunny(self) -> None:
         assert decode_tenko("1") == "晴"
 

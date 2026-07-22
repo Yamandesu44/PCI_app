@@ -22,20 +22,55 @@ class RegisterRaceEntriesUseCase:
     def __init__(self, repo: RaceRepository) -> None:
         self._repo = repo
 
-    def execute(self, race_info: RaceInfo, entries: list[EntryInput]) -> None:
+    def execute(self, race_info: RaceInfo, entries: list[EntryInput]) -> int:
         key = RaceKey(race_info.race_key)
+        existing_race = self._repo.find_by_key(key)
+        existing_entries = {entry.horse_no: entry for entry in self._repo.find_entries(key)}
+        is_preliminary = bool(entries) and all(entry.frame_no == 0 for entry in entries)
+
+        # 特別登録の仮順は、確定済みの馬番・枠番・成績を上書きしてはならない。
+        if is_preliminary and existing_race is not None:
+            has_final_entries = any(entry.frame_no > 0 for entry in existing_entries.values())
+            if existing_race.status == RaceStatus.RESULT or has_final_entries:
+                return 0
+
+        snapshot_unchanged = _entry_snapshot_matches(existing_entries, entries)
+        preserve_result = (
+            existing_race is not None
+            and existing_race.status == RaceStatus.RESULT
+            and snapshot_unchanged
+        )
         race = Race(
             race_key=key,
             race_date=race_info.race_date,
             jyo_cd=race_info.jyo_cd,
             distance_m=race_info.distance_m,
             track_type=race_info.track_type,
-            field_size=race_info.field_size,
-            status=RaceStatus.ENTRIES,
-            track_condition=race_info.track_condition,
-            weather=race_info.weather,
-            grade=race_info.grade,
-            race_class=race_info.race_class,
+            field_size=len(entries) if entries else race_info.field_size,
+            status=RaceStatus.RESULT if preserve_result else RaceStatus.ENTRIES,
+            track_condition=(
+                race_info.track_condition
+                or (existing_race.track_condition if existing_race is not None else None)
+            ),
+            weather=(
+                race_info.weather
+                or (existing_race.weather if existing_race is not None else None)
+            ),
+            grade=race_info.grade or (existing_race.grade if existing_race is not None else None),
+            race_class=(
+                race_info.race_class
+                or (existing_race.race_class if existing_race is not None else None)
+            ),
+            rpci_actual=(
+                existing_race.rpci_actual
+                if preserve_result and existing_race is not None
+                else None
+            ),
+            pci3_actual=(
+                existing_race.pci3_actual
+                if preserve_result and existing_race is not None
+                else None
+            ),
         )
         self._repo.save_race(race)
 
@@ -44,8 +79,16 @@ class RegisterRaceEntriesUseCase:
         self._repo.ensure_horses(e.ketto_num for e in entries)
         self._repo.ensure_jockeys(e.jockey_code for e in entries)
         self._repo.ensure_trainers(e.trainer_code for e in entries)
+        self._repo.delete_entries_not_in(key, {entry.horse_no for entry in entries})
 
         for e in entries:
+            previous = existing_entries.get(e.horse_no)
+            keep_result = (
+                preserve_result
+                and previous is not None
+                and previous.ketto_num == e.ketto_num
+            )
+            preserved = previous if keep_result else None
             entry = RaceEntry(
                 race_key=key,
                 horse_no=e.horse_no,
@@ -54,8 +97,22 @@ class RegisterRaceEntriesUseCase:
                 weight=e.weight,
                 jockey_code=e.jockey_code,
                 trainer_code=e.trainer_code,
+                finish_pos=preserved.finish_pos if preserved is not None else None,
+                race_time_s=preserved.race_time_s if preserved is not None else None,
+                agari_3f_s=preserved.agari_3f_s if preserved is not None else None,
+                corner_1=preserved.corner_1 if preserved is not None else None,
+                corner_2=preserved.corner_2 if preserved is not None else None,
+                corner_3=preserved.corner_3 if preserved is not None else None,
+                corner_4=preserved.corner_4 if preserved is not None else None,
+                pci_actual=preserved.pci_actual if preserved is not None else None,
+                running_style=(
+                    preserved.running_style if preserved is not None else None
+                ),
+                popularity=preserved.popularity if preserved is not None else None,
+                prize_money=preserved.prize_money if preserved is not None else None,
             )
             self._repo.save_entry(entry)
+        return len(entries)
 
 
 class RecordRaceResultUseCase:
@@ -207,3 +264,17 @@ def _resolve_running_style(entry: RaceEntry, repo: RaceRepository) -> str | None
     if not c4_positions:
         return None
     return str(classify_running_style(c4_positions).label)
+
+
+def _entry_snapshot_matches(
+    existing: dict[int, RaceEntry],
+    incoming: list[EntryInput],
+) -> bool:
+    if set(existing) != {entry.horse_no for entry in incoming}:
+        return False
+    return all(
+        (current := existing.get(entry.horse_no)) is not None
+        and current.frame_no == entry.frame_no
+        and current.ketto_num == entry.ketto_num
+        for entry in incoming
+    )

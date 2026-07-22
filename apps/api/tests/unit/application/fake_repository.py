@@ -63,6 +63,8 @@ class FakeRaceRepository:
             race
             for race in self._races.values()
             if race.race_date < before and race.status == RaceStatus.ENTRIES
+            and race.jyo_cd in _JRA_PLACE_CODES
+            and race.track_type != "障害"
         ]
         races.sort(key=lambda race: (race.race_date, str(race.race_key)), reverse=True)
         return races[:limit]
@@ -91,6 +93,17 @@ class FakeRaceRepository:
 
     def save_entry(self, entry: RaceEntry) -> None:
         self._entries[(str(entry.race_key), entry.horse_no)] = entry
+
+    def delete_entries_not_in(self, key: RaceKey, horse_nos: set[int]) -> int:
+        race_key = str(key)
+        targets = [
+            entry_key
+            for entry_key in self._entries
+            if entry_key[0] == race_key and entry_key[1] not in horse_nos
+        ]
+        for entry_key in targets:
+            del self._entries[entry_key]
+        return len(targets)
 
     def delete_race(self, key: RaceKey) -> bool:
         race_key = str(key)
@@ -129,3 +142,6 @@ class FakeRaceRepository:
         for code in codes:
             if code and code not in self._trainers:
                 self._trainers[code] = Trainer(code=code, name=code)
+
+
+_JRA_PLACE_CODES = frozenset(f"{code:02d}" for code in range(1, 11))

@@ -79,6 +79,15 @@ class IngestApiClient:
         result: dict[str, Any] = resp.json()
         return result
 
+    def incomplete_race_keys(self) -> set[str]:
+        """APIが検出した成績未取り込みのJRA平地レースキーを返す。"""
+        path = "/internal/ingest/incomplete-race-keys"
+        resp = self._http.get(f"{self._base_url}{path}", headers=self._headers())
+        if resp.is_error:
+            raise RuntimeError(f"Ingest API エラー {resp.status_code} {path}: {resp.text[:1000]}")
+        payload: list[str] = resp.json()
+        return set(payload)
+
     # ----- マスタデータ -----
 
     def upsert_horses(self, horses: list[HorseRecord]) -> int:

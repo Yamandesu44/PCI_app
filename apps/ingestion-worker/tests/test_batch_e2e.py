@@ -248,6 +248,47 @@ class TestIngestEntries:
 
 
 class TestIngestResults:
+    def test_refreshes_final_entry_snapshot_before_results(self) -> None:
+        api = _mock_api()
+
+        ingest_results(_client(), api, "20260618", "20260618")
+
+        api.register_entries.assert_called_once()
+        snapshot = api.register_entries.call_args.args[0]
+        assert snapshot.race_key == _RACE_KEY
+        assert snapshot.field_size == 3
+        assert [entry.horse_no for entry in snapshot.entries] == [1, 2, 3]
+
+    def test_limits_results_to_requested_race_keys(self) -> None:
+        api = _mock_api()
+
+        ingest_results(
+            _client(),
+            api,
+            "20260618",
+            "20260618",
+            race_keys={"2099010101010101"},
+        )
+
+        api.register_entries.assert_not_called()
+        api.record_results.assert_not_called()
+
+    def test_replaces_stale_key_with_authoritative_race_key(self) -> None:
+        api = _mock_api()
+        stale_key = "2026061805999901"
+
+        ingest_results(
+            _client(),
+            api,
+            "20260618",
+            "20260618",
+            race_keys={stale_key},
+        )
+
+        api.delete_race.assert_called_once_with(stale_key)
+        assert api.register_entries.call_args.args[0].race_key == _RACE_KEY
+        assert api.record_results.call_args.args[0].race_key == _RACE_KEY
+
     def test_record_results_called_once(self) -> None:
         api = _mock_api()
         ingest_results(_client(), api, "20260618", "20260618")

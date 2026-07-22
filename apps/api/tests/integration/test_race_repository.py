@@ -11,7 +11,7 @@ import datetime
 import pytest
 from sqlalchemy.orm import Session
 
-from pci.domain.racing.race import Race, RaceStatus
+from pci.domain.racing.race import Race, RaceStatus, TrackType
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import HorseModel, JockeyModel, TrainerModel
@@ -137,6 +137,31 @@ class TestSaveAndFindEntries:
         horse_nos = [e.horse_no for e in repo.find_entries(RACE_KEY)]
         assert horse_nos == [1, 2, 3]
 
+    def test_delete_entries_not_in_removes_old_registration(self, db_session: Session) -> None:
+        _seed_master(db_session)
+        repo = SqlAlchemyRaceRepository(db_session)
+        repo.save_race(_make_race())
+        db_session.flush()
+        for no in [1, 2, 3]:
+            repo.save_entry(
+                RaceEntry(
+                    race_key=RACE_KEY,
+                    horse_no=no,
+                    frame_no=no,
+                    ketto_num="2020100001",
+                    weight=480.0,
+                    jockey_code="01001",
+                    trainer_code="01001",
+                )
+            )
+        db_session.flush()
+
+        deleted = repo.delete_entries_not_in(RACE_KEY, {1, 3})
+        db_session.flush()
+
+        assert deleted == 1
+        assert [entry.horse_no for entry in repo.find_entries(RACE_KEY)] == [1, 3]
+
 
 @pytest.mark.integration
 class TestEnsureMastersSelfHeal:
@@ -254,6 +279,28 @@ class TestFindIncompletePastRaces:
                     status=status,
                 )
             )
+        repo.save_race(
+            Race(
+                race_key=RaceKey("2026061810020801"),
+                race_date=datetime.date(2026, 6, 18),
+                jyo_cd="10",
+                distance_m=2860,
+                track_type=TrackType.HURDLE,
+                field_size=12,
+                status=RaceStatus.ENTRIES,
+            )
+        )
+        repo.save_race(
+            Race(
+                race_key=RaceKey("2026061842040409"),
+                race_date=datetime.date(2026, 6, 18),
+                jyo_cd="42",
+                distance_m=1400,
+                track_type=TrackType.DIRT,
+                field_size=12,
+                status=RaceStatus.ENTRIES,
+            )
+        )
         db_session.flush()
 
         before = datetime.date(2026, 6, 19)

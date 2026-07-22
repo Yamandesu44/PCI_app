@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ingestion.models import EntryRecord, HorseRecord, RaceEntriesRecord
+from ingestion.parser.common import decode_track
 from ingestion.parser.jv_spec import RA_RECORD_BYTES, SE_RECORD_BYTES
 
 _RACE_TABLE_CANDIDATES = ("TOKUBETSU_TOROKUBA", "tokubetsu_torokuba")
@@ -78,6 +79,7 @@ _PLACE_CODES = {
     "阪神": "09",
     "小倉": "10",
 }
+_JRA_PLACE_CODES = frozenset(_PLACE_CODES.values())
 
 _TRACK_TYPES = {
     "1": "芝",
@@ -159,6 +161,7 @@ class MyKeibaDbClient:
             if (
                 date_from <= race.race_date.strftime("%Y%m%d") <= date_to
                 and race.race_key not in self._config.excluded_race_keys
+                and race.jyo_cd in _JRA_PLACE_CODES
             ):
                 by_key[race.race_key] = race
                 by_loose_key[_loose_race_key(row)] = race
@@ -199,6 +202,10 @@ class MyKeibaDbClient:
         for row in self._iter_table_by_date_range(connection, table, date_from, date_to):
             if not _row_in_date_range(row, date_from, date_to):
                 continue
+            if _jyo_cd_from_row(row) not in _JRA_PLACE_CODES:
+                continue
+            if _race_key_from_row(row)[10:14] == "0000":
+                continue
             yield _raw_record(row) or _build_ra_record(row)
 
     def iter_se_records(self, date_from: str, date_to: str) -> Iterator[str]:
@@ -207,6 +214,10 @@ class MyKeibaDbClient:
         table = self._find_table(connection, _SE_TABLE_CANDIDATES)
         for row in self._iter_table_by_date_range(connection, table, date_from, date_to):
             if not _row_in_date_range(row, date_from, date_to):
+                continue
+            if _jyo_cd_from_row(row) not in _JRA_PLACE_CODES:
+                continue
+            if _race_key_from_row(row)[10:14] == "0000":
                 continue
             yield _raw_record(row) or _build_se_record(row)
 
@@ -560,15 +571,24 @@ def _jyo_cd_from_row(row: dict[str, Any]) -> str:
 
 def _track_type(value: Any) -> str:
     s = _str_or_none(value) or ""
+    if s.isdigit():
+        return decode_track(s)
     return _TRACK_TYPES.get(s, _TRACK_TYPES.get(s[:1], s or "芝"))
 
 
 def _track_code(value: Any) -> str:
+    raw = _str_or_none(value) or ""
+    if raw.isdigit():
+        code = int(raw)
+        if code in {1, 2, 3}:
+            return {1: "17", 2: "24", 3: "52"}[code]
+        if 10 <= code <= 29 or 50 <= code <= 59:
+            return f"{code:02d}"
     track_type = _track_type(value)
     if track_type == "ダート":
         return "24"
     if track_type == "障害":
-        return "30"
+        return "52"
     return "17"
 
 

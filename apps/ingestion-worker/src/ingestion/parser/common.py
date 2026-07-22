@@ -102,7 +102,7 @@ def decode_baba(code: str) -> str | None:
 def decode_track(code: str) -> str:
     """TrackCD を芝/ダート/障害に変換する。
 
-    JV-Data Ver.4.9 の TrackCD は2桁コード: 10番台=芝, 20番台=ダート, 30番台=障害。
+    JV-Data Ver.4.9 の TrackCD は2桁コード: 10番台=芝, 20番台=ダート, 50番台=障害。
     旧仕様の1桁コード(1/2/3)も受け付ける。
     """
     c = code.strip()
@@ -112,7 +112,7 @@ def decode_track(code: str) -> str:
             return "芝"
         if n == 2 or 20 <= n <= 29:
             return "ダート"
-        if n == 3 or 30 <= n <= 39:
+        if n == 3 or 50 <= n <= 59:
             return "障害"
     return "芝"
 

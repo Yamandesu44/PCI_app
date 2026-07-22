@@ -11,7 +11,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
-from pci.domain.racing.race import Race, RaceStatus
+from pci.domain.racing.race import Race, RaceStatus, TrackType
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import (
@@ -69,10 +69,12 @@ class SqlAlchemyRaceRepository:
         return [self._to_race(m) for m in self._s.scalars(stmt).all()]
 
     def count_incomplete_past_races(self, before: datetime.date) -> int:
-        """指定日より前で、結果未反映のレース件数を返す。"""
+        """指定日より前で、結果未反映のJRA平地レース件数を返す。"""
         stmt = select(func.count()).select_from(RaceModel).where(
             RaceModel.race_date < before,
             RaceModel.status == str(RaceStatus.ENTRIES),
+            RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+            RaceModel.track_type != str(TrackType.HURDLE),
         )
         return int(self._s.scalar(stmt) or 0)
 
@@ -83,6 +85,8 @@ class SqlAlchemyRaceRepository:
         stmt = select(func.min(RaceModel.race_date)).where(
             RaceModel.race_date < before,
             RaceModel.status == str(RaceStatus.ENTRIES),
+            RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+            RaceModel.track_type != str(TrackType.HURDLE),
         )
         return self._s.scalar(stmt)
 
@@ -95,6 +99,8 @@ class SqlAlchemyRaceRepository:
             .where(
                 RaceModel.race_date < before,
                 RaceModel.status == str(RaceStatus.ENTRIES),
+                RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+                RaceModel.track_type != str(TrackType.HURDLE),
             )
             .order_by(RaceModel.race_date.desc(), RaceModel.race_key.desc())
             .limit(limit)
@@ -154,6 +160,21 @@ class SqlAlchemyRaceRepository:
                 delete(PredictedPaceModel).where(PredictedPaceModel.race_key == race_key)
             )
         self._s.merge(self._from_entry(entry))
+
+    def delete_entries_not_in(self, key: RaceKey, horse_nos: set[int]) -> int:
+        """完全な出馬表から消えた特別登録馬・旧馬番を削除する。"""
+        race_key = str(key)
+        stmt = delete(RaceEntryModel).where(RaceEntryModel.race_key == race_key)
+        if horse_nos:
+            stmt = stmt.where(RaceEntryModel.horse_no.not_in(horse_nos))
+        cursor = cast(CursorResult[Any], self._s.execute(stmt))
+        deleted = int(cursor.rowcount or 0)
+        if deleted:
+            self._s.execute(delete(PaceFitModel).where(PaceFitModel.race_key == race_key))
+            self._s.execute(
+                delete(PredictedPaceModel).where(PredictedPaceModel.race_key == race_key)
+            )
+        return deleted
 
     def delete_race(self, key: RaceKey) -> bool:
         """レース本体と、画面表示に関わる関連データをまとめて削除する。"""
@@ -307,3 +328,6 @@ class SqlAlchemyRaceRepository:
             popularity=e.popularity,
             prize_money=e.prize_money,
         )
+
+
+_JRA_PLACE_CODES = tuple(f"{code:02d}" for code in range(1, 11))

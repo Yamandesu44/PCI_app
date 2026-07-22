@@ -25,7 +25,7 @@ from ingestion.models import (
 )
 
 
-def _make_http_client(response_body: dict[str, Any], status_code: int = 200) -> Mock:
+def _make_http_client(response_body: Any, status_code: int = 200) -> Mock:
     resp = Mock(spec=httpx.Response)
     resp.json.return_value = response_body
     resp.raise_for_status.return_value = None
@@ -35,9 +35,25 @@ def _make_http_client(response_body: dict[str, Any], status_code: int = 200) -> 
     resp.is_error = status_code >= 400
     resp.text = ""
     client = Mock(spec=httpx.Client)
+    client.get.return_value = resp
     client.post.return_value = resp
     client.delete.return_value = resp
     return client
+
+
+class TestIncompleteRaceKeys:
+    def test_returns_only_valid_race_keys(self) -> None:
+        http = _make_http_client(
+            ["2026071910020801", "2026071810020701"]
+        )
+        api = IngestApiClient("http://api", token="secret", http_client=http)
+
+        result = api.incomplete_race_keys()
+
+        assert result == {"2026071910020801", "2026071810020701"}
+        call = http.get.call_args
+        assert call.args[0] == "http://api/internal/ingest/incomplete-race-keys"
+        assert call.kwargs["headers"]["X-Ingest-Token"] == "secret"
 
 
 class TestUpsertHorses:

@@ -138,6 +138,71 @@ class TestRegisterRaceEntriesUseCase:
         assert race.track_condition == "良"
         assert race.grade == "G1"
 
+    def test_final_entries_replace_special_registration_snapshot(self) -> None:
+        repo = self._make_repo()
+        special_entries = [
+            EntryInput(
+                horse_no=i,
+                frame_no=0,
+                ketto_num=f"202010{i:04d}",
+                weight=0.0,
+                jockey_code="TBD",
+                trainer_code="TBD",
+            )
+            for i in range(1, 20)
+        ]
+        special_info = RaceInfo(**{**RACE_INFO.__dict__, "field_size": 19})
+        RegisterRaceEntriesUseCase(repo).execute(special_info, special_entries)
+
+        accepted = RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+
+        assert accepted == 3
+        race = repo.find_by_key(RaceKey(RACE_KEY))
+        assert race is not None and race.field_size == 3
+        actual = repo.find_entries(RaceKey(RACE_KEY))
+        assert [entry.horse_no for entry in actual] == [1, 2, 3]
+        assert [entry.frame_no for entry in actual] == [1, 2, 3]
+        assert [entry.ketto_num for entry in actual] == [
+            "2020100001",
+            "2020100002",
+            "2020100003",
+        ]
+
+    def test_special_registration_does_not_overwrite_final_entries(self) -> None:
+        repo = self._make_repo()
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+        special = [
+            EntryInput(
+                horse_no=1,
+                frame_no=0,
+                ketto_num="2020999999",
+                weight=0.0,
+                jockey_code="TBD",
+                trainer_code="TBD",
+            )
+        ]
+
+        accepted = RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, special)
+
+        assert accepted == 0
+        actual = repo.find_entries(RaceKey(RACE_KEY))
+        assert len(actual) == 3
+        assert actual[0].ketto_num == "2020100001"
+
+    def test_same_final_snapshot_preserves_recorded_result(self) -> None:
+        repo = self._make_repo()
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+        RecordRaceResultUseCase(repo).execute(RACE_KEY, RESULTS)
+
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+
+        race = repo.find_by_key(RaceKey(RACE_KEY))
+        horse = repo.find_entries(RaceKey(RACE_KEY))[0]
+        assert race is not None and race.status == RaceStatus.RESULT
+        assert race.rpci_actual is not None
+        assert horse.finish_pos == 1
+        assert horse.pci_actual is not None
+
 
 class TestRecordRaceResultUseCase:
     def _setup_repo(self) -> FakeRaceRepository:

@@ -22,7 +22,12 @@ from pci.application.ingest_use_cases import (
 from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
 from pci.config.settings import get_settings
 from pci.domain.shared.race_key import RaceKey
-from pci.presentation.dependencies import PrecomputeForecastsUseCaseDep, RepositoryDep, SessionDep
+from pci.presentation.dependencies import (
+    PrecomputeForecastsUseCaseDep,
+    RaceCompletenessRepositoryDep,
+    RepositoryDep,
+    SessionDep,
+)
 
 router = APIRouter(prefix="/internal/ingest", tags=["ingest"])
 
@@ -41,6 +46,16 @@ def _verify_token(x_ingest_token: Annotated[str | None, Header()] = None) -> Non
 
 
 AuthDep = Annotated[None, Depends(_verify_token)]
+
+
+@router.get("/incomplete-race-keys", response_model=list[str])
+def get_incomplete_race_keys(
+    repo: RaceCompletenessRepositoryDep,
+    _auth: AuthDep,
+) -> list[str]:
+    """再同期対象となる成績未取り込みのJRA平地レースキーを全件返す。"""
+    races = repo.find_incomplete_past_races(datetime.date.today(), limit=10_000)
+    return [str(race.race_key) for race in races]
 
 
 # ----- リクエストスキーマ -----
@@ -227,9 +242,9 @@ def ingest_entries(
         )
         for e in body.entries
     ]
-    uc.execute(race_info, entries)
+    accepted = uc.execute(race_info, entries)
     session.commit()
-    return IngestResponse(accepted=len(entries))
+    return IngestResponse(accepted=accepted)
 
 
 @router.post("/results", response_model=ResultResponse, status_code=status.HTTP_200_OK)

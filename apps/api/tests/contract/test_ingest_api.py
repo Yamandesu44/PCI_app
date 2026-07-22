@@ -288,6 +288,16 @@ class TestPrecomputeForecasts:
         assert resp.status_code == 422
 
 
+class TestIncompleteRaceKeys:
+    def test_returns_all_incomplete_race_keys(self, client: TestClient) -> None:
+        client.post("/internal/ingest/entries", json=ENTRIES_PAYLOAD)
+
+        resp = client.get("/internal/ingest/incomplete-race-keys")
+
+        assert resp.status_code == 200
+        assert resp.json() == [RACE_KEY]
+
+
 class TestIngestAuth:
     """INGEST_TOKEN 設定時の認証動作を検証する。"""
 

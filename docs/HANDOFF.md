@@ -9,10 +9,10 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新25回目・Codex が予想の同期後事前生成を追加） |
+| 更新日時 | 2026-07-22（更新26回目・Codex が成績未取り込みと出走馬不整合を修復） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（今後のレース予想を同期後に事前生成） |
+| 直前の担当AI | OpenAI Codex（成績未取り込みと2026-07-19小倉11Rを修復） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
 | 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `899147b`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
@@ -21,7 +21,32 @@
 
 ## 現在の作業目的
 
-**ユーザー指示により、次の推奨項目として今後のレース予想の事前生成を実装した。**
+**ユーザー指示により、障害戦を除く成績未取り込み警告と2026-07-19小倉11Rの不整合を修復した。**
+
+根本原因は、特別登録の仮馬番を確定出馬表で完全置換せず、結果だけを馬番で重ねていたこと、
+JV障害コードを30番台と誤認していたこと、古い取り込みが誤った開催回・開催日次のレースキーを
+生成していたことだった。確定出馬表の完全置換、結果前の出馬表再登録、特別登録の上書き防止、
+JRA外・海外・障害の除外、`--only-incomplete`限定修復を実装した。
+
+実DBは未取り込み343件から0件へ修復済み。`2026071910020811`は18頭・17頭着順反映、
+`2026071910020801`は障害・11頭へ修正した。限定同期は310レース成功、11レース失敗。
+失敗は距離0の海外行または確定出馬表を再構成できない行で、未取り込み警告には残っていない。
+
+Claude Codeが最初に確認するファイル: `apps/api/src/pci/application/race_use_cases.py`,
+`apps/api/src/pci/infrastructure/repositories/race_repository.py`,
+`apps/ingestion-worker/src/ingestion/batch.py`,
+`apps/ingestion-worker/src/ingestion/client/mykeibadb_client.py`, `docs/DECISIONS.md`。
+最初に実行するコマンド: `git status --short --branch`、続いて
+`cd apps/api && python -m pytest -m "not integration" -q` と
+`cd ../ingestion-worker && python -m pytest -q`。
+
+未完了・既知事項: SQL統合テストはDocker依存のため今回未実行。worker全体Ruffには既存の
+`windows_client.py`、`locate_corners.py`、`test_batch_e2e.py`等の違反が残る。API全体mypyは
+Python 3.11設定とローカルNumPy 3.12型定義の不整合で停止するため、変更対象4ファイルだけ成功確認した。
+
+---
+
+### 直前タスク（今後のレース予想の事前生成）
 
 `PrecomputeUpcomingForecastsUseCase`と認証付き`POST /internal/ingest/forecasts/precompute`を追加した。
 workerには`--step forecasts`を追加し、`run_mykeibadb_full_sync.ps1`がentries、results、

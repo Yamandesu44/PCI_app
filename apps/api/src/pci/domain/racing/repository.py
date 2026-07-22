@@ -30,6 +30,10 @@ class RaceRepository(Protocol):
 
     def save_entry(self, entry: RaceEntry) -> None: ...
 
+    def delete_entries_not_in(self, key: RaceKey, horse_nos: set[int]) -> int:
+        """完全な出馬表に存在しない旧エントリを削除する。"""
+        ...
+
     def delete_race(self, key: RaceKey) -> bool: ...
 
     def find_horse_recent_entries(
@@ -66,7 +70,7 @@ class RaceRepository(Protocol):
 
 
 class RaceCompletenessRepository(Protocol):
-    """確定日を過ぎても結果未反映のレースを検出する読み取りポート。"""
+    """確定日を過ぎても結果未反映のJRA平地レースを検出する読み取りポート。"""
 
     def count_incomplete_past_races(self, before: datetime.date) -> int: ...
 

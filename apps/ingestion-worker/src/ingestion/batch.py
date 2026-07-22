@@ -92,7 +92,13 @@ def _build_client(mode: str, race_option: int = 1) -> JvLinkClient:
     raise ValueError(f"未知のモード: {mode!r}。'fixture' または 'jvlink' を指定してください。")
 
 
-def ingest_mykeibadb_special_entries(api: IngestApiClient, date_from: str, date_to: str) -> None:
+def ingest_mykeibadb_special_entries(
+    api: IngestApiClient,
+    date_from: str,
+    date_to: str,
+    *,
+    today: datetime.date | None = None,
+) -> None:
     """mykeibadb の特別登録テーブルから出走前レースを取り込む。"""
     from ingestion.client.mykeibadb_client import MyKeibaDbClient
 
@@ -103,8 +109,14 @@ def ingest_mykeibadb_special_entries(api: IngestApiClient, date_from: str, date_
         except Exception as exc:
             _log.error("mykeibadb 除外レース削除エラー %s: %s", race_key, exc)
 
-    races = client.fetch_special_entries(date_from, date_to)
-    horses = client.fetch_special_horses(date_from, date_to)
+    current = (today or datetime.date.today()).strftime("%Y%m%d")
+    effective_from = max(date_from, current)
+    if effective_from > date_to:
+        _log.info("mykeibadb 特別登録の未来レースなし: %s→%s", date_from, date_to)
+        return
+
+    races = client.fetch_special_entries(effective_from, date_to)
+    horses = client.fetch_special_horses(effective_from, date_to)
 
     if not races:
         _log.info("mykeibadb 特別登録データが見つかりません: %s→%s", date_from, date_to)
@@ -287,20 +299,34 @@ def ingest_results(
     api: IngestApiClient,
     date_from: str,
     date_to: str,
+    *,
+    race_keys: set[str] | None = None,
 ) -> None:
     """SE レコード（DataKubun=4/7）+ RA レコード（DataKubun=7）から確定成績を取り込む。"""
     # race_key → RaceResultRecord のバッファ
     race_results: dict[str, RaceResultRecord] = {}
+    target_by_identity: dict[str, set[str]] = {}
+    if race_keys is not None:
+        for target_key in race_keys:
+            target_by_identity.setdefault(_race_identity(target_key), set()).add(target_key)
+    stale_race_keys: set[str] = set()
 
     # RA 確定レコード（DataKubun=7）から HaronTimeL3（後半3F）を収集する。
     # ingest_entries より後に呼ばれるが、RA は SE と独立したデータ種別のため再取得可能。
     race_s3f_map: dict[str, float] = {}
     race_l3f_map: dict[str, float] = {}
     grade_map: dict[str, str] = {}
+    entry_snapshots: dict[str, RaceEntriesRecord] = {}
     for rec in client.iter_ra_records(date_from, date_to):
         try:
             ra = _parse_ra(rec)
             if ra:
+                if race_keys is not None:
+                    matching = target_by_identity.get(_race_identity(ra.race_key), set())
+                    if ra.race_key not in race_keys and not matching:
+                        continue
+                    stale_race_keys.update(key for key in matching if key != ra.race_key)
+                entry_snapshots[ra.race_key] = ra
                 if ra.race_s3f is not None:
                     race_s3f_map[ra.race_key] = ra.race_s3f
                 if ra.race_l3f is not None:
@@ -319,6 +345,20 @@ def ingest_results(
         se_rows += 1
         try:
             race_key = parse_race_key_from_se(rec)
+            if race_keys is not None:
+                matching = target_by_identity.get(_race_identity(race_key), set())
+                if race_key not in race_keys and not matching:
+                    continue
+            entry = parse_se_entry(rec)
+            snapshot = entry_snapshots.get(race_key)
+            if entry is not None and snapshot is not None and entry.horse_no > 0:
+                for index, current in enumerate(snapshot.entries):
+                    if current.horse_no == entry.horse_no:
+                        snapshot.entries[index] = entry
+                        break
+                else:
+                    snapshot.entries.append(entry)
+
             result = parse_se_result(rec)
             if result is None:
                 continue
@@ -349,8 +389,37 @@ def ingest_results(
 
     sent_ok = 0
     sent_fail = 0
-    for race_key, rr in race_results.items():
-        if not rr.results:
+    for stale_race_key in sorted(stale_race_keys):
+        try:
+            api.delete_race(stale_race_key)
+        except Exception as exc:
+            sent_fail += 1
+            _log.error("旧レースキー削除エラー %s: %s", stale_race_key, exc)
+
+    snapshots_to_send = (
+        entry_snapshots
+        if race_keys is not None
+        else {
+            key: entry_snapshots[key]
+            for key in race_results
+            if key in entry_snapshots
+        }
+    )
+    for race_key, snapshot in snapshots_to_send.items():
+        if not snapshot.entries:
+            sent_fail += 1
+            _log.error("確定出馬表を再構成できないため成績送信を中止: %s", race_key)
+            continue
+        snapshot.entries.sort(key=lambda entry: entry.horse_no)
+        snapshot.field_size = len(snapshot.entries)
+        try:
+            api.register_entries(snapshot)
+        except Exception as exc:
+            sent_fail += 1
+            _log.error("確定出馬表送信エラー %s: %s", race_key, exc)
+            continue
+        rr = race_results.get(race_key)
+        if rr is None or not rr.results:
             continue
         rr.race_s3f = race_s3f_map.get(race_key)
         rr.race_l3f = race_l3f_map.get(race_key)
@@ -380,6 +449,11 @@ def ingest_results(
             "上の『成績送信エラー』の内容（例: レースが見つかりません=出走表未登録、"
             "HTTPエラー=API/DB接続先の相違）を確認してください。"
         )
+
+
+def _race_identity(race_key: str) -> str:
+    """開催回・開催日次を除いた、日付・競馬場・R番号の同一性キーを返す。"""
+    return f"{race_key[:10]}{race_key[-2:]}"
 
 
 def _to_iso_date(yyyymmdd: str) -> str:
@@ -482,6 +556,11 @@ def main() -> None:
             "0 の場合は従来どおり一括で処理する。"
         ),
     )
+    parser.add_argument(
+        "--only-incomplete",
+        action="store_true",
+        help="APIが検出した成績未取り込みのJRA平地レースだけを再同期する。",
+    )
     args = parser.parse_args()
 
     date_from: str = args.date
@@ -491,6 +570,12 @@ def main() -> None:
     ingest_token = os.environ.get("INGEST_TOKEN", "")
 
     api = IngestApiClient(base_url=api_base_url, token=ingest_token)
+    incomplete_race_keys: set[str] | None = None
+    if args.only_incomplete:
+        if args.step != "results":
+            parser.error("--only-incomplete は --step results と組み合わせてください。")
+        incomplete_race_keys = api.incomplete_race_keys()
+        _log.info("--- 成績未取り込み限定: %d レース ---", len(incomplete_race_keys))
 
     _log.info(
         "=== ingestion-worker 開始 mode=%s date=%s→%s race_option=%s ===",
@@ -551,7 +636,13 @@ def main() -> None:
 
             if args.step in ("all", "results"):
                 _log.info("--- 確定成績取り込み ---")
-                ingest_results(client, api, chunk_from, chunk_to)
+                ingest_results(
+                    client,
+                    api,
+                    chunk_from,
+                    chunk_to,
+                    race_keys=incomplete_race_keys,
+                )
 
         _log.info("=== ingestion-worker 完了 ===")
         api.log_batch(
