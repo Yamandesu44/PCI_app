@@ -118,9 +118,11 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 ### 表示
 - web が API から DTO を取得し、`lib/pace.ts` 等で実数値を言葉・バー・色に翻訳して表示。
 
-### 取り込み鮮度監視
+### 取り込み鮮度・データ完全性監視
 - `GET /api/v1/ingest-status` → `GetIngestStatusUseCase` が `ingest_log` の直近20件から
-  鮮度・直近失敗有無を判定し返す。web トップ画面が `IngestStatusBanner` で表示（2026-07-12追加）。
+  鮮度・直近失敗有無を判定する。同時に `RaceCompletenessRepository` が前日以前で
+  `status=entries` のレースをDB集計し、全件数と代表20件を返す。web トップ画面が
+  `IngestStatusBanner` で失敗・鮮度低下・成績未取込を優先順に表示する。
 
 ---
 

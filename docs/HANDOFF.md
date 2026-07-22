@@ -9,18 +9,38 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-22（更新16回目・Codex がAbilityWeights同一期間比較CLIを実装） |
+| 更新日時 | 2026-07-22（更新17回目・Codex が取り込みデータ完全性監視を実装） |
 | 作業担当AI | OpenAI Codex |
-| 直前の担当AI | OpenAI Codex（AbilityWeights比較CLI・JSON出力を実装） |
+| 引き継ぎ先 | Claude Code |
+| 直前の担当AI | OpenAI Codex（取り込みデータ完全性監視を実装） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット作成前は `845e0fd`） |
-| 作業ツリー | AbilityWeights比較差分をコミット後にクリーン化する前提 |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `5dd8c98`） |
+| 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**ユーザー指示により、Phase 2の次の推奨項目としてAbilityWeightsの同一期間比較CLIを実装した。**
+**ユーザー指示により、次の推奨項目として取り込み監視をデータ完全性へ拡張した。**
+
+`GET /api/v1/ingest-status` は従来のバッチ成否・鮮度に加え、日本時間の前日以前で
+`races.status=entries` のまま残るレースを集計する。Webトップは件数を警告し、代表20件への
+リンクを表示する。取り込みログが無い環境でも、未取込レースがあれば警告する。
+
+暫定条件は「前日以前かつentries」で、当日開催分は除外する。障害競走等の恒常的な誤警告が
+確認された場合のみ、対象種別または猶予日数を追加する。現時点で既知の機能不具合はない。
+
+テスト結果: API非統合447 passed、関連SQL integration 1 passed（残り18件は未実行）、Web66 passed、ruff clean、
+Web typecheck/build成功。mypyはローカルNumPy型定義がPython 3.11設定で解釈できず依存解析前に停止。
+
+Claude Codeが最初に確認するファイル: `apps/api/src/pci/application/ingest_status_use_cases.py`,
+`apps/api/src/pci/infrastructure/repositories/race_repository.py`, `apps/web/src/lib/ingestStatus.ts`,
+`tasks/current.md`。最初に実行するコマンド: `git status --short --branch`、続いて
+`cd apps/api && python -m pytest -m "not integration" -q` と `npm test --workspace=@pci/web`。
+
+---
+
+### 直前タスク（AbilityWeights比較CLI）
 
 `--compare-ability-weights`で検証用4候補を同一レース集合に適用し、統合順位の3指標と
 現行差をCLI/JSONに出力する。本番重みは書き換えず、実DBでの再現性確認後に別途判断する。
@@ -84,6 +104,23 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ---
 
 ## 完了した作業（直近セッション）
+
+0C. **取り込み監視をデータ完全性へ拡張**（本セッション・OpenAI Codex）
+   - domain: `RaceCompletenessRepository`を追加。既存の汎用`RaceRepository`は変更せず、
+     状態監視に必要な読み取りだけを分離した。
+   - infrastructure: `SqlAlchemyRaceRepository.count_incomplete_past_races()` /
+     `find_incomplete_past_races()`を追加。日本時間の当日より前かつ`RaceStatus.ENTRIES`を対象に、
+     件数と新しい順の代表20件をDBで取得する。
+   - API: `IngestStatusOutput` / `IngestStatusSchema`へ`has_incomplete_races`、
+     `incomplete_race_count`、`incomplete_races`を追加し、OpenAPIとapi-client型を再生成。
+   - Web: `ingestStatusMeta()`で直近失敗を最優先、次に成績未取込、次に鮮度低下を表示。
+     `IngestStatusBanner`の開閉領域から対象レースの予想画面へ移動できる。
+   - 仮実装・暫定値: 詳細上限20件。当日開催分は正常な結果待ちとして除外。障害競走等の
+     個別除外は未実装で、誤警告が確認された場合のみ見直す。
+   - 既知の不具合: なし。Dockerを使うSQL実装用の`TestFindIncompletePastRaces`は実行済み。
+     その他のintegration 18件は今回の対象外として未実行。
+   - テスト: API非統合447 passed、関連SQL integration 1 passed、Web66 passed、ruff、
+     Web typecheck/build成功。mypyのみローカルNumPy型定義とPython 3.11設定の不整合で停止。
 
 0B. **AbilityWeightsの同一期間比較CLI**（本セッション・OpenAI Codex）
    - `DEFAULT_ABILITY_WEIGHT_PROFILES`に現行・近走のみ・近走重視・市場支持重視を定義。

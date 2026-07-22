@@ -12,6 +12,9 @@ STATUS_KEYS = {
     "days_since_last_success",
     "is_stale",
     "recent_failures",
+    "has_incomplete_races",
+    "incomplete_race_count",
+    "incomplete_races",
 }
 
 
@@ -29,8 +32,12 @@ def test_ingest_status_reflects_recent_success(client: TestClient) -> None:
     assert body["last_success_step"] == "entries"
     assert body["last_attempt_failed"] is False
     assert body["is_stale"] is False
-    assert body["days_since_last_success"] == 0
+    # UTC日付の切り替わり直後は「3時間前」が前日になるため、0〜1日を直近とする。
+    assert body["days_since_last_success"] in {0, 1}
     assert body["recent_failures"] == []
+    assert body["has_incomplete_races"] is True
+    assert body["incomplete_race_count"] == 1
+    assert body["incomplete_races"][0]["race_key"] == "2026062005010101"
 
 
 def test_openapi_exposes_ingest_status(client: TestClient) -> None:

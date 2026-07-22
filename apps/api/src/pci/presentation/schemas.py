@@ -390,6 +390,16 @@ class IngestFailureSchema(BaseModel):
     error_summary: str
 
 
+class IncompleteRaceSchema(BaseModel):
+    """開催日を過ぎても結果が反映されていないレース。"""
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    track_type: str
+    distance_m: int
+
+
 class IngestStatusSchema(BaseModel):
     """取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。
 
@@ -403,6 +413,9 @@ class IngestStatusSchema(BaseModel):
     days_since_last_success: int | None = None
     is_stale: bool = False
     recent_failures: list[IngestFailureSchema] = []
+    has_incomplete_races: bool = False
+    incomplete_race_count: int = 0
+    incomplete_races: list[IncompleteRaceSchema] = []
 
     @classmethod
     def from_dto(cls, dto: IngestStatusOutput) -> IngestStatusSchema:
@@ -414,6 +427,9 @@ class IngestStatusSchema(BaseModel):
             days_since_last_success=dto.days_since_last_success,
             is_stale=dto.is_stale,
             recent_failures=[IngestFailureSchema(**vars(f)) for f in dto.recent_failures],
+            has_incomplete_races=dto.has_incomplete_races,
+            incomplete_race_count=dto.incomplete_race_count,
+            incomplete_races=[IncompleteRaceSchema(**vars(r)) for r in dto.incomplete_races],
         )
 
 

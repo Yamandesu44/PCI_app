@@ -4,24 +4,37 @@ from __future__ import annotations
 
 import datetime
 
-from pci.application.dto import IngestFailureOutput, IngestStatusOutput
+from pci.application.dto import IncompleteRaceOutput, IngestFailureOutput, IngestStatusOutput
 from pci.domain.ops.ingest_log import IngestLogRepository, evaluate_freshness
+from pci.domain.racing.repository import RaceCompletenessRepository
 
 _HISTORY_LOOKBACK = 20
 _RECENT_FAILURES_LIMIT = 5
 _ERROR_SUMMARY_MAX_LEN = 200
+_INCOMPLETE_RACES_LIMIT = 20
+_JRA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=9), name="JST")
 
 
 class GetIngestStatusUseCase:
     """直近の取り込みログから、データの鮮度・失敗有無を判定する。"""
 
-    def __init__(self, repo: IngestLogRepository) -> None:
+    def __init__(
+        self,
+        repo: IngestLogRepository,
+        race_repo: RaceCompletenessRepository,
+    ) -> None:
         self._repo = repo
+        self._race_repo = race_repo
 
-    def execute(self) -> IngestStatusOutput:
+    def execute(self, *, now: datetime.datetime | None = None) -> IngestStatusOutput:
         entries = self._repo.find_recent(limit=_HISTORY_LOOKBACK)
-        now = datetime.datetime.now(datetime.UTC)
+        now = now or datetime.datetime.now(datetime.UTC)
         freshness = evaluate_freshness(entries, now)
+        race_date_today = now.astimezone(_JRA_TIMEZONE).date()
+        incomplete_count = self._race_repo.count_incomplete_past_races(race_date_today)
+        incomplete_races = self._race_repo.find_incomplete_past_races(
+            race_date_today, limit=_INCOMPLETE_RACES_LIMIT
+        )
 
         failures = [
             IngestFailureOutput(
@@ -46,4 +59,16 @@ class GetIngestStatusUseCase:
             days_since_last_success=freshness.days_since_last_success,
             is_stale=freshness.is_stale,
             recent_failures=failures,
+            has_incomplete_races=incomplete_count > 0,
+            incomplete_race_count=incomplete_count,
+            incomplete_races=[
+                IncompleteRaceOutput(
+                    race_key=str(race.race_key),
+                    race_date=race.race_date.isoformat(),
+                    jyo_cd=race.jyo_cd,
+                    track_type=race.track_type,
+                    distance_m=race.distance_m,
+                )
+                for race in incomplete_races
+            ],
         )

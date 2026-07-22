@@ -301,6 +301,17 @@ class IngestFailureOutput:
 
 
 @dataclass
+class IncompleteRaceOutput:
+    """開催日を過ぎても結果が反映されていないレース。"""
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    track_type: str
+    distance_m: int
+
+
+@dataclass
 class IngestStatusOutput:
     """取り込みバッチの鮮度サマリ（GetIngestStatusUseCase の出力）。
 
@@ -315,3 +326,6 @@ class IngestStatusOutput:
     days_since_last_success: int | None = None
     is_stale: bool = False
     recent_failures: list[IngestFailureOutput] = field(default_factory=list)
+    has_incomplete_races: bool = False
+    incomplete_race_count: int = 0
+    incomplete_races: list[IncompleteRaceOutput] = field(default_factory=list)

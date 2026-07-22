@@ -63,3 +63,13 @@ class RaceRepository(Protocol):
     def ensure_trainers(self, codes: Iterable[str]) -> None:
         """参照される調教師マスタが無ければプレースホルダを作成する（FK 整合の自己修復）。"""
         ...
+
+
+class RaceCompletenessRepository(Protocol):
+    """確定日を過ぎても結果未反映のレースを検出する読み取りポート。"""
+
+    def count_incomplete_past_races(self, before: datetime.date) -> int: ...
+
+    def find_incomplete_past_races(
+        self, before: datetime.date, limit: int = 20
+    ) -> list[Race]: ...

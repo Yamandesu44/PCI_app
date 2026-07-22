@@ -6,9 +6,13 @@ import datetime
 
 from pci.application.ingest_status_use_cases import GetIngestStatusUseCase
 from pci.domain.ops.ingest_log import IngestLogEntry
+from pci.domain.racing.race import Race, RaceStatus
+from pci.domain.shared.race_key import RaceKey
 from tests.unit.application.fake_ingest_log_repository import FakeIngestLogRepository
+from tests.unit.application.fake_repository import FakeRaceRepository
 
 UTC = datetime.UTC
+NOW = datetime.datetime(2026, 7, 22, 12, tzinfo=UTC)
 
 
 def _entry(
@@ -18,7 +22,7 @@ def _entry(
     step: str = "entries",
     error_msg: str | None = None,
 ) -> IngestLogEntry:
-    started = datetime.datetime.now(UTC) - datetime.timedelta(days=days_ago)
+    started = NOW - datetime.timedelta(days=days_ago)
     return IngestLogEntry(
         batch_date=started.date(),
         step=step,
@@ -31,8 +35,16 @@ def _entry(
 
 
 class TestGetIngestStatusUseCase:
+    @staticmethod
+    def _execute(
+        entries: list[IngestLogEntry], race_repo: FakeRaceRepository | None = None
+    ):
+        return GetIngestStatusUseCase(
+            FakeIngestLogRepository(entries), race_repo or FakeRaceRepository()
+        ).execute(now=NOW)
+
     def test_no_history_reports_not_applicable(self) -> None:
-        output = GetIngestStatusUseCase(FakeIngestLogRepository([])).execute()
+        output = self._execute([])
         assert output.has_history is False
         assert output.is_stale is False
         assert output.last_success_at is None
@@ -40,7 +52,7 @@ class TestGetIngestStatusUseCase:
 
     def test_recent_success_is_reported(self) -> None:
         entry = _entry(days_ago=1, step="results")
-        output = GetIngestStatusUseCase(FakeIngestLogRepository([entry])).execute()
+        output = self._execute([entry])
         assert output.has_history is True
         assert output.is_stale is False
         assert output.last_success_step == "results"
@@ -48,9 +60,7 @@ class TestGetIngestStatusUseCase:
         assert output.days_since_last_success == 1
 
     def test_stale_history_is_flagged(self) -> None:
-        output = GetIngestStatusUseCase(
-            FakeIngestLogRepository([_entry(days_ago=10)])
-        ).execute()
+        output = self._execute([_entry(days_ago=10)])
         assert output.is_stale is True
 
     def test_recent_failures_are_summarized_and_truncated(self) -> None:
@@ -59,7 +69,7 @@ class TestGetIngestStatusUseCase:
             _entry(days_ago=0, status="error", step="entries", error_msg=long_error),
             _entry(days_ago=1, status="ok"),
         ]
-        output = GetIngestStatusUseCase(FakeIngestLogRepository(entries)).execute()
+        output = self._execute(entries)
         assert output.last_attempt_failed is True
         assert len(output.recent_failures) == 1
         failure = output.recent_failures[0]
@@ -71,5 +81,60 @@ class TestGetIngestStatusUseCase:
         entries = [
             _entry(days_ago=i, status="error", error_msg=f"e{i}") for i in range(8)
         ]
-        output = GetIngestStatusUseCase(FakeIngestLogRepository(entries)).execute()
+        output = self._execute(entries)
         assert len(output.recent_failures) == 5
+
+    def test_past_entries_are_reported_as_incomplete(self) -> None:
+        repo = FakeRaceRepository()
+        for key, race_date, status in [
+            ("2026072005010101", datetime.date(2026, 7, 20), RaceStatus.ENTRIES),
+            ("2026072105010102", datetime.date(2026, 7, 21), RaceStatus.ENTRIES),
+            ("2026072105010103", datetime.date(2026, 7, 21), RaceStatus.RESULT),
+            ("2026072205010104", datetime.date(2026, 7, 22), RaceStatus.ENTRIES),
+        ]:
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(key),
+                    race_date=race_date,
+                    jyo_cd="05",
+                    distance_m=1600,
+                    track_type="芝",
+                    field_size=12,
+                    status=status,
+                )
+            )
+
+        output = self._execute([_entry(days_ago=0)], repo)
+
+        assert output.has_incomplete_races is True
+        assert output.incomplete_race_count == 2
+        assert [race.race_key for race in output.incomplete_races] == [
+            "2026072105010102",
+            "2026072005010101",
+        ]
+
+    def test_no_past_entries_reports_complete(self) -> None:
+        output = self._execute([_entry(days_ago=0)])
+        assert output.has_incomplete_races is False
+        assert output.incomplete_race_count == 0
+        assert output.incomplete_races == []
+
+    def test_completeness_uses_jra_local_date(self) -> None:
+        repo = FakeRaceRepository()
+        repo.save_race(
+            Race(
+                race_key=RaceKey("2026072105010101"),
+                race_date=datetime.date(2026, 7, 21),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=12,
+                status=RaceStatus.ENTRIES,
+            )
+        )
+        utc_before_jst_midnight = datetime.datetime(2026, 7, 21, 14, 59, tzinfo=UTC)
+        utc_after_jst_midnight = datetime.datetime(2026, 7, 21, 15, 1, tzinfo=UTC)
+        use_case = GetIngestStatusUseCase(FakeIngestLogRepository([]), repo)
+
+        assert use_case.execute(now=utc_before_jst_midnight).has_incomplete_races is False
+        assert use_case.execute(now=utc_after_jst_midnight).has_incomplete_races is True

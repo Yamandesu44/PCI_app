@@ -553,6 +553,22 @@ export interface components {
             running_style?: string | null;
         };
         /**
+         * IncompleteRaceSchema
+         * @description 開催日を過ぎても結果が反映されていないレース。
+         */
+        IncompleteRaceSchema: {
+            /** Distance M */
+            distance_m: number;
+            /** Jyo Cd */
+            jyo_cd: string;
+            /** Race Date */
+            race_date: string;
+            /** Race Key */
+            race_key: string;
+            /** Track Type */
+            track_type: string;
+        };
+        /**
          * IngestFailureSchema
          * @description 直近の取り込み失敗1件。
          */
@@ -620,6 +636,21 @@ export interface components {
             days_since_last_success?: number | null;
             /** Has History */
             has_history: boolean;
+            /**
+             * Has Incomplete Races
+             * @default false
+             */
+            has_incomplete_races: boolean;
+            /**
+             * Incomplete Race Count
+             * @default 0
+             */
+            incomplete_race_count: number;
+            /**
+             * Incomplete Races
+             * @default []
+             */
+            incomplete_races: components["schemas"]["IncompleteRaceSchema"][];
             /**
              * Is Stale
              * @default false

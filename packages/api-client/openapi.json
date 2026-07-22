@@ -683,6 +683,40 @@
         "title": "HorsePaceAnalysisSchema",
         "type": "object"
       },
+      "IncompleteRaceSchema": {
+        "description": "開催日を過ぎても結果が反映されていないレース。",
+        "properties": {
+          "distance_m": {
+            "title": "Distance M",
+            "type": "integer"
+          },
+          "jyo_cd": {
+            "title": "Jyo Cd",
+            "type": "string"
+          },
+          "race_date": {
+            "title": "Race Date",
+            "type": "string"
+          },
+          "race_key": {
+            "title": "Race Key",
+            "type": "string"
+          },
+          "track_type": {
+            "title": "Track Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "race_key",
+          "race_date",
+          "jyo_cd",
+          "track_type",
+          "distance_m"
+        ],
+        "title": "IncompleteRaceSchema",
+        "type": "object"
+      },
       "IngestFailureSchema": {
         "description": "直近の取り込み失敗1件。",
         "properties": {
@@ -830,6 +864,24 @@
           "has_history": {
             "title": "Has History",
             "type": "boolean"
+          },
+          "has_incomplete_races": {
+            "default": false,
+            "title": "Has Incomplete Races",
+            "type": "boolean"
+          },
+          "incomplete_race_count": {
+            "default": 0,
+            "title": "Incomplete Race Count",
+            "type": "integer"
+          },
+          "incomplete_races": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IncompleteRaceSchema"
+            },
+            "title": "Incomplete Races",
+            "type": "array"
           },
           "is_stale": {
             "default": false,

@@ -68,6 +68,29 @@ class SqlAlchemyRaceRepository:
         )
         return [self._to_race(m) for m in self._s.scalars(stmt).all()]
 
+    def count_incomplete_past_races(self, before: datetime.date) -> int:
+        """指定日より前で、結果未反映のレース件数を返す。"""
+        stmt = select(func.count()).select_from(RaceModel).where(
+            RaceModel.race_date < before,
+            RaceModel.status == str(RaceStatus.ENTRIES),
+        )
+        return int(self._s.scalar(stmt) or 0)
+
+    def find_incomplete_past_races(
+        self, before: datetime.date, limit: int = 20
+    ) -> list[Race]:
+        """指定日より前で、結果未反映のレースを新しい順に返す。"""
+        stmt = (
+            select(RaceModel)
+            .where(
+                RaceModel.race_date < before,
+                RaceModel.status == str(RaceStatus.ENTRIES),
+            )
+            .order_by(RaceModel.race_date.desc(), RaceModel.race_key.desc())
+            .limit(limit)
+        )
+        return [self._to_race(m) for m in self._s.scalars(stmt).all()]
+
     def find_horse_recent_entries(
         self, ketto_num: str, limit: int = 5, before: datetime.date | None = None
     ) -> list[RaceEntry]:

@@ -6,7 +6,7 @@ import datetime
 from collections.abc import Iterable
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
-from pci.domain.racing.race import Race
+from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 
@@ -46,6 +46,20 @@ class FakeRaceRepository:
             [r for r in self._races.values() if r.race_date == date],
             key=lambda r: str(r.race_key),
         )
+
+    def count_incomplete_past_races(self, before: datetime.date) -> int:
+        return len(self.find_incomplete_past_races(before, limit=len(self._races)))
+
+    def find_incomplete_past_races(
+        self, before: datetime.date, limit: int = 20
+    ) -> list[Race]:
+        races = [
+            race
+            for race in self._races.values()
+            if race.race_date < before and race.status == RaceStatus.ENTRIES
+        ]
+        races.sort(key=lambda race: (race.race_date, str(race.race_key)), reverse=True)
+        return races[:limit]
 
     def find_horse_recent_entries(
         self, ketto_num: str, limit: int = 5, before: datetime.date | None = None

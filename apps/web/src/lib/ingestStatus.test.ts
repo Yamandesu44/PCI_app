@@ -12,6 +12,9 @@ function status(overrides: Partial<IngestStatus>): IngestStatus {
     days_since_last_success: null,
     is_stale: false,
     recent_failures: [],
+    has_incomplete_races: false,
+    incomplete_race_count: 0,
+    incomplete_races: [],
     ...overrides,
   };
 }
@@ -20,6 +23,36 @@ describe("ingestStatusMeta", () => {
   it("履歴が無い場合はバナー自体を非表示にする", () => {
     const meta = ingestStatusMeta(status({ has_history: false }));
     expect(meta.visible).toBe(false);
+  });
+
+  it("履歴が無くても成績未取込レースがあれば警告する", () => {
+    const meta = ingestStatusMeta(
+      status({
+        has_history: false,
+        has_incomplete_races: true,
+        incomplete_race_count: 1,
+        incomplete_races: [
+          {
+            race_key: "2026072005010111",
+            race_date: "2026-07-20",
+            jyo_cd: "05",
+            track_type: "芝",
+            distance_m: 1600,
+          },
+        ],
+      }),
+    );
+    expect(meta.visible).toBe(true);
+    expect(meta.tone).toBe("warning");
+    expect(meta.headline).toContain("1件");
+    expect(meta.incompleteRaces).toEqual([
+      {
+        raceKey: "2026072005010111",
+        label: "7月20日 東京 11R",
+        condition: "芝1600m",
+        href: "/races/2026072005010111/forecast",
+      },
+    ]);
   });
 
   it("正常時は ok トーンで、失敗一覧を出さない", () => {

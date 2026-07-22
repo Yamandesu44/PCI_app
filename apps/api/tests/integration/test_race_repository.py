@@ -234,6 +234,37 @@ class TestListRecentRaces:
 
 
 @pytest.mark.integration
+class TestFindIncompletePastRaces:
+    def test_counts_and_lists_only_past_entries(self, db_session: Session) -> None:
+        repo = SqlAlchemyRaceRepository(db_session)
+        for key, race_date, status in [
+            ("2026061705010101", datetime.date(2026, 6, 17), RaceStatus.ENTRIES),
+            ("2026061805010101", datetime.date(2026, 6, 18), RaceStatus.ENTRIES),
+            ("2026061805010102", datetime.date(2026, 6, 18), RaceStatus.RESULT),
+            ("2026061905010101", datetime.date(2026, 6, 19), RaceStatus.ENTRIES),
+        ]:
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(key),
+                    race_date=race_date,
+                    jyo_cd="05",
+                    distance_m=1600,
+                    track_type="芝",
+                    field_size=12,
+                    status=status,
+                )
+            )
+        db_session.flush()
+
+        before = datetime.date(2026, 6, 19)
+        assert repo.count_incomplete_past_races(before) == 2
+        assert [str(race.race_key) for race in repo.find_incomplete_past_races(before)] == [
+            "2026061805010101",
+            "2026061705010101",
+        ]
+
+
+@pytest.mark.integration
 class TestFindHorseRecentEntries:
     def test_returns_only_result_races(self, db_session: Session) -> None:
         _seed_master(db_session)

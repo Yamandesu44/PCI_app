@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
@@ -30,7 +30,7 @@ from pci.domain.ops.ingest_log import IngestLogRepository
 from pci.domain.pace.commentary import CommentGenerator, RuleBasedCommentGenerator
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import RpciForecaster
-from pci.domain.racing.repository import RaceRepository
+from pci.domain.racing.repository import RaceCompletenessRepository, RaceRepository
 from pci.infrastructure.database.session import build_engine, build_session_maker
 from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster
 from pci.infrastructure.repositories.ingest_log_repository import SqlAlchemyIngestLogRepository
@@ -96,6 +96,15 @@ def get_race_repository(session: SessionDep) -> RaceRepository:
 RepositoryDep = Annotated[RaceRepository, Depends(get_race_repository)]
 
 
+def get_race_completeness_repository(repo: RepositoryDep) -> RaceCompletenessRepository:
+    return cast(RaceCompletenessRepository, repo)
+
+
+RaceCompletenessRepositoryDep = Annotated[
+    RaceCompletenessRepository, Depends(get_race_completeness_repository)
+]
+
+
 def get_mart_repository(session: SessionDep) -> MartRepository:
     return SqlAlchemyMartRepository(session)
 
@@ -139,8 +148,11 @@ def get_ingest_log_repository(session: SessionDep) -> IngestLogRepository:
 IngestLogRepositoryDep = Annotated[IngestLogRepository, Depends(get_ingest_log_repository)]
 
 
-def get_ingest_status_use_case(repo: IngestLogRepositoryDep) -> GetIngestStatusUseCase:
-    return GetIngestStatusUseCase(repo)
+def get_ingest_status_use_case(
+    repo: IngestLogRepositoryDep,
+    race_repo: RaceCompletenessRepositoryDep,
+) -> GetIngestStatusUseCase:
+    return GetIngestStatusUseCase(repo, race_repo)
 
 
 ForecastUseCaseDep = Annotated[ForecastRaceUseCase, Depends(get_forecast_use_case)]

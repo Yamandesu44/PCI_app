@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-22（AbilityWeights比較CLI完成） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-22（取り込みデータ完全性監視を追加） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -17,6 +17,14 @@
 ---
 
 ## 最近完了したタスク
+
+- [x] ✅ **P2 取り込み監視をデータ完全性へ拡張**（本セッション・OpenAI Codex）
+  - 前日以前のレースが `status=entries` のまま残っている件数と代表20件を、
+    `GET /api/v1/ingest-status` で返すようにした。
+  - Webトップの `IngestStatusBanner` に成績未取込警告と対象レースへのリンクを追加。
+    取り込みログが無い環境でも、未取込レースがあれば警告する。
+  - API非統合テスト447件、関連SQL統合テスト1件、Webテスト66件、ruff、Web型チェック・本番ビルド成功。
+    mypyはローカルNumPy型定義とPython 3.11設定の不整合で依存型解析前に停止（新規コード原因ではない）。
 
 - [x] ✅ **P1 AbilityWeightsの同一期間比較CLI**（本セッション・OpenAI Codex）
   - `backtest_forecast.py --compare-ability-weights`を追加し、現行・近走のみ・近走重視・

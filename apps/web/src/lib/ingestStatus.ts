@@ -6,12 +6,21 @@
  */
 import type { IngestStatus } from "@pci/api-client";
 
+import { formatRaceDate, jyoName, raceNumber } from "./races";
+
 export type IngestStatusTone = "ok" | "warning" | "error";
 
 export interface IngestFailureMeta {
   label: string;
   timestamp: string;
   detail: string;
+}
+
+export interface IncompleteRaceMeta {
+  raceKey: string;
+  label: string;
+  condition: string;
+  href: string;
 }
 
 export interface IngestStatusMeta {
@@ -21,6 +30,7 @@ export interface IngestStatusMeta {
   detail: string;
   color: string;
   failures: IngestFailureMeta[];
+  incompleteRaces: IncompleteRaceMeta[];
 }
 
 const TONE_COLOR: Record<IngestStatusTone, string> = {
@@ -44,6 +54,15 @@ function buildFailures(status: IngestStatus): IngestFailureMeta[] {
   }));
 }
 
+function buildIncompleteRaces(status: IngestStatus): IncompleteRaceMeta[] {
+  return status.incomplete_races.map((race) => ({
+    raceKey: race.race_key,
+    label: `${formatRaceDate(race.race_date)} ${jyoName(race.jyo_cd)} ${raceNumber(race.race_key)}`,
+    condition: `${race.track_type}${race.distance_m}m`,
+    href: `/races/${race.race_key}/forecast`,
+  }));
+}
+
 const HIDDEN: IngestStatusMeta = {
   visible: false,
   tone: "ok",
@@ -51,10 +70,11 @@ const HIDDEN: IngestStatusMeta = {
   detail: "",
   color: TONE_COLOR.ok,
   failures: [],
+  incompleteRaces: [],
 };
 
 export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
-  if (!status.has_history) {
+  if (!status.has_history && !status.has_incomplete_races) {
     return HIDDEN;
   }
 
@@ -68,6 +88,19 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
         : "取り込みがまだ一度も成功していません。手動同期をご検討ください。",
       color: TONE_COLOR.error,
       failures: buildFailures(status),
+      incompleteRaces: buildIncompleteRaces(status),
+    };
+  }
+
+  if (status.has_incomplete_races) {
+    return {
+      visible: true,
+      tone: "warning",
+      headline: `成績未取込のレースが${status.incomplete_race_count}件あります`,
+      detail: "開催済みですが出走前の状態で残っています。結果データの取り込み状況をご確認ください。",
+      color: TONE_COLOR.warning,
+      failures: buildFailures(status),
+      incompleteRaces: buildIncompleteRaces(status),
     };
   }
 
@@ -83,6 +116,7 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       detail: "自動取り込みが止まっている可能性があります。手動同期をご検討ください。",
       color: TONE_COLOR.warning,
       failures: buildFailures(status),
+      incompleteRaces: [],
     };
   }
 
@@ -93,5 +127,6 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
     detail: "直近の自動取り込みは正常に完了しています。",
     color: TONE_COLOR.ok,
     failures: [],
+    incompleteRaces: [],
   };
 }

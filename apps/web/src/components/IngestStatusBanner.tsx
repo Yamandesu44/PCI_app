@@ -1,4 +1,5 @@
 import { CheckCircle2, TriangleAlert, XCircle } from "lucide-react";
+import Link from "next/link";
 
 import { ingestStatusMeta } from "@/lib/ingestStatus";
 import type { IngestStatus } from "@pci/api-client";
@@ -56,6 +57,32 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                   </li>
                 ))}
               </ul>
+            </details>
+          ) : null}
+
+          {meta.incompleteRaces.length > 0 ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
+                対象レース（{meta.incompleteRaces.length}件）
+              </summary>
+              <ul className="m-0 mt-2 grid list-none gap-1.5 p-0 sm:grid-cols-2">
+                {meta.incompleteRaces.map((race) => (
+                  <li key={race.raceKey}>
+                    <Link
+                      href={race.href}
+                      className="flex items-center justify-between rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-amber-300 hover:text-slate-950"
+                    >
+                      <span className="font-semibold">{race.label}</span>
+                      <span className="ml-3 text-slate-500">{race.condition}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {status.incomplete_race_count > meta.incompleteRaces.length ? (
+                <p className="m-0 mt-2 text-xs text-slate-500">
+                  ほか{status.incomplete_race_count - meta.incompleteRaces.length}件
+                </p>
+              ) : null}
             </details>
           ) : null}
         </div>
