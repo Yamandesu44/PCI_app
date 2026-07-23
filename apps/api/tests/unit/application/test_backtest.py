@@ -22,18 +22,25 @@ from pci.application.backtest import (
     PaiLift,
     RpciAccuracy,
     RpciSample,
+    StyleAdvantageLift,
+    StyleAdvantageSample,
     _AsOfRaceRepository,
     ability_weight_comparisons_to_dict,
+    collect_actual_style_advantage_samples,
     compare_ability_weight_reports,
     format_ability_weight_comparison,
+    format_actual_style_advantage_validation,
     format_report,
     group_races_by_track,
     report_to_dict,
+    style_advantage_lift_to_dict,
     summarize_integrated_accuracy,
     summarize_pai_lift,
     summarize_rpci,
+    summarize_style_advantage,
 )
 from pci.domain.pace.rpci_forecast import PaceLabel
+from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -143,6 +150,83 @@ class TestSummarizeIntegratedAccuracy:
         assert result.top1_win_rate == 0.5
         assert result.top1_good_rate == 1.0
         assert result.top3_good_capture_rate == 1.0
+
+
+class TestSummarizeStyleAdvantage:
+    def test_empty_returns_none(self) -> None:
+        assert summarize_style_advantage([]) is None
+
+    def test_advantaged_and_disadvantaged_lift(self) -> None:
+        samples = [
+            StyleAdvantageSample("R1", 1, 70.0, True),
+            StyleAdvantageSample("R1", 2, 60.0, True),
+            StyleAdvantageSample("R1", 3, 40.0, False),
+            StyleAdvantageSample("R1", 4, 30.0, False),
+        ]
+
+        result = summarize_style_advantage(samples)
+
+        assert result is not None
+        assert result.baseline_rate == 0.5
+        assert result.advantaged_n == 2
+        assert result.advantaged_rate == 1.0
+        assert result.advantaged_lift == 2.0
+        assert result.disadvantaged_n == 2
+        assert result.disadvantaged_rate == 0.0
+        assert result.rate_gap == 1.0
+        assert result.point_biserial > 0
+        assert style_advantage_lift_to_dict(result) == {
+            "n": 4,
+            "baseline_rate": 0.5,
+            "advantaged_n": 2,
+            "advantaged_rate": 1.0,
+            "advantaged_lift": 2.0,
+            "disadvantaged_n": 2,
+            "disadvantaged_rate": 0.0,
+            "disadvantaged_lift": 0.0,
+            "rate_gap": 1.0,
+            "point_biserial": result.point_biserial,
+        }
+
+    def test_collects_actual_pace_and_confirmed_styles(self) -> None:
+        repo = FakeRaceRepository()
+        race = Race(
+            race_key=RaceKey("2026011505010101"),
+            race_date=datetime.date(2026, 1, 15),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=2,
+            status=RaceStatus.RESULT,
+            rpci_actual=55.0,
+        )
+        repo.save_race(race)
+        for horse_no, style, finish in (
+            (1, RunningStyleLabel.ESCAPE, 1),
+            (2, RunningStyleLabel.CLOSER, 8),
+        ):
+            repo.save_entry(
+                RaceEntry(
+                    race_key=race.race_key,
+                    horse_no=horse_no,
+                    frame_no=horse_no,
+                    ketto_num=f"H{horse_no}",
+                    weight=480.0,
+                    jockey_code="J001",
+                    trainer_code="T001",
+                    finish_pos=finish,
+                    running_style=str(style),
+                )
+            )
+
+        samples = collect_actual_style_advantage_samples([race], repo)
+        result = summarize_style_advantage(samples)
+
+        assert len(samples) == 2
+        assert result is not None
+        assert result.advantaged_rate == 1.0
+        assert result.disadvantaged_rate == 0.0
+        assert "診断専用" in format_actual_style_advantage_validation(result)
 
 
 class TestAbilityWeightComparison:
@@ -432,6 +516,18 @@ class TestFormatReport:
                 point_biserial=0.25,
                 top_band_lift=1.67,
             ),
+            style_advantage=StyleAdvantageLift(
+                n=80,
+                baseline_rate=0.3,
+                advantaged_n=20,
+                advantaged_rate=0.4,
+                advantaged_lift=1.333,
+                disadvantaged_n=20,
+                disadvantaged_rate=0.2,
+                disadvantaged_lift=0.667,
+                rate_gap=0.2,
+                point_biserial=0.15,
+            ),
         )
         text = format_report(report)
         assert "バックテスト結果" in text
@@ -439,6 +535,8 @@ class TestFormatReport:
         assert "MAE" in text
         assert "point-biserial" in text
         assert "リフト" in text
+        assert "脚質別展開有利度" in text
+        assert "やや不利以下" in text
 
     def test_no_samples_shows_fallback_sections(self) -> None:
         """rpci = None / pai = None のとき「有効サンプルなし」が出力される。"""
@@ -525,7 +623,9 @@ class TestReportToDict:
             {"race_key": "2026010105010101", "horse_no": 1, "pai": 80.0, "good_run": True}
         ]
         assert result["integrated"] is None
+        assert result["style_advantage"] is None
         assert result["integrated_samples"] == []
+        assert result["style_advantage_samples"] == []
         # PaceLabel(StrEnum) が生の値のまま紛れ込んでいないか、実際にJSON化して確認する。
         json.dumps(result)
 
@@ -542,7 +642,9 @@ class TestReportToDict:
         assert result["rpci"] is None
         assert result["pai"] is None
         assert result["integrated"] is None
+        assert result["style_advantage"] is None
         assert result["rpci_samples"] == []
         assert result["horse_samples"] == []
         assert result["integrated_samples"] == []
+        assert result["style_advantage_samples"] == []
         json.dumps(result)

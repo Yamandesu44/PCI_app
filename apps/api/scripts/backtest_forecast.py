@@ -52,11 +52,15 @@ from pci.application.backtest import (
     BacktestReport,
     ForecastBacktester,
     ability_weight_comparisons_to_dict,
+    collect_actual_style_advantage_samples,
     compare_ability_weight_reports,
     format_ability_weight_comparison,
+    format_actual_style_advantage_validation,
     format_report,
     group_races_by_track,
     report_to_dict,
+    style_advantage_lift_to_dict,
+    summarize_style_advantage,
 )
 from pci.config.settings import get_settings
 from pci.domain.pace.ability import AbilityScorer
@@ -113,6 +117,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="能力指数の検証用重み4候補を同一対象で比較する",
     )
+    p.add_argument(
+        "--validate-style-advantage",
+        action="store_true",
+        help="実績ペース・確定脚質で脚質別有利度ルールだけを高速検証する",
+    )
     return p.parse_args()
 
 
@@ -166,6 +175,21 @@ def main() -> None:
     print(f"対象 {len(targets)} レースでバックテストを実行します{filter_note}…\n")
 
     repo = SqlAlchemyRaceRepository(session)
+    if args.validate_style_advantage:
+        samples = collect_actual_style_advantage_samples(targets, repo)
+        summary = summarize_style_advantage(samples)
+        print(format_actual_style_advantage_validation(summary))
+        if args.output:
+            payload = {
+                "mode": "actual_pace_confirmed_style_diagnostic",
+                "style_advantage": style_advantage_lift_to_dict(summary),
+            }
+            args.output.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            print(f"\n診断結果を保存しました: {args.output}")
+        return
+
     forecaster = load_best_forecaster()
     backtester = ForecastBacktester(repo, forecaster=forecaster)
     report = backtester.run(targets)

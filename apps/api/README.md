@@ -84,6 +84,22 @@ python -m scripts.backtest_forecast \
 2026-07-22に2025年後半212レース・2026年前半97レースで比較し、全3指標が両期間で
 改善する候補は無かったため、現行重みを維持した。
 
+## 脚質別展開有利度の実DB検証
+
+通常のバックテストは、想定RPCI・予測脚質から算出した有利度について「やや有利以上」と
+「やや不利以下」の好走率・リフト・相関を出力する。係数の方向性だけを高速に切り分ける場合は、
+確定RPCIと確定脚質を使う診断モードを実行する。このモードは本番予測の精度評価ではない。
+
+```bash
+python -m scripts.backtest_forecast \
+  --limit 1000 --track-type 芝 --rpci-min 20 --rpci-max 90 \
+  --validate-style-advantage \
+  --output results/style-advantage-turf.json
+```
+
+`--track-type ダート`でも別に実行し、コース種別を混ぜずに比較する。診断結果だけで
+`StyleAdvantageWeights`を自動変更しない。
+
 ### LightGBMモデルの改行
 
 `models/*.txt`は内部の`tree_sizes`にバイト長を保持するため、必ずLFで扱う。

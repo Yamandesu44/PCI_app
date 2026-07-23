@@ -3,7 +3,7 @@
 > 現時点で確認できる未着手事項を整理する。**確定タスク**（やると決まっている）と
 > **改善案/検討**（やるかどうか未確定）を区別する。着手したら `tasks/current.md` へ移す。
 
-最終更新: 2026-07-22
+最終更新: 2026-07-23
 
 ---
 
@@ -52,8 +52,11 @@
 - [ ] **P2 実JV-Dataの人気/賞金予約オフセット検証**（jvlink実COM用）。現状はmykeibadb合成専用。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
-  `DistanceStyleWeights`(running-style-v2-distance)・`StyleAdvantageWeights`(style-advantage-v1)・
+  `DistanceStyleWeights`(running-style-v2-distance)・
   `STALE_AFTER_DAYS`(ingest_log鮮度監視)。実データ・実運用での検証後に確定（独断で確定しない）。
+- [ ] 🧪 `StyleAdvantageWeights`の期間別安定性と芝の予測逆転を調査する。
+  2026-07-23に確定値1000レースずつで方向性は確認済み。予測込みでは芝のみ有利群の好走率が
+  不利群を下回ったため、想定RPCIと予測脚質を個別に期間分割して原因を切り分ける。係数は未変更。
 - [ ] 脚質判定ルールの最適化（design/07 C9・データ蓄積後）。
 - [ ] 展開コメントの LLM（Gemini）本採用可否と品質基準（ADR-0008）。数値はドメイン確定・表現のみ LLM。
 - [ ] PAI 正式定義の確定（design/07 C10・実運用検証後）。

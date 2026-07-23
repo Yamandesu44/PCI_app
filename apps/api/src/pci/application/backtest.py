@@ -37,6 +37,8 @@ from pci.domain.pace.ability import (
 from pci.domain.pace.affinity import is_good_run
 from pci.domain.pace.commentary import CommentGenerator
 from pci.domain.pace.rpci_forecast import PaceLabel, RpciForecaster, classify_pace
+from pci.domain.pace.running_style import RunningStyleLabel
+from pci.domain.pace.style_advantage import build_style_advantage
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
@@ -154,6 +156,16 @@ class IntegratedSample:
     good_run: bool
 
 
+@dataclass(frozen=True)
+class StyleAdvantageSample:
+    """予測した脚質別有利度と、その馬の好走実績の比較サンプル。"""
+
+    race_key: str
+    horse_no: int
+    score: float
+    good_run: bool
+
+
 # ----- 集計結果 -----
 
 
@@ -203,6 +215,22 @@ class IntegratedAccuracy:
     top1_win_rate: float
     top1_good_rate: float
     top3_good_capture_rate: float
+
+
+@dataclass(frozen=True)
+class StyleAdvantageLift:
+    """脚質別有利度が好走率を分離できているかを示すサマリ。"""
+
+    n: int
+    baseline_rate: float
+    advantaged_n: int
+    advantaged_rate: float
+    advantaged_lift: float
+    disadvantaged_n: int
+    disadvantaged_rate: float
+    disadvantaged_lift: float
+    rate_gap: float
+    point_biserial: float
 
 
 @dataclass(frozen=True)
@@ -260,9 +288,11 @@ class BacktestReport:
     rpci: RpciAccuracy | None
     pai: PaiLift | None
     integrated: IntegratedAccuracy | None = None
+    style_advantage: StyleAdvantageLift | None = None
     rpci_samples: list[RpciSample] = field(default_factory=list)
     horse_samples: list[HorseSample] = field(default_factory=list)
     integrated_samples: list[IntegratedSample] = field(default_factory=list)
+    style_advantage_samples: list[StyleAdvantageSample] = field(default_factory=list)
 
 
 def summarize_rpci(samples: list[RpciSample]) -> RpciAccuracy | None:
@@ -348,6 +378,76 @@ def summarize_integrated_accuracy(
     )
 
 
+def summarize_style_advantage(
+    samples: list[StyleAdvantageSample],
+) -> StyleAdvantageLift | None:
+    """UIと同じ境界で有利・不利群の好走率とリフトを集計する。"""
+    if not samples:
+        return None
+    baseline_rate = sum(sample.good_run for sample in samples) / len(samples)
+    advantaged = [sample for sample in samples if sample.score >= 55]
+    disadvantaged = [sample for sample in samples if sample.score <= 45]
+
+    def _rate(group: list[StyleAdvantageSample]) -> float:
+        return sum(sample.good_run for sample in group) / len(group) if group else 0.0
+
+    advantaged_rate = _rate(advantaged)
+    disadvantaged_rate = _rate(disadvantaged)
+    return StyleAdvantageLift(
+        n=len(samples),
+        baseline_rate=round(baseline_rate, 4),
+        advantaged_n=len(advantaged),
+        advantaged_rate=round(advantaged_rate, 4),
+        advantaged_lift=round(advantaged_rate / baseline_rate, 3) if baseline_rate else 0.0,
+        disadvantaged_n=len(disadvantaged),
+        disadvantaged_rate=round(disadvantaged_rate, 4),
+        disadvantaged_lift=(round(disadvantaged_rate / baseline_rate, 3) if baseline_rate else 0.0),
+        rate_gap=round(advantaged_rate - disadvantaged_rate, 4),
+        point_biserial=round(_style_advantage_point_biserial(samples), 4),
+    )
+
+
+def collect_actual_style_advantage_samples(
+    targets: Iterable[Race], repo: RaceRepository
+) -> list[StyleAdvantageSample]:
+    """実績ペース・確定脚質で、脚質有利度ルール単体の理論上限を検証する。"""
+    samples: list[StyleAdvantageSample] = []
+    for race in targets:
+        if race.rpci_actual is None:
+            continue
+        entries = repo.find_entries(race.race_key)
+        styles_by_horse: dict[int, RunningStyleLabel] = {}
+        for entry in entries:
+            if entry.running_style is None:
+                continue
+            try:
+                styles_by_horse[entry.horse_no] = RunningStyleLabel(entry.running_style)
+            except ValueError:
+                continue
+        if not styles_by_horse:
+            continue
+        advantage = build_style_advantage(
+            race.rpci_actual,
+            race.track_type,
+            tuple(styles_by_horse.values()),
+        )
+        scores = {entry.style: entry.score for entry in advantage.entries}
+        for entry in entries:
+            style = styles_by_horse.get(entry.horse_no)
+            score = scores.get(style) if style is not None else None
+            if score is None:
+                continue
+            samples.append(
+                StyleAdvantageSample(
+                    race_key=str(race.race_key),
+                    horse_no=entry.horse_no,
+                    score=score,
+                    good_run=is_good_run(entry.finish_pos, race.grade),
+                )
+            )
+    return samples
+
+
 def compare_ability_weight_reports(
     reports: dict[str, BacktestReport],
     profiles: tuple[AbilityWeightProfile, ...] = DEFAULT_ABILITY_WEIGHT_PROFILES,
@@ -421,10 +521,14 @@ def report_to_dict(report: BacktestReport) -> dict[str, Any]:
         "rpci": _rpci_accuracy_to_dict(report.rpci),
         "pai": _pai_lift_to_dict(report.pai),
         "integrated": _integrated_accuracy_to_dict(report.integrated),
+        "style_advantage": style_advantage_lift_to_dict(report.style_advantage),
         "rpci_samples": [_rpci_sample_to_dict(s) for s in report.rpci_samples],
         "horse_samples": [_horse_sample_to_dict(s) for s in report.horse_samples],
         "integrated_samples": [
             _integrated_sample_to_dict(s) for s in report.integrated_samples
+        ],
+        "style_advantage_samples": [
+            _style_advantage_sample_to_dict(s) for s in report.style_advantage_samples
         ],
     }
 
@@ -495,6 +599,25 @@ def _integrated_accuracy_to_dict(
     }
 
 
+def style_advantage_lift_to_dict(
+    lift: StyleAdvantageLift | None,
+) -> dict[str, Any] | None:
+    if lift is None:
+        return None
+    return {
+        "n": lift.n,
+        "baseline_rate": lift.baseline_rate,
+        "advantaged_n": lift.advantaged_n,
+        "advantaged_rate": lift.advantaged_rate,
+        "advantaged_lift": lift.advantaged_lift,
+        "disadvantaged_n": lift.disadvantaged_n,
+        "disadvantaged_rate": lift.disadvantaged_rate,
+        "disadvantaged_lift": lift.disadvantaged_lift,
+        "rate_gap": lift.rate_gap,
+        "point_biserial": lift.point_biserial,
+    }
+
+
 def _rpci_sample_to_dict(sample: RpciSample) -> dict[str, Any]:
     return {
         "race_key": sample.race_key,
@@ -521,6 +644,15 @@ def _integrated_sample_to_dict(sample: IntegratedSample) -> dict[str, Any]:
         "horse_no": sample.horse_no,
         "rank": sample.rank,
         "finish_pos": sample.finish_pos,
+        "good_run": sample.good_run,
+    }
+
+
+def _style_advantage_sample_to_dict(sample: StyleAdvantageSample) -> dict[str, Any]:
+    return {
+        "race_key": sample.race_key,
+        "horse_no": sample.horse_no,
+        "score": sample.score,
         "good_run": sample.good_run,
     }
 
@@ -571,6 +703,23 @@ def format_report(report: BacktestReport) -> str:
     else:
         lines.append("\n■ 統合順位予想: 有効サンプルなし")
 
+    if report.style_advantage is not None:
+        s = report.style_advantage
+        lines.append("\n■ 脚質別展開有利度のリフト")
+        lines.append(f"  全体好走率(ベースライン): {s.baseline_rate:.1%}")
+        lines.append(
+            f"  やや有利以上: {s.advantaged_rate:.1%} "
+            f"({s.advantaged_n}頭 / {s.advantaged_lift:.2f}x)"
+        )
+        lines.append(
+            f"  やや不利以下: {s.disadvantaged_rate:.1%} "
+            f"({s.disadvantaged_n}頭 / {s.disadvantaged_lift:.2f}x)"
+        )
+        lines.append(f"  有利−不利の好走率差: {s.rate_gap:+.1%}")
+        lines.append(f"  有利度×好走 の相関(point-biserial): {s.point_biserial:+.3f}")
+    else:
+        lines.append("\n■ 脚質別展開有利度: 有効サンプルなし")
+
     return "\n".join(lines)
 
 
@@ -603,6 +752,33 @@ def format_ability_weight_comparison(comparisons: list[AbilityWeightComparison])
     return "\n".join(lines)
 
 
+def format_actual_style_advantage_validation(
+    lift: StyleAdvantageLift | None,
+) -> str:
+    """実績ペース・確定脚質を使う診断結果をCLI向けに整形する。"""
+    if lift is None:
+        return "脚質別展開有利度: 有効サンプルなし"
+    return "\n".join(
+        [
+            "=" * 72,
+            "脚質別展開有利度の単体検証（実績ペース・確定脚質を使用）",
+            "※ 本番予測ではなく、方向性と係数の診断専用",
+            f"全体好走率: {lift.baseline_rate:.1%}（{lift.n}頭）",
+            (
+                f"やや有利以上: {lift.advantaged_rate:.1%} "
+                f"（{lift.advantaged_n}頭 / {lift.advantaged_lift:.2f}x）"
+            ),
+            (
+                f"やや不利以下: {lift.disadvantaged_rate:.1%} "
+                f"（{lift.disadvantaged_n}頭 / {lift.disadvantaged_lift:.2f}x）"
+            ),
+            f"有利−不利の好走率差: {lift.rate_gap:+.1%}",
+            f"有利度×好走の相関: {lift.point_biserial:+.3f}",
+            "=" * 72,
+        ]
+    )
+
+
 def _format_delta(value: float | None) -> str:
     return "   n/a" if value is None else f"{value:+6.1%}"
 
@@ -621,6 +797,22 @@ def _point_biserial(samples: list[HorseSample]) -> float:
     var_y = sum((y - my) ** 2 for y in ys)
     denom = math.sqrt(var_x * var_y)
     return cov / denom if denom > 0 else 0.0
+
+
+def _style_advantage_point_biserial(samples: list[StyleAdvantageSample]) -> float:
+    """脚質別有利度（連続）と好走（0/1）の相関係数。"""
+    n = len(samples)
+    if n < 2:
+        return 0.0
+    xs = [sample.score for sample in samples]
+    ys = [1.0 if sample.good_run else 0.0 for sample in samples]
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    covariance = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys, strict=True))
+    variance_x = sum((x - mean_x) ** 2 for x in xs)
+    variance_y = sum((y - mean_y) ** 2 for y in ys)
+    denominator = math.sqrt(variance_x * variance_y)
+    return covariance / denominator if denominator > 0 else 0.0
 
 
 class ForecastBacktester:
@@ -644,6 +836,7 @@ class ForecastBacktester:
         rpci_samples: list[RpciSample] = []
         horse_samples: list[HorseSample] = []
         integrated_samples: list[IntegratedSample] = []
+        style_advantage_samples: list[StyleAdvantageSample] = []
         n_races = 0
         skipped = 0
         model_versions: set[str] = set()
@@ -673,16 +866,32 @@ class ForecastBacktester:
 
             actual_entries = self._repo.find_entries(race.race_key)
             finish_by_no = {e.horse_no: e.finish_pos for e in actual_entries}
+            style_scores = (
+                {entry.style: entry.score for entry in out.style_advantage.entries}
+                if out.style_advantage is not None
+                else {}
+            )
             for horse in out.horses:
                 finish = finish_by_no.get(horse.horse_no)
+                good_run = is_good_run(finish, race.grade)
                 horse_samples.append(
                     HorseSample(
                         race_key=key,
                         horse_no=horse.horse_no,
                         pai=horse.pai,
-                        good_run=is_good_run(finish, race.grade),
+                        good_run=good_run,
                     )
                 )
+                style_score = style_scores.get(horse.running_style)
+                if style_score is not None:
+                    style_advantage_samples.append(
+                        StyleAdvantageSample(
+                            race_key=key,
+                            horse_no=horse.horse_no,
+                            score=style_score,
+                            good_run=good_run,
+                        )
+                    )
             if out.integrated_ranking is not None:
                 for entry in out.integrated_ranking.entries:
                     finish = finish_by_no.get(entry.horse_no)
@@ -706,9 +915,11 @@ class ForecastBacktester:
             rpci=summarize_rpci(rpci_samples),
             pai=summarize_pai_lift(horse_samples, self._band_edges),
             integrated=summarize_integrated_accuracy(integrated_samples),
+            style_advantage=summarize_style_advantage(style_advantage_samples),
             rpci_samples=rpci_samples,
             horse_samples=horse_samples,
             integrated_samples=integrated_samples,
+            style_advantage_samples=style_advantage_samples,
         )
 
     def _predict_as_of(self, race: Race) -> ForecastOutput:
