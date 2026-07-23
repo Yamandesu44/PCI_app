@@ -1,5 +1,73 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 19:42 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `d946adb`
+- 実装最新コミット: `6fda136`
+- 今回の目的: 馬場情報バックフィル後の実DBで小倉芝1200mを馬場状態別に再検証し、参考表示の妥当性を確定する。
+
+### 完了した内容
+
+1. `apps/api/src/pci/application/backtest.py`
+   - 脚質別有利度の内訳へ`distance-track-condition`を追加した。
+   - `1200m / 良`のようなラベルと、距離・馬場状態順の安定した並びを実装した。
+2. `apps/api/scripts/backtest_forecast.py`
+   - `--style-breakdown distance-track-condition`を選択可能にした。
+3. `apps/api/src/pci/domain/pace/style_advantage.py`
+   - 7月小倉芝1200mの参考理由へ「馬場状態別でも同じ傾向」を追記した。
+   - 参考条件、スコア、PAI、順位、仮係数は変更していない。
+4. 実DB再検証
+   - 対象: 2025-07-01〜2026-07-31、小倉芝199レース・1534頭。
+   - 1200m: 良-22.4pt（45R）、稍重-10.5pt（12R）、重-9.0pt（6R）、不明-26.4pt（27R）。
+   - 確認できた全馬場状態で逆転方向が続いたため、`style-advantage-v3`の参考条件を維持した。
+   - 1800m・2000mは馬場状態ごとに正負が混在し、参考範囲を拡張する根拠はなかった。
+
+### 未完了・既知の問題
+
+- 今回のタスクに未完了実装はない。
+- 「不明」27レースは主に直近365日の補完開始より前の2025年データを含む。今回の既知馬場3区分が
+  すべて同方向のため判断は可能だが、監視窓より前まで再補完する場合は同じコマンドで再診断する。
+- `StyleAdvantageWeights`は引き続き仮係数。今回の結果だけで反転・補正しない。
+- API非統合テスト全体の既知状態は509 passed / 3 failed。失敗は既存のcaplogログ捕捉テストで、
+  今回の対象テスト49件は成功した。
+- 実運用cloneの既存未追跡`apps/ingestion-worker/.env]`と`result_run.txt`には触れていない。
+
+### テスト結果
+
+- API対象:
+  `python -m pytest tests/unit/application/test_backtest.py tests/unit/domain/pace/test_style_advantage.py -q`
+  -> 49 passed
+- API Ruff: `python -m ruff check src tests scripts/backtest_forecast.py` -> passed
+- API mypy: `python -m mypy src --strict --python-version 3.12` -> passed（63 source files）
+- import-linter: `lint-imports.exe` -> 2 contracts kept / 0 broken
+- 実DB診断:
+  `python -m scripts.backtest_forecast --validate-style-advantage --track-type 芝 --venue-code 10
+  --date-from 2025-07-01 --date-to 2026-07-31 --style-breakdown distance-track-condition`
+  -> 199レース・1534頭を集計、正常終了
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `docs/HANDOFF.md`
+3. `docs/SPEC.md`
+4. `docs/DECISIONS.md`
+5. `apps/api/src/pci/application/backtest.py`
+6. `apps/api/src/pci/domain/pace/style_advantage.py`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/application/test_backtest.py tests/unit/domain/pace/test_style_advantage.py -q
+python -m scripts.backtest_forecast --validate-style-advantage --track-type 芝 --venue-code 10 `
+  --date-from 2025-07-01 --date-to 2026-07-31 --style-breakdown distance-track-condition
+```
+
 ## 2026-07-23 19:31 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
