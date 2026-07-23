@@ -507,6 +507,37 @@ export interface components {
             predicted_rpci: number;
         };
         /**
+         * ForecastPaceMatrixCellSchema
+         * @description 予想展開に対する実績展開1区分の件数と割合。
+         */
+        ForecastPaceMatrixCellSchema: {
+            /** Count */
+            count: number;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Rate */
+            rate?: number | null;
+        };
+        /**
+         * ForecastPaceMatrixRowSchema
+         * @description 予想展開1区分の実績分布。
+         */
+        ForecastPaceMatrixRowSchema: {
+            /**
+             * Cells
+             * @default []
+             */
+            cells: components["schemas"]["ForecastPaceMatrixCellSchema"][];
+            /** Predicted Key */
+            predicted_key: string;
+            /** Predicted Label */
+            predicted_label: string;
+            /** Sample Size */
+            sample_size: number;
+        };
+        /**
          * ForecastPerformanceGroupSchema
          * @description コース種別ごとの展開ラベル的中率。
          */
@@ -545,6 +576,11 @@ export interface components {
             hit_count: number;
             /** Hit Rate */
             hit_rate?: number | null;
+            /**
+             * Pace Matrix
+             * @default []
+             */
+            pace_matrix: components["schemas"]["ForecastPaceMatrixRowSchema"][];
             /** Period Days */
             period_days: number;
             /** Sample Size */

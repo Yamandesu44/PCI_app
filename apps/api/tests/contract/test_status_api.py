@@ -70,6 +70,7 @@ def test_forecast_performance_contract_hides_internal_values(
         "hit_rate",
         "groups",
         "confidence_groups",
+        "pace_matrix",
         "weekly_trend",
     }
     assert body["period_days"] == 90
@@ -85,6 +86,16 @@ def test_forecast_performance_contract_hides_internal_values(
         "strong",
         "normal",
         "caution",
+    ]
+    assert [row["predicted_key"] for row in body["pace_matrix"]] == [
+        "high",
+        "average",
+        "slow",
+    ]
+    assert [cell["key"] for cell in body["pace_matrix"][0]["cells"]] == [
+        "high",
+        "average",
+        "slow",
     ]
     assert set(body["weekly_trend"][0]) == {
         "date_from",

@@ -172,6 +172,8 @@
   `weekly_trend`は進行中の週を除き、直近8完了週を月曜から日曜の固定区間で返す。
   `confidence_groups`は既存UIと同じ境界で「読みやすい（70%以上）」「標準（50%以上70%未満）」
   「変動注意（50%未満）」ごとの一致率・的中数・母数を返す。
+  `pace_matrix`は「速い・平均・落ち着く」の予想3区分を行、実績3区分を列とし、
+  各セルの件数と予想区分内割合を返す。Webでは既定で閉じた詳細検証として表示する。
 - ✅ 内部取り込み
   `POST /internal/ingest/{horses,jockeys,trainers,entries,results,race-metadata,log}`,
   `POST /internal/ingest/forecasts/precompute`,

@@ -93,6 +93,27 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
         ("caution", 1, 1.0),
     ]
     assert all("rpci" not in vars(group) for group in output.confidence_groups)
+    assert [
+        (
+            row.predicted_key,
+            row.sample_size,
+            [(cell.key, cell.count, cell.rate) for cell in row.cells],
+        )
+        for row in output.pace_matrix
+    ] == [
+        ("high", 0, [("high", 0, None), ("average", 0, None), ("slow", 0, None)]),
+        (
+            "average",
+            2,
+            [("high", 1, 0.5), ("average", 1, 0.5), ("slow", 0, 0.0)],
+        ),
+        ("slow", 1, [("high", 0, 0.0), ("average", 0, 0.0), ("slow", 1, 1.0)]),
+    ]
+    assert all(
+        "rpci" not in vars(row)
+        and all("rpci" not in vars(cell) for cell in row.cells)
+        for row in output.pace_matrix
+    )
 
 
 def test_empty_period_returns_null_rate() -> None:
@@ -103,5 +124,11 @@ def test_empty_period_returns_null_rate() -> None:
     assert output.hit_rate is None
     assert all(group.hit_rate is None for group in output.groups)
     assert all(group.hit_rate is None for group in output.confidence_groups)
+    assert all(row.sample_size == 0 for row in output.pace_matrix)
+    assert all(
+        cell.rate is None
+        for row in output.pace_matrix
+        for cell in row.cells
+    )
     assert len(output.weekly_trend) == 8
     assert all(point.hit_rate is None for point in output.weekly_trend)

@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime
 
 from pci.application.dto import (
+    ForecastPaceMatrixCellOutput,
+    ForecastPaceMatrixRowOutput,
     ForecastPerformanceGroupOutput,
     ForecastPerformanceOutput,
     ForecastPerformanceTrendPointOutput,
@@ -27,6 +29,11 @@ _CONFIDENCE_GROUPS = (
     ("strong", "読みやすい", 0.7, None),
     ("normal", "標準", 0.5, 0.7),
     ("caution", "変動注意", None, 0.5),
+)
+_PACE_GROUPS = (
+    ("high", "速い流れ", "ハイ"),
+    ("average", "平均的な流れ", "平均"),
+    ("slow", "落ち着いた流れ", "スロー"),
 )
 
 
@@ -57,6 +64,7 @@ class GetForecastPerformanceUseCase:
             )
             for key, label, minimum, maximum in _CONFIDENCE_GROUPS
         ]
+        pace_matrix = _build_pace_matrix(records)
         weekly_trend = _build_weekly_trend(records, date_to)
         overall = groups[0]
         return ForecastPerformanceOutput(
@@ -68,6 +76,7 @@ class GetForecastPerformanceUseCase:
             hit_rate=overall.hit_rate,
             groups=groups,
             confidence_groups=confidence_groups,
+            pace_matrix=pace_matrix,
             weekly_trend=weekly_trend,
         )
 
@@ -164,3 +173,45 @@ def _summarize_confidence(
         hit_count=hit_count,
         hit_rate=round(hit_count / sample_size, 3) if sample_size else None,
     )
+
+
+def _build_pace_matrix(
+    records: list[PredictionEvaluationRecord],
+) -> list[ForecastPaceMatrixRowOutput]:
+    """予想3区分ごとに、実績3区分への分布を集計する。"""
+    rows: list[ForecastPaceMatrixRowOutput] = []
+    for predicted_key, predicted_label, predicted_value in _PACE_GROUPS:
+        targets = [
+            record
+            for record in records
+            if record.predicted_label == predicted_value
+        ]
+        sample_size = len(targets)
+        actual_labels = [
+            str(classify_pace(record.actual_rpci, record.track_type))
+            for record in targets
+        ]
+        cells = []
+        for actual_key, actual_label, actual_value in _PACE_GROUPS:
+            count = actual_labels.count(actual_value)
+            cells.append(
+                ForecastPaceMatrixCellOutput(
+                    key=actual_key,
+                    label=actual_label,
+                    count=count,
+                    rate=(
+                        round(count / sample_size, 3)
+                        if sample_size
+                        else None
+                    ),
+                )
+            )
+        rows.append(
+            ForecastPaceMatrixRowOutput(
+                predicted_key=predicted_key,
+                predicted_label=predicted_label,
+                sample_size=sample_size,
+                cells=cells,
+            )
+        )
+    return rows

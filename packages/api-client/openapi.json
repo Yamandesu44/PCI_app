@@ -273,6 +273,77 @@
         "title": "ForecastAccuracySchema",
         "type": "object"
       },
+      "ForecastPaceMatrixCellSchema": {
+        "description": "予想展開に対する実績展開1区分の件数と割合。",
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "count"
+        ],
+        "title": "ForecastPaceMatrixCellSchema",
+        "type": "object"
+      },
+      "ForecastPaceMatrixRowSchema": {
+        "description": "予想展開1区分の実績分布。",
+        "properties": {
+          "cells": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ForecastPaceMatrixCellSchema"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "predicted_key": {
+            "title": "Predicted Key",
+            "type": "string"
+          },
+          "predicted_label": {
+            "title": "Predicted Label",
+            "type": "string"
+          },
+          "sample_size": {
+            "minimum": 0.0,
+            "title": "Sample Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "predicted_key",
+          "predicted_label",
+          "sample_size"
+        ],
+        "title": "ForecastPaceMatrixRowSchema",
+        "type": "object"
+      },
       "ForecastPerformanceGroupSchema": {
         "description": "コース種別ごとの展開ラベル的中率。",
         "properties": {
@@ -361,6 +432,14 @@
               }
             ],
             "title": "Hit Rate"
+          },
+          "pace_matrix": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ForecastPaceMatrixRowSchema"
+            },
+            "title": "Pace Matrix",
+            "type": "array"
           },
           "period_days": {
             "minimum": 1.0,

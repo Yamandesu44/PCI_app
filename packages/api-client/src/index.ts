@@ -34,6 +34,10 @@ export type ForecastPerformanceGroup =
   components["schemas"]["ForecastPerformanceGroupSchema"];
 export type ForecastPerformanceTrendPoint =
   components["schemas"]["ForecastPerformanceTrendPointSchema"];
+export type ForecastPaceMatrixCell =
+  components["schemas"]["ForecastPaceMatrixCellSchema"];
+export type ForecastPaceMatrixRow =
+  components["schemas"]["ForecastPaceMatrixRowSchema"];
 export type Readiness = components["schemas"]["ReadinessSchema"];
 
 export type { components, paths } from "./schema";

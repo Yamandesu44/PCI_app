@@ -2,6 +2,7 @@ import { Activity, Database } from "lucide-react";
 import type { ForecastPerformance } from "@pci/api-client";
 
 import { ForecastConfidenceCalibration } from "@/components/ForecastConfidenceCalibration";
+import { ForecastErrorPattern } from "@/components/ForecastErrorPattern";
 import { ForecastPerformanceTrendLazy } from "@/components/ForecastPerformanceTrendLazy";
 import { formatRaceDate } from "@/lib/races";
 
@@ -69,6 +70,7 @@ export function ForecastPerformanceSummary({
               <ForecastPerformanceTrendLazy points={performance.weekly_trend} />
             ) : null}
           </div>
+          <ForecastErrorPattern rows={performance.pace_matrix} />
         </>
       ) : (
         <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">

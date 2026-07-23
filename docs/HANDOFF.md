@@ -9,20 +9,20 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新36回目・Codex が信頼度別の予想一致率を実装） |
+| 更新日時 | 2026-07-23（更新37回目・Codex が展開予想の外れ方比較表を実装） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（表示信頼度を実績一致率で検証可能にした） |
+| 直前の担当AI | OpenAI Codex（予想と実績の展開3区分を混同行列で比較可能にした） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `09c2480`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `5b9298e`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**画面に表示する「読みやすい・標準・変動注意」という信頼度が、実際の展開一致率と
-整合しているかを母数付きで確認できるようにした。**
+**展開予想が外れたとき、実際は速い側・遅い側のどちらへずれたかを、
+内部実数値を出さずに確認できるようにした。**
 
 `MartRepository.find_prediction_evaluations()`は、JST基準の直近90日にある確定済みJRA平地から、
 レース日以前に生成された最新の予想を1件だけ選ぶ。application層で確定RPCIを展開区分へ変換し、
@@ -36,6 +36,11 @@ PCI/RPCIの内部実数値をAPI・画面へ露出しない。`weekly_trend`は�
 50%以上70%未満を「標準」、50%未満を「変動注意」として一致率・的中数・母数を返す。
 `ForecastConfidenceCalibration`は3本の横棒と母数を表示する。信頼度別集計は複数モデル世代を
 横断するため、個別モデルの校正指標ではなく現在の画面表示全体の実績として解釈すること。
+
+`pace_matrix`は「速い・平均・落ち着く」の予想3区分を行、実績3区分を列として、
+各セルの件数と行内割合を返す。`ForecastErrorPattern`はトップ画面の情報密度を抑えるため
+native `details`で既定は閉じ、一致セルを緑、不一致セルを黄で表示する。モバイルは
+最小幅430pxの表を横スクロールし、文字や数値を縮めすぎない。
 
 `ForecastPerformanceTrend`は約100KBのRecharts依存を持つため、
 `ForecastPerformanceTrendLazy`から`next/dynamic`で遅延読み込みする。直接importした試作では
@@ -56,6 +61,7 @@ lintスクリプトがないため実行不可（Next buildもlintをskipする�
 Claude Codeが最初に確認するファイル:
 `apps/api/src/pci/application/forecast_performance_use_cases.py`,
 `apps/web/src/components/ForecastConfidenceCalibration.tsx`,
+`apps/web/src/components/ForecastErrorPattern.tsx`,
 `apps/web/src/components/ForecastPerformanceTrend.tsx`,
 `apps/web/src/components/ForecastPerformanceTrendLazy.tsx`,
 `apps/web/src/components/ForecastPerformanceSummary.tsx`,

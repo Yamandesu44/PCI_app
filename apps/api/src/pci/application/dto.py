@@ -368,6 +368,26 @@ class ForecastPerformanceTrendPointOutput:
 
 
 @dataclass(frozen=True)
+class ForecastPaceMatrixCellOutput:
+    """予想展開に対する実績展開1区分の件数と割合。"""
+
+    key: str
+    label: str
+    count: int
+    rate: float | None
+
+
+@dataclass(frozen=True)
+class ForecastPaceMatrixRowOutput:
+    """予想展開1区分について、実績展開3区分への分布を表す。"""
+
+    predicted_key: str
+    predicted_label: str
+    sample_size: int
+    cells: list[ForecastPaceMatrixCellOutput] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ForecastPerformanceOutput:
     """直近期間の展開ラベル的中率サマリー。"""
 
@@ -381,6 +401,7 @@ class ForecastPerformanceOutput:
     confidence_groups: list[ForecastPerformanceGroupOutput] = field(
         default_factory=list
     )
+    pace_matrix: list[ForecastPaceMatrixRowOutput] = field(default_factory=list)
     weekly_trend: list[ForecastPerformanceTrendPointOutput] = field(
         default_factory=list
     )
