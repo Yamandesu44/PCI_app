@@ -1,5 +1,13 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-23 完了: 予想検証の専用画面
+
+- [x] `GET /api/v1/forecast-performance/misses`を追加し、30/90/180日、芝/ダート、予想・実績区分で検索可能にした。
+- [x] 25件単位のページングと最大100件のAPI上限を設け、PCI/RPCI実数値と生の信頼度は公開しない。
+- [x] `/forecast-review`を追加し、URLに絞り込み状態を保持して確定後分析へ遷移可能にした。
+- [x] トップの直近不一致一覧と共通ヘッダーから専用画面へ移動できるようにした。
+- [x] API 21 tests、Web 81 tests、Ruff、mypy strict、型チェック、production buildを完了した。
+
 ## 2026-07-23 完了: 予想検証から不一致レースを確認できる導線
 
 - [x] 選択期間内で予想区分と実績区分が異なる直近5レースをAPIへ追加した。
@@ -63,7 +71,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-23（予想検証から不一致レースを確認できる導線） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-23（予想検証の専用画面） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 

@@ -1,5 +1,62 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 22:18 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `4c96177`
+- 実装コミット: `9babd33`
+- 目的: 不一致レースを条件別に回顧できる予想検証専用画面を追加する。
+
+### 完了した内容
+
+- `GetForecastMissesUseCase`と`ForecastMissesOutput`を追加した。
+- `GET /api/v1/forecast-performance/misses`で期間、芝/ダート、予想区分、実績区分、offset/limitを扱う。
+- OpenAPIと`@pci/api-client`へ`ForecastMisses`、`ForecastMissQuery`、`getForecastMisses`を追加した。
+- `/forecast-review`へURL状態付きフィルター、25件ページング、確定後分析リンクを追加した。
+- `ForecastRecentMisses`から「すべての不一致を確認」へ進め、`AppHeader`にも予想検証導線を追加した。
+- レース名のプレースホルダー除外を`raceNameOrFallback`へ共通化した。
+
+### 未完了・既知事項
+
+- 今回の機能に未完了実装はない。
+- ブラウザー連携のローカル接続エラーにより目視スクリーンショット確認は未実施。Webの型検査と
+  production buildは成功している。
+- `python -m lint_imports`は実行環境に`lint_imports`が無く起動できなかった。Ruffとmypy strictは成功。
+- 検索は最大180日をアプリケーション層で絞り込む。データ量増加時はSQLページングへ移す。
+
+### テスト結果
+
+- API単体・契約・OpenAPI: 21 passed
+- API Ruff: passed
+- API mypy strict: 63 files passed
+- api-client typecheck: passed
+- Web: 81 passed、typecheck passed、production build passed
+- import-linter: 未実行（`No module named lint_imports`）
+- 画面目視: 未実行（ブラウザー連携のローカル接続エラー）
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `apps/api/src/pci/application/forecast_performance_use_cases.py`
+3. `apps/api/src/pci/presentation/routers/status.py`
+4. `apps/web/src/app/forecast-review/page.tsx`
+5. `apps/web/src/lib/forecastReview.ts`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/application/test_forecast_performance_use_cases.py `
+  tests/contract/test_status_api.py tests/contract/test_openapi_snapshot.py -q
+cd ..\..\apps\web
+npm test
+npm run typecheck
+```
+
 ## 2026-07-23 22:01 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
