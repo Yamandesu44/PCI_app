@@ -259,11 +259,13 @@ class TestCommon:
         assert key == "2026061805010101"
         assert len(key) == 16
 
-    def test_decode_track_turf(self) -> None:
-        assert decode_track("1") == "芝"
+    @pytest.mark.parametrize("code", ["1", "10", "19", "20", "21", "22"])
+    def test_decode_track_turf(self, code: str) -> None:
+        assert decode_track(code) == "芝"
 
-    def test_decode_track_dirt(self) -> None:
-        assert decode_track("2") == "ダート"
+    @pytest.mark.parametrize("code", ["2", "23", "24", "29"])
+    def test_decode_track_dirt(self, code: str) -> None:
+        assert decode_track(code) == "ダート"
 
     @pytest.mark.parametrize("code", ["52", "54", "56"])
     def test_decode_track_hurdle_from_jv_codes(self, code: str) -> None:

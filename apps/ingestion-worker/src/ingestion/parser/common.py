@@ -108,9 +108,9 @@ def decode_track(code: str) -> str:
     c = code.strip()
     if c.isdigit():
         n = int(c)
-        if n == 1 or 10 <= n <= 19:
+        if n == 1 or 10 <= n <= 22:
             return "芝"
-        if n == 2 or 20 <= n <= 29:
+        if n == 2 or 23 <= n <= 29:
             return "ダート"
         if n == 3 or 50 <= n <= 59:
             return "障害"
