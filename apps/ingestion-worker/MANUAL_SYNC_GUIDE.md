@@ -356,3 +356,9 @@ apps/ingestion-worker/
   過去成績の再取込が必要（7.5節）。 |
 | 2026-07-21 | Phase2完成: gradeを正式コードから永続化しability-v3で直接利用。results単独再取込でも
   確定馬体重を更新し、統合順位のバックテスト指標を追加（7.5節）。 |
+
+## 馬場情報補完の補足
+
+`--mode mykeibadb --step all` はmasters/entries/resultsに加えてrace-metadataも実行します。`run_mykeibadb_full_sync.ps1` でもentries後にrace-metadataが自動実行されます。special-entriesとforecastsは引き続き個別ステップです。
+
+旧形式レースキーが残っている環境では、正規キーと同一日付・競馬場・R番号のレースにも馬場情報が反映されます。重複レース自体の削除は行いません。

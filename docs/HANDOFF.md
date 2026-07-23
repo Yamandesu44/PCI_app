@@ -1,5 +1,75 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 19:31 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `48ddac3`
+- 実装最新コミット: `dfcb0d7`
+- 今回の目的: 予想検証サマリーの左右見切れを解消し、ほとんどのレースで欠けていた馬場情報を実データから補完する。
+
+### 完了した内容
+
+1. `apps/web/src/components/ForecastPerformanceSummary.tsx`
+   - セクションへ `px-4 sm:px-6` を追加し、見出し・期間切替・指標の左右余白を確保した。
+2. `apps/ingestion-worker/src/ingestion/batch.py`
+   - `includes_race_metadata()` を追加し、mykeibadb の `--step all` でも補足情報を取り込むようにした。
+3. `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`
+   - entries後にrace-metadataを自動実行し、終了コードも全体成否へ含めた。
+4. `apps/api/src/pci/application/race_use_cases.py`
+   - コース種別・馬場状態・天候を更新する。
+   - 正規キーと旧キーが併存する場合、日付・競馬場・R番号が一致する重複レースも同時更新する。
+   - 正規キーがない場合は候補が一意のときだけ旧キーを更新し、曖昧な候補は更新しない。
+5. `apps/ingestion-worker/src/ingestion/parser/common.py`
+   - mykeibadb `track_code` マスタに基づき、TrackCDを芝10〜22、ダート23〜29、障害51〜59へ修正した。
+6. 実データ補完
+   - 2025-07-23〜2026-07-23を3回検証しながら再補完した。最終全期間実行ログはingest log id=55、12月6日再補完はid=56。
+   - 未反映件数は564件から0件。
+   - `2026020108010111` は芝・良・曇、`2026071902011211` は芝・重・晴を確認。
+   - mykeibadbに存在しない開発用シード `2026061805010101` は内部削除APIで削除した。
+
+### 未完了・既知の問題
+
+- 旧形式キーと正規キーの重複レース自体は残っている。今回は削除・成績統合をせず、馬場情報だけを一致させた。重複整理は別タスクとして、RaceEntry・予想マート等のFK移行設計を先に行うこと。
+- API非統合テスト全体は509 passed / 3 failed。失敗は既存のcaplogログ文言取得テスト3件で、今回の対象テスト63件は成功。
+- ingestion-worker全体lintは既存14件で失敗する。対象は未変更の `windows_client.py`、`locate_corners.py`、`test_locate_corners.py`。今回変更ファイルのlintは成功。
+- 作業用workspaceからユーザーの `.venv` を直接起動するとプロセス生成に失敗したため、テストはシステムPython 3.12で実行した。実運用cloneの `run_batch.ps1` は成功している。
+- `C:\Users\yuuta\PCI_app\apps\ingestion-worker\.env]` と `result_run.txt` は既存未追跡ファイルのため触れていない。
+
+### テスト結果
+
+- ingestion-worker: `python -m pytest -q` -> 220 passed
+- ingestion-worker変更ファイル: Ruff -> passed
+- API対象: `pytest tests/unit/application/test_race_use_cases.py tests/contract/test_ingest_api.py -q` -> 63 passed
+- API: Ruff -> passed
+- API: mypy strict Python 3.12 -> passed (63 source files)
+- Web: Vitest -> 74 passed
+- api-client / Web: typecheck -> passed
+- Web: `next build` -> passed
+- API非統合全体: 509 passed / 3 failed（既存ログ捕捉テスト）
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `docs/HANDOFF.md`
+3. `docs/DECISIONS.md`
+4. `apps/api/src/pci/application/race_use_cases.py`
+5. `apps/ingestion-worker/src/ingestion/parser/common.py`
+6. `apps/ingestion-worker/src/ingestion/batch.py`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+Invoke-RestMethod http://localhost:8000/api/v1/ingest-status
+cd apps\ingestion-worker
+python -m pytest -q
+cd ..\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/application/test_race_use_cases.py tests/contract/test_ingest_api.py -q
+```
+
 > Claude Code / Codex を交互に使うための引き継ぎファイル。**作業を中断・終了するたびに更新する。**
 > 会話履歴が無くても、このファイル + Git 履歴 + `docs/` + `tasks/` から状態を復元できることが目標。
 

@@ -185,3 +185,13 @@ pytest tests/
 - SE レコードのバイト位置は JV-Data仕様書 Ver.3.0 準拠（実際の JV-Link 出力との照合推奨。
   Ver.3.0のまま変わっていないのか、UM/KS/CH同様Ver.4.9相当で校正済みなのかは未確認 → `docs/SPEC.md §9-8`）
 - JV-Linkの新バージョン追従・バイトオフセットの再検証手順は `JV_SPEC_MAINTENANCE_GUIDE.md` 参照
+
+## 馬場情報の自動補完
+
+mykeibadbモードでは、`--step all` と `scripts/run_mykeibadb_full_sync.ps1` がコース種別・馬場状態・天候の補完も実行します。過去データだけを再補完する場合は次を実行します。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723 -ChunkDays 7 -MaxRetries 1
+```
+
+TrackCDはmykeibadbの `track_code` マスタに従い、芝10〜22、ダート23〜29、障害51〜59として扱います。
