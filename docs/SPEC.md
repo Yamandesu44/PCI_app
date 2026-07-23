@@ -254,6 +254,14 @@
   同一`race_date`・`jyo_cd`・レースキー末尾2桁のR番号に複数の16桁キーが存在する組を集計する。
   全組数と新しい順の代表20組を返し、Webでは各キーへのリンクを表示する。
   FK移行と正規キー判定が必要なため、自動削除・自動統合・修復コマンドは提供しない。
+- ✅ **重複レースdry-run監査**（2026-07-23追加）: 認証付き
+  `GET /internal/ingest/duplicate-race-audit`は、指定期間の全重複組について各キーの状態・頭数・
+  確定頭数・出走馬署名・中核成績署名・`predicted_pace`/`pace_fit`件数を返す。
+  `python -m ingestion.audit_duplicate_races`はmykeibadbの16桁`RACE_CODE`を正規候補として照合し、
+  `removable_after_resync`、`mart_migration_required`、`result_conflict`、
+  `canonical_incomplete`、`source_unresolved`へ分類してJSON保存する。DB書き込みは行わない。
+  中核成績署名は馬番・着順・走破時計・上がり3F・通過順だけを対象とし、再取込時期で欠損し得る
+  人気・賞金と、別途出走馬署名で検出する馬IDは含めない。
 - ✅ **安全な手動再同期支援**（2026-07-22追加）: DBで最古の成績未取込日を集計し、標準10日以上で
   その日を含む`recommended_sync_days_back`を返す。警告バナーはWindowsのコマンドプロンプトで
   実行できる`run_mykeibadb_full_sync.ps1 -DaysBack N`を生成し、コピーできる。正常時は表示しない。

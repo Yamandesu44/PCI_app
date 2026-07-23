@@ -1,5 +1,105 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 20:32 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `9b3ad5f`
+- 実装最新コミット: `41a4859`
+- 今回の目的: 重複450組を削除する前に、正規キー・内容差・関連martを読み取り専用で監査する。
+
+### 完了した内容
+
+1. `SqlAlchemyRaceRepository.find_duplicate_race_audits`
+   - 重複キーごとの状態、頭数、確定頭数、出走馬署名、中核成績署名、
+     `predicted_pace`/`pace_fit`件数を一括取得する。
+   - 中核成績署名は馬番・着順・時計・上がり・通過順に限定し、馬ID・人気・賞金は含めない。
+2. `GET /internal/ingest/duplicate-race-audit`
+   - `X-Ingest-Token`必須、`date_from`/`date_to`/`limit`指定の読み取り専用APIを追加した。
+   - OpenAPIと`@pci/api-client`の型を同期した。
+3. `ingestion.audit_duplicate_races`
+   - mykeibadbを31日単位で読み、16桁`RACE_CODE`との一意一致から正規キー候補を決める。
+   - 5分類のJSON監査結果を出力し、DB更新・削除はしない。
+4. 実DB監査
+   - 対象: 2025-07-23〜2026-07-23。
+   - mykeibadb取得キー3492件、重複450組、各組の旧キーは1件。
+   - `removable_after_resync` 450組、その他4分類0組。
+   - 全450組で出走馬構成差を検出。旧キーを削除する前に正規キー再同期が必須。
+
+### 未完了・作業が止まっている箇所
+
+- 旧キーの削除・FK移行は未実装。監査で安全条件を確定した段階で止めている。
+- 次工程では正規キーをmykeibadbから再同期し、`races`/`race_entries`の頭数・確定頭数を照合してから、
+  同一トランザクションで旧キーを削除する必要がある。
+- `result_conflict`、`canonical_incomplete`、`source_unresolved`、
+  `mart_migration_required`は自動削除対象にしない。
+
+### 次に実施する具体的な手順
+
+1. `apps/ingestion-worker/src/ingestion/audit_duplicate_races.py`の分類結果を入力にする、
+   明示的な`--apply`ではなく別コマンドの統合CLIを設計する。
+2. `apps/api/src/pci/presentation/routers/ingest.py`へ認証付き統合エンドポイントを追加し、
+   `SqlAlchemyRaceRepository`で正規キー再同期後の頭数・確定頭数・mart件数を再検証する。
+3. `RaceEntryModel`、`PredictedPaceModel`、`PaceFitModel`の件数が監査値と一致する場合だけ、
+   1重複組ずつトランザクションで旧キーを削除する。例外時は組単位でrollbackする。
+4. `TestFindDuplicateRaceGroups`と新規契約テストへ、成功・中核成績不一致・martあり・正規キー未確定・
+   再同期後頭数不一致のケースを追加する。
+5. 実行後に`count_duplicate_race_groups(...) == 0`、レース減少450件、
+   正規キー側の確定頭数維持、予想mart件数維持を検証する。
+
+### 仮実装・暫定値・未確定仕様
+
+- 監査期間のCLI既定は365日、mykeibadb読取チャンクは31日。運用値であり正式要件ではない。
+- 正規キー再同期後の削除API契約、失敗時の再開単位、監査JSONの再利用可否は未確定。
+- 今回の実DBではmart移行対象0件だが、将来の`mart_migration_required`処理方針は未確定。
+
+### 既知の問題
+
+- API非統合テスト全体は516 passed / 3 failed。既存の`caplog`ログ捕捉テスト3件が、
+  この実行環境ではログを受け取れず失敗する。今回の変更対象テストは成功。
+- worker仮想環境の`mypy`は`librt.internal`欠落で起動不能。システムPython 3.12では
+  変更2ファイルのstrict型チェックが成功した。
+- 実運用cloneの既存未追跡`apps/ingestion-worker/.env]`と`result_run.txt`には触れていない。
+
+### テスト実行コマンド・結果
+
+- API Ruff: `python -m ruff check src tests scripts/export_openapi.py scripts/backtest_forecast.py`
+  -> passed
+- API mypy: `python -m mypy src --strict --python-version 3.12` -> 63 files passed
+- 対象API/DB: `python -m pytest tests/unit/infrastructure/test_race_repository_audit.py
+  tests/contract/test_ingest_api.py tests/integration/test_race_repository.py::TestFindDuplicateRaceGroups -q`
+  -> 41 passed
+- OpenAPI契約: `python -m pytest tests/contract/test_ingest_api.py
+  tests/contract/test_openapi_snapshot.py -q` -> 41 passed
+- worker: `python -m pytest tests/test_audit_duplicate_races.py -q` -> 5 passed
+- worker全体: `python -m pytest -q` -> 225 passed
+- api-client: `npm run typecheck --workspace=@pci/api-client` -> passed
+- API非統合全体: 516 passed / 3 failed（上記既知のログ捕捉テスト）
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `tasks/backlog.md`
+3. `docs/HANDOFF.md`
+4. `docs/DECISIONS.md`
+5. `apps/ingestion-worker/src/ingestion/audit_duplicate_races.py`
+6. `apps/api/src/pci/infrastructure/repositories/race_repository.py`
+7. `apps/api/src/pci/presentation/routers/ingest.py`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/infrastructure/test_race_repository_audit.py `
+  tests/contract/test_ingest_api.py `
+  tests/integration/test_race_repository.py::TestFindDuplicateRaceGroups -q
+cd ..\ingestion-worker
+python -m pytest tests/test_audit_duplicate_races.py -q
+```
+
 ## 2026-07-23 19:57 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

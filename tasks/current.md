@@ -1,5 +1,15 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-23 完了: 重複レース統合前のdry-run監査
+
+- [x] 認証付き`GET /internal/ingest/duplicate-race-audit`で、重複キーごとの状態・頭数・
+  確定頭数・出走馬署名・中核成績署名・予想mart件数を読み取り専用で取得可能にした。
+- [x] `python -m ingestion.audit_duplicate_races`でmykeibadbの`RACE_CODE`を正規キー候補とし、
+  5区分へ分類するJSON監査CLIを追加した。
+- [x] 2025-07-23〜2026-07-23を実DBで監査し、450組すべてで正規キーを一意に特定した。
+- [x] 450組すべてが中核成績一致・旧キー側予想martなしの`removable_after_resync`だった。
+- [x] 450組すべてで出走馬構成差があるため、正規キー再同期前の旧キー削除は禁止する。
+
 ## 2026-07-23 完了: 重複レースのデータ完全性監視
 
 - [x] 直近365日のJRA平地について、同一開催日・競馬場・R番号に複数キーがあるレース組をDB集計する。
@@ -31,7 +41,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-23（重複レースのデータ完全性監視） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-23（重複レース統合前のdry-run監査） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 

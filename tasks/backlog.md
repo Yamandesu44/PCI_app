@@ -76,8 +76,12 @@
   Geminiは`gemini`モードとAPIキーの二段階オプトインに限定する。
 - [ ] **P2 実JV-Dataの人気/賞金予約オフセット検証**（jvlink実COM用）。現状はmykeibadb合成専用。
 - [ ] **P1 重複レースキーを安全に正規キーへ統合する**。
-  実DBの直近1年で450組を検出済み。正規キーをmykeibadbと照合し、RaceEntry・予想mart・関連FKを
-  dry-run付きで移行してから旧キーを削除する。成績・頭数が不一致の組は自動統合しない。
+  - [x] dry-run監査を実装し、実DB直近1年の450組すべてでmykeibadbの正規キーを一意に特定した。
+    中核成績は全組一致し、旧キー側の予想martは0件。ただし出走馬構成は全組で不一致。
+  - [ ] 正規キーへ出走表・成績を再同期し、正規キーの頭数・確定頭数をmykeibadbと照合する。
+  - [ ] トランザクション内で関連FKと予想mart件数を再確認し、旧キーを削除する。
+  - [ ] 削除後に重複組数0件、レース総数・確定成績数・予想mart件数の期待差を検証する。
+  `result_conflict`・`canonical_incomplete`・`source_unresolved`は今後発生しても自動統合しない。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
   `DistanceStyleWeights`(running-style-v2-distance)・
