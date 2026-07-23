@@ -112,7 +112,7 @@ def get_duplicate_race_audit(
     """指定期間の重複レースを読み取り専用で監査する。"""
     if date_to < date_from:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="date_to must be on or after date_from",
         )
     groups = repo.find_duplicate_race_audits(
@@ -473,12 +473,12 @@ def precompute_forecasts(
     """今後の出走前レースの予想martを、画面表示より先に生成する。"""
     if body.date_from > body.date_to:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="date_from は date_to 以前にしてください。",
         )
     if (body.date_to - body.date_from).days > 31:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="事前生成は32日以内の範囲を指定してください。",
         )
 
@@ -503,7 +503,7 @@ def delete_ingested_race(
         key = RaceKey(race_key)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
     deleted = repo.delete_race(key)
