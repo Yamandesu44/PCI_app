@@ -29,20 +29,16 @@ import argparse
 import math
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
 sys.path.insert(0, "src")
 
-try:
-    import lightgbm as lgb  # type: ignore[import-untyped]
-except ImportError:
-    print("エラー: lightgbm が未インストールです。pip install lightgbm を実行してください。")
-    sys.exit(1)
-
 from sqlalchemy import text
 
 from pci.config.settings import get_settings
+from pci.domain.pace.rpci_forecast import PaceLabel, classify_pace
 from pci.infrastructure.database.session import build_engine, build_session_maker
 from pci.infrastructure.pace.lgbm_forecaster import FEATURE_NAMES
 
@@ -58,14 +54,14 @@ _QUERY_TEMPLATE = """\
             WHEN r.jyo_cd ~ '^[0-9]+$' THEN r.jyo_cd::int
             ELSE 0
         END                                                             AS jyo_cd,
-        SUM(CASE WHEN e.running_style = '逃' THEN 1 ELSE 0 END)        AS escape_count,
-        SUM(CASE WHEN e.running_style IN ('逃','先') THEN 1 ELSE 0 END)::float
+        SUM(CASE WHEN e.running_style = '逃げ' THEN 1 ELSE 0 END)      AS escape_count,
+        SUM(CASE WHEN e.running_style IN ('逃げ','先行') THEN 1 ELSE 0 END)::float
             / NULLIF(COUNT(e.horse_no), 0)                             AS front_ratio,
-        SUM(CASE WHEN e.running_style IN ('差','追') THEN 1 ELSE 0 END)::float
+        SUM(CASE WHEN e.running_style IN ('差し','追込') THEN 1 ELSE 0 END)::float
             / NULLIF(COUNT(e.horse_no), 0)                             AS closer_ratio,
         (
-            SUM(CASE WHEN e.running_style IN ('差','追') THEN 1 ELSE 0 END)
-          - SUM(CASE WHEN e.running_style IN ('逃','先') THEN 1 ELSE 0 END)
+            SUM(CASE WHEN e.running_style IN ('差し','追込') THEN 1 ELSE 0 END)
+          - SUM(CASE WHEN e.running_style IN ('逃げ','先行') THEN 1 ELSE 0 END)
         )::float / NULLIF(COUNT(e.horse_no), 0)                        AS style_balance,
         CASE r.track_condition
             WHEN '稍重' THEN 1
@@ -84,7 +80,7 @@ _QUERY_TEMPLATE = """\
     GROUP BY r.race_key,
              r.distance_m, r.track_type, r.jyo_cd, r.track_condition, r.rpci_actual
     HAVING COUNT(e.horse_no) > 0
-    ORDER BY r.race_date DESC
+    ORDER BY r.race_date DESC, r.race_key DESC
     LIMIT :lim
 """
 
@@ -168,6 +164,12 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    try:
+        import lightgbm as lgb
+    except ImportError:
+        print("エラー: lightgbm が未インストールです。pip install lightgbm を実行してください。")
+        return
+
     args = _parse_args()
     track_type: str = args.track_type
     output = Path(args.output if args.output else _DEFAULT_OUTPUT[track_type])
@@ -191,6 +193,9 @@ def main() -> None:
     if not rows:
         print("学習データが見つかりません。DB の状態を確認してください。")
         return
+    if len(rows) < 5:
+        print("学習データが5レース未満です。期間または取り込み状況を確認してください。")
+        return
 
     print(f"取得: {len(rows):,} レース")
 
@@ -201,11 +206,11 @@ def main() -> None:
     )
     y_np = np.array([float(row[-1]) for row in rows], dtype=np.float64)
 
-    # 80/20 分割（時系列順のため先頭を訓練、後続をテストとしない）
-    # ランダムシャッフルなし → 直近 20% をテストに使う（将来データ漏洩に注意）
-    split = int(len(x_np) * 0.8)
-    x_train, x_test = x_np[:split], x_np[split:]
-    y_train, y_test = y_np[:split], y_np[split:]
+    # SQLは新しい順。直近20%を検証へ取り分け、残る古い80%だけで学習する。
+    # LIMIT指定時も最新期間を保持しつつ、将来から過去を予測する漏洩を防ぐ。
+    test_size = max(1, len(x_np) - int(len(x_np) * 0.8))
+    x_test, x_train = x_np[:test_size], x_np[test_size:]
+    y_test, y_train = y_np[:test_size], y_np[test_size:]
 
     print(f"訓練: {len(x_train):,} / テスト: {len(x_test):,}")
 
@@ -235,6 +240,7 @@ def main() -> None:
     print(f"  MAE  : {mae:.3f}")
     print(f"  RMSE : {rmse:.3f}")
     print(f"  バイアス: {bias:+.3f}")
+    _print_label_recall(preds, y_test, x_test, track_type)
 
     print("\n■ 特徴量重要度 (gain)")
     imp = model.feature_importance(importance_type="gain")
@@ -251,6 +257,38 @@ def main() -> None:
         "  git commit -m 'feat: 芝/ダート別 LightGBM モデル追加'\n"
         "  python -m scripts.backtest_forecast で精度を検証してください。"
     )
+
+
+def _print_label_recall(
+    predictions: Any,
+    actuals: Any,
+    features: Any,
+    configured_track_type: str,
+) -> None:
+    """検証セットの展開3分類再現率をコース種別ごとに表示する。"""
+    grouped: dict[tuple[str, PaceLabel], list[bool]] = {}
+    for prediction, actual, feature in zip(predictions, actuals, features, strict=True):
+        track_type = (
+            "ダート"
+            if configured_track_type == "dirt"
+            or (configured_track_type == "all" and float(feature[1]) == 1.0)
+            else "芝"
+        )
+        actual_label = classify_pace(float(actual), track_type)
+        predicted_label = classify_pace(float(prediction), track_type)
+        grouped.setdefault((track_type, actual_label), []).append(
+            predicted_label == actual_label
+        )
+
+    print("\n■ 展開3分類の再現率")
+    for track_type in ("芝", "ダート"):
+        for label in PaceLabel:
+            hits = grouped.get((track_type, label), [])
+            if hits:
+                print(
+                    f"  {track_type}「{label}」: "
+                    f"{sum(hits) / len(hits):.1%} ({sum(hits)}/{len(hits)})"
+                )
 
 
 if __name__ == "__main__":

@@ -50,6 +50,7 @@ import datetime
 import json
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 
 sys.path.insert(0, "src")
 
@@ -142,6 +143,18 @@ def _parse_args() -> argparse.Namespace:
         help="競馬場コードフィルター（例: 函館=02、福島=03、小倉=10）",
     )
     p.add_argument(
+        "--turf-model-path",
+        type=str,
+        default=None,
+        help="検証に使う芝LightGBMモデル。未指定時は本番モデル",
+    )
+    p.add_argument(
+        "--dirt-model-path",
+        type=str,
+        default=None,
+        help="検証に使うダートLightGBMモデル。未指定時は本番モデル",
+    )
+    p.add_argument(
         "--output",
         type=str,
         default=None,
@@ -186,6 +199,10 @@ def _parse_args() -> argparse.Namespace:
     args = p.parse_args()
     if args.style_breakdown and not args.validate_style_advantage:
         p.error("--style-breakdown は --validate-style-advantage と組み合わせてください")
+    for path_arg in ("turf_model_path", "dirt_model_path"):
+        value = getattr(args, path_arg)
+        if value is not None and not Path(value).is_file():
+            p.error(f"--{path_arg.replace('_', '-')} のファイルが見つかりません: {value}")
     return args
 
 
@@ -238,6 +255,10 @@ def main() -> None:
         notes.append(f"コース種別: {args.track_type}")
     if args.venue_code is not None:
         notes.append(f"競馬場コード: {args.venue_code.zfill(2)}")
+    if args.turf_model_path is not None:
+        notes.append(f"芝モデル: {args.turf_model_path}")
+    if args.dirt_model_path is not None:
+        notes.append(f"ダートモデル: {args.dirt_model_path}")
     if notes:
         filter_note = f" （{' / '.join(notes)}）"
     print(f"対象 {len(targets)} レースでバックテストを実行します{filter_note}…\n")
@@ -262,7 +283,10 @@ def main() -> None:
             _write_diagnostic_output(args.output, payload)
         return
 
-    forecaster = load_best_forecaster()
+    forecaster = load_best_forecaster(
+        turf_model_path=Path(args.turf_model_path) if args.turf_model_path else None,
+        dirt_model_path=Path(args.dirt_model_path) if args.dirt_model_path else None,
+    )
     backtester = ForecastBacktester(repo, forecaster=forecaster)
     if args.diagnose_style_advantage:
         diagnosis = backtester.diagnose_style_advantage(targets)
