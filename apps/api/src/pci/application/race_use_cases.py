@@ -132,37 +132,34 @@ class UpdateRaceMetadataUseCase:
         weather: str | None = None,
     ) -> bool:
         key = RaceKey(race_key_str)
-        race = self._find_target_race(key)
-        if race is None or (
+        races = self._find_target_races(key)
+        if not races or (
             track_type is None and track_condition is None and weather is None
         ):
             return False
 
-        self._repo.save_race(
-            Race(
-                race_key=race.race_key,
-                race_date=race.race_date,
-                jyo_cd=race.jyo_cd,
-                distance_m=race.distance_m,
-                track_type=track_type or race.track_type,
-                field_size=race.field_size,
-                status=race.status,
-                track_condition=track_condition or race.track_condition,
-                weather=weather or race.weather,
-                grade=race.grade,
-                race_class=race.race_class,
-                rpci_actual=race.rpci_actual,
-                pci3_actual=race.pci3_actual,
+        for race in races:
+            self._repo.save_race(
+                Race(
+                    race_key=race.race_key,
+                    race_date=race.race_date,
+                    jyo_cd=race.jyo_cd,
+                    distance_m=race.distance_m,
+                    track_type=track_type or race.track_type,
+                    field_size=race.field_size,
+                    status=race.status,
+                    track_condition=track_condition or race.track_condition,
+                    weather=weather or race.weather,
+                    grade=race.grade,
+                    race_class=race.race_class,
+                    rpci_actual=race.rpci_actual,
+                    pci3_actual=race.pci3_actual,
+                )
             )
-        )
         return True
 
-    def _find_target_race(self, source_key: RaceKey) -> Race | None:
-        """完全一致を優先し、旧形式キーは日付・場・R番号で一意に照合する。"""
-        exact = self._repo.find_by_key(source_key)
-        if exact is not None:
-            return exact
-
+    def _find_target_races(self, source_key: RaceKey) -> list[Race]:
+        """完全一致と、同じ日付・場・R番号を持つ旧形式キーを返す。"""
         value = source_key.value
         try:
             race_date = datetime.date(
@@ -171,7 +168,7 @@ class UpdateRaceMetadataUseCase:
                 int(value[6:8]),
             )
         except ValueError:
-            return None
+            return []
         jyo_cd = value[8:10]
         race_no = value[14:16]
         candidates = [
@@ -179,7 +176,10 @@ class UpdateRaceMetadataUseCase:
             for race in self._repo.list_races_by_date(race_date)
             if race.jyo_cd == jyo_cd and race.race_key.value[14:16] == race_no
         ]
-        return candidates[0] if len(candidates) == 1 else None
+        exact = next((race for race in candidates if race.race_key == source_key), None)
+        if exact is not None:
+            return candidates
+        return candidates if len(candidates) == 1 else []
 
 
 class RecordRaceResultUseCase:

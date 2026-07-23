@@ -252,6 +252,33 @@ class TestUpdateRaceMetadataUseCase:
         assert legacy.weather == "雨"
         assert repo.find_by_key(RaceKey(source_key)) is None
 
+    def test_exact_and_legacy_keys_receive_the_same_metadata(self) -> None:
+        repo = FakeRaceRepository()
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+        source_key = "2026061805020301"
+        repo.save_race(
+            Race(
+                race_key=RaceKey(source_key),
+                race_date=RACE_DATE,
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=3,
+            )
+        )
+
+        updated = UpdateRaceMetadataUseCase(repo).execute(
+            source_key,
+            track_condition="重",
+            weather="雨",
+        )
+
+        assert updated is True
+        for key in (RACE_KEY, source_key):
+            race = repo.find_by_key(RaceKey(key))
+            assert race is not None
+            assert race.track_condition == "重"
+            assert race.weather == "雨"
     def test_legacy_key_is_not_matched_when_identity_is_ambiguous(self) -> None:
         repo = FakeRaceRepository()
         RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
