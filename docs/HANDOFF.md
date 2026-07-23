@@ -1,5 +1,55 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 22:53 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `5ce5be7`
+- 実装コミット: `7d4e034`
+- 目的: APIテストに残る自コード・自設定由来の非推奨警告を解消する。
+
+### 完了した内容
+
+- `apps/api/src/pci/presentation/routers/ingest.py`の4箇所で、Starletteの旧
+  `HTTP_422_UNPROCESSABLE_ENTITY`を`HTTP_422_UNPROCESSABLE_CONTENT`へ変更した。
+  HTTPステータス値とAPI契約は422のまま変わらない。
+- `apps/api/alembic.ini`へ`path_separator = os`を追加し、`prepend_sys_path`の
+  旧区切り解釈に関するAlembic警告を解消した。
+- API非統合テストの警告は5件から2件へ減少した。
+
+### 未完了・既知事項
+
+- FastAPI 0.138.0 / Starlette 1.3.1のTestClientが出す`httpx2`移行警告は外部依存由来。
+  依存更新とテストクライアント移行の影響調査を伴うため、今回の保守変更には含めない。
+- `.pytest_cache`の書込み警告はCodexワークスペース権限由来。通常クローンでの動作不良ではない。
+- 設計判断の変更はないため、今回`docs/DECISIONS.md`への追記は行っていない。
+
+### テスト結果
+
+- `python -m pytest tests/contract/test_ingest_api.py -q`: 42 passed
+- `python -m pytest tests/integration/test_database_readiness.py -q`: 2 passed
+- `python -m pytest -m "not integration" -q`: 533 passed、28 deselected、2 warnings
+- API全体Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 63 files passed
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `apps/api/src/pci/presentation/routers/ingest.py`
+3. `apps/api/alembic.ini`
+4. `docs/HANDOFF.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest -m "not integration" -q
+python -m pytest tests/integration/test_database_readiness.py -q
+```
+
 ## 2026-07-23 22:46 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
@@ -24,7 +74,7 @@
 
 - 今回の修正に未完了実装はない。
 - pytestキャッシュはワークスペース権限により作成できず警告が出るが、結果には影響しない。
-- Starlette/httpxとHTTP 422定数の既存非推奨警告は別タスク。
+- Starlette/httpxの既存非推奨警告は別タスク。HTTP 422定数は次の更新で解消済み。
 
 ### テスト結果
 
