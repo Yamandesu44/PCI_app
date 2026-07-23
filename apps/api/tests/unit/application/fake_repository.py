@@ -193,6 +193,8 @@ class FakeRaceRepository:
             result_signature=self._signature(result_values),
             predicted_pace_count=0,
             pace_fit_count=0,
+            predicted_pace_models=(),
+            pace_fit_models=(),
         )
 
     @staticmethod

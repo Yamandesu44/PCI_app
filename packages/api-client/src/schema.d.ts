@@ -529,8 +529,12 @@ export interface components {
             finished_count: number;
             /** Pace Fit Count */
             pace_fit_count: number;
+            /** Pace Fit Models */
+            pace_fit_models: components["schemas"]["MartVersionAuditSchema"][];
             /** Predicted Pace Count */
             predicted_pace_count: number;
+            /** Predicted Pace Models */
+            predicted_pace_models: components["schemas"]["MartVersionAuditSchema"][];
             /** Race Key */
             race_key: string;
             /** Result Signature */
@@ -1140,6 +1144,16 @@ export interface components {
             code: string;
             /** Name */
             name: string;
+        };
+        /**
+         * MartVersionAuditSchema
+         * @description 予想martのモデル世代別行数。
+         */
+        MartVersionAuditSchema: {
+            /** Model Version */
+            model_version: string;
+            /** Row Count */
+            row_count: number;
         };
         /**
          * MissingTrackConditionRaceSchema

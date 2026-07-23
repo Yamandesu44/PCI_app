@@ -22,6 +22,14 @@ class DuplicateRaceGroup:
 
 
 @dataclass(frozen=True)
+class MartVersionAudit:
+    """予想martのモデル世代別行数。"""
+
+    model_version: str
+    row_count: int
+
+
+@dataclass(frozen=True)
 class DuplicateRaceKeyAudit:
     """重複レースキー1件に紐づく、統合判断用のデータ概要。"""
 
@@ -34,6 +42,8 @@ class DuplicateRaceKeyAudit:
     result_signature: str
     predicted_pace_count: int
     pace_fit_count: int
+    predicted_pace_models: tuple[MartVersionAudit, ...]
+    pace_fit_models: tuple[MartVersionAudit, ...]
 
 
 @dataclass(frozen=True)

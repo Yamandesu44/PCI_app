@@ -9,7 +9,11 @@ from pci.domain.pace.pci import aggregate_rpci, calculate_pci, calculate_rpci_fr
 from pci.domain.pace.running_style import classify_running_style
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
-from pci.domain.racing.repository import RaceCompletenessRepository, RaceRepository
+from pci.domain.racing.repository import (
+    DuplicateRaceKeyAudit,
+    RaceCompletenessRepository,
+    RaceRepository,
+)
 from pci.domain.shared.measurements import Distance, Furlong3Time, RaceTime
 from pci.domain.shared.race_key import RaceKey
 
@@ -246,8 +250,10 @@ class DeleteDuplicateRaceUseCase:
             raise ValueError("正規キーの再同期件数がmykeibadbと一致しません")
         if canonical.result_signature != stale.result_signature:
             raise ValueError("旧キーと正規キーの中核成績が一致しません")
-        if stale.predicted_pace_count > 0 or stale.pace_fit_count > 0:
-            raise ValueError("旧キーに予想martが残っているため削除できません")
+        if (
+            stale.predicted_pace_count > 0 or stale.pace_fit_count > 0
+        ) and not _canonical_mart_covers_stale(stale, canonical):
+            raise ValueError("旧キーの予想martを正規キー側で完全に代替できません")
         return self._repo.delete_race(RaceKey(stale_race_key))
 
 
@@ -426,3 +432,33 @@ def _race_date_from_key(race_key: str) -> datetime.date:
         )
     except (ValueError, IndexError) as exc:
         raise ValueError("レースキーから開催日を取得できません") from exc
+
+
+def _canonical_mart_covers_stale(
+    stale: DuplicateRaceKeyAudit,
+    canonical: DuplicateRaceKeyAudit,
+) -> bool:
+    """正規キーの同一モデル世代が旧martを全件代替できるか判定する。"""
+    if (
+        sum(item.row_count for item in stale.predicted_pace_models)
+        != stale.predicted_pace_count
+        or sum(item.row_count for item in stale.pace_fit_models)
+        != stale.pace_fit_count
+    ):
+        return False
+    canonical_predicted = {
+        item.model_version: item.row_count
+        for item in canonical.predicted_pace_models
+    }
+    canonical_fit = {
+        item.model_version: item.row_count for item in canonical.pace_fit_models
+    }
+    predicted_covered = all(
+        canonical_predicted.get(item.model_version, 0) >= item.row_count
+        for item in stale.predicted_pace_models
+    )
+    fit_covered = all(
+        canonical_fit.get(item.model_version, 0) >= canonical.entry_count
+        for item in stale.pace_fit_models
+    )
+    return predicted_covered and fit_covered

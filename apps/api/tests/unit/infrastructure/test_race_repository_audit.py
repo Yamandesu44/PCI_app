@@ -57,8 +57,8 @@ def test_result_signature_ignores_identity_and_optional_result_metadata() -> Non
                 prize_money=None,
             )
         ],
-        predicted_pace_count=0,
-        pace_fit_count=0,
+        predicted_pace_models=(),
+        pace_fit_models=(),
     )
     canonical = SqlAlchemyRaceRepository._build_duplicate_key_audit(
         _race("2026020105010209"),
@@ -70,8 +70,8 @@ def test_result_signature_ignores_identity_and_optional_result_metadata() -> Non
                 prize_money=100_000,
             )
         ],
-        predicted_pace_count=0,
-        pace_fit_count=0,
+        predicted_pace_models=(),
+        pace_fit_models=(),
     )
 
     assert stale.result_signature == canonical.result_signature

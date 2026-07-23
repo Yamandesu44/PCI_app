@@ -27,6 +27,12 @@ AuditDecision = Literal[
 
 
 @dataclass(frozen=True)
+class MartVersionAudit:
+    model_version: str
+    row_count: int
+
+
+@dataclass(frozen=True)
 class RaceKeyAudit:
     race_key: str
     status: str
@@ -37,6 +43,8 @@ class RaceKeyAudit:
     result_signature: str
     predicted_pace_count: int
     pace_fit_count: int
+    predicted_pace_models: tuple[MartVersionAudit, ...] = ()
+    pace_fit_models: tuple[MartVersionAudit, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,14 +100,15 @@ def classify_duplicate_group(
         decision = "result_conflict"
         reasons.append("旧キーと正規キー候補の確定成績内容が一致しない")
     elif any(
-        key.predicted_pace_count > 0 or key.pace_fit_count > 0
+        (key.predicted_pace_count > 0 or key.pace_fit_count > 0)
+        and not canonical_mart_covers_stale(key, canonical)
         for key in stale
     ):
         decision = "mart_migration_required"
-        reasons.append("旧キーに保存済み予想があり、削除前に予想martの移行が必要")
+        reasons.append("旧キーの予想martを正規キー側で完全に代替できない")
     else:
         decision = "removable_after_resync"
-        reasons.append("正規キー候補の成績が確定し、旧キーに予想martがない")
+        reasons.append("正規キー候補の成績が確定し、旧キーの関連データを安全に破棄できる")
 
     if any(key.entry_signature != canonical.entry_signature for key in stale):
         reasons.append("出走馬構成には差があるため、正規キー再同期後の削除を前提とする")
@@ -116,11 +125,50 @@ def classify_duplicate_group(
 
 
 def _parse_group(payload: dict[str, Any]) -> DuplicateGroupAudit:
+    keys: list[RaceKeyAudit] = []
+    for value in payload["keys"]:
+        key = dict(value)
+        key["predicted_pace_models"] = tuple(
+            MartVersionAudit(**item)
+            for item in key.get("predicted_pace_models", [])
+        )
+        key["pace_fit_models"] = tuple(
+            MartVersionAudit(**item) for item in key.get("pace_fit_models", [])
+        )
+        keys.append(RaceKeyAudit(**key))
     return DuplicateGroupAudit(
         race_date=str(payload["race_date"]),
         jyo_cd=str(payload["jyo_cd"]),
         race_no=str(payload["race_no"]),
-        keys=tuple(RaceKeyAudit(**key) for key in payload["keys"]),
+        keys=tuple(keys),
+    )
+
+
+def canonical_mart_covers_stale(
+    stale: RaceKeyAudit,
+    canonical: RaceKeyAudit,
+) -> bool:
+    """正規キーの同一モデル世代が旧martを全件代替できるか判定する。"""
+    if (
+        sum(item.row_count for item in stale.predicted_pace_models)
+        != stale.predicted_pace_count
+        or sum(item.row_count for item in stale.pace_fit_models)
+        != stale.pace_fit_count
+    ):
+        return False
+    canonical_predicted = {
+        item.model_version: item.row_count
+        for item in canonical.predicted_pace_models
+    }
+    canonical_fit = {
+        item.model_version: item.row_count for item in canonical.pace_fit_models
+    }
+    return all(
+        canonical_predicted.get(item.model_version, 0) >= item.row_count
+        for item in stale.predicted_pace_models
+    ) and all(
+        canonical_fit.get(item.model_version, 0) >= canonical.entry_count
+        for item in stale.pace_fit_models
     )
 
 

@@ -171,9 +171,23 @@
             "title": "Pace Fit Count",
             "type": "integer"
           },
+          "pace_fit_models": {
+            "items": {
+              "$ref": "#/components/schemas/MartVersionAuditSchema"
+            },
+            "title": "Pace Fit Models",
+            "type": "array"
+          },
           "predicted_pace_count": {
             "title": "Predicted Pace Count",
             "type": "integer"
+          },
+          "predicted_pace_models": {
+            "items": {
+              "$ref": "#/components/schemas/MartVersionAuditSchema"
+            },
+            "title": "Predicted Pace Models",
+            "type": "array"
           },
           "race_key": {
             "title": "Race Key",
@@ -197,7 +211,9 @@
           "entry_signature",
           "result_signature",
           "predicted_pace_count",
-          "pace_fit_count"
+          "pace_fit_count",
+          "predicted_pace_models",
+          "pace_fit_models"
         ],
         "title": "DuplicateRaceKeyAuditSchema",
         "type": "object"
@@ -1595,6 +1611,25 @@
           "name"
         ],
         "title": "JockeyBody",
+        "type": "object"
+      },
+      "MartVersionAuditSchema": {
+        "description": "予想martのモデル世代別行数。",
+        "properties": {
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model_version",
+          "row_count"
+        ],
+        "title": "MartVersionAuditSchema",
         "type": "object"
       },
       "MissingTrackConditionRaceSchema": {

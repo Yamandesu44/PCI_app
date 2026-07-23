@@ -15,7 +15,13 @@ from pci.application.race_use_cases import DeleteDuplicateRaceUseCase
 from pci.domain.racing.race import Race, RaceStatus, TrackType
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
-from pci.infrastructure.database.models import HorseModel, JockeyModel, TrainerModel
+from pci.infrastructure.database.models import (
+    HorseModel,
+    JockeyModel,
+    PaceFitModel,
+    PredictedPaceModel,
+    TrainerModel,
+)
 from pci.infrastructure.repositories.race_repository import SqlAlchemyRaceRepository
 
 pytestmark = pytest.mark.integration
@@ -480,6 +486,28 @@ class TestDeleteDuplicateRaceUseCase:
                     race_time_s=94.4,
                     agari_3f_s=34.0,
                     corner_4=1,
+                )
+            )
+        db_session.flush()
+        for key in (stale_key, canonical_key):
+            db_session.add(
+                PredictedPaceModel(
+                    race_key=key,
+                    model_version="rule-v4",
+                    predicted_rpci=53.6,
+                    pace_label="スロー",
+                    confidence=0.59,
+                    factors=[],
+                )
+            )
+            db_session.add(
+                PaceFitModel(
+                    race_key=key,
+                    horse_no=1,
+                    model_version="pai-v1",
+                    pai=80.0,
+                    fit_label="適合",
+                    reasons=[],
                 )
             )
         db_session.flush()

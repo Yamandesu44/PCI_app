@@ -20,6 +20,7 @@ from pci.domain.racing.repository import (
     DuplicateRaceAuditGroup,
     DuplicateRaceGroup,
     DuplicateRaceKeyAudit,
+    MartVersionAudit,
 )
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import (
@@ -225,8 +226,10 @@ class SqlAlchemyRaceRepository:
             .order_by(RaceEntryModel.race_key, RaceEntryModel.horse_no)
         ):
             entries_by_key.setdefault(entry.race_key, []).append(entry)
-        predicted_counts = self._count_by_race_key(PredictedPaceModel, race_keys)
-        fit_counts = self._count_by_race_key(PaceFitModel, race_keys)
+        predicted_models = self._version_counts_by_race_key(
+            PredictedPaceModel, race_keys
+        )
+        fit_models = self._version_counts_by_race_key(PaceFitModel, race_keys)
 
         return [
             DuplicateRaceAuditGroup(
@@ -237,8 +240,8 @@ class SqlAlchemyRaceRepository:
                     self._build_duplicate_key_audit(
                         races[key],
                         entries_by_key.get(key, []),
-                        predicted_counts.get(key, 0),
-                        fit_counts.get(key, 0),
+                        predicted_models.get(key, ()),
+                        fit_models.get(key, ()),
                     )
                     for key in group.race_keys
                 ),
@@ -246,23 +249,32 @@ class SqlAlchemyRaceRepository:
             for group in groups
         ]
 
-    def _count_by_race_key(
+    def _version_counts_by_race_key(
         self, model: type[PredictedPaceModel] | type[PaceFitModel], race_keys: list[str]
-    ) -> dict[str, int]:
+    ) -> dict[str, tuple[MartVersionAudit, ...]]:
         rows = self._s.execute(
-            select(model.race_key, func.count())
+            select(model.race_key, model.model_version, func.count())
             .where(model.race_key.in_(race_keys))
-            .group_by(model.race_key)
+            .group_by(model.race_key, model.model_version)
+            .order_by(model.race_key, model.model_version)
         )
-        return {race_key: int(count) for race_key, count in rows}
+        grouped: dict[str, list[MartVersionAudit]] = {}
+        for race_key, model_version, count in rows:
+            grouped.setdefault(race_key, []).append(
+                MartVersionAudit(
+                    model_version=str(model_version),
+                    row_count=int(count),
+                )
+            )
+        return {race_key: tuple(items) for race_key, items in grouped.items()}
 
     @classmethod
     def _build_duplicate_key_audit(
         cls,
         race: RaceModel,
         entries: list[RaceEntryModel],
-        predicted_pace_count: int,
-        pace_fit_count: int,
+        predicted_pace_models: tuple[MartVersionAudit, ...],
+        pace_fit_models: tuple[MartVersionAudit, ...],
     ) -> DuplicateRaceKeyAudit:
         finished = [entry for entry in entries if entry.finish_pos is not None]
         entry_values = [
@@ -292,8 +304,10 @@ class SqlAlchemyRaceRepository:
             finished_count=len(finished),
             entry_signature=cls._content_signature(entry_values),
             result_signature=cls._content_signature(result_values),
-            predicted_pace_count=predicted_pace_count,
-            pace_fit_count=pace_fit_count,
+            predicted_pace_count=sum(item.row_count for item in predicted_pace_models),
+            pace_fit_count=sum(item.row_count for item in pace_fit_models),
+            predicted_pace_models=predicted_pace_models,
+            pace_fit_models=pace_fit_models,
         )
 
     @staticmethod

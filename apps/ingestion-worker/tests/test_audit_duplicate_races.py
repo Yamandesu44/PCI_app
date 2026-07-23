@@ -2,6 +2,7 @@
 
 from ingestion.audit_duplicate_races import (
     DuplicateGroupAudit,
+    MartVersionAudit,
     RaceKeyAudit,
     classify_duplicate_group,
 )
@@ -93,3 +94,29 @@ def test_incomplete_canonical_is_not_removable() -> None:
     result = classify_duplicate_group(_group(stale, canonical), {canonical.race_key})
 
     assert result.decision == "canonical_incomplete"
+
+
+def test_stale_mart_is_removable_when_canonical_has_full_model_coverage() -> None:
+    stale = _key("2026020105010111", predicted=1, fit=12)
+    canonical = _key("2026020105010211", predicted=1, fit=12)
+    stale = RaceKeyAudit(
+        **{
+            **stale.__dict__,
+            "predicted_pace_models": (MartVersionAudit("rule-v4", 1),),
+            "pace_fit_models": (MartVersionAudit("pai-v1", 12),),
+        }
+    )
+    canonical = RaceKeyAudit(
+        **{
+            **canonical.__dict__,
+            "predicted_pace_models": (MartVersionAudit("rule-v4", 1),),
+            "pace_fit_models": (MartVersionAudit("pai-v1", 12),),
+        }
+    )
+
+    result = classify_duplicate_group(
+        _group(stale, canonical),
+        {canonical.race_key},
+    )
+
+    assert result.decision == "removable_after_resync"

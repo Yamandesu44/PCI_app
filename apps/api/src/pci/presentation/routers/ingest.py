@@ -53,6 +53,13 @@ def _verify_token(x_ingest_token: Annotated[str | None, Header()] = None) -> Non
 AuthDep = Annotated[None, Depends(_verify_token)]
 
 
+class MartVersionAuditSchema(BaseModel):
+    """予想martのモデル世代別行数。"""
+
+    model_version: str
+    row_count: int
+
+
 class DuplicateRaceKeyAuditSchema(BaseModel):
     """重複レースキー1件の関連データ概要。"""
 
@@ -65,6 +72,8 @@ class DuplicateRaceKeyAuditSchema(BaseModel):
     result_signature: str
     predicted_pace_count: int
     pace_fit_count: int
+    predicted_pace_models: list[MartVersionAuditSchema]
+    pace_fit_models: list[MartVersionAuditSchema]
 
 
 class DuplicateRaceAuditGroupSchema(BaseModel):
