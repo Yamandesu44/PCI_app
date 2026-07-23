@@ -88,6 +88,8 @@
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
   `DistanceStyleWeights`(running-style-v2-distance)・
   `STALE_AFTER_DAYS`(ingest_log鮮度監視)。実データ・実運用での検証後に確定（独断で確定しない）。
+  `RuleWeights`は2026-07-23に5候補の全体・芝・ダート比較を実装し、2期間で診断済み。
+  MAE改善と分類一致率悪化が競合したため現行値を維持し、より大きな標本での再検証を残す。
 - [x] ~~夏開催の芝における`StyleAdvantageWeights`の開催場・季節安定性を検証する~~
   → **2026-07-23完了**。函館は複数年で一貫せず、小倉はデータのある4年すべてで確定値同士が逆転。
   係数は変更せず、7月の小倉芝を`reference`表示にした。福島の想定RPCI誤差は別途調査候補。

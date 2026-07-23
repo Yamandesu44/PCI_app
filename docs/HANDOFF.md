@@ -1,5 +1,76 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 23:30 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `fa093fa`
+- 実装コミット: `fafc133`
+- 目的: `RuleWeights`の候補を同一レースで比較し、仮係数を実データで診断できる基盤を追加する。
+
+### 完了した内容
+
+- `apps/api/src/pci/application/backtest.py`
+  - `RuleWeightProfile`、`RuleWeightMetrics`、`RuleWeightComparison`を追加した。
+  - 現行、`style-light/heavy`、`evidence-light/heavy`の5候補を定義した。
+  - `compare_rule_weight_reports()`で候補間の対象レース一致を検証し、全体・芝・ダート別の
+    MAE、展開分類一致率、現行差を集計する。
+  - `RpciSample.track_type`を追加し、JSON明細でもコース種別を保存する。
+- `apps/api/scripts/backtest_forecast.py`
+  - `--compare-rule-weights`を追加した。比較時はLightGBMの選択状態に依存せず、
+    各候補の`RuleBasedRpciForecaster`を同一対象へ実行する。
+  - CLIと`--output` JSONへ比較結果を出力する。本番`DEFAULT_WEIGHTS`は変更しない。
+- `apps/api/tests/unit/application/test_backtest.py`
+  - 全体・芝・ダート差分、対象不一致拒否、JSON、CLI表示を検証するテストを追加した。
+
+### 実DB診断と採用判断
+
+- 2025-07-01〜2025-12-31、50件（`sample-every=3`）:
+  - `evidence-heavy`: 全体MAE -0.198、分類一致率 +4.0pt。
+  - 芝MAE -0.068・一致率 ±0.0pt、ダートMAE -0.300・一致率 +7.1pt。
+- 2026-01-01〜2026-07-23、30件（`sample-every=5`）:
+  - `evidence-heavy`: 全体MAE -0.186、分類一致率 -6.7pt。
+  - 芝MAE -0.281・一致率 ±0.0pt、ダートMAE +0.033・一致率 -22.2pt。
+- MAE改善は再現したが分類一致率、とくに2026年ダートが悪化したため候補は採用しない。
+  `RuleWeights`は現行値を維持する。
+
+### 未完了・既知事項
+
+- `RuleWeights`の正式化は未完了。今回の80件は候補を採用するには小さく、開催場・距離・季節別の
+  安定性も未検証。比較基盤を使い、より大きな独立標本で再検証する。
+- API全体テストは531 passed・3 failed。失敗は今回の変更外にあるログ文言の`caplog`検証3件で、
+  同じ3件を単独再実行すると3 passed。テスト順序によるロガー状態汚染が既知問題。
+- `.pytest_cache`はワークスペース権限により作成できず警告が出るが、テスト結果には影響しない。
+
+### テスト結果
+
+- `python -m pytest tests/unit/application/test_backtest.py -q`: 35 passed
+- `python -m ruff check src tests scripts/backtest_forecast.py`: passed
+- `python -m mypy src --strict --python-version 3.12`: 63 files passed
+- `python -m pytest -m "not integration" -q`: 531 passed、3 failed、26 deselected
+- 上記失敗3件の単独再実行: 3 passed
+- 実DBバックテストCLI: 2025年50件、2026年30件とも完走
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `apps/api/src/pci/application/backtest.py`
+3. `apps/api/scripts/backtest_forecast.py`
+4. `apps/api/tests/unit/application/test_backtest.py`
+5. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/application/test_backtest.py -q
+python -m scripts.backtest_forecast --limit 200 --sample-every 3 `
+  --rpci-min 20 --rpci-max 90 --compare-rule-weights
+```
+
 ## 2026-07-23 22:18 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
