@@ -19,6 +19,9 @@ pci.application.backtest に集約。本スクリプトは DB 配線と対象選
     # 能力指数の重み候補を同じ対象レースで比較する
     python -m scripts.backtest_forecast --limit 200 --compare-ability-weights
 
+    # ルールベース想定RPCIの重み候補を芝・ダート別にも比較する
+    python -m scripts.backtest_forecast --limit 200 --compare-rule-weights
+
     # ペース予測と脚質予測のどちらが脚質別有利度を悪化させるか切り分ける
     python -m scripts.backtest_forecast --track-type 芝 --diagnose-style-advantage
 
@@ -52,20 +55,25 @@ from sqlalchemy.orm import Session
 
 from pci.application.backtest import (
     DEFAULT_ABILITY_WEIGHT_PROFILES,
+    DEFAULT_RULE_WEIGHT_PROFILES,
     AbilityWeightComparison,
     BacktestReport,
     ForecastBacktester,
+    RuleWeightComparison,
     ability_weight_comparisons_to_dict,
     build_actual_style_advantage_breakdown,
     collect_actual_style_advantage_samples,
     compare_ability_weight_reports,
+    compare_rule_weight_reports,
     format_ability_weight_comparison,
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
     format_report,
+    format_rule_weight_comparison,
     format_style_advantage_attribution,
     group_races_by_track,
     report_to_dict,
+    rule_weight_comparisons_to_dict,
     style_advantage_attribution_to_dict,
     style_advantage_breakdown_to_dict,
     style_advantage_lift_to_dict,
@@ -73,7 +81,10 @@ from pci.application.backtest import (
 )
 from pci.config.settings import get_settings
 from pci.domain.pace.ability import AbilityScorer
-from pci.domain.pace.rpci_forecast import RpciForecaster
+from pci.domain.pace.rpci_forecast import (
+    RpciForecaster,
+    RuleBasedRpciForecaster,
+)
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import RaceModel
@@ -131,6 +142,11 @@ def _parse_args() -> argparse.Namespace:
         "--compare-ability-weights",
         action="store_true",
         help="能力指数の検証用重み4候補を同一対象で比較する",
+    )
+    p.add_argument(
+        "--compare-rule-weights",
+        action="store_true",
+        help="想定RPCIのルール重み5候補を全体・芝・ダートで比較する",
     )
     diagnostic_mode = p.add_mutually_exclusive_group()
     diagnostic_mode.add_argument(
@@ -264,8 +280,19 @@ def main() -> None:
         )
         print(f"\n{format_ability_weight_comparison(weight_comparisons)}")
 
+    rule_weight_comparisons: list[RuleWeightComparison] = []
+    if args.compare_rule_weights:
+        rule_weight_comparisons = _run_rule_weight_comparison(repo, targets)
+        print(f"\n{format_rule_weight_comparison(rule_weight_comparisons)}")
+
     if args.output:
-        _write_output(args.output, report, track_reports, weight_comparisons)
+        _write_output(
+            args.output,
+            report,
+            track_reports,
+            weight_comparisons=weight_comparisons,
+            rule_weight_comparisons=rule_weight_comparisons,
+        )
 
 
 def _run_ability_weight_comparison(
@@ -288,6 +315,22 @@ def _run_ability_weight_comparison(
         )
         reports[profile.name] = candidate_backtester.run(targets)
     return compare_ability_weight_reports(reports)
+
+
+def _run_rule_weight_comparison(
+    repo: SqlAlchemyRaceRepository,
+    targets: list[Race],
+) -> list[RuleWeightComparison]:
+    """各候補を同一対象で実行し、本番設定を変更せずに比較する。"""
+    reports: dict[str, BacktestReport] = {}
+    for profile in DEFAULT_RULE_WEIGHT_PROFILES:
+        print(f"\nルール重み候補「{profile.name}」を検証中…")
+        candidate_backtester = ForecastBacktester(
+            repo,
+            forecaster=RuleBasedRpciForecaster(profile.weights),
+        )
+        reports[profile.name] = candidate_backtester.run(targets)
+    return compare_rule_weight_reports(reports)
 
 
 def _print_track_breakdown(
@@ -315,7 +358,9 @@ def _write_output(
     path: str,
     report: BacktestReport,
     track_reports: dict[str, BacktestReport],
+    *,
     weight_comparisons: list[AbilityWeightComparison] | None = None,
+    rule_weight_comparisons: list[RuleWeightComparison] | None = None,
 ) -> None:
     payload: dict[str, object] = {"combined": report_to_dict(report)}
     if track_reports:
@@ -325,6 +370,10 @@ def _write_output(
     if weight_comparisons:
         payload["ability_weight_comparison"] = ability_weight_comparisons_to_dict(
             weight_comparisons
+        )
+    if rule_weight_comparisons:
+        payload["rule_weight_comparison"] = rule_weight_comparisons_to_dict(
+            rule_weight_comparisons
         )
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)

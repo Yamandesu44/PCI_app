@@ -22,7 +22,7 @@ from __future__ import annotations
 import datetime
 import math
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 from pci.application.dto import ForecastOutput
@@ -36,7 +36,15 @@ from pci.domain.pace.ability import (
 )
 from pci.domain.pace.affinity import is_good_run
 from pci.domain.pace.commentary import CommentGenerator
-from pci.domain.pace.rpci_forecast import PaceLabel, RpciForecaster, classify_pace
+from pci.domain.pace.rpci_forecast import (
+    DEFAULT_WEIGHTS as DEFAULT_RULE_WEIGHTS,
+)
+from pci.domain.pace.rpci_forecast import (
+    PaceLabel,
+    RpciForecaster,
+    RuleWeights,
+    classify_pace,
+)
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.pace.style_advantage import build_style_advantage
 from pci.domain.racing.master import Horse, Jockey, Trainer
@@ -143,6 +151,7 @@ class RpciSample:
     actual: float
     predicted_label: PaceLabel
     actual_label: PaceLabel
+    track_type: str = ""
 
     @property
     def error(self) -> float:
@@ -311,6 +320,71 @@ class AbilityWeightComparison:
     delta_top1_win_rate: float | None
     delta_top1_good_rate: float | None
     delta_top3_good_capture_rate: float | None
+
+
+@dataclass(frozen=True)
+class RuleWeightProfile:
+    """実DB比較に使うルール重みの候補。本番設定は書き換えない。"""
+
+    name: str
+    description: str
+    weights: RuleWeights
+
+
+DEFAULT_RULE_WEIGHT_PROFILES: tuple[RuleWeightProfile, ...] = (
+    RuleWeightProfile(
+        name="current",
+        description="現行重み",
+        weights=DEFAULT_RULE_WEIGHTS,
+    ),
+    RuleWeightProfile(
+        name="style-light",
+        description="脚質構成の影響を弱める",
+        weights=replace(DEFAULT_RULE_WEIGHTS, style_balance_weight=6.0),
+    ),
+    RuleWeightProfile(
+        name="style-heavy",
+        description="脚質構成の影響を強める",
+        weights=replace(DEFAULT_RULE_WEIGHTS, style_balance_weight=10.0),
+    ),
+    RuleWeightProfile(
+        name="evidence-light",
+        description="前付け実績の混合を弱める",
+        weights=replace(
+            DEFAULT_RULE_WEIGHTS,
+            evidence_weight_per_sample=0.075,
+            evidence_weight_cap=0.6,
+        ),
+    ),
+    RuleWeightProfile(
+        name="evidence-heavy",
+        description="前付け実績の混合を強める",
+        weights=replace(
+            DEFAULT_RULE_WEIGHTS,
+            evidence_weight_per_sample=0.125,
+            evidence_weight_cap=0.8,
+        ),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class RuleWeightMetrics:
+    """候補ルールの精度と現行値との差。"""
+
+    accuracy: RpciAccuracy | None
+    delta_mae: float | None
+    delta_label_accuracy: float | None
+
+
+@dataclass(frozen=True)
+class RuleWeightComparison:
+    """同一対象レースでのルール重み候補の比較結果。"""
+
+    profile: RuleWeightProfile
+    combined: RuleWeightMetrics
+    turf: RuleWeightMetrics
+    dirt: RuleWeightMetrics
 
 
 @dataclass(frozen=True)
@@ -578,6 +652,72 @@ def compare_ability_weight_reports(
     return comparisons
 
 
+def compare_rule_weight_reports(
+    reports: dict[str, BacktestReport],
+    profiles: tuple[RuleWeightProfile, ...] = DEFAULT_RULE_WEIGHT_PROFILES,
+    *,
+    baseline_name: str = "current",
+) -> list[RuleWeightComparison]:
+    """同一レースのルール重み候補を全体・芝・ダートで比較する。"""
+    baseline_report = reports.get(baseline_name)
+    if baseline_report is None:
+        raise ValueError(f"基準プロファイルがありません: {baseline_name}")
+    baseline_keys = [sample.race_key for sample in baseline_report.rpci_samples]
+
+    comparisons: list[RuleWeightComparison] = []
+    for profile in profiles:
+        report = reports.get(profile.name)
+        if report is None:
+            raise ValueError(f"比較レポートがありません: {profile.name}")
+        if [sample.race_key for sample in report.rpci_samples] != baseline_keys:
+            raise ValueError(f"比較対象レースが現行重みと一致しません: {profile.name}")
+
+        comparisons.append(
+            RuleWeightComparison(
+                profile=profile,
+                combined=_compare_rule_scope(
+                    baseline_report.rpci_samples,
+                    report.rpci_samples,
+                ),
+                turf=_compare_rule_scope(
+                    _filter_rpci_samples(baseline_report.rpci_samples, "芝"),
+                    _filter_rpci_samples(report.rpci_samples, "芝"),
+                ),
+                dirt=_compare_rule_scope(
+                    _filter_rpci_samples(baseline_report.rpci_samples, "ダート"),
+                    _filter_rpci_samples(report.rpci_samples, "ダート"),
+                ),
+            )
+        )
+    return comparisons
+
+
+def _filter_rpci_samples(samples: list[RpciSample], track_type: str) -> list[RpciSample]:
+    return [sample for sample in samples if sample.track_type == track_type]
+
+
+def _compare_rule_scope(
+    baseline_samples: list[RpciSample],
+    candidate_samples: list[RpciSample],
+) -> RuleWeightMetrics:
+    baseline = summarize_rpci(baseline_samples)
+    candidate = summarize_rpci(candidate_samples)
+    if baseline is None or candidate is None:
+        return RuleWeightMetrics(
+            accuracy=candidate,
+            delta_mae=None,
+            delta_label_accuracy=None,
+        )
+    return RuleWeightMetrics(
+        accuracy=candidate,
+        delta_mae=round(candidate.mae - baseline.mae, 4),
+        delta_label_accuracy=round(
+            candidate.label_accuracy - baseline.label_accuracy,
+            4,
+        ),
+    )
+
+
 def group_races_by_track(races: Iterable[Race]) -> dict[str, list[Race]]:
     """レース群をコース種別ごとにグルーピングする。
 
@@ -666,6 +806,37 @@ def ability_weight_comparisons_to_dict(
     ]
 
 
+def rule_weight_comparisons_to_dict(
+    comparisons: list[RuleWeightComparison],
+) -> list[dict[str, Any]]:
+    """ルール重み比較結果をJSON保存用の辞書へ変換する。"""
+    return [
+        {
+            "name": item.profile.name,
+            "description": item.profile.description,
+            "weights": {
+                "style_balance": item.profile.weights.style_balance_weight,
+                "evidence_per_sample": item.profile.weights.evidence_weight_per_sample,
+                "evidence_cap": item.profile.weights.evidence_weight_cap,
+            },
+            "combined": _rule_weight_metrics_to_dict(item.combined),
+            "turf": _rule_weight_metrics_to_dict(item.turf),
+            "dirt": _rule_weight_metrics_to_dict(item.dirt),
+        }
+        for item in comparisons
+    ]
+
+
+def _rule_weight_metrics_to_dict(metrics: RuleWeightMetrics) -> dict[str, Any]:
+    return {
+        "rpci": _rpci_accuracy_to_dict(metrics.accuracy),
+        "delta_vs_current": {
+            "mae": metrics.delta_mae,
+            "label_accuracy": metrics.delta_label_accuracy,
+        },
+    }
+
+
 def _integrated_accuracy_to_dict(
     accuracy: IntegratedAccuracy | None,
 ) -> dict[str, Any] | None:
@@ -735,6 +906,7 @@ def _rpci_sample_to_dict(sample: RpciSample) -> dict[str, Any]:
         "error": sample.error,
         "predicted_label": str(sample.predicted_label),
         "actual_label": str(sample.actual_label),
+        "track_type": sample.track_type,
     }
 
 
@@ -861,6 +1033,42 @@ def format_ability_weight_comparison(comparisons: list[AbilityWeightComparison])
     return "\n".join(lines)
 
 
+def format_rule_weight_comparison(comparisons: list[RuleWeightComparison]) -> str:
+    """ルール重み候補の比較をCLI向けの表に整形する。"""
+    lines = [
+        "=" * 96,
+        "RuleWeightsの同一期間比較（候補は自動採用しません）",
+        "MAEは低いほど良く、展開分類一致率は高いほど良い指標です。",
+        "-" * 96,
+    ]
+    for item in comparisons:
+        weights = item.profile.weights
+        lines.append(
+            f"{item.profile.name} "
+            f"(style={weights.style_balance_weight:.3f}, "
+            f"evidence={weights.evidence_weight_per_sample:.3f}, "
+            f"cap={weights.evidence_weight_cap:.3f})"
+        )
+        for label, metrics in (
+            ("全体", item.combined),
+            ("芝", item.turf),
+            ("ダート", item.dirt),
+        ):
+            if metrics.accuracy is None:
+                summary = "有効サンプルなし"
+            else:
+                summary = (
+                    f"n={metrics.accuracy.n:4d} "
+                    f"MAE={metrics.accuracy.mae:6.3f}"
+                    f"({_format_number_delta(metrics.delta_mae)}) "
+                    f"一致率={metrics.accuracy.label_accuracy:6.1%}"
+                    f"({_format_delta(metrics.delta_label_accuracy)})"
+                )
+            lines.append(f"  {label:<4} {summary}")
+    lines.append("=" * 96)
+    return "\n".join(lines)
+
+
 def format_actual_style_advantage_validation(
     lift: StyleAdvantageLift | None,
 ) -> str:
@@ -962,6 +1170,10 @@ def _format_delta(value: float | None) -> str:
     return "   n/a" if value is None else f"{value:+6.1%}"
 
 
+def _format_number_delta(value: float | None) -> str:
+    return "   n/a" if value is None else f"{value:+7.3f}"
+
+
 def _point_biserial(samples: list[HorseSample]) -> float:
     """PAI（連続）と好走（0/1）の相関係数。分散ゼロや少数時は 0 を返す。"""
     n = len(samples)
@@ -1053,6 +1265,7 @@ class ForecastBacktester:
                     actual=race.rpci_actual,
                     predicted_label=classify_pace(out.predicted_rpci, race.track_type),
                     actual_label=classify_pace(race.rpci_actual, race.track_type),
+                    track_type=race.track_type,
                 )
             )
 
