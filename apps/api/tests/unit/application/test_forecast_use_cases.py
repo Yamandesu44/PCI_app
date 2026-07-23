@@ -49,6 +49,7 @@ def _register_upcoming(
     draw_confirmed: bool = True,
     race_date: datetime.date = RACE_DATE,
     jyo_cd: str = "05",
+    track_condition: str = "良",
 ) -> None:
     info = RaceInfo(
         race_key=UPCOMING,
@@ -57,7 +58,7 @@ def _register_upcoming(
         distance_m=distance_m,
         track_type="芝",
         field_size=n,
-        track_condition="良",
+        track_condition=track_condition,
     )
     entries = [
         EntryInput(
@@ -149,6 +150,41 @@ def _seed_mixed_distance_history(repo: FakeRaceRepository, ketto_num: str) -> No
                 trainer_code="T001",
                 finish_pos=3,
                 corner_4=corner,
+            )
+        )
+
+
+def _seed_course_history(
+    repo: FakeRaceRepository,
+    ketto_num: str,
+    runs: tuple[tuple[int, str, int], ...],
+) -> None:
+    """距離・馬場状態・着順を指定したコース適性用の履歴を作る。"""
+    for index, (distance_m, track_condition, finish_pos) in enumerate(runs, start=10):
+        race_key = RaceKey(f"202604{index:02d}05010177")
+        repo.save_race(
+            Race(
+                race_key=race_key,
+                race_date=datetime.date(2026, 4, index),
+                jyo_cd="05",
+                distance_m=distance_m,
+                track_type="芝",
+                field_size=12,
+                status=RaceStatus.RESULT,
+                track_condition=track_condition,
+            )
+        )
+        repo.save_entry(
+            RaceEntry(
+                race_key=race_key,
+                horse_no=1,
+                frame_no=1,
+                ketto_num=ketto_num,
+                weight=480.0,
+                jockey_code="J001",
+                trainer_code="T001",
+                finish_pos=finish_pos,
+                corner_4=4,
             )
         )
 
@@ -412,7 +448,7 @@ class TestForecastRaceUseCase:
 
         assert (UPCOMING, "rule-v4") in mart_repo.predicted_pace
         assert len(mart_repo.pace_fit) == 4
-        assert all(key[2] == "pai-v1" for key in mart_repo.pace_fit)
+        assert all(key[2] == "pai-v2" for key in mart_repo.pace_fit)
 
     def test_mart_not_called_when_no_repo(self) -> None:
         """mart_repo が None の場合、永続化なしで算出結果を返す。"""
@@ -574,3 +610,37 @@ class TestForecastRaceUseCase:
         assert "PCI" not in descriptions
         assert "RPCI" not in descriptions
         assert re.search(r"\d+\.\d+", descriptions) is None
+
+    def test_distance_aptitude_from_history_is_applied_to_pai(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=1, distance_m=2000)
+        _seed_course_history(
+            repo,
+            "2020100001",
+            ((1200, "良", 1), (1200, "良", 2)),
+        )
+
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        reason = next(r for r in output.horses[0].reasons if r.code == "distance_diff")
+        assert "適性から外れる可能性" in reason.description
+
+    def test_off_track_weakness_from_history_is_applied_to_pai(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=1, track_condition="重")
+        _seed_course_history(
+            repo,
+            "2020100001",
+            (
+                (1600, "良", 1),
+                (1800, "良", 2),
+                (1400, "良", 1),
+                (1600, "重", 9),
+                (1800, "稍重", 10),
+                (1400, "不良", 9),
+            ),
+        )
+
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        assert any(r.code == "off_track" for r in output.horses[0].reasons)

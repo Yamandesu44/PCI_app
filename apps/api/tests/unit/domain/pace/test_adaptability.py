@@ -97,9 +97,9 @@ class TestPaiCoreLogic:
         assert "rpci_diff" in codes
         assert "pai" in codes
 
-    def test_model_version_is_pai_v1(self) -> None:
+    def test_model_version_is_pai_v2(self) -> None:
         result = PaceAdaptabilityScorer().score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
-        assert result.model_version == "pai-v1"
+        assert result.model_version == "pai-v2"
 
     def test_custom_weights_change_thresholds(self) -> None:
         strict = PaiWeights(matched_threshold=95.0)

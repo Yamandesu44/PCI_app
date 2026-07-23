@@ -31,7 +31,7 @@ from pci.domain.pace.rpci_forecast import RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "pai-v1"
+MODEL_VERSION = "pai-v2"
 
 _OFF_TRACK_CONDITIONS = ("稍重", "重", "不良")
 
@@ -80,7 +80,7 @@ DEFAULT_WEIGHTS = PaiWeights()
 
 
 class PaceAdaptabilityScorer:
-    """PAI 算出器（pai-v1）。減点内訳を reasons として出力する。"""
+    """PAI 算出器（pai-v2）。減点内訳を reasons として出力する。"""
 
     def __init__(self, weights: PaiWeights | None = None) -> None:
         self._w = weights or DEFAULT_WEIGHTS

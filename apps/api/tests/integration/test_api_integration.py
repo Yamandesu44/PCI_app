@@ -185,7 +185,7 @@ def test_forecast_persists_to_mart(client: TestClient, db_session: Session) -> N
         select(PaceFitModel).where(PaceFitModel.race_key == UPCOMING_RACE_KEY)
     ).all()
     assert len(pf_rows) == 1
-    assert pf_rows[0].model_version == "pai-v1"
+    assert pf_rows[0].model_version == "pai-v2"
     assert 0.0 <= pf_rows[0].pai <= 100.0
     assert pf_rows[0].fit_label in ("合致", "中立", "不利")
     assert isinstance(pf_rows[0].reasons, list)

@@ -34,6 +34,11 @@ from pci.domain.pace.commentary import (
     ForecastCommentInput,
     RuleBasedCommentGenerator,
 )
+from pci.domain.pace.course_aptitude import (
+    CourseAptitudeProfile,
+    CourseAptitudeRaceResult,
+    build_course_aptitude_profile,
+)
 from pci.domain.pace.formation import (
     FormationHorseInput,
     FormationPrediction,
@@ -101,15 +106,23 @@ class ForecastRaceUseCase:
         profiles: list[HorsePaceProfile] = []
         front_pace_samples: list[FrontRunnerPaceSample] = []
         formation_inputs: list[FormationHorseInput] = []
+        history_by_horse_no: dict[int, tuple[tuple[RaceEntry, Race], ...]] = {}
         for e in entries:
+            history = self._load_history(e.ketto_num, race)
+            history_by_horse_no[e.horse_no] = history
             style, style_confidence, early_position, early_sample_size = (
-                self._resolve_style_evidence(e.ketto_num, race)
+                self._resolve_style_evidence(history, race)
             )
+            course_aptitude = self._build_course_aptitude_profile(history, race)
             profiles.append(
                 HorsePaceProfile(
                     horse_no=e.horse_no,
                     running_style=style,
-                    pace_affinity=self._build_affinity_profile(e.ketto_num, style, race),
+                    distance_aptitude_m=course_aptitude.distance_aptitude_m,
+                    weak_on_off_track=course_aptitude.weak_on_off_track,
+                    pace_affinity=self._build_affinity_profile(
+                        e.ketto_num, style, race, history
+                    ),
                 )
             )
             formation_inputs.append(
@@ -122,7 +135,7 @@ class ForecastRaceUseCase:
                     recent_sample_size=early_sample_size,
                 )
             )
-            sample = self._build_front_pace_sample(e.horse_no, e.ketto_num, style)
+            sample = self._build_front_pace_sample(e.horse_no, style, history)
             if sample is not None:
                 front_pace_samples.append(sample)
 
@@ -180,7 +193,13 @@ class ForecastRaceUseCase:
         ]
 
         abilities = tuple(
-            self._build_ability_score(e.horse_no, e.ketto_num, race) for e in entries
+            self._build_ability_score(
+                e.horse_no,
+                e.ketto_num,
+                race,
+                history_by_horse_no[e.horse_no],
+            )
+            for e in entries
         )
         integrated = build_integrated_ranking(abilities, tuple(fit_results))
 
@@ -219,33 +238,46 @@ class ForecastRaceUseCase:
             ),
         )
 
-    def _resolve_style_evidence(
+    def _load_history(
         self, ketto_num: str, target_race: Race
-    ) -> tuple[RunningStyleLabel, float, float | None, int]:
-        """脚質と、隊列予想に使う近走序盤位置の証拠をまとめて返す。"""
+    ) -> tuple[tuple[RaceEntry, Race], ...]:
+        """同一予想内で共用する、予想日より前の確定成績とレース情報を読む。"""
         if not ketto_num:
-            return RunningStyleLabel.FLEXIBLE, 0.0, None, 0
-        recent = self._repo.find_horse_recent_entries(
+            return ()
+        entries = self._repo.find_horse_recent_entries(
             ketto_num,
-            limit=5,
+            limit=20,
             before=target_race.race_date,
         )
+        history: list[tuple[RaceEntry, Race]] = []
+        for entry in entries:
+            past_race = self._repo.find_by_key(entry.race_key)
+            if past_race is not None:
+                history.append((entry, past_race))
+        return tuple(history)
+
+    def _resolve_style_evidence(
+        self,
+        history: tuple[tuple[RaceEntry, Race], ...],
+        target_race: Race,
+    ) -> tuple[RunningStyleLabel, float, float | None, int]:
+        """脚質と、隊列予想に使う近走序盤位置の証拠をまとめて返す。"""
+        if not history:
+            return RunningStyleLabel.FLEXIBLE, 0.0, None, 0
         early_position_items: list[int] = []
         style_histories: list[RunningStyleHistory] = []
-        for entry in recent:
+        for entry, past_race in history[:5]:
             early_position = entry.corner_1 if entry.corner_1 is not None else entry.corner_4
             if early_position is not None:
                 early_position_items.append(early_position)
             if entry.corner_4 is None:
                 continue
-            past_race = self._repo.find_by_key(entry.race_key)
-            if past_race is not None:
-                style_histories.append(
-                    RunningStyleHistory(
-                        corner_position=entry.corner_4,
-                        distance_m=past_race.distance_m,
-                    )
+            style_histories.append(
+                RunningStyleHistory(
+                    corner_position=entry.corner_4,
+                    distance_m=past_race.distance_m,
                 )
+            )
         style = predict_running_style_for_distance(
             tuple(style_histories),
             target_race.distance_m,
@@ -255,7 +287,10 @@ class ForecastRaceUseCase:
         return style.label, style.confidence, average, len(early_positions)
 
     def _build_front_pace_sample(
-        self, horse_no: int, ketto_num: str, style: RunningStyleLabel
+        self,
+        horse_no: int,
+        style: RunningStyleLabel,
+        history: tuple[tuple[RaceEntry, Race], ...],
     ) -> FrontRunnerPaceSample | None:
         """逃げ・先行候補が近10走で「前で運んだとき」に作ったペース傾向を集計する（rule-v2）。
 
@@ -263,17 +298,15 @@ class ForecastRaceUseCase:
         PCI（欠損時は当該レースの実績RPCIで補完）を平均する。前付け実績が無ければ
         None を返し、想定RPCI 予測は頭数ベース（rule-v1 相当）にフォールバックする。
         """
-        if not ketto_num or style not in _FRONT_STYLES:
+        if not history or style not in _FRONT_STYLES:
             return None
-        recent = self._repo.find_horse_recent_entries(ketto_num, limit=10)
         paces: list[float] = []
-        for entry in recent:
+        for entry, past_race in history[:10]:
             if not _led_from_front(entry):
                 continue
             pace = entry.pci_actual
             if pace is None:
-                past = self._repo.find_by_key(entry.race_key)
-                pace = past.rpci_actual if past is not None else None
+                pace = past_race.rpci_actual
             if pace is not None:
                 paces.append(pace)
         if not paces:
@@ -286,15 +319,15 @@ class ForecastRaceUseCase:
         )
 
     def _build_affinity_profile(
-        self, ketto_num: str, style: RunningStyleLabel, target_race: Race
+        self,
+        ketto_num: str,
+        style: RunningStyleLabel,
+        target_race: Race,
+        history: tuple[tuple[RaceEntry, Race], ...],
     ) -> HorsePaceAffinityProfile:
         """過去好走時のペースから、馬ごとの得意なレース質を作る。"""
-        recent = self._repo.find_horse_recent_entries(ketto_num, limit=12)
         results: list[PaceAffinityRaceResult] = []
-        for entry in recent:
-            past_race = self._repo.find_by_key(entry.race_key)
-            if past_race is None:
-                continue
+        for entry, past_race in history[:12]:
             results.append(
                 PaceAffinityRaceResult(
                     race_key=entry.race_key,
@@ -313,22 +346,41 @@ class ForecastRaceUseCase:
             as_of=target_race.race_date,
         )
 
+    def _build_course_aptitude_profile(
+        self,
+        history: tuple[tuple[RaceEntry, Race], ...],
+        target_race: Race,
+    ) -> CourseAptitudeProfile:
+        """予想日より前の同一馬場種別の成績から距離・道悪適性を作る。"""
+        results: list[CourseAptitudeRaceResult] = []
+        for entry, past_race in history:
+            results.append(
+                CourseAptitudeRaceResult(
+                    distance_m=past_race.distance_m,
+                    track_type=past_race.track_type,
+                    track_condition=past_race.track_condition,
+                    finish_pos=entry.finish_pos,
+                    field_size=past_race.field_size,
+                )
+            )
+        return build_course_aptitude_profile(
+            tuple(results),
+            target_track_type=target_race.track_type,
+            target_distance_m=target_race.distance_m,
+        )
+
     def _build_ability_score(
-        self, horse_no: int, ketto_num: str, target_race: Race
+        self,
+        horse_no: int,
+        ketto_num: str,
+        target_race: Race,
+        history: tuple[tuple[RaceEntry, Race], ...],
     ) -> AbilityScore:
         """近走の着順・grade・賞金・人気から能力指数を算出する。"""
         if not ketto_num:
             return self._ability_scorer.score(horse_no, ())
-        recent = self._repo.find_horse_recent_entries(
-            ketto_num,
-            limit=5,
-            before=target_race.race_date,
-        )
         results: list[AbilityRaceResult] = []
-        for entry in recent:
-            past_race = self._repo.find_by_key(entry.race_key)
-            if past_race is None:
-                continue
+        for entry, past_race in history[:5]:
             results.append(
                 AbilityRaceResult(
                     finish_pos=entry.finish_pos,
