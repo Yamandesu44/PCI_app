@@ -83,3 +83,9 @@ class MartRepository(Protocol):
         date_from: datetime.date,
         date_to: datetime.date,
     ) -> list[PredictionEvaluationRecord]: ...
+
+    def count_prediction_evaluation_candidates(
+        self,
+        date_from: datetime.date,
+        date_to: datetime.date,
+    ) -> int: ...

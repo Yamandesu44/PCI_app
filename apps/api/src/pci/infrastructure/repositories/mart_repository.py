@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from pci.domain.pace.adaptability import PaiResult
@@ -203,3 +203,23 @@ class SqlAlchemyMartRepository:
                 )
             )
         return result
+
+    def count_prediction_evaluation_candidates(
+        self,
+        date_from: datetime.date,
+        date_to: datetime.date,
+    ) -> int:
+        """期間内で展開予想の答え合わせ対象となる確定レース数を返す。"""
+        count = self._s.scalar(
+            select(func.count())
+            .select_from(RaceModel)
+            .where(
+                RaceModel.race_date >= date_from,
+                RaceModel.race_date <= date_to,
+                RaceModel.status == str(RaceStatus.RESULT),
+                RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+                RaceModel.track_type != str(TrackType.HURDLE),
+                RaceModel.rpci_actual.is_not(None),
+            )
+        )
+        return int(count or 0)

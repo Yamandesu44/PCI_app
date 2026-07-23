@@ -563,10 +563,14 @@ export interface components {
              * @default []
              */
             confidence_groups: components["schemas"]["ForecastPerformanceGroupSchema"][];
+            /** Coverage Rate */
+            coverage_rate?: number | null;
             /** Date From */
             date_from: string;
             /** Date To */
             date_to: string;
+            /** Eligible Race Count */
+            eligible_race_count: number;
             /**
              * Groups
              * @default []

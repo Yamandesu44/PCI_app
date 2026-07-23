@@ -61,13 +61,16 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
         ),
         _record("2026042405010104", datetime.date(2026, 4, 24), "芝", "ハイ", 45.0),
     ]
+    repo.prediction_evaluation_candidate_count = 5
 
     output = GetForecastPerformanceUseCase(repo).execute(now=NOW)
 
     assert output.date_from == "2026-04-25"
     assert output.date_to == "2026-07-23"
     assert output.period_days == 90
+    assert output.eligible_race_count == 5
     assert output.sample_size == 3
+    assert output.coverage_rate == 0.6
     assert output.hit_count == 2
     assert output.hit_rate == 0.667
     assert [(group.key, group.sample_size, group.hit_rate) for group in output.groups] == [
@@ -120,6 +123,8 @@ def test_empty_period_returns_null_rate() -> None:
     output = GetForecastPerformanceUseCase(FakeMartRepository()).execute(now=NOW)
 
     assert output.sample_size == 0
+    assert output.eligible_race_count == 0
+    assert output.coverage_rate is None
     assert output.hit_count == 0
     assert output.hit_rate is None
     assert all(group.hit_rate is None for group in output.groups)

@@ -22,6 +22,7 @@ class FakeMartRepository:
         self._latest_prediction_version: dict[str, str] = {}
         self._latest_fit_version: dict[str, str] = {}
         self.prediction_evaluations: list[PredictionEvaluationRecord] = []
+        self.prediction_evaluation_candidate_count: int | None = None
 
     def save_predicted_pace(self, race_key: str, forecast: RpciForecast) -> None:
         self.predicted_pace[(race_key, forecast.model_version)] = forecast
@@ -77,3 +78,12 @@ class FakeMartRepository:
             for record in self.prediction_evaluations
             if date_from <= record.race_date <= date_to
         ]
+
+    def count_prediction_evaluation_candidates(
+        self,
+        date_from: datetime.date,
+        date_to: datetime.date,
+    ) -> int:
+        if self.prediction_evaluation_candidate_count is not None:
+            return self.prediction_evaluation_candidate_count
+        return len(self.find_prediction_evaluations(date_from, date_to))

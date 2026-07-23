@@ -510,7 +510,9 @@ class ForecastPerformanceSchema(BaseModel):
     date_from: str
     date_to: str
     period_days: int = Field(ge=1)
+    eligible_race_count: int = Field(ge=0)
     sample_size: int = Field(ge=0)
+    coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     hit_count: int = Field(ge=0)
     hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     groups: list[ForecastPerformanceGroupSchema] = []
@@ -526,7 +528,9 @@ class ForecastPerformanceSchema(BaseModel):
             date_from=dto.date_from,
             date_to=dto.date_to,
             period_days=dto.period_days,
+            eligible_race_count=dto.eligible_race_count,
             sample_size=dto.sample_size,
+            coverage_rate=dto.coverage_rate,
             hit_count=dto.hit_count,
             hit_rate=dto.hit_rate,
             groups=[

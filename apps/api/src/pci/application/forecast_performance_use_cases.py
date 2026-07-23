@@ -50,6 +50,10 @@ class GetForecastPerformanceUseCase:
         date_to = current.astimezone(_JRA_TIMEZONE).date()
         date_from = date_to - datetime.timedelta(days=_PERIOD_DAYS - 1)
         records = self._repo.find_prediction_evaluations(date_from, date_to)
+        eligible_race_count = self._repo.count_prediction_evaluation_candidates(
+            date_from,
+            date_to,
+        )
         groups = [
             _summarize(records, key=key, label=label, track_type=track_type)
             for key, label, track_type in _GROUPS
@@ -71,7 +75,13 @@ class GetForecastPerformanceUseCase:
             date_from=date_from.isoformat(),
             date_to=date_to.isoformat(),
             period_days=_PERIOD_DAYS,
+            eligible_race_count=eligible_race_count,
             sample_size=overall.sample_size,
+            coverage_rate=(
+                round(overall.sample_size / eligible_race_count, 3)
+                if eligible_race_count
+                else None
+            ),
             hit_count=overall.hit_count,
             hit_rate=overall.hit_rate,
             groups=groups,

@@ -9,20 +9,20 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新37回目・Codex が展開予想の外れ方比較表を実装） |
+| 更新日時 | 2026-07-23（更新38回目・Codex が事前予想の検証カバー率を実装） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（予想と実績の展開3区分を混同行列で比較可能にした） |
+| 直前の担当AI | OpenAI Codex（予想評価の母集団カバー率を表示可能にした） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `5b9298e`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `beaf64e`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**展開予想が外れたとき、実際は速い側・遅い側のどちらへずれたかを、
-内部実数値を出さずに確認できるようにした。**
+**展開予想の一致率が、確定した評価対象レースの何割を照合した結果なのかを
+同じ画面で確認できるようにした。**
 
 `MartRepository.find_prediction_evaluations()`は、JST基準の直近90日にある確定済みJRA平地から、
 レース日以前に生成された最新の予想を1件だけ選ぶ。application層で確定RPCIを展開区分へ変換し、
@@ -42,6 +42,12 @@ PCI/RPCIの内部実数値をAPI・画面へ露出しない。`weekly_trend`は�
 native `details`で既定は閉じ、一致セルを緑、不一致セルを黄で表示する。モバイルは
 最小幅430pxの表を横スクロールし、文字や数値を縮めすぎない。
 
+`MartRepository.count_prediction_evaluation_candidates()`は、直近90日の確定済みJRA平地かつ
+`rpci_actual`を持つレースを、予想martの有無と独立に集計する。APIは`eligible_race_count`と
+`coverage_rate = sample_size / eligible_race_count`を返し、対象0件ならnullとする。
+`ForecastEvaluationCoverage`は照合済み件数／対象総数を進捗バーで表示し、全件なら緑、
+未保存が残る場合は黄とする。任意の品質閾値は導入していない。
+
 `ForecastPerformanceTrend`は約100KBのRecharts依存を持つため、
 `ForecastPerformanceTrendLazy`から`next/dynamic`で遅延読み込みする。直接importした試作では
 一覧のFirst Load JSが214KBまで増えたが、遅延化後は110KBへ戻った。
@@ -60,7 +66,9 @@ lintスクリプトがないため実行不可（Next buildもlintをskipする�
 
 Claude Codeが最初に確認するファイル:
 `apps/api/src/pci/application/forecast_performance_use_cases.py`,
+`apps/api/src/pci/infrastructure/repositories/mart_repository.py`,
 `apps/web/src/components/ForecastConfidenceCalibration.tsx`,
+`apps/web/src/components/ForecastEvaluationCoverage.tsx`,
 `apps/web/src/components/ForecastErrorPattern.tsx`,
 `apps/web/src/components/ForecastPerformanceTrend.tsx`,
 `apps/web/src/components/ForecastPerformanceTrendLazy.tsx`,

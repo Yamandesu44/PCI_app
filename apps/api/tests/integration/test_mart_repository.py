@@ -162,6 +162,16 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
                 status="result",
                 rpci_actual=43.0,
             ),
+            RaceModel(
+                race_key="2026071705010104",
+                race_date=datetime.date(2026, 7, 17),
+                jyo_cd="05",
+                distance_m=1800,
+                track_type="ダート",
+                field_size=14,
+                status="result",
+                rpci_actual=44.0,
+            ),
         ]
     )
     db_session.flush()
@@ -219,8 +229,15 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
         datetime.date(2026, 7, 1),
         datetime.date(2026, 7, 31),
     )
+    candidate_count = SqlAlchemyMartRepository(
+        db_session
+    ).count_prediction_evaluation_candidates(
+        datetime.date(2026, 7, 1),
+        datetime.date(2026, 7, 31),
+    )
 
     assert len(records) == 1
+    assert candidate_count == 2
     assert records[0].race_key == race_key
     assert records[0].model_version == "rule-v4"
     assert records[0].predicted_label == "スロー"

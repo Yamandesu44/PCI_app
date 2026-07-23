@@ -394,7 +394,9 @@ class ForecastPerformanceOutput:
     date_from: str
     date_to: str
     period_days: int
+    eligible_race_count: int
     sample_size: int
+    coverage_rate: float | None
     hit_count: int
     hit_rate: float | None
     groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)

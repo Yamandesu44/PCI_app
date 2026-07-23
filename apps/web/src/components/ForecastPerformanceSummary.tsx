@@ -3,6 +3,7 @@ import type { ForecastPerformance } from "@pci/api-client";
 
 import { ForecastConfidenceCalibration } from "@/components/ForecastConfidenceCalibration";
 import { ForecastErrorPattern } from "@/components/ForecastErrorPattern";
+import { ForecastEvaluationCoverage } from "@/components/ForecastEvaluationCoverage";
 import { ForecastPerformanceTrendLazy } from "@/components/ForecastPerformanceTrendLazy";
 import { formatRaceDate } from "@/lib/races";
 
@@ -42,6 +43,12 @@ export function ForecastPerformanceSummary({
           {formatRaceDate(performance.date_from)} - {formatRaceDate(performance.date_to)}
         </p>
       </div>
+
+      <ForecastEvaluationCoverage
+        eligibleRaceCount={performance.eligible_race_count}
+        sampleSize={performance.sample_size}
+        coverageRate={performance.coverage_rate}
+      />
 
       {performance.sample_size > 0 ? (
         <>

@@ -65,7 +65,9 @@ def test_forecast_performance_contract_hides_internal_values(
         "date_from",
         "date_to",
         "period_days",
+        "eligible_race_count",
         "sample_size",
+        "coverage_rate",
         "hit_count",
         "hit_rate",
         "groups",
@@ -74,7 +76,9 @@ def test_forecast_performance_contract_hides_internal_values(
         "weekly_trend",
     }
     assert body["period_days"] == 90
+    assert body["eligible_race_count"] == 0
     assert body["sample_size"] == 0
+    assert body["coverage_rate"] is None
     assert body["hit_rate"] is None
     assert [group["key"] for group in body["groups"]] == [
         "overall",
