@@ -305,6 +305,11 @@ class TestActualStyleAdvantageBreakdown:
         by_year = build_actual_style_advantage_breakdown(targets, repo, "year")
         by_distance = build_actual_style_advantage_breakdown(targets, repo, "distance")
         by_condition = build_actual_style_advantage_breakdown(targets, repo, "track-condition")
+        by_distance_condition = build_actual_style_advantage_breakdown(
+            targets,
+            repo,
+            "distance-track-condition",
+        )
 
         assert [(group.label, group.n_races) for group in by_year] == [
             ("2025", 1),
@@ -315,11 +320,20 @@ class TestActualStyleAdvantageBreakdown:
             ("1800m", 1),
         ]
         assert [group.label for group in by_condition] == ["良", "稍重", "不明"]
+        assert [group.label for group in by_distance_condition] == [
+            "1200m / 良",
+            "1200m / 不明",
+            "1800m / 稍重",
+        ]
         assert all(group.lift is not None for group in by_year)
 
         payload = style_advantage_breakdown_to_dict(by_distance)
         assert payload["1200m"]["n_races"] == 2
         assert "好走率差" in format_actual_style_advantage_breakdown("distance", by_distance)
+        assert "距離×馬場状態" in format_actual_style_advantage_breakdown(
+            "distance-track-condition",
+            by_distance_condition,
+        )
 
 
 class TestAbilityWeightComparison:

@@ -146,10 +146,10 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--style-breakdown",
         action="append",
-        choices=["year", "distance", "track-condition"],
+        choices=["year", "distance", "track-condition", "distance-track-condition"],
         default=[],
         help=(
-            "確定値の脚質別有利度を年・実距離・馬場状態で分割表示する"
+            "確定値の脚質別有利度を年・実距離・馬場状態・距離×馬場状態で分割表示する"
             "（--validate-style-advantage専用、複数指定可）"
         ),
     )

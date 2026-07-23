@@ -54,7 +54,12 @@ _SCOREABLE_STYLES = frozenset(
         RunningStyleLabel.CLOSER,
     }
 )
-StyleAdvantageBreakdownDimension = Literal["year", "distance", "track-condition"]
+StyleAdvantageBreakdownDimension = Literal[
+    "year",
+    "distance",
+    "track-condition",
+    "distance-track-condition",
+]
 
 
 class _AsOfRaceRepository:
@@ -484,20 +489,31 @@ def build_actual_style_advantage_breakdown(
     repo: RaceRepository,
     dimension: StyleAdvantageBreakdownDimension,
 ) -> list[StyleAdvantageBreakdownGroup]:
-    """確定値診断を年・実距離・馬場状態のいずれかで分割する。"""
+    """確定値診断を年・実距離・馬場状態、または距離×馬場状態で分割する。"""
     groups: dict[str, list[Race]] = {}
     for race in targets:
         if dimension == "year":
             label = str(race.race_date.year)
         elif dimension == "distance":
             label = f"{race.distance_m}m"
-        else:
+        elif dimension == "track-condition":
             label = race.track_condition or "不明"
+        else:
+            label = f"{race.distance_m}m / {race.track_condition or '不明'}"
         groups.setdefault(label, []).append(race)
 
+    condition_order = {"良": 0, "稍重": 1, "重": 2, "不良": 3, "不明": 4}
     if dimension == "track-condition":
-        condition_order = {"良": 0, "稍重": 1, "重": 2, "不良": 3, "不明": 4}
         labels = sorted(groups, key=lambda value: (condition_order.get(value, 5), value))
+    elif dimension == "distance-track-condition":
+        labels = sorted(
+            groups,
+            key=lambda value: (
+                int(value.split("m", maxsplit=1)[0]),
+                condition_order.get(value.rsplit(" / ", maxsplit=1)[-1], 5),
+                value,
+            ),
+        )
     else:
         labels = sorted(groups, key=lambda value: int(value.removesuffix("m")))
 
@@ -881,6 +897,7 @@ def format_actual_style_advantage_breakdown(
         "year": "年",
         "distance": "距離",
         "track-condition": "馬場状態",
+        "distance-track-condition": "距離×馬場状態",
     }
     lines = [
         "",

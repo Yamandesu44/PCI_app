@@ -109,6 +109,7 @@ class TestBuildStyleAdvantage:
 
         assert advantage.reliability == StyleAdvantageReliability.REFERENCE
         assert advantage.reliability_reason is not None
+        assert "馬場状態別でも同じ傾向" in advantage.reliability_reason
         assert any(reason.code == "seasonal_venue_caution" for reason in advantage.reasons)
         assert advantage.entries == standard.entries
 

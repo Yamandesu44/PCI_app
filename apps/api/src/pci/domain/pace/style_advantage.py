@@ -176,7 +176,8 @@ def build_style_advantage(
     ):
         reliability = StyleAdvantageReliability.REFERENCE
         reliability_reason = (
-            "7月の小倉芝1200mでは過去複数年で脚質別有利度の方向が実績と逆転したため参考扱い"
+            "7月の小倉芝1200mでは過去複数年で脚質別有利度の方向が実績と逆転し、"
+            "馬場状態別でも同じ傾向のため参考扱い"
         )
         reasons.append(
             Reason(
