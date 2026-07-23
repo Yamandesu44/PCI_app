@@ -1,5 +1,87 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 00:06 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `04b0024`
+- 実装コミット: `42cd051`
+- 目的: PAIで未使用だった距離・馬場係数を、lookaheadのない実履歴へ保守的に接続する。
+
+### 完了した内容
+
+- `apps/api/src/pci/domain/pace/course_aptitude.py`
+  - `CourseAptitudeRaceResult`、`CourseAptitudeProfile`、
+    `build_course_aptitude_profile()`を追加した。
+  - 予想日より前かつ対象と同じ芝/ダートの確定着順だけを使う。
+  - 距離は好走2件以上から今回に最も近い距離を採用し、前後200m以内は適合扱いにする。
+  - 道悪は今回距離の前後400m、良・道悪各3件以上を必要とし、
+    頭数補正した着順評価の差が0.30以上の場合だけ弱点を立てる。
+  - 標本不足・無効着順・異なる馬場種別では`None`/`False`へ縮退する。
+- `apps/api/src/pci/application/forecast_use_cases.py`
+  - `distance_aptitude_m`と`weak_on_off_track`を`HorsePaceProfile`へ接続した。
+  - 最大20走を1回読み、脚質5走、前付け10走、ペース相性12走、能力5走、
+    コース適性20走で共用する。従来の重複DB照会を除いた。
+  - 前付け・ペース相性も予想日より前の履歴に統一し、バックテストの未来参照を防いだ。
+- `apps/api/src/pci/domain/pace/adaptability.py`
+  - 入力意味が変わるためPAIモデル世代を`pai-v2`へ更新した。
+  - Web向け説明は従来どおり内部PCI/RPCI/PAI実数を出さない。
+- 単体テストで距離、馬場種別、標本不足、無効着順、距離帯許容、道悪比較、
+  ユースケース接続、モデル世代を検証した。
+
+### 実DB診断と採用判断
+
+- 2025-07-01〜2025-12-31、30レース・424頭:
+  - 導入後の全体PAI相関 `+0.070`、最上位帯リフト `1.16x`。
+  - 導入前は`+0.069`、`1.17x`であり、実質同水準。
+  - 芝は`+0.165` / `1.41x`、ダートは`-0.051` / `0.84x`。
+- 2026-01-01〜2026-07-23、30レース・413頭:
+  - 導入後の全体PAI相関 `-0.069`、最上位帯リフト `0.94x`。
+  - 導入前も`-0.069`、`0.94x`で同水準。
+  - 芝は`-0.065` / `0.88x`、ダートは`-0.081` / `1.09x`。
+- 最初の中央値距離案と距離200m差も減点する案は実DB指標が悪化したため不採用。
+  最寄り好走距離と200m許容へ修正し、既存指標を維持したうえで説明根拠を追加した。
+
+### 暫定値・未確定仕様・既知事項
+
+- 好走2件、距離許容200m、馬場比較400m、良/道悪各3件、評価差0.30は暫定値。
+  係数を自動最適化した値ではなく、誤判定を抑える保守的な初期値である。
+- 2期間60レースは正式な係数最適化には小さい。`pai-v2`を蓄積後、独立期間で再検証する。
+- 2026年前半はPAI相関自体が負であり、距離・馬場接続だけでは解消していない。
+  `PaiWeights`は今回変更していない。
+- 既存`pai-v1` martは自動削除しない。各レースを再予想すると`pai-v2`が保存される。
+
+### テスト結果
+
+- PAI・予想ユースケース対象: 54 passed
+- `python -m pytest -m "not integration" -q`: 545 passed、28 deselected
+- `python -m pytest tests/integration/test_api_integration.py -q`: 6 passed
+- API全体Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 64 files passed
+- 実DBバックテストCLI: 2025年30件・424頭、2026年30件・413頭とも完走
+- 残る警告はCodexワークスペースの`.pytest_cache`書込権限のみ。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/domain/pace/course_aptitude.py`
+2. `apps/api/src/pci/application/forecast_use_cases.py`
+3. `apps/api/tests/unit/domain/pace/test_course_aptitude.py`
+4. `tasks/current.md`
+5. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/domain/pace/test_course_aptitude.py `
+  tests/unit/application/test_forecast_use_cases.py -q
+python -m scripts.backtest_forecast --date-from 2026-01-01 --date-to 2026-07-23 `
+  --limit 30 --sample-every 5 --rpci-min 20 --rpci-max 90
+```
+
 ## 2026-07-23 23:44 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
@@ -1515,7 +1597,7 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 - ❓ 受入基準「ラベル一致率≥60%」を blended/track別のどちらで判定するかは未確定
   （`docs/SPEC.md §9`-3）。基準を定めた側（プロダクトオーナー）の確認が必要。
-- ❓ PAI の正式定義・重み（pai-v1 は暫定、`docs/SPEC.md §9`-1）。
+- ❓ PAI の正式定義・重み（pai-v2 も重みは暫定、`docs/SPEC.md §9`-1）。
 - ❓ 脚質判定ルールの最適化基準、展開コメントのLLM本採用可否、本番認証・課金仕様
   （いずれも `docs/SPEC.md §9` にリストあり、詳細はそちらを参照）。
 - ❓ Geminiの正式運用品質基準・費用上限・モデル更新時の受入手順。任意実装とフォールバックは
@@ -1536,7 +1618,7 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 
 ## 仮実装
 
-- 🧪 `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`_NEIGHBOR_BLEED_RATIO=0.4`・
+- 🧪 `RuleWeights`(rule-v4)・`PaiWeights`(pai-v2)・`_NEIGHBOR_BLEED_RATIO=0.4`・
   上がり3F 妥当範囲(25〜55秒)。いずれも独断で確定しないこと（`docs/SPEC.md §9`）。
 - 🧪 `FormationWeights`（脚質0.7・近走序盤位置0.3）。`formation-v1` として隔離済み。
 - 🧪 `DistanceStyleWeights`（近走減衰・距離差・先行距離補正）。

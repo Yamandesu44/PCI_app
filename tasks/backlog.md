@@ -14,7 +14,7 @@
 > 現時点で確認できる未着手事項を整理する。**確定タスク**（やると決まっている）と
 > **改善案/検討**（やるかどうか未確定）を区別する。着手したら `tasks/current.md` へ移す。
 
-最終更新: 2026-07-23
+最終更新: 2026-07-24
 
 ---
 
@@ -85,17 +85,17 @@
   - [x] 残存1組を統合し、重複0件と正規側mart 1件＋12件の維持を確認した。
   `result_conflict`・`canonical_incomplete`・`source_unresolved`は今後発生しても自動統合しない。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
-  `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
+  `RuleWeights`(rule-v4)・`PaiWeights`(pai-v2)・`FormationWeights`(formation-v1)・
   `DistanceStyleWeights`(running-style-v2-distance)・
   `STALE_AFTER_DAYS`(ingest_log鮮度監視)。実データ・実運用での検証後に確定（独断で確定しない）。
   `RuleWeights`は2026-07-23に5候補の全体・芝・ダート比較を実装し、2期間で診断済み。
   MAE改善と分類一致率悪化が競合したため現行値を維持し、より大きな標本での再検証を残す。
   `PaiWeights`も同日に5候補を2期間で診断したが、全指標を安定改善する候補がなく現行値を維持。
-- [ ] **P2 PAIの距離適性・道悪弱点を実履歴からプロファイルへ接続する**
-  - 現在の`ForecastRaceUseCase`は`HorsePaceProfile.distance_aptitude_m`と
-    `weak_on_off_track`を設定しておらず、`PaiWeights`の距離・馬場係数は実予想で効果を持たない。
-  - 距離別好走履歴と馬場状態別成績から、lookaheadを避けて根拠を構築する。根拠不足時は`None`/`False`へ縮退する。
-  - 係数調整より先に、プロファイル生成・説明文・バックテストを一体で設計する。
+- [x] ~~**P2 PAIの距離適性・道悪弱点を実履歴からプロファイルへ接続する**~~
+  → **2026-07-24完了**。予想日前・同一馬場種別の確定成績だけから距離適性と道悪弱点を生成し、
+  `HorsePaceProfile`へ接続した。距離は好走2件以上・最寄り好走距離・前後200m許容、
+  道悪は今回距離前後400m・良/道悪各3件以上・頭数補正着順差0.30以上の暫定基準。
+  2025年後半424頭と2026年前半413頭で、導入前と同水準の相関・上位帯リフトを確認した。
 - [x] ~~夏開催の芝における`StyleAdvantageWeights`の開催場・季節安定性を検証する~~
   → **2026-07-23完了**。函館は複数年で一貫せず、小倉はデータのある4年すべてで確定値同士が逆転。
   係数は変更せず、7月の小倉芝を`reference`表示にした。福島の想定RPCI誤差は別途調査候補。
