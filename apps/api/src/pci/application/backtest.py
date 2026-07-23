@@ -46,6 +46,14 @@ from pci.domain.racing.repository import RaceRepository
 from pci.domain.shared.race_key import RaceKey
 
 DEFAULT_BAND_EDGES: tuple[int, ...] = (0, 20, 40, 60, 80, 100)
+_SCOREABLE_STYLES = frozenset(
+    {
+        RunningStyleLabel.ESCAPE,
+        RunningStyleLabel.FRONT,
+        RunningStyleLabel.STALKER,
+        RunningStyleLabel.CLOSER,
+    }
+)
 
 
 class _AsOfRaceRepository:
@@ -231,6 +239,19 @@ class StyleAdvantageLift:
     disadvantaged_lift: float
     rate_gap: float
     point_biserial: float
+
+
+@dataclass(frozen=True)
+class StyleAdvantageAttribution:
+    """ペース予測と脚質予測を入れ替えて有利度の誤差要因を比較する診断結果。"""
+
+    n_races: int
+    n_horses: int
+    skipped: int
+    forecast: StyleAdvantageLift | None
+    actual_pace: StyleAdvantageLift | None
+    actual_style: StyleAdvantageLift | None
+    oracle: StyleAdvantageLift | None
 
 
 @dataclass(frozen=True)
@@ -618,6 +639,22 @@ def style_advantage_lift_to_dict(
     }
 
 
+def style_advantage_attribution_to_dict(
+    report: StyleAdvantageAttribution,
+) -> dict[str, Any]:
+    return {
+        "n_races": report.n_races,
+        "n_horses": report.n_horses,
+        "skipped": report.skipped,
+        "forecast": style_advantage_lift_to_dict(report.forecast),
+        "actual_pace": style_advantage_lift_to_dict(report.actual_pace),
+        "actual_style": style_advantage_lift_to_dict(report.actual_style),
+        "oracle": style_advantage_lift_to_dict(report.oracle),
+        "pace_recovery": _rate_gap_delta(report.actual_pace, report.forecast),
+        "style_recovery": _rate_gap_delta(report.actual_style, report.forecast),
+    }
+
+
 def _rpci_sample_to_dict(sample: RpciSample) -> dict[str, Any]:
     return {
         "race_key": sample.race_key,
@@ -779,6 +816,46 @@ def format_actual_style_advantage_validation(
     )
 
 
+def format_style_advantage_attribution(report: StyleAdvantageAttribution) -> str:
+    """脚質別有利度の誤差要因をCLI向けに比較表示する。"""
+    lines = [
+        "=" * 72,
+        "脚質別展開有利度の誤差要因診断",
+        f"対象: {report.n_races}レース / {report.n_horses}頭（スキップ {report.skipped}）",
+        "※ 4パターンで共通して脚質を判定できた馬だけを比較",
+        "-" * 72,
+    ]
+    rows = (
+        ("予測ペース × 予測脚質", report.forecast),
+        ("実績ペース × 予測脚質", report.actual_pace),
+        ("予測ペース × 確定脚質", report.actual_style),
+        ("実績ペース × 確定脚質", report.oracle),
+    )
+    for label, lift in rows:
+        if lift is None:
+            lines.append(f"{label}: 有効サンプルなし")
+            continue
+        lines.append(
+            f"{label}: 有利 {lift.advantaged_rate:.1%} / "
+            f"不利 {lift.disadvantaged_rate:.1%} / 差 {lift.rate_gap:+.1%}"
+        )
+    pace_recovery = _rate_gap_delta(report.actual_pace, report.forecast)
+    style_recovery = _rate_gap_delta(report.actual_style, report.forecast)
+    lines.append("-" * 72)
+    lines.append(f"ペースを実績へ置換した改善幅: {_format_optional_delta(pace_recovery)}")
+    lines.append(f"脚質を確定値へ置換した改善幅: {_format_optional_delta(style_recovery)}")
+    if pace_recovery is not None and style_recovery is not None:
+        if pace_recovery > style_recovery:
+            conclusion = "想定RPCI側の影響が相対的に大きい"
+        elif style_recovery > pace_recovery:
+            conclusion = "脚質予測側の影響が相対的に大きい"
+        else:
+            conclusion = "想定RPCIと脚質予測の影響は同程度"
+        lines.append(f"診断: {conclusion}")
+    lines.append("=" * 72)
+    return "\n".join(lines)
+
+
 def _format_delta(value: float | None) -> str:
     return "   n/a" if value is None else f"{value:+6.1%}"
 
@@ -813,6 +890,19 @@ def _style_advantage_point_biserial(samples: list[StyleAdvantageSample]) -> floa
     variance_y = sum((y - mean_y) ** 2 for y in ys)
     denominator = math.sqrt(variance_x * variance_y)
     return covariance / denominator if denominator > 0 else 0.0
+
+
+def _rate_gap_delta(
+    candidate: StyleAdvantageLift | None,
+    baseline: StyleAdvantageLift | None,
+) -> float | None:
+    if candidate is None or baseline is None:
+        return None
+    return round(candidate.rate_gap - baseline.rate_gap, 4)
+
+
+def _format_optional_delta(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:+.1%}"
 
 
 class ForecastBacktester:
@@ -922,6 +1012,100 @@ class ForecastBacktester:
             style_advantage_samples=style_advantage_samples,
         )
 
+    def diagnose_style_advantage(
+        self, targets: Iterable[Race]
+    ) -> StyleAdvantageAttribution:
+        """ペースと脚質を個別に確定値へ置換し、有利度の誤差要因を切り分ける。"""
+        forecast_samples: list[StyleAdvantageSample] = []
+        actual_pace_samples: list[StyleAdvantageSample] = []
+        actual_style_samples: list[StyleAdvantageSample] = []
+        oracle_samples: list[StyleAdvantageSample] = []
+        n_races = 0
+        skipped = 0
+
+        for race in targets:
+            if race.rpci_actual is None:
+                skipped += 1
+                continue
+            try:
+                output = self._predict_as_of(race)
+            except Exception:
+                skipped += 1
+                continue
+
+            actual_entries = {
+                entry.horse_no: entry for entry in self._repo.find_entries(race.race_key)
+            }
+            predicted_styles = {
+                horse.horse_no: style
+                for horse in output.horses
+                if (style := _scoreable_style(horse.running_style)) is not None
+            }
+            actual_styles = {
+                horse_no: style
+                for horse_no, entry in actual_entries.items()
+                if (style := _scoreable_style(entry.running_style)) is not None
+            }
+            eligible = sorted(predicted_styles.keys() & actual_styles.keys())
+            if not eligible:
+                skipped += 1
+                continue
+            predicted_composition = tuple(predicted_styles[horse_no] for horse_no in eligible)
+            actual_composition = tuple(actual_styles[horse_no] for horse_no in eligible)
+
+            forecast_scores = _style_score_map(
+                output.predicted_rpci,
+                race.track_type,
+                predicted_composition,
+            )
+            actual_pace_scores = _style_score_map(
+                race.rpci_actual,
+                race.track_type,
+                predicted_composition,
+            )
+            actual_style_scores = _style_score_map(
+                output.predicted_rpci,
+                race.track_type,
+                actual_composition,
+            )
+            oracle_scores = _style_score_map(
+                race.rpci_actual,
+                race.track_type,
+                actual_composition,
+            )
+
+            race_key = str(race.race_key)
+            for horse_no in eligible:
+                predicted_style = predicted_styles[horse_no]
+                actual_style = actual_styles[horse_no]
+                good_run = is_good_run(actual_entries[horse_no].finish_pos, race.grade)
+                values = (
+                    (forecast_samples, forecast_scores[predicted_style]),
+                    (actual_pace_samples, actual_pace_scores[predicted_style]),
+                    (actual_style_samples, actual_style_scores[actual_style]),
+                    (oracle_samples, oracle_scores[actual_style]),
+                )
+                for samples, score in values:
+                    samples.append(
+                        StyleAdvantageSample(
+                            race_key=race_key,
+                            horse_no=horse_no,
+                            score=score,
+                            good_run=good_run,
+                        )
+                    )
+            n_races += 1
+
+        return StyleAdvantageAttribution(
+            n_races=n_races,
+            n_horses=len(forecast_samples),
+            skipped=skipped,
+            forecast=summarize_style_advantage(forecast_samples),
+            actual_pace=summarize_style_advantage(actual_pace_samples),
+            actual_style=summarize_style_advantage(actual_style_samples),
+            oracle=summarize_style_advantage(oracle_samples),
+        )
+
     def _predict_as_of(self, race: Race) -> ForecastOutput:
         # mart_repo=None で保存を抑止し、実績データを汚さずに予測だけ再現する。
         as_of_repo = _AsOfRaceRepository(self._repo, race.race_date)
@@ -933,3 +1117,22 @@ class ForecastBacktester:
             ability_scorer=self._ability_scorer,
         )
         return use_case.execute(str(race.race_key))
+
+
+def _scoreable_style(value: str | RunningStyleLabel | None) -> RunningStyleLabel | None:
+    if value is None:
+        return None
+    try:
+        style = RunningStyleLabel(value)
+    except ValueError:
+        return None
+    return style if style in _SCOREABLE_STYLES else None
+
+
+def _style_score_map(
+    rpci: float,
+    track_type: str,
+    running_styles: tuple[RunningStyleLabel, ...],
+) -> dict[RunningStyleLabel, float]:
+    advantage = build_style_advantage(rpci, track_type, running_styles)
+    return {entry.style: entry.score for entry in advantage.entries}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -22,6 +23,7 @@ from pci.application.backtest import (
     PaiLift,
     RpciAccuracy,
     RpciSample,
+    StyleAdvantageAttribution,
     StyleAdvantageLift,
     StyleAdvantageSample,
     _AsOfRaceRepository,
@@ -31,8 +33,10 @@ from pci.application.backtest import (
     format_ability_weight_comparison,
     format_actual_style_advantage_validation,
     format_report,
+    format_style_advantage_attribution,
     group_races_by_track,
     report_to_dict,
+    style_advantage_attribution_to_dict,
     style_advantage_lift_to_dict,
     summarize_integrated_accuracy,
     summarize_pai_lift,
@@ -491,6 +495,81 @@ class TestForecastBacktesterEndToEnd:
         report = ForecastBacktester(repo).run([phantom])
         assert report.n_races == 0
         assert report.skipped == 1
+
+    def test_diagnoses_pace_and_style_on_same_horses(self) -> None:
+        repo = FakeRaceRepository()
+        horses = [(1, "H1", 1), (3, "H3", 6), (6, "H6", 2), (10, "H10", 10)]
+        _seed_result_race(
+            repo,
+            "2026010105010101",
+            1,
+            rpci_actual=50.0,
+            horses=horses,
+        )
+        target = _seed_result_race(
+            repo,
+            "2026011505010101",
+            15,
+            rpci_actual=55.0,
+            horses=horses,
+        )
+        actual_styles = (
+            RunningStyleLabel.ESCAPE,
+            RunningStyleLabel.FRONT,
+            RunningStyleLabel.STALKER,
+            RunningStyleLabel.CLOSER,
+        )
+        for entry, style in zip(repo.find_entries(target.race_key), actual_styles, strict=True):
+            repo.save_entry(replace(entry, running_style=str(style)))
+
+        diagnosis = ForecastBacktester(repo).diagnose_style_advantage([target])
+
+        assert diagnosis.n_races == 1
+        assert diagnosis.n_horses == 4
+        assert diagnosis.skipped == 0
+        assert diagnosis.forecast is not None
+        assert diagnosis.actual_pace is not None
+        assert diagnosis.actual_style is not None
+        assert diagnosis.oracle is not None
+        assert {diagnosis.forecast.n, diagnosis.actual_pace.n, diagnosis.actual_style.n} == {4}
+        payload = style_advantage_attribution_to_dict(diagnosis)
+        assert payload["n_horses"] == 4
+        assert "pace_recovery" in payload
+        assert "予測ペース × 予測脚質" in format_style_advantage_attribution(diagnosis)
+
+
+class TestStyleAdvantageAttributionFormat:
+    def test_reports_larger_recovery_as_primary_factor(self) -> None:
+        def _lift(gap: float) -> StyleAdvantageLift:
+            return StyleAdvantageLift(
+                n=100,
+                baseline_rate=0.2,
+                advantaged_n=30,
+                advantaged_rate=0.2 + gap / 2,
+                advantaged_lift=1.0,
+                disadvantaged_n=30,
+                disadvantaged_rate=0.2 - gap / 2,
+                disadvantaged_lift=1.0,
+                rate_gap=gap,
+                point_biserial=0.0,
+            )
+
+        report = StyleAdvantageAttribution(
+            n_races=10,
+            n_horses=100,
+            skipped=0,
+            forecast=_lift(-0.10),
+            actual_pace=_lift(0.10),
+            actual_style=_lift(-0.05),
+            oracle=_lift(0.20),
+        )
+
+        payload = style_advantage_attribution_to_dict(report)
+        text = format_style_advantage_attribution(report)
+
+        assert payload["pace_recovery"] == 0.2
+        assert payload["style_recovery"] == 0.05
+        assert "想定RPCI側の影響が相対的に大きい" in text
 
 
 class TestFormatReport:

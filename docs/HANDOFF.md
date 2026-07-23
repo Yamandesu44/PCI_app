@@ -9,22 +9,29 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新28回目・Codex が脚質別展開有利度の実DB検証基盤を追加） |
+| 更新日時 | 2026-07-23（更新29回目・Codex が脚質別展開有利度の誤差要因を切り分け） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（脚質別展開有利度のバックテスト指標と診断CLIを実装） |
+| 直前の担当AI | OpenAI Codex（ペース/脚質の4パターン診断と競馬場フィルターを実装） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `4c28c75`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `66568ad`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**脚質別展開有利度の仮係数を実DBで検証し、予測誤差とルール自体の問題を切り分け可能にした。**
+**芝の脚質別展開有利度について、想定RPCIと脚質予測の誤差を同一母集団で切り分けた。**
 
-変更対象は`apps/api/src/pci/application/backtest.py`、`apps/api/scripts/backtest_forecast.py`、
-`apps/api/tests/unit/application/test_backtest.py`。関連単体テスト29 passed、Ruff成功、対象2ファイルと
+`--diagnose-style-advantage`は予測/実績RPCI × 予測/確定脚質の4パターンを比較し、
+`--venue-code`で競馬場別に絞り込める。2025年後半・2026年前半は正方向だったが、2026年7月だけ逆転。
+福島は想定RPCIが主因、函館・小倉は確定値同士でも逆転した。短期標本のため本番係数は変更していない。
+
+今回の検証は関連単体31 passed、Ruff成功、API全体62ファイルのmypy strict成功。API非統合全体は
+485 passed / 3 failed / 22 deselected。失敗3件は既存のログ捕捉テストで、単独再実行は3 passed。
+実DB1レースで`--validate-style-advantage --output`のJSON生成も成功し、一時ファイルは削除済み。
+
+前セッションの検証は関連単体テスト29 passed、Ruff成功、対象2ファイルと
 API全体62ファイルのmypy strict成功。API非統合全体は483 passed / 3 failed / 22 deselectedで、失敗3件は
 既存のログ捕捉テストが全体実行時だけ`caplog`を取得できないテスト順序依存。3件の単独再実行は全件成功。
 今回の変更対象テストに失敗はない。
@@ -421,7 +428,7 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
      逃げ・追込は増幅1.2、逃げ候補2頭以上で逃げのみ競合減点。reasons/model_version 付き。
    - `StyleAdvantageWeights` は🧪仮係数（`docs/SPEC.md §3.4/§9`-11、`docs/DECISIONS.md` 2026-07-12）。
 
-9a. **脚質別展開有利度の実DB検証基盤**（本セッション）
+9a. **脚質別展開有利度の実DB検証基盤**（`66568ad`）
    - `ForecastBacktester`へ有利群・不利群の好走率、リフト、好走率差、point-biserial相関とJSON明細を追加。
    - `backtest_forecast.py --validate-style-advantage`は確定RPCI・確定脚質を使い、係数の方向性だけを
      高速診断する。`--output`で診断サマリをJSON保存できる。本番予測精度として扱わない。
@@ -429,6 +436,13 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
      ダート8618頭で33.0%／14.0%（差+19.0pt）。ルール方向は妥当。
    - 予測込み（各100レース）: 芝17.6%／27.8%（差-10.2pt）、ダート28.5%／19.7%（差+8.8pt）。
      芝だけ逆転するため`StyleAdvantageWeights`は変更せず、想定RPCIと脚質予測の切り分けを残した。
+
+9b. **脚質別展開有利度の誤差要因診断**（本セッション）
+   - `ForecastBacktester.diagnose_style_advantage()`と`--diagnose-style-advantage`を追加。
+   - 4パターンで共通して脚質を判定できた馬だけを使い、母集団差による誤読を防ぐ。
+   - `--venue-code`で開催場別診断、`--output`でJSON保存が可能。前セッションで混入した
+     `args.output.write_text`（`str`に対する誤呼び出し）も通常のJSON writerへ修正。
+   - 実測値は`docs/SPEC.md §3.4`と`docs/DECISIONS.md` 2026-07-23を参照。
 
 10. **バックテスト結果のJSON保存**（`03bc005`）
    - `report_to_dict()` + `--output <path>`。混合＋track別内訳をJSON保存。print出力は不変。
@@ -494,8 +508,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
   未反映（ユーザー保留）のみ。
 - **統合順位予想 Phase2・AbilityWeights比較CLI・実DB採用判断は完了**。残る検証は、
   実JV-Link COMにおけるGradeCD[615]および人気/賞金予約オフセットの確認（`tasks/backlog.md` B節）。
-- **脚質別展開有利度の係数方向は確定値で確認済み**。ただし予測込みでは芝だけ逆転する。
-  `StyleAdvantageWeights`は未変更で、期間分割した芝の想定RPCI・脚質予測の原因切り分けが未完了。
+- **脚質別展開有利度の期間分割と誤差要因の切り分けは完了**。残る課題は、2022〜2025年の
+  函館・小倉の同時期でも確定値同士の逆転が再現するか。`StyleAdvantageWeights`は未変更。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
   自動同期スクリプト自体がWindows実行機で問題なく動くかも未確認。
@@ -519,10 +533,9 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 0. **P2 実JV-Dataの人気/賞金予約オフセット検証**。Windows実行機のJV-Link COMが必要。
    `JV_SPEC_MAINTENANCE_GUIDE.md`の手順に従い、実レコードの位置を確認してから正式化する。
-1. **P2 芝の脚質別展開有利度が予測込みで逆転する原因の切り分け**。
-   `apps/api/scripts/backtest_forecast.py`と`apps/api/src/pci/application/backtest.py`を使い、
-   2025年後半・2026年前半に分けて芝を再測定し、想定RPCI誤差と予測脚質誤差を個別に比較する。
-   係数変更は両期間で再現する原因を確認してから別タスクで判断する。
+1. **P2 函館・小倉の夏開催を2022〜2025年で再診断**。
+   `backtest_forecast.py --diagnose-style-advantage --venue-code 02/10`を各年7月へ実行し、
+   確定値同士の逆転が複数年で再現するか確認する。再現した場合だけ競馬場補正または信頼度抑制を設計する。
 2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
    `FormationWeights`・`DistanceStyleWeights`・`STALE_AFTER_DAYS`・
    `AbilityWeights`の成分重み以外）

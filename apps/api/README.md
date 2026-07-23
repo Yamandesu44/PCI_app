@@ -100,6 +100,19 @@ python -m scripts.backtest_forecast \
 `--track-type ダート`でも別に実行し、コース種別を混ぜずに比較する。診断結果だけで
 `StyleAdvantageWeights`を自動変更しない。
 
+想定RPCIと脚質予測のどちらが有利度を悪化させているかは、4パターン比較で切り分ける。
+
+```bash
+python -m scripts.backtest_forecast \
+  --date-from 2026-07-01 --date-to 2026-07-22 \
+  --track-type 芝 --venue-code 03 --rpci-min 20 --rpci-max 90 \
+  --diagnose-style-advantage \
+  --output results/style-advantage-fukushima.json
+```
+
+予測RPCI/実績RPCI × 予測脚質/確定脚質の4パターンを、すべての脚質を判定できた同じ馬だけで
+比較する。`--venue-code`はJRA競馬場コード（函館02、福島03、小倉10など）を指定する。
+
 ### LightGBMモデルの改行
 
 `models/*.txt`は内部の`tree_sizes`にバイト長を保持するため、必ずLFで扱う。

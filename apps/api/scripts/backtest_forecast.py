@@ -19,6 +19,9 @@ pci.application.backtest に集約。本スクリプトは DB 配線と対象選
     # 能力指数の重み候補を同じ対象レースで比較する
     python -m scripts.backtest_forecast --limit 200 --compare-ability-weights
 
+    # ペース予測と脚質予測のどちらが脚質別有利度を悪化させるか切り分ける
+    python -m scripts.backtest_forecast --track-type 芝 --diagnose-style-advantage
+
 対象は status="result" かつ rpci_actual を持つレース。1レースの予測は
 数百クエリを伴うため、既定は新しい順 200 レースに絞る（--limit で調整）。
 lookahead は backtest 側でレース当日カットオフして防止する。
@@ -40,6 +43,7 @@ import argparse
 import datetime
 import json
 import sys
+from collections.abc import Mapping
 
 sys.path.insert(0, "src")
 
@@ -57,8 +61,10 @@ from pci.application.backtest import (
     format_ability_weight_comparison,
     format_actual_style_advantage_validation,
     format_report,
+    format_style_advantage_attribution,
     group_races_by_track,
     report_to_dict,
+    style_advantage_attribution_to_dict,
     style_advantage_lift_to_dict,
     summarize_style_advantage,
 )
@@ -107,6 +113,12 @@ def _parse_args() -> argparse.Namespace:
         help="コース種別フィルター（芝/ダート/障害）。未指定=全種別",
     )
     p.add_argument(
+        "--venue-code",
+        type=str,
+        default=None,
+        help="競馬場コードフィルター（例: 函館=02、福島=03、小倉=10）",
+    )
+    p.add_argument(
         "--output",
         type=str,
         default=None,
@@ -117,10 +129,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="能力指数の検証用重み4候補を同一対象で比較する",
     )
-    p.add_argument(
+    diagnostic_mode = p.add_mutually_exclusive_group()
+    diagnostic_mode.add_argument(
         "--validate-style-advantage",
         action="store_true",
         help="実績ペース・確定脚質で脚質別有利度ルールだけを高速検証する",
+    )
+    diagnostic_mode.add_argument(
+        "--diagnose-style-advantage",
+        action="store_true",
+        help="予測/実績ペースと予測/確定脚質の4パターンで誤差要因を診断する",
     )
     return p.parse_args()
 
@@ -140,6 +158,8 @@ def _select_targets(session: Session, args: argparse.Namespace) -> list[Race]:
         stmt = stmt.where(RaceModel.rpci_actual <= args.rpci_max)
     if args.track_type is not None:
         stmt = stmt.where(RaceModel.track_type == args.track_type)
+    if args.venue_code is not None:
+        stmt = stmt.where(RaceModel.jyo_cd == args.venue_code.zfill(2))
     stmt = stmt.order_by(RaceModel.race_date.desc(), RaceModel.race_key.desc())
 
     keys = list(session.scalars(stmt).all())
@@ -170,6 +190,8 @@ def main() -> None:
         notes.append(f"rpci_actual: {lo}〜{hi}")
     if args.track_type is not None:
         notes.append(f"コース種別: {args.track_type}")
+    if args.venue_code is not None:
+        notes.append(f"競馬場コード: {args.venue_code.zfill(2)}")
     if notes:
         filter_note = f" （{' / '.join(notes)}）"
     print(f"対象 {len(targets)} レースでバックテストを実行します{filter_note}…\n")
@@ -184,14 +206,24 @@ def main() -> None:
                 "mode": "actual_pace_confirmed_style_diagnostic",
                 "style_advantage": style_advantage_lift_to_dict(summary),
             }
-            args.output.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            print(f"\n診断結果を保存しました: {args.output}")
+            _write_diagnostic_output(args.output, payload)
         return
 
     forecaster = load_best_forecaster()
     backtester = ForecastBacktester(repo, forecaster=forecaster)
+    if args.diagnose_style_advantage:
+        diagnosis = backtester.diagnose_style_advantage(targets)
+        print(format_style_advantage_attribution(diagnosis))
+        if args.output:
+            _write_diagnostic_output(
+                args.output,
+                {
+                    "mode": "style_advantage_error_attribution",
+                    "style_advantage": style_advantage_attribution_to_dict(diagnosis),
+                },
+            )
+        return
+
     report = backtester.run(targets)
     print(format_report(report))
 
@@ -274,6 +306,12 @@ def _write_output(
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     print(f"\n結果を {path} に保存しました。")
+
+
+def _write_diagnostic_output(path: str, payload: Mapping[str, object]) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    print(f"\n診断結果を保存しました: {path}")
 
 
 if __name__ == "__main__":

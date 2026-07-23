@@ -54,9 +54,10 @@
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
   `DistanceStyleWeights`(running-style-v2-distance)・
   `STALE_AFTER_DAYS`(ingest_log鮮度監視)。実データ・実運用での検証後に確定（独断で確定しない）。
-- [ ] 🧪 `StyleAdvantageWeights`の期間別安定性と芝の予測逆転を調査する。
-  2026-07-23に確定値1000レースずつで方向性は確認済み。予測込みでは芝のみ有利群の好走率が
-  不利群を下回ったため、想定RPCIと予測脚質を個別に期間分割して原因を切り分ける。係数は未変更。
+- [ ] 🧪 夏開催の芝における`StyleAdvantageWeights`の開催場・季節安定性を検証する。
+  2026年7月は函館・小倉で確定RPCI×確定脚質でも有利群が逆転した一方、2025年後半・2026年前半の
+  広域標本では正方向だった。2022〜2025年の同競馬場・同時期を比較し、複数年で再現してから
+  競馬場補正や信頼度抑制を判断する。福島は想定RPCI側の誤差を別途調査する。係数は未変更。
 - [ ] 脚質判定ルールの最適化（design/07 C9・データ蓄積後）。
 - [ ] 展開コメントの LLM（Gemini）本採用可否と品質基準（ADR-0008）。数値はドメイン確定・表現のみ LLM。
 - [ ] PAI 正式定義の確定（design/07 C10・実運用検証後）。
