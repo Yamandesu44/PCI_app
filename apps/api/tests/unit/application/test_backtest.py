@@ -28,15 +28,18 @@ from pci.application.backtest import (
     StyleAdvantageSample,
     _AsOfRaceRepository,
     ability_weight_comparisons_to_dict,
+    build_actual_style_advantage_breakdown,
     collect_actual_style_advantage_samples,
     compare_ability_weight_reports,
     format_ability_weight_comparison,
+    format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
     format_report,
     format_style_advantage_attribution,
     group_races_by_track,
     report_to_dict,
     style_advantage_attribution_to_dict,
+    style_advantage_breakdown_to_dict,
     style_advantage_lift_to_dict,
     summarize_integrated_accuracy,
     summarize_pai_lift,
@@ -231,6 +234,92 @@ class TestSummarizeStyleAdvantage:
         assert result.advantaged_rate == 1.0
         assert result.disadvantaged_rate == 0.0
         assert "診断専用" in format_actual_style_advantage_validation(result)
+
+
+class TestActualStyleAdvantageBreakdown:
+    @staticmethod
+    def _register_race(
+        repo: FakeRaceRepository,
+        race_key: str,
+        race_date: datetime.date,
+        distance_m: int,
+        track_condition: str | None,
+    ) -> Race:
+        race = Race(
+            race_key=RaceKey(race_key),
+            race_date=race_date,
+            jyo_cd="10",
+            distance_m=distance_m,
+            track_type="芝",
+            field_size=2,
+            status=RaceStatus.RESULT,
+            track_condition=track_condition,
+            rpci_actual=55.0,
+        )
+        repo.save_race(race)
+        for horse_no, style, finish_pos in (
+            (1, RunningStyleLabel.ESCAPE, 1),
+            (2, RunningStyleLabel.CLOSER, 8),
+        ):
+            repo.save_entry(
+                RaceEntry(
+                    race_key=race.race_key,
+                    horse_no=horse_no,
+                    frame_no=horse_no,
+                    ketto_num=f"H{horse_no}",
+                    weight=55.0,
+                    jockey_code="00001",
+                    trainer_code="00001",
+                    finish_pos=finish_pos,
+                    running_style=str(style),
+                )
+            )
+        return race
+
+    def test_groups_by_year_distance_and_track_condition(self) -> None:
+        repo = FakeRaceRepository()
+        targets = [
+            self._register_race(
+                repo,
+                "2025070110020101",
+                datetime.date(2025, 7, 1),
+                1200,
+                "良",
+            ),
+            self._register_race(
+                repo,
+                "2026070110020101",
+                datetime.date(2026, 7, 1),
+                1800,
+                "稍重",
+            ),
+            self._register_race(
+                repo,
+                "2026070210020101",
+                datetime.date(2026, 7, 2),
+                1200,
+                None,
+            ),
+        ]
+
+        by_year = build_actual_style_advantage_breakdown(targets, repo, "year")
+        by_distance = build_actual_style_advantage_breakdown(targets, repo, "distance")
+        by_condition = build_actual_style_advantage_breakdown(targets, repo, "track-condition")
+
+        assert [(group.label, group.n_races) for group in by_year] == [
+            ("2025", 1),
+            ("2026", 2),
+        ]
+        assert [(group.label, group.n_races) for group in by_distance] == [
+            ("1200m", 2),
+            ("1800m", 1),
+        ]
+        assert [group.label for group in by_condition] == ["良", "稍重", "不明"]
+        assert all(group.lift is not None for group in by_year)
+
+        payload = style_advantage_breakdown_to_dict(by_distance)
+        assert payload["1200m"]["n_races"] == 2
+        assert "好走率差" in format_actual_style_advantage_breakdown("distance", by_distance)
 
 
 class TestAbilityWeightComparison:

@@ -56,15 +56,18 @@ from pci.application.backtest import (
     BacktestReport,
     ForecastBacktester,
     ability_weight_comparisons_to_dict,
+    build_actual_style_advantage_breakdown,
     collect_actual_style_advantage_samples,
     compare_ability_weight_reports,
     format_ability_weight_comparison,
+    format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
     format_report,
     format_style_advantage_attribution,
     group_races_by_track,
     report_to_dict,
     style_advantage_attribution_to_dict,
+    style_advantage_breakdown_to_dict,
     style_advantage_lift_to_dict,
     summarize_style_advantage,
 )
@@ -140,7 +143,20 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="予測/実績ペースと予測/確定脚質の4パターンで誤差要因を診断する",
     )
-    return p.parse_args()
+    p.add_argument(
+        "--style-breakdown",
+        action="append",
+        choices=["year", "distance", "track-condition"],
+        default=[],
+        help=(
+            "確定値の脚質別有利度を年・実距離・馬場状態で分割表示する"
+            "（--validate-style-advantage専用、複数指定可）"
+        ),
+    )
+    args = p.parse_args()
+    if args.style_breakdown and not args.validate_style_advantage:
+        p.error("--style-breakdown は --validate-style-advantage と組み合わせてください")
+    return args
 
 
 def _select_targets(session: Session, args: argparse.Namespace) -> list[Race]:
@@ -201,11 +217,18 @@ def main() -> None:
         samples = collect_actual_style_advantage_samples(targets, repo)
         summary = summarize_style_advantage(samples)
         print(format_actual_style_advantage_validation(summary))
+        breakdowns: dict[str, object] = {}
+        for dimension in args.style_breakdown:
+            groups = build_actual_style_advantage_breakdown(targets, repo, dimension)
+            print(format_actual_style_advantage_breakdown(dimension, groups))
+            breakdowns[dimension] = style_advantage_breakdown_to_dict(groups)
         if args.output:
             payload = {
                 "mode": "actual_pace_confirmed_style_diagnostic",
                 "style_advantage": style_advantage_lift_to_dict(summary),
             }
+            if breakdowns:
+                payload["breakdowns"] = breakdowns
             _write_diagnostic_output(args.output, payload)
         return
 

@@ -343,7 +343,7 @@ describe("forecastAccuracyMeta", () => {
 
 describe("styleAdvantageScores", () => {
   const advantage = {
-    model_version: "style-advantage-v2",
+    model_version: "style-advantage-v3",
     reliability: "standard" as const,
     reliability_reason: null,
     entries: [

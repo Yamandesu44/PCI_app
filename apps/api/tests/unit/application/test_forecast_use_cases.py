@@ -264,7 +264,7 @@ class TestForecastRaceUseCase:
             repo, forecaster=_FixedForecaster(55.0, PaceLabel.SLOW)
         ).execute(UPCOMING)
         assert slow_case.style_advantage is not None
-        assert slow_case.style_advantage.model_version == "style-advantage-v2"
+        assert slow_case.style_advantage.model_version == "style-advantage-v3"
         assert slow_case.style_advantage.reliability == "standard"
         slow_scores = {entry.style: entry.score for entry in slow_case.style_advantage.entries}
         assert slow_scores["先行"] > 50 > slow_scores["差し"]
@@ -282,6 +282,7 @@ class TestForecastRaceUseCase:
         _register_upcoming(
             repo,
             n=4,
+            distance_m=1200,
             race_date=datetime.date(2026, 7, 19),
             jyo_cd="10",
         )
@@ -290,7 +291,7 @@ class TestForecastRaceUseCase:
 
         assert output.style_advantage is not None
         assert output.style_advantage.reliability == "reference"
-        assert "小倉芝" in (output.style_advantage.reliability_reason or "")
+        assert "小倉芝1200m" in (output.style_advantage.reliability_reason or "")
 
     def test_formation_uses_horse_names_and_frame_numbers(self) -> None:
         repo = FakeRaceRepository()

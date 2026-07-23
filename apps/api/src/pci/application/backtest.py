@@ -23,7 +23,7 @@ import datetime
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from pci.application.dto import ForecastOutput
 from pci.application.forecast_use_cases import ForecastRaceUseCase
@@ -54,6 +54,7 @@ _SCOREABLE_STYLES = frozenset(
         RunningStyleLabel.CLOSER,
     }
 )
+StyleAdvantageBreakdownDimension = Literal["year", "distance", "track-condition"]
 
 
 class _AsOfRaceRepository:
@@ -252,6 +253,15 @@ class StyleAdvantageAttribution:
     actual_pace: StyleAdvantageLift | None
     actual_style: StyleAdvantageLift | None
     oracle: StyleAdvantageLift | None
+
+
+@dataclass(frozen=True)
+class StyleAdvantageBreakdownGroup:
+    """確定値による脚質別有利度を、1つの開催条件で集計した結果。"""
+
+    label: str
+    n_races: int
+    lift: StyleAdvantageLift | None
 
 
 @dataclass(frozen=True)
@@ -469,6 +479,40 @@ def collect_actual_style_advantage_samples(
     return samples
 
 
+def build_actual_style_advantage_breakdown(
+    targets: Iterable[Race],
+    repo: RaceRepository,
+    dimension: StyleAdvantageBreakdownDimension,
+) -> list[StyleAdvantageBreakdownGroup]:
+    """確定値診断を年・実距離・馬場状態のいずれかで分割する。"""
+    groups: dict[str, list[Race]] = {}
+    for race in targets:
+        if dimension == "year":
+            label = str(race.race_date.year)
+        elif dimension == "distance":
+            label = f"{race.distance_m}m"
+        else:
+            label = race.track_condition or "不明"
+        groups.setdefault(label, []).append(race)
+
+    if dimension == "track-condition":
+        condition_order = {"良": 0, "稍重": 1, "重": 2, "不良": 3, "不明": 4}
+        labels = sorted(groups, key=lambda value: (condition_order.get(value, 5), value))
+    else:
+        labels = sorted(groups, key=lambda value: int(value.removesuffix("m")))
+
+    return [
+        StyleAdvantageBreakdownGroup(
+            label=label,
+            n_races=len(groups[label]),
+            lift=summarize_style_advantage(
+                collect_actual_style_advantage_samples(groups[label], repo)
+            ),
+        )
+        for label in labels
+    ]
+
+
 def compare_ability_weight_reports(
     reports: dict[str, BacktestReport],
     profiles: tuple[AbilityWeightProfile, ...] = DEFAULT_ABILITY_WEIGHT_PROFILES,
@@ -655,6 +699,18 @@ def style_advantage_attribution_to_dict(
     }
 
 
+def style_advantage_breakdown_to_dict(
+    groups: Iterable[StyleAdvantageBreakdownGroup],
+) -> dict[str, Any]:
+    return {
+        group.label: {
+            "n_races": group.n_races,
+            "style_advantage": style_advantage_lift_to_dict(group.lift),
+        }
+        for group in groups
+    }
+
+
 def _rpci_sample_to_dict(sample: RpciSample) -> dict[str, Any]:
     return {
         "race_key": sample.race_key,
@@ -814,6 +870,35 @@ def format_actual_style_advantage_validation(
             "=" * 72,
         ]
     )
+
+
+def format_actual_style_advantage_breakdown(
+    dimension: StyleAdvantageBreakdownDimension,
+    groups: Iterable[StyleAdvantageBreakdownGroup],
+) -> str:
+    """確定値診断の開催条件別内訳をCLI向けの表に整形する。"""
+    dimension_labels = {
+        "year": "年",
+        "distance": "距離",
+        "track-condition": "馬場状態",
+    }
+    lines = [
+        "",
+        f"■ 脚質別展開有利度の内訳（{dimension_labels[dimension]}別）",
+        "条件          レース  対象頭数   有利好走率   不利好走率   好走率差",
+        "-" * 72,
+    ]
+    for group in groups:
+        lift = group.lift
+        if lift is None:
+            metrics = "有効サンプルなし"
+        else:
+            metrics = (
+                f"{lift.n:8d}   {lift.advantaged_rate:9.1%}   "
+                f"{lift.disadvantaged_rate:9.1%}   {lift.rate_gap:+8.1%}"
+            )
+        lines.append(f"{group.label:<12} {group.n_races:6d}  {metrics}")
+    return "\n".join(lines)
 
 
 def format_style_advantage_attribution(report: StyleAdvantageAttribution) -> str:

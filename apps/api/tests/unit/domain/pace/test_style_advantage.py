@@ -1,4 +1,4 @@
-"""脚質別有利度（style-advantage-v2）のテスト。"""
+"""脚質別有利度（style-advantage-v3）のテスト。"""
 
 from __future__ import annotations
 
@@ -96,6 +96,7 @@ class TestBuildStyleAdvantage:
             (ESCAPE, STALKER),
             venue_code="10",
             race_date=datetime.date(2026, 7, 19),
+            distance_m=1200,
         )
         standard = build_style_advantage(
             53.0,
@@ -103,6 +104,7 @@ class TestBuildStyleAdvantage:
             (ESCAPE, STALKER),
             venue_code="02",
             race_date=datetime.date(2026, 7, 19),
+            distance_m=1200,
         )
 
         assert advantage.reliability == StyleAdvantageReliability.REFERENCE
@@ -111,15 +113,20 @@ class TestBuildStyleAdvantage:
         assert advantage.entries == standard.entries
 
     @pytest.mark.parametrize(
-        ("track_type", "venue_code", "race_date"),
+        ("track_type", "venue_code", "race_date", "distance_m"),
         [
-            ("芝", "10", datetime.date(2026, 6, 30)),
-            ("ダート", "10", datetime.date(2026, 7, 19)),
-            ("芝", "02", datetime.date(2026, 7, 19)),
+            ("芝", "10", datetime.date(2026, 6, 30), 1200),
+            ("ダート", "10", datetime.date(2026, 7, 19), 1200),
+            ("芝", "02", datetime.date(2026, 7, 19), 1200),
+            ("芝", "10", datetime.date(2026, 7, 19), 1800),
         ],
     )
     def test_other_conditions_remain_standard(
-        self, track_type: str, venue_code: str, race_date: datetime.date
+        self,
+        track_type: str,
+        venue_code: str,
+        race_date: datetime.date,
+        distance_m: int,
     ) -> None:
         advantage = build_style_advantage(
             53.0,
@@ -127,6 +134,7 @@ class TestBuildStyleAdvantage:
             (),
             venue_code=venue_code,
             race_date=race_date,
+            distance_m=distance_m,
         )
 
         assert advantage.reliability == StyleAdvantageReliability.STANDARD

@@ -113,9 +113,20 @@ python -m scripts.backtest_forecast \
 予測RPCI/実績RPCI × 予測脚質/確定脚質の4パターンを、すべての脚質を判定できた同じ馬だけで
 比較する。`--venue-code`はJRA競馬場コード（函館02、福島03、小倉10など）を指定する。
 
-2022〜2026年の7月1〜22日を比較した結果、小倉芝はデータのある4年すべてで確定値同士の
-有利群好走率差が負だった。このため`style-advantage-v2`は7月小倉芝を`reference`として返す。
-係数・PAI・順位は変更しない。函館は年ごとに方向が変わったため通常判定のままとする。
+確定値診断を年・実距離・馬場状態で分割する場合は、`--style-breakdown`を反復指定する。
+
+```bash
+python -m scripts.backtest_forecast \
+  --date-from 2026-07-01 --date-to 2026-07-22 \
+  --track-type 芝 --venue-code 10 --rpci-min 20 --rpci-max 90 \
+  --validate-style-advantage \
+  --style-breakdown year --style-breakdown distance \
+  --style-breakdown track-condition
+```
+
+2022〜2026年の7月1〜22日を年別に比較した結果、小倉芝1200mだけがデータのある4年すべてで
+大幅な負だった。このため`style-advantage-v3`は「7月・小倉・芝・1200m」を`reference`として返す。
+係数・PAI・順位は変更しない。小倉芝1800m以上と函館は通常判定のままとする。
 
 ### LightGBMモデルの改行
 

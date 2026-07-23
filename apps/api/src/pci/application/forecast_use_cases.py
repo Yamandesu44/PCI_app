@@ -159,6 +159,7 @@ class ForecastRaceUseCase:
             tuple(p.running_style for p in profiles),
             venue_code=race.jyo_cd,
             race_date=race.race_date,
+            distance_m=race.distance_m,
         )
 
         name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)

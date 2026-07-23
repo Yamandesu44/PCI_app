@@ -530,7 +530,7 @@ function styleVerdict(score: number): string {
 }
 
 /**
- * API の脚質別有利度（style-advantage-v2、50=互角）を表示用に変換する。
+ * API の脚質別有利度（style-advantage-v3、50=互角）を表示用に変換する。
  * 以前は web 側でその脚質の最大PAIを流用しており、スコアが高止まりして
  * 差が出なかった。算出はドメイン層（想定RPCIの中立点からの乖離）へ移した。
  */

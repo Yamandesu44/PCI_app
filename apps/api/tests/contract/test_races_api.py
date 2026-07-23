@@ -251,7 +251,7 @@ class TestForecastEndpoint:
     def test_style_advantage_contract(self, client: TestClient) -> None:
         advantage = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast").json()["style_advantage"]
         assert set(advantage.keys()) == STYLE_ADVANTAGE_KEYS
-        assert advantage["model_version"] == "style-advantage-v2"
+        assert advantage["model_version"] == "style-advantage-v3"
         assert advantage["reliability"] == "standard"
         assert advantage["reliability_reason"] is None
         styles = [entry["style"] for entry in advantage["entries"]]

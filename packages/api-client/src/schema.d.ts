@@ -1047,7 +1047,7 @@ export interface components {
         };
         /**
          * StyleAdvantageSchema
-         * @description 脚質別の展開有利度（style-advantage-v2）。
+         * @description 脚質別の展開有利度（style-advantage-v3）。
          */
         StyleAdvantageSchema: {
             /**

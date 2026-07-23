@@ -1,4 +1,4 @@
-"""脚質別の展開有利度（style-advantage-v2）。
+"""脚質別の展開有利度（style-advantage-v3）。
 
 想定RPCIが中立点からどちらへ寄っているかを、脚質（逃/先/差/追）ごとの
 有利・不利スコアへ翻訳する。UIの「展開分析」カードの算出元。
@@ -27,7 +27,7 @@ from pci.domain.pace.rpci_forecast import DEFAULT_WEIGHTS, RuleWeights
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "style-advantage-v2"
+MODEL_VERSION = "style-advantage-v3"
 
 
 class StyleAdvantageReliability(StrEnum):
@@ -39,7 +39,7 @@ class StyleAdvantageReliability(StrEnum):
 
 @dataclass(frozen=True)
 class StyleAdvantageWeights:
-    """style-advantage-v2 の仮係数。実データ検証後の調整を前提とする。"""
+    """style-advantage-v3 の仮係数。実データ検証後の調整を前提とする。"""
 
     # RPCIが中立から1ポイント離れるごとのスコア変化量
     slope_per_point: float = 4.0
@@ -98,6 +98,7 @@ def build_style_advantage(
     *,
     venue_code: str | None = None,
     race_date: datetime.date | None = None,
+    distance_m: int | None = None,
     weights: StyleAdvantageWeights | None = None,
     rule_weights: RuleWeights = DEFAULT_WEIGHTS,
 ) -> StyleAdvantage:
@@ -109,6 +110,7 @@ def build_style_advantage(
         running_styles:  出走各馬の判定済み脚質（逃げ競合の検出に使用）
         venue_code:      競馬場コード（開催条件別の信頼度判定に使用）
         race_date:       開催日（季節別の信頼度判定に使用）
+        distance_m:      実施距離（距離別の信頼度判定に使用）
         weights:         仮係数。省略時は DEFAULT_STYLE_ADVANTAGE_WEIGHTS
         rule_weights:    展開3分類の閾値（classify_pace と共有し中立点を導出）
 
@@ -165,10 +167,16 @@ def build_style_advantage(
 
     reliability = StyleAdvantageReliability.STANDARD
     reliability_reason: str | None = None
-    if track_type == "芝" and venue_code == "10" and race_date is not None and race_date.month == 7:
+    if (
+        track_type == "芝"
+        and venue_code == "10"
+        and race_date is not None
+        and race_date.month == 7
+        and distance_m == 1200
+    ):
         reliability = StyleAdvantageReliability.REFERENCE
         reliability_reason = (
-            "小倉芝の7月開催では過去複数年で脚質別有利度の方向が実績と逆転したため参考扱い"
+            "7月の小倉芝1200mでは過去複数年で脚質別有利度の方向が実績と逆転したため参考扱い"
         )
         reasons.append(
             Reason(
