@@ -1,5 +1,78 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 00:33 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `95d74a8`
+- 実装コミット: `4976e65`
+- 目的: RPCI LightGBM学習で失われていた脚質特徴量を復旧し、候補モデルを本番へ影響させず比較できるようにする。
+
+### 完了した内容
+
+- `apps/api/scripts/train_rpci_lgbm.py`
+  - DBの正規脚質表記`逃げ`・`先行`・`差し`・`追込`を学習SQLで使用するよう修正した。
+  - SQLは最新順を維持し、直近20%を検証、残る古い80%を学習に使うよう時系列分割を修正した。
+  - 5レース未満を拒否し、検証セットの芝・ダート別3分類再現率を出力する。
+  - `lightgbm` importを実行時へ遅延し、SQL定義をモデル未導入環境でもテスト可能にした。
+- `apps/api/scripts/backtest_forecast.py`
+  - `--turf-model-path`と`--dirt-model-path`を追加した。
+  - 候補モデルを本番ファイルへ上書きせず、既存のas-ofバックテストで比較できる。
+- `apps/api/tests/unit/test_train_rpci_lgbm.py`
+  - 正規脚質ラベル、最新順、コース別分類閾値を回帰テストで固定した。
+
+### 実DB診断と採用判断
+
+- `race_entries.running_style`は非NULL214,968件がすべて2文字の正規表記で、旧SQLの1文字ラベルは0件だった。
+  したがって従来学習では脚質構成特徴量が常にゼロだった。
+- 修正版で候補モデルを生成し、直近200レースをas-of条件で比較した。
+  - 芝候補: MAE 4.347（現行5.625）だが、分類一致率58.0%（現行63.5%）、
+    ハイ再現率58.3%（現行80.2%）へ悪化。
+  - ダート候補: MAE 2.655（現行5.401）、分類一致率62.0%（現行35.5%）だが、
+    ハイ再現率0%（現行100%）。
+  - ダート候補へ現行ハイ判定を合成する試行はMAE 3.404、分類一致率55.5%で、
+    候補単体より悪化した。
+- 展開3分類の重要な区分を欠落させるため、候補モデルと合成案は不採用。
+  候補モデルファイル、実験用合成予測器、一時オプションは削除し、本番モデルは変更していない。
+
+### 未完了・未確定仕様・既知事項
+
+- 正規脚質特徴量を使う本番モデルの採用は未完了。全体精度だけでなく芝・ダート各3区分の
+  再現率を満たす学習目標、損失、特徴量を別途検討する必要がある。
+- `tasks/backlog.md`のダート「ハイ」・芝「平均」の構造的課題は継続。今回の単純再学習では解消しない。
+- `ruff check src tests scripts`は、今回未変更の`apps/api/scripts/seed_dev.py:281`と`:307`にある
+  未使用ループ変数・行長の既存10件で失敗する。変更対象Ruffは成功している。
+- pytest警告はCodexワークスペースの`.pytest_cache`書込権限のみ。
+
+### テスト結果
+
+- `python -m pytest -m "not integration" -q`: 548 passed、28 deselected
+- `python -m pytest tests/unit/infrastructure/pace/test_lgbm_forecaster.py tests/unit/test_train_rpci_lgbm.py -q`:
+  34 passed
+- 変更対象Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 64 files passed
+- Web変更なしのためWeb typecheck/buildは未実行
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/scripts/train_rpci_lgbm.py`
+2. `apps/api/scripts/backtest_forecast.py`
+3. `apps/api/tests/unit/test_train_rpci_lgbm.py`
+4. `tasks/backlog.md`
+5. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests\unit\test_train_rpci_lgbm.py -q
+python -m scripts.backtest_forecast --track-type ダート --limit 200 `
+  --rpci-min 20 --rpci-max 90 --dirt-model-path C:\path\candidate.txt
+```
+
 ## 2026-07-24 00:06 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
