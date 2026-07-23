@@ -7,6 +7,7 @@
 - [x] 旧形式レースキーの重複データにも馬場情報を補完する。
 - [x] TrackCD 20〜22を芝として扱う。
 - [x] 小倉芝1200mの脚質別有利度を馬場状態別に再検証する。
+- [x] 直近1年の重複レースをデータ完全性監視へ追加する。
 
 > 現時点で確認できる未着手事項を整理する。**確定タスク**（やると決まっている）と
 > **改善案/検討**（やるかどうか未確定）を区別する。着手したら `tasks/current.md` へ移す。
@@ -74,6 +75,9 @@
   `COMMENT_GENERATOR_MODE=rule`を既定とし、APIキーが残っていても外部通信しない。
   Geminiは`gemini`モードとAPIキーの二段階オプトインに限定する。
 - [ ] **P2 実JV-Dataの人気/賞金予約オフセット検証**（jvlink実COM用）。現状はmykeibadb合成専用。
+- [ ] **P1 重複レースキーを安全に正規キーへ統合する**。
+  実DBの直近1年で450組を検出済み。正規キーをmykeibadbと照合し、RaceEntry・予想mart・関連FKを
+  dry-run付きで移行してから旧キーを削除する。成績・頭数が不一致の組は自動統合しない。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
   `DistanceStyleWeights`(running-style-v2-distance)・

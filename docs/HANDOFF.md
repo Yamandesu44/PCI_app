@@ -1,5 +1,79 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 19:57 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `58f8651`
+- 実装最新コミット: `87b5495`
+- 今回の目的: 旧形式キーと正規キーが併存する重複レースを、安全に削除できる前段階として継続監視する。
+
+### 完了した内容
+
+1. API/Repository
+   - 直近365日のJRA平地を、開催日・競馬場・R番号で集計する読み取りポートを追加した。
+   - `/api/v1/ingest-status`へ`has_duplicate_races`、組数、代表20組と各レースキーを追加した。
+2. Web
+   - `IngestStatusBanner`へ重複レース詳細を追加し、各キーの予想画面へ遷移可能にした。
+   - 重複だけがある場合は独立した警告を表示し、他の取り込み異常がある場合も詳細に併記する。
+3. 実DB確認
+   - 2025-07-23〜2026-07-23で450組を検出した。
+   - 自動削除・自動統合は行っていない。
+
+### 未完了・次に実施する作業
+
+1. **P1 重複450組の安全な統合設計**
+   - mykeibadbに存在するキーを正規候補とする。
+   - `RaceEntryModel`、`PredictedPaceModel`、`PaceFitModel`等の関連件数をdry-runで出力する。
+   - 成績・頭数・出走馬が不一致の組を自動対象から除外する。
+   - トランザクション内でFKを正規キーへ移行し、移行前後の件数を照合してから旧キーを削除する。
+2. **P2 実JV-Dataの人気・賞金予約オフセット検証**
+   - `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md`に従い、Windows JV-Link実機で確認する。
+3. **P2 暫定定数の検証**
+   - 対象定数と受入指標を先に決め、実データで検証する。独断で正式化しない。
+4. **P2 Webhook通知の実地確認**
+   - Windows実行機で`NOTIFY_WEBHOOK_URL`を設定して失敗通知の到達を確認する。
+
+### 既知の問題
+
+- 重複450組は監視のみで、一覧・バックテスト母集団からまだ除去されていない。
+- API全scriptsのRuffは既存`seed_dev.py`の未使用変数・行長10件で失敗する。
+  今回の`src`・`tests`・運用scripts対象Ruffは成功した。
+- 実運用cloneの既存未追跡`apps/ingestion-worker/.env]`と`result_run.txt`には触れていない。
+
+### テスト結果
+
+- API単体・契約・OpenAPI: 23 passed
+- PostgreSQL統合: `TestFindDuplicateRaceGroups` 1 passed
+- API Ruff対象範囲: passed
+- API mypy strict: passed（63 source files）
+- import-linter: 2 contracts kept / 0 broken
+- Web: 76 passed
+- api-client / Web typecheck: passed
+- Web production build: passed
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `tasks/backlog.md`
+3. `docs/HANDOFF.md`
+4. `apps/api/src/pci/infrastructure/repositories/race_repository.py`
+5. `apps/api/src/pci/application/ingest_status_use_cases.py`
+6. `apps/web/src/components/IngestStatusBanner.tsx`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/application/test_ingest_status_use_cases.py `
+  tests/contract/test_status_api.py tests/contract/test_openapi_snapshot.py -q
+cd ..\..\apps\web
+npm test
+```
+
 ## 2026-07-23 19:42 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
@@ -746,9 +820,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
   未反映（ユーザー保留）のみ。
 - **統合順位予想 Phase2・AbilityWeights比較CLI・実DB採用判断は完了**。残る検証は、
   実JV-Link COMにおけるGradeCD[615]および人気/賞金予約オフセットの確認（`tasks/backlog.md` B節）。
-- **脚質別展開有利度の複数年・距離別比較は完了**。7月小倉芝1200mだけ`reference`表示とした。
-  残る課題は、RA馬場状態の取り込み・バックフィル後の馬場別再検証と、福島の想定RPCI誤差の調査。
-  `StyleAdvantageWeights`は未変更。
+- **脚質別展開有利度の複数年・距離・馬場状態別比較は完了**。7月小倉芝1200mだけ
+  `reference`表示とし、`StyleAdvantageWeights`は未変更。福島の想定RPCI誤差は調査候補として残る。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
   自動同期スクリプト自体がWindows実行機で問題なく動くかも未確認。
@@ -761,8 +834,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 ## 現在止まっている箇所
 
-**コード実装は停止していない。実DBバックフィルだけWindows実行機でのユーザー操作待ち。**
-バックフィル前はWebトップの馬場情報未反映警告が出る想定で、完了後は件数0となり警告が消える。
+**コード実装は停止していない。** 馬場情報バックフィルと再検証は完了した。
+現在の最優先残件は、検出した重複450組の正規キー判定とFK移行設計である。
 
 ---
 
@@ -771,12 +844,9 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ユーザーからの新規指示がない場合、以下の優先順で `tasks/backlog.md` から着手を検討する。
 **どれを選ぶかはユーザー確認を推奨**（`docs/PROJECT_RULES.md` の「独断で正式仕様化しない」方針）。
 
-0. **P2 実DBで馬場状態を1年分バックフィルし、馬場状態別に再検証**。
-   Web警告内のコマンド、または上記`run_batch.ps1 -Step race-metadata`をWindows実行機で実行し、
-   `/api/v1/ingest-status`の`missing_track_condition_count=0`とWeb警告消去を確認後、
-   `python -m scripts.backtest_forecast --validate-style-advantage --track-type 芝 --venue-code 10
-   --date-from 2025-07-01 --date-to 2026-07-31 --style-breakdown year
-   --style-breakdown track-condition --style-breakdown distance`で欠損率と小倉芝1200mを確認する。
+0. **P1 重複レース450組の安全な統合設計**。
+   正規キー候補、関連FK件数、成績・頭数・出走馬差分をdry-runし、自動統合可能な組を分類する。
+   dry-runとトランザクション設計が完成するまで削除処理は追加しない。
 1. **P2 実JV-Dataの人気/賞金予約オフセット検証**。Windows実行機のJV-Link COMが必要。
    `JV_SPEC_MAINTENANCE_GUIDE.md`の手順に従い、実レコードの位置を確認してから正式化する。
 2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・

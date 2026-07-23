@@ -1,5 +1,12 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-23 完了: 重複レースのデータ完全性監視
+
+- [x] 直近365日のJRA平地について、同一開催日・競馬場・R番号に複数キーがあるレース組をDB集計する。
+- [x] `/api/v1/ingest-status`へ重複組数と代表20組を追加し、Web警告バナーで各キーを確認可能にする。
+- [x] 実DBで450組を検出し、監視が実データを捉えることを確認した。
+- [x] FKを伴う誤削除を防ぐため、自動削除・自動統合は実装しない。
+
 ## 2026-07-23 完了: 小倉芝1200mの馬場状態別再検証
 
 - [x] 確定値診断へ `distance-track-condition` 内訳を追加し、距離と馬場状態の交差条件を同時比較できるようにした。
@@ -24,7 +31,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-23（小倉芝1200mの馬場状態別再検証） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-23（重複レースのデータ完全性監視） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -498,16 +505,16 @@
 
 ## 次に着手する候補（今スプリントの当面・優先順位順）
 
-（進行中タスクはなし。以下は `tasks/backlog.md` から優先度順に抜粋した候補。
-**着手前にユーザーへどれを選ぶか確認すること**（`docs/PROJECT_RULES.md` に沿い独断で選定しない）。）
+（進行中タスクはなし。以下は `tasks/backlog.md` と実DB確認から整理した残タスク。）
 
-- [ ] **P2 Windows ワーカー運用の監視強化**（`tasks/backlog.md` A節）
-  - 状態: ⬜未着手
-  - 背景: `ingest_log`（migration 002）は導入済みだが、失敗の可視化・再実行導線・
-    `NOTIFY_WEBHOOK_URL` 通知の定着が未完了。
-  - 完了条件: 直近の取り込み失敗が一覧できる（API or CLI）、失敗時にWebhook通知が実際に届くことを
-    手元で確認済み。
-  - ブロック要因: Webhook通知の動作確認にはユーザーの実行環境（Windows機）が必要。
+- [ ] **P1 直近1年の重複レース450組を安全に統合する**
+  - 状態: ⬜設計待ち
+  - 完了条件: 正規キーの判定、RaceEntry・予想mart・関連FKの移行、dry-run、件数照合を経て旧キーを削除する。
+  - 制約: 自動削除は行わない。正規・旧キーで成績や出走馬が異なる組を先に分類する。
+
+- [ ] **P2 実JV-Dataの人気・賞金予約オフセットを検証する**
+  - 状態: ⏸Windows JV-Link実機待ち
+  - 対象: `apps/ingestion-worker/JV_SPEC_MAINTENANCE_GUIDE.md`
 
 - [ ] **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・上がり3F妥当範囲・`RuleWeights`・`PaiWeights`・
   `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`AbilityWeights`）
@@ -523,15 +530,11 @@
     確定データがあれば）での再検証が望ましいが、現状データで可能な範囲でよい。`AbilityWeights`は
     migration 003 適用＋過去成績再取込（`MANUAL_SYNC_GUIDE §7.5`）後でないと人気/本賞金データが
     無く検証できない点に注意。
-  - ブロック要因: 実DBアクセスが必要（このクラウド環境からは接続不可。想定RPCI検証と同様、
-    ユーザーに手元でスクリプト実行→結果を貼ってもらう進め方になる見込み）。着手前にどの定数を
-    対象にするかユーザーに確認。
+  - ブロック要因: 対象定数ごとの評価指標・受入条件は未確定。独断で正式化しない。
 
-- [ ] **P3 技術的負債の解消（残件）**（`tasks/backlog.md` C節）
-  - 状態: mypy strict全体化・旧handoffファイル整理・JV-Dataオフセット追従手順の明文化は完了
-    （上記「最近完了したタスク」参照）。**残るは統合テスト環境整備のみ**。
-  - 完了条件: `tasks/backlog.md` C節を参照。優先度は相対的に低い。
-  - ブロック要因: Docker/testcontainers-postgresが必要（このクラウド環境では利用不可）。
+- [ ] **P2 Webhook通知のWindows実地確認**
+  - 状態: ⏸通知先設定待ち
+  - 完了条件: `NOTIFY_WEBHOOK_URL`を設定し、失敗通知の到達をWindows実行機で確認する。
 
 ---
 
@@ -542,7 +545,5 @@
   - 見直し条件: `forecast_accuracy` の蓄積データが増える（track毎に100件超など）、
     または実運用でダートの外れ方に偏り（例: 常にハイ側へ外す）が見えた場合に着手を再検討。
 
-- [ ] ⏸ **P2 統合テスト（testcontainers-postgres）の実行環境整備**
-  - 状態: ⏸保留（Docker / DB 前提。CI or ローカルで要環境）
-  - 対象: `apps/api/tests/integration/`
-  - メモ: 現在は unit+contract のみ日常実行。infrastructure 層の実 DB 経路は integration 依存。
+- [x] ✅ **P2 統合テスト（testcontainers-postgres）の実行環境整備**
+  - CIとローカルDockerで実行可能。今回も重複集計のPostgreSQL統合テスト1件が成功した。
