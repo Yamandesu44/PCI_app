@@ -26,7 +26,10 @@ def _record(
     return PredictionEvaluationRecord(
         race_key=race_key,
         race_date=race_date,
+        jyo_cd="05",
+        distance_m=1600,
         track_type=track_type,
+        race_class="テスト特別",
         predicted_label=predicted_label,
         actual_rpci=actual_rpci,
         confidence=confidence,
@@ -129,6 +132,18 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
         and all("rpci" not in vars(cell) for cell in row.cells)
         for row in output.pace_matrix
     )
+    assert [
+        (
+            miss.race_key,
+            miss.predicted_label,
+            miss.actual_label,
+            miss.race_class,
+        )
+        for miss in output.recent_misses
+    ] == [
+        ("2026071905010102", "平均", "ハイ", "テスト特別"),
+    ]
+    assert all("rpci" not in vars(miss) for miss in output.recent_misses)
 
 
 def test_empty_period_returns_null_rate() -> None:
@@ -153,6 +168,32 @@ def test_empty_period_returns_null_rate() -> None:
     )
     assert len(output.weekly_trend) == 8
     assert all(point.hit_rate is None for point in output.weekly_trend)
+    assert output.recent_misses == []
+
+
+def test_recent_misses_are_limited_and_sorted_by_latest_race() -> None:
+    repo = FakeMartRepository()
+    repo.prediction_evaluations = [
+        _record(
+            f"202607{day:02d}050101{race_no:02d}",
+            datetime.date(2026, 7, day),
+            "芝",
+            "平均",
+            45.0,
+        )
+        for race_no, day in enumerate(range(14, 21), start=1)
+    ]
+
+    output = GetForecastPerformanceUseCase(repo).execute(now=NOW)
+
+    assert len(output.recent_misses) == 5
+    assert [miss.race_date for miss in output.recent_misses] == [
+        "2026-07-20",
+        "2026-07-19",
+        "2026-07-18",
+        "2026-07-17",
+        "2026-07-16",
+    ]
 
 
 def test_selected_period_does_not_shorten_weekly_trend() -> None:

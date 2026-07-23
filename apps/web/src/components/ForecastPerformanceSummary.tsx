@@ -9,6 +9,7 @@ import { ForecastConfidenceCalibration } from "@/components/ForecastConfidenceCa
 import { ForecastErrorPattern } from "@/components/ForecastErrorPattern";
 import { ForecastEvaluationCoverage } from "@/components/ForecastEvaluationCoverage";
 import { ForecastPerformanceTrendLazy } from "@/components/ForecastPerformanceTrendLazy";
+import { ForecastRecentMisses } from "@/components/ForecastRecentMisses";
 import { formatRaceDate } from "@/lib/races";
 
 function rateLabel(rate: number | null | undefined): string {
@@ -153,6 +154,7 @@ export function ForecastPerformanceSummary({
             ) : null}
           </div>
           <ForecastErrorPattern rows={performance.pace_matrix} />
+          <ForecastRecentMisses misses={performance.recent_misses} />
         </>
       ) : (
         <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">

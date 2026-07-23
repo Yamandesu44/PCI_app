@@ -455,6 +455,62 @@
         "title": "ForecastAccuracySchema",
         "type": "object"
       },
+      "ForecastMissSchema": {
+        "description": "予想区分と実績区分が一致しなかったレース。",
+        "properties": {
+          "actual_label": {
+            "title": "Actual Label",
+            "type": "string"
+          },
+          "distance_m": {
+            "exclusiveMinimum": 0.0,
+            "title": "Distance M",
+            "type": "integer"
+          },
+          "jyo_cd": {
+            "title": "Jyo Cd",
+            "type": "string"
+          },
+          "predicted_label": {
+            "title": "Predicted Label",
+            "type": "string"
+          },
+          "race_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Race Class"
+          },
+          "race_date": {
+            "title": "Race Date",
+            "type": "string"
+          },
+          "race_key": {
+            "title": "Race Key",
+            "type": "string"
+          },
+          "track_type": {
+            "title": "Track Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "race_key",
+          "race_date",
+          "jyo_cd",
+          "distance_m",
+          "track_type",
+          "predicted_label",
+          "actual_label"
+        ],
+        "title": "ForecastMissSchema",
+        "type": "object"
+      },
       "ForecastPaceMatrixCellSchema": {
         "description": "予想展開に対する実績展開1区分の件数と割合。",
         "properties": {
@@ -685,6 +741,14 @@
           },
           "previous_period": {
             "$ref": "#/components/schemas/ForecastPerformanceComparisonSchema"
+          },
+          "recent_misses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ForecastMissSchema"
+            },
+            "title": "Recent Misses",
+            "type": "array"
           },
           "sample_size": {
             "minimum": 0.0,

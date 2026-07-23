@@ -140,6 +140,7 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
                 track_type="芝",
                 field_size=12,
                 status="result",
+                race_class="テスト特別",
                 rpci_actual=55.0,
             ),
             RaceModel(
@@ -241,6 +242,9 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
     assert records[0].race_key == race_key
     assert records[0].model_version == "rule-v4"
     assert records[0].predicted_label == "スロー"
+    assert records[0].jyo_cd == "05"
+    assert records[0].distance_m == 1600
+    assert records[0].race_class == "テスト特別"
 
 
 def test_entry_draw_change_invalidates_saved_forecast(db_session: Session) -> None:

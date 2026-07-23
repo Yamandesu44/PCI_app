@@ -530,6 +530,19 @@ class ForecastPaceMatrixRowSchema(BaseModel):
     cells: list[ForecastPaceMatrixCellSchema] = []
 
 
+class ForecastMissSchema(BaseModel):
+    """予想区分と実績区分が一致しなかったレース。"""
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    distance_m: int = Field(gt=0)
+    track_type: str
+    race_class: str | None = None
+    predicted_label: str
+    actual_label: str
+
+
 class ForecastPerformanceSchema(BaseModel):
     """直近期間の予想精度サマリー。PCI/RPCI実数値は公開しない。"""
 
@@ -546,6 +559,7 @@ class ForecastPerformanceSchema(BaseModel):
     confidence_groups: list[ForecastPerformanceGroupSchema] = []
     pace_matrix: list[ForecastPaceMatrixRowSchema] = []
     weekly_trend: list[ForecastPerformanceTrendPointSchema] = []
+    recent_misses: list[ForecastMissSchema] = []
 
     @classmethod
     def from_dto(
@@ -591,6 +605,10 @@ class ForecastPerformanceSchema(BaseModel):
             weekly_trend=[
                 ForecastPerformanceTrendPointSchema(**vars(point))
                 for point in dto.weekly_trend
+            ],
+            recent_misses=[
+                ForecastMissSchema(**vars(miss))
+                for miss in dto.recent_misses
             ],
         )
 

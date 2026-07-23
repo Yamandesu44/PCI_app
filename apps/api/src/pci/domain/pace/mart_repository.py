@@ -45,7 +45,10 @@ class PredictionEvaluationRecord:
 
     race_key: str
     race_date: datetime.date
+    jyo_cd: str
+    distance_m: int
     track_type: str
+    race_class: str | None
     predicted_label: str
     actual_rpci: float
     confidence: float

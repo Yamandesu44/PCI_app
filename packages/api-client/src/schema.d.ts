@@ -624,6 +624,28 @@ export interface components {
             predicted_rpci: number;
         };
         /**
+         * ForecastMissSchema
+         * @description 予想区分と実績区分が一致しなかったレース。
+         */
+        ForecastMissSchema: {
+            /** Actual Label */
+            actual_label: string;
+            /** Distance M */
+            distance_m: number;
+            /** Jyo Cd */
+            jyo_cd: string;
+            /** Predicted Label */
+            predicted_label: string;
+            /** Race Class */
+            race_class?: string | null;
+            /** Race Date */
+            race_date: string;
+            /** Race Key */
+            race_key: string;
+            /** Track Type */
+            track_type: string;
+        };
+        /**
          * ForecastPaceMatrixCellSchema
          * @description 予想展開に対する実績展開1区分の件数と割合。
          */
@@ -726,6 +748,11 @@ export interface components {
             /** Period Days */
             period_days: number;
             previous_period: components["schemas"]["ForecastPerformanceComparisonSchema"];
+            /**
+             * Recent Misses
+             * @default []
+             */
+            recent_misses: components["schemas"]["ForecastMissSchema"][];
             /** Sample Size */
             sample_size: number;
             /**

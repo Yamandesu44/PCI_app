@@ -78,6 +78,7 @@ def test_forecast_performance_contract_hides_internal_values(
         "confidence_groups",
         "pace_matrix",
         "weekly_trend",
+        "recent_misses",
     }
     assert body["period_days"] == 90
     assert body["eligible_race_count"] == 0
@@ -100,6 +101,7 @@ def test_forecast_performance_contract_hides_internal_values(
         "dirt",
     ]
     assert len(body["weekly_trend"]) == 8
+    assert body["recent_misses"] == []
     assert [group["key"] for group in body["confidence_groups"]] == [
         "strong",
         "normal",

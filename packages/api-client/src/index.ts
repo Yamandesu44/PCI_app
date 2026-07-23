@@ -36,6 +36,7 @@ export type ForecastPerformanceGroup =
   components["schemas"]["ForecastPerformanceGroupSchema"];
 export type ForecastPerformanceTrendPoint =
   components["schemas"]["ForecastPerformanceTrendPointSchema"];
+export type ForecastMiss = components["schemas"]["ForecastMissSchema"];
 export type ForecastPaceMatrixCell =
   components["schemas"]["ForecastPaceMatrixCellSchema"];
 export type ForecastPaceMatrixRow =

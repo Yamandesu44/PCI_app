@@ -407,6 +407,20 @@ class ForecastPaceMatrixRowOutput:
 
 
 @dataclass(frozen=True)
+class ForecastMissOutput:
+    """予想区分と実績区分が一致しなかったレース。内部実数値は含めない。"""
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    distance_m: int
+    track_type: str
+    race_class: str | None
+    predicted_label: str
+    actual_label: str
+
+
+@dataclass(frozen=True)
 class ForecastPerformanceOutput:
     """直近期間の展開ラベル的中率サマリー。"""
 
@@ -427,6 +441,7 @@ class ForecastPerformanceOutput:
     weekly_trend: list[ForecastPerformanceTrendPointOutput] = field(
         default_factory=list
     )
+    recent_misses: list[ForecastMissOutput] = field(default_factory=list)
 
 
 @dataclass

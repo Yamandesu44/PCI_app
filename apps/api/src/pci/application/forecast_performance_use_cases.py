@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 
 from pci.application.dto import (
+    ForecastMissOutput,
     ForecastPaceMatrixCellOutput,
     ForecastPaceMatrixRowOutput,
     ForecastPerformanceComparisonOutput,
@@ -21,6 +22,7 @@ from pci.domain.pace.rpci_forecast import classify_pace
 _DEFAULT_PERIOD_DAYS = 90
 _ALLOWED_PERIOD_DAYS = frozenset({30, 90, 180})
 _TREND_WEEKS = 8
+_RECENT_MISS_LIMIT = 5
 _JRA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=9), name="JST")
 _GROUPS = (
     ("overall", "全体", None),
@@ -104,6 +106,7 @@ class GetForecastPerformanceUseCase:
         ]
         pace_matrix = _build_pace_matrix(period_records)
         weekly_trend = _build_weekly_trend(records, date_to)
+        recent_misses = _build_recent_misses(period_records)
         overall = groups[0]
         return ForecastPerformanceOutput(
             date_from=date_from.isoformat(),
@@ -127,6 +130,7 @@ class GetForecastPerformanceUseCase:
             confidence_groups=confidence_groups,
             pace_matrix=pace_matrix,
             weekly_trend=weekly_trend,
+            recent_misses=recent_misses,
         )
 
 
@@ -269,3 +273,32 @@ def _build_pace_matrix(
             )
         )
     return rows
+
+
+def _build_recent_misses(
+    records: list[PredictionEvaluationRecord],
+) -> list[ForecastMissOutput]:
+    """直近の不一致レースを、内部RPCI値を除いた表示情報へ変換する。"""
+    misses = [
+        (record, str(classify_pace(record.actual_rpci, record.track_type)))
+        for record in records
+        if str(classify_pace(record.actual_rpci, record.track_type))
+        != record.predicted_label
+    ]
+    misses.sort(
+        key=lambda item: (item[0].race_date, item[0].race_key),
+        reverse=True,
+    )
+    return [
+        ForecastMissOutput(
+            race_key=record.race_key,
+            race_date=record.race_date.isoformat(),
+            jyo_cd=record.jyo_cd,
+            distance_m=record.distance_m,
+            track_type=record.track_type,
+            race_class=record.race_class,
+            predicted_label=record.predicted_label,
+            actual_label=actual_label,
+        )
+        for record, actual_label in misses[:_RECENT_MISS_LIMIT]
+    ]

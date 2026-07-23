@@ -195,7 +195,10 @@ class SqlAlchemyMartRepository:
                 PredictionEvaluationRecord(
                     race_key=prediction.race_key,
                     race_date=race.race_date,
+                    jyo_cd=race.jyo_cd,
+                    distance_m=race.distance_m,
                     track_type=race.track_type,
+                    race_class=race.race_class,
                     predicted_label=prediction.pace_label,
                     actual_rpci=race.rpci_actual,
                     confidence=prediction.confidence,
