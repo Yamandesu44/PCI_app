@@ -281,6 +281,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/ingest/race-metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Race Metadata
+         * @description 既存レースへ馬場状態・天候を上書きし、成績や出走馬は変更しない。
+         */
+        post: operations["ingest_race_metadata_internal_ingest_race_metadata_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/ingest/races/{race_key}": {
         parameters: {
             query?: never;
@@ -920,6 +940,15 @@ export interface components {
             /** Weather */
             weather?: string | null;
         };
+        /** RaceMetadataBody */
+        RaceMetadataBody: {
+            /** Race Key */
+            race_key: string;
+            /** Track Condition */
+            track_condition?: string | null;
+            /** Weather */
+            weather?: string | null;
+        };
         /**
          * RaceSummarySchema
          * @description レース一覧の1件分（トップ画面のレース選択用）。
@@ -1515,6 +1544,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IngestLogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_race_metadata_internal_ingest_race_metadata_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RaceMetadataBody"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestResponse"];
                 };
             };
             /** @description Validation Error */

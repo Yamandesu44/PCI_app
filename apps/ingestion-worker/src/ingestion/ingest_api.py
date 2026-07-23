@@ -15,6 +15,7 @@ from ingestion.models import (
     HorseRecord,
     JockeyRecord,
     RaceEntriesRecord,
+    RaceMetadataRecord,
     RaceResultRecord,
     TrainerRecord,
 )
@@ -202,6 +203,24 @@ class IngestApiClient:
             ),
         )
         return result
+
+    def update_race_metadata(self, records: list[RaceMetadataRecord]) -> int:
+        """既存レースへ馬場状態・天候を一括反映する。"""
+        total = 0
+        for i in range(0, len(records), _BATCH_SIZE):
+            batch = records[i : i + _BATCH_SIZE]
+            payload = [
+                {
+                    "race_key": record.race_key,
+                    "track_condition": record.track_condition,
+                    "weather": record.weather,
+                }
+                for record in batch
+            ]
+            result = self._post("/internal/ingest/race-metadata", payload)
+            total += int(result.get("accepted", 0))
+        _log.info("レース補足情報更新: %d / %d 件", total, len(records))
+        return total
 
     def delete_race(self, race_key: str) -> int:
         """取り込み対象外になったレースをAPI側DBから削除する。"""

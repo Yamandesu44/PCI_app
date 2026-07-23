@@ -7,7 +7,11 @@ import datetime
 import pytest
 
 from pci.application.dto import EntryInput, RaceInfo, ResultInput
-from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
+from pci.application.race_use_cases import (
+    RecordRaceResultUseCase,
+    RegisterRaceEntriesUseCase,
+    UpdateRaceMetadataUseCase,
+)
 from pci.domain.racing.master import Horse
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -202,6 +206,49 @@ class TestRegisterRaceEntriesUseCase:
         assert race.rpci_actual is not None
         assert horse.finish_pos == 1
         assert horse.pci_actual is not None
+
+
+class TestUpdateRaceMetadataUseCase:
+    def test_updates_only_metadata_and_preserves_result(self) -> None:
+        repo = FakeRaceRepository()
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+        RecordRaceResultUseCase(repo).execute(RACE_KEY, RESULTS)
+        before = repo.find_by_key(RaceKey(RACE_KEY))
+        assert before is not None
+
+        updated = UpdateRaceMetadataUseCase(repo).execute(
+            RACE_KEY,
+            track_condition="稍重",
+            weather="小雨",
+        )
+
+        after = repo.find_by_key(RaceKey(RACE_KEY))
+        assert updated is True
+        assert after is not None
+        assert after.track_condition == "稍重"
+        assert after.weather == "小雨"
+        assert after.status == RaceStatus.RESULT
+        assert after.rpci_actual == before.rpci_actual
+        assert after.pci3_actual == before.pci3_actual
+        assert len(repo.find_entries(RaceKey(RACE_KEY))) == 3
+
+    def test_unknown_race_is_skipped(self) -> None:
+        repo = FakeRaceRepository()
+
+        updated = UpdateRaceMetadataUseCase(repo).execute(
+            RACE_KEY,
+            track_condition="良",
+        )
+
+        assert updated is False
+
+    def test_empty_metadata_is_skipped(self) -> None:
+        repo = FakeRaceRepository()
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+
+        updated = UpdateRaceMetadataUseCase(repo).execute(RACE_KEY)
+
+        assert updated is False
 
 
 class TestRecordRaceResultUseCase:

@@ -577,6 +577,23 @@
 - **見直し条件**: 馬場状態バックフィル後に1200mの逆転が特定馬場だけへ局在すると判明した場合は、
   `reference`条件をさらに限定する。追加年で正方向へ安定した場合は条件を解除する。
 
+## 2026-07-23 馬場状態はmykeibadbの列分解済み情報から安全に取り込む
+
+- **背景**: アプリDBには`track_condition`があるが、`ra_parser.py`はJV-Link固定長RAの位置が
+  実レコードで未確認のため`None`を返す。推測したオフセットを本番取り込みへ適用できない。
+- **採用案**: mykeibadbの`race_shosai`に存在する`SHIBA_BABAJOTAI_CODE`、
+  `DIRT_BABAJOTAI_CODE`、`TENKO_CODE`を列名で直接読み、`RaceMetadataRecord`として固定長パーサ結果へ
+  重ねる。既存レース向けには認証付き`POST /internal/ingest/race-metadata`と
+  `--step race-metadata`を追加する。
+- **安全性**: 補足情報更新ユースケースは既存レースだけを対象とし、status、出走馬、成績、
+  RPCI/PCI3、grade、race_classを保持する。未知コードと情報なし行は更新しない。
+- **不採用案**: 未確認の`SibaBabaCD`/`DirtBabaCD`固定長位置を`ra_parser.py`で読み始める案。
+  JV-Link COM経路まで誤読させる危険があるため採用しない。
+- **運用**: 今後のmykeibadb entries/results同期では自動反映する。既存1年分はWindows実行機で
+  `--step race-metadata --chunk-days 7`を一度実行する。
+- **未検証**: 本番mykeibadb/PostgreSQLへのバックフィル件数と馬場状態別の小倉芝1200m診断。
+  実測完了まで`style-advantage-v3`の条件・係数は変更しない。
+
 ---
 
 > 過去（本ログ作成以前）の重い決定は ADR-0001〜0009 に記録済み。詳細は `docs/adr/` を参照。

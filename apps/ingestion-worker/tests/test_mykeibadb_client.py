@@ -233,6 +233,9 @@ def test_iter_ra_records_accepts_wmykeibadb_race_shosai_columns() -> None:
                 "KYORI": 1600,
                 "TRACK_CODE": 17,
                 "GRADE_CODE": "A",
+                "TENKO_CODE": "3",
+                "SHIBA_BABAJOTAI_CODE": "2",
+                "DIRT_BABAJOTAI_CODE": "1",
                 "ZENHAN_3F": 35.2,
                 "KOHAN_3F": 35.8,
             }
@@ -246,6 +249,53 @@ def test_iter_ra_records_accepts_wmykeibadb_race_shosai_columns() -> None:
     assert parsed.race_key == "2026062105030411"
     assert parsed.distance_m == 1600
     assert parsed.grade == "G1"
+    metadata = client.race_metadata(parsed.race_key)
+    assert metadata is not None
+    assert metadata.track_condition == "稍重"
+    assert metadata.weather == "小雨"
+
+
+def test_iter_race_metadata_uses_condition_for_actual_track() -> None:
+    class _TrackConditionConnection(_Connection):
+        ra = [
+            {
+                "DATA_KUBUN": "7",
+                "KAISAI_NEN": 2026,
+                "KAISAI_GAPPI": "0621",
+                "KEIBAJO_CODE": 5,
+                "KAISAI_KAI": 3,
+                "KAISAI_NICHIME": 4,
+                "RACE_BANGO": 10,
+                "KYORI": 1600,
+                "TRACK_CODE": 17,
+                "TENKO_CODE": "1",
+                "SHIBA_BABAJOTAI_CODE": "2",
+                "DIRT_BABAJOTAI_CODE": "4",
+            },
+            {
+                "DATA_KUBUN": "7",
+                "KAISAI_NEN": 2026,
+                "KAISAI_GAPPI": "0621",
+                "KEIBAJO_CODE": 5,
+                "KAISAI_KAI": 3,
+                "KAISAI_NICHIME": 4,
+                "RACE_BANGO": 11,
+                "KYORI": 1600,
+                "TRACK_CODE": 24,
+                "TENKO_CODE": "4",
+                "SHIBA_BABAJOTAI_CODE": "1",
+                "DIRT_BABAJOTAI_CODE": "3",
+            },
+        ]
+
+    client = MyKeibaDbClient(connection=_TrackConditionConnection())
+
+    records = list(client.iter_race_metadata("20260621", "20260621"))
+
+    assert [(record.track_condition, record.weather) for record in records] == [
+        ("稍重", "晴"),
+        ("重", "雨"),
+    ]
 
 
 def test_iter_ra_records_preserves_hurdle_track_code() -> None:
@@ -261,16 +311,19 @@ def test_iter_ra_records_preserves_hurdle_track_code() -> None:
                 "RACE_BANGO": "01",
                 "KYORI": "2860",
                 "TRACK_CODE": "54",
+                "DIRT_BABAJOTAI_CODE": "4",
             }
         ]
 
-    record = next(MyKeibaDbClient(connection=_HurdleConnection()).iter_ra_records(
-        "20260719", "20260719"
-    ))
+    client = MyKeibaDbClient(connection=_HurdleConnection())
+    record = next(client.iter_ra_records("20260719", "20260719"))
     parsed = parse_ra(record)
 
     assert parsed is not None
     assert parsed.track_type == "障害"
+    metadata = client.race_metadata(parsed.race_key)
+    assert metadata is not None
+    assert metadata.track_condition is None
 
 
 def test_iter_race_records_excludes_non_jra_venues() -> None:

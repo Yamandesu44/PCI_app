@@ -96,3 +96,12 @@ class RaceResultRecord:
     race_s3f: float | None = None  # RA の HaronTimeS3（前半3F秒）。RPCI 算出に使用
     race_l3f: float | None = None  # RA の HaronTimeL3（後半3F秒）。RPCI 算出に使用
     results: list[ResultRecord] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RaceMetadataRecord:
+    """列分解済みデータソースから得た、固定長位置に依存しないレース補足情報。"""
+
+    race_key: str
+    track_condition: str | None = None
+    weather: str | None = None

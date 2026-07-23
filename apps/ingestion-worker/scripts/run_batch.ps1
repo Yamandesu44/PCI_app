@@ -8,7 +8,8 @@
     final failure. Logs are written per-date under logs\.
 
 .PARAMETER Step
-    Step to run: all | masters | entries | results | special-entries | forecasts
+    Step to run: all | masters | entries | results | race-metadata |
+    special-entries | forecasts
 
 .PARAMETER Mode
     Data source: jvlink | fixture | mykeibadb (default: jvlink)
@@ -27,6 +28,7 @@
     .\run_batch.ps1 -Step entries
     .\run_batch.ps1 -Step results -Date 20260628
     .\run_batch.ps1 -Step entries -Mode mykeibadb -Date 20260629 -DateTo 20260720
+    .\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723
 #>
 param(
     [Parameter(Mandatory)][string]$Step,

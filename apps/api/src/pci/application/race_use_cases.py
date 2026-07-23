@@ -115,6 +115,44 @@ class RegisterRaceEntriesUseCase:
         return len(entries)
 
 
+class UpdateRaceMetadataUseCase:
+    """既存レースの馬場状態・天候だけを安全に更新する。"""
+
+    def __init__(self, repo: RaceRepository) -> None:
+        self._repo = repo
+
+    def execute(
+        self,
+        race_key_str: str,
+        *,
+        track_condition: str | None = None,
+        weather: str | None = None,
+    ) -> bool:
+        key = RaceKey(race_key_str)
+        race = self._repo.find_by_key(key)
+        if race is None or (track_condition is None and weather is None):
+            return False
+
+        self._repo.save_race(
+            Race(
+                race_key=race.race_key,
+                race_date=race.race_date,
+                jyo_cd=race.jyo_cd,
+                distance_m=race.distance_m,
+                track_type=race.track_type,
+                field_size=race.field_size,
+                status=race.status,
+                track_condition=track_condition or race.track_condition,
+                weather=weather or race.weather,
+                grade=race.grade,
+                race_class=race.race_class,
+                rpci_actual=race.rpci_actual,
+                pci3_actual=race.pci3_actual,
+            )
+        )
+        return True
+
+
 class RecordRaceResultUseCase:
     """レース確定結果記録ユースケース。
 

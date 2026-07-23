@@ -1359,6 +1359,44 @@
         "title": "RaceDetailSchema",
         "type": "object"
       },
+      "RaceMetadataBody": {
+        "properties": {
+          "race_key": {
+            "pattern": "^\\d{16}$",
+            "title": "Race Key",
+            "type": "string"
+          },
+          "track_condition": {
+            "anyOf": [
+              {
+                "pattern": "^(良|稍重|重|不良)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Condition"
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "pattern": "^(晴|曇|小雨|雨|小雪|雪)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather"
+          }
+        },
+        "required": [
+          "race_key"
+        ],
+        "title": "RaceMetadataBody",
+        "type": "object"
+      },
       "RaceSummarySchema": {
         "description": "レース一覧の1件分（トップ画面のレース選択用）。\n\nstatus で遷移先（entries=展開予想／result=ペース分析）を判別する。",
         "properties": {
@@ -2564,6 +2602,70 @@
           }
         },
         "summary": "Write Ingest Log",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/race-metadata": {
+      "post": {
+        "description": "既存レースへ馬場状態・天候を上書きし、成績や出走馬は変更しない。",
+        "operationId": "ingest_race_metadata_internal_ingest_race_metadata_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/RaceMetadataBody"
+                },
+                "title": "Body",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Race Metadata",
         "tags": [
           "ingest"
         ]

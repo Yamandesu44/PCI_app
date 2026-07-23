@@ -19,7 +19,11 @@ from pci.application.ingest_use_cases import (
     SaveMasterDataUseCase,
     TrainerInput,
 )
-from pci.application.race_use_cases import RecordRaceResultUseCase, RegisterRaceEntriesUseCase
+from pci.application.race_use_cases import (
+    RecordRaceResultUseCase,
+    RegisterRaceEntriesUseCase,
+    UpdateRaceMetadataUseCase,
+)
 from pci.config.settings import get_settings
 from pci.domain.shared.race_key import RaceKey
 from pci.presentation.dependencies import (
@@ -122,6 +126,12 @@ class ResultBody(BaseModel):
     race_s3f: float | None = None  # RA HaronTimeS3（前半3ハロン秒）。TARGET 準拠 RPCI に使用
     race_l3f: float | None = None  # RA HaronTimeL3（後半3ハロン秒）。TARGET 準拠 RPCI に使用
     results: list[ResultItem]
+
+
+class RaceMetadataBody(BaseModel):
+    race_key: str = Field(pattern=r"^\d{16}$")
+    track_condition: str | None = Field(default=None, pattern=r"^(良|稍重|重|不良)$")
+    weather: str | None = Field(default=None, pattern=r"^(晴|曇|小雨|雨|小雪|雪)$")
 
 
 # ----- レスポンス -----
@@ -289,6 +299,31 @@ def ingest_results(
         formula_version=out.formula_version,
         entry_pcis=out.entry_pcis,
     )
+
+
+@router.post(
+    "/race-metadata",
+    response_model=IngestResponse,
+    status_code=status.HTTP_200_OK,
+)
+def ingest_race_metadata(
+    body: list[RaceMetadataBody],
+    repo: RepositoryDep,
+    session: SessionDep,
+    _auth: AuthDep,
+) -> IngestResponse:
+    """既存レースへ馬場状態・天候を上書きし、成績や出走馬は変更しない。"""
+    uc = UpdateRaceMetadataUseCase(repo)
+    accepted = sum(
+        uc.execute(
+            item.race_key,
+            track_condition=item.track_condition,
+            weather=item.weather,
+        )
+        for item in body
+    )
+    session.commit()
+    return IngestResponse(accepted=accepted)
 
 
 @router.post("/log", response_model=IngestLogResponse, status_code=status.HTTP_200_OK)

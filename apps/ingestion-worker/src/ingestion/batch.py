@@ -24,7 +24,7 @@ import sys
 
 from dotenv import load_dotenv
 
-from ingestion.client.base import JvLinkClient
+from ingestion.client.base import JvLinkClient, RaceMetadataProvider
 from ingestion.client.fixture_client import FixtureJvLinkClient
 from ingestion.ingest_api import IngestApiClient
 from ingestion.models import (
@@ -215,6 +215,7 @@ def ingest_entries(
         try:
             ra = _parse_ra(rec)
             if ra:
+                _apply_source_metadata(client, ra)
                 races[ra.race_key] = ra
         except Exception as exc:
             _log.warning("RA パースエラー: %s | %.40s", exc, rec)
@@ -316,11 +317,14 @@ def ingest_results(
     race_s3f_map: dict[str, float] = {}
     race_l3f_map: dict[str, float] = {}
     grade_map: dict[str, str] = {}
+    track_condition_map: dict[str, str] = {}
+    weather_map: dict[str, str] = {}
     entry_snapshots: dict[str, RaceEntriesRecord] = {}
     for rec in client.iter_ra_records(date_from, date_to):
         try:
             ra = _parse_ra(rec)
             if ra:
+                _apply_source_metadata(client, ra)
                 if race_keys is not None:
                     matching = target_by_identity.get(_race_identity(ra.race_key), set())
                     if ra.race_key not in race_keys and not matching:
@@ -333,6 +337,10 @@ def ingest_results(
                     race_l3f_map[ra.race_key] = ra.race_l3f
                 if ra.grade is not None:
                     grade_map[ra.race_key] = ra.grade
+                if ra.track_condition is not None:
+                    track_condition_map[ra.race_key] = ra.track_condition
+                if ra.weather is not None:
+                    weather_map[ra.race_key] = ra.weather
         except Exception as exc:
             _log.warning("RA(results) パースエラー: %s | %.40s", exc, rec)
 
@@ -424,6 +432,8 @@ def ingest_results(
         rr.race_s3f = race_s3f_map.get(race_key)
         rr.race_l3f = race_l3f_map.get(race_key)
         rr.grade = grade_map.get(race_key)
+        rr.track_condition = track_condition_map.get(race_key)
+        rr.weather = weather_map.get(race_key)
         if rr.race_s3f is not None and rr.race_l3f is not None:
             _log.debug("HaronTime 取得 %s: S3=%.1f L3=%.1f", race_key, rr.race_s3f, rr.race_l3f)
         try:
@@ -449,6 +459,31 @@ def ingest_results(
             "上の『成績送信エラー』の内容（例: レースが見つかりません=出走表未登録、"
             "HTTPエラー=API/DB接続先の相違）を確認してください。"
         )
+
+
+def _apply_source_metadata(client: JvLinkClient, race: RaceEntriesRecord) -> None:
+    """列分解済みデータソースの補足情報を、固定長パーサ結果へ安全に重ねる。"""
+    if not isinstance(client, RaceMetadataProvider):
+        return
+    metadata = client.race_metadata(race.race_key)
+    if metadata is None:
+        return
+    race.track_condition = metadata.track_condition or race.track_condition
+    race.weather = metadata.weather or race.weather
+
+
+def ingest_race_metadata(
+    client: RaceMetadataProvider,
+    api: IngestApiClient,
+    date_from: str,
+    date_to: str,
+) -> int:
+    """mykeibadbの列分解済みRA情報を、既存レースへ副作用を限定して反映する。"""
+    records = list(client.iter_race_metadata(date_from, date_to))
+    if not records:
+        _log.info("レース補足情報の更新対象なし: %s→%s", date_from, date_to)
+        return 0
+    return api.update_race_metadata(records)
 
 
 def _race_identity(race_key: str) -> str:
@@ -533,7 +568,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--step",
-        choices=["all", "masters", "entries", "results", "special-entries", "forecasts"],
+        choices=[
+            "all",
+            "masters",
+            "entries",
+            "results",
+            "race-metadata",
+            "special-entries",
+            "forecasts",
+        ],
         default="all",
         help="実行ステップ（デフォルト: all）",
     )
@@ -616,6 +659,9 @@ def main() -> None:
             )
             return
 
+        if args.step == "race-metadata" and args.mode != "mykeibadb":
+            parser.error("--step race-metadata は --mode mykeibadb と組み合わせてください。")
+
         client = _build_client(args.mode, race_option=args.race_option)
 
         if args.step in ("all", "masters"):
@@ -643,6 +689,12 @@ def main() -> None:
                     chunk_to,
                     race_keys=incomplete_race_keys,
                 )
+
+            if args.step == "race-metadata":
+                if not isinstance(client, RaceMetadataProvider):
+                    raise RuntimeError("選択したデータソースはレース補足情報に対応していません。")
+                _log.info("--- 馬場状態・天候バックフィル ---")
+                ingest_race_metadata(client, api, chunk_from, chunk_to)
 
         _log.info("=== ingestion-worker 完了 ===")
         api.log_batch(

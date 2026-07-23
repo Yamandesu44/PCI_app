@@ -179,8 +179,13 @@
 
 ## 6. 取り込み（ingestion-worker）
 
-- ✅ `--mode fixture|jvlink|mykeibadb`、`--step masters|entries|results|special-entries|forecasts|all`、`--date/--date-to`、`--chunk-days`。
+- ✅ `--mode fixture|jvlink|mykeibadb`、
+  `--step masters|entries|results|race-metadata|special-entries|forecasts|all`、
+  `--date/--date-to`、`--chunk-days`。
 - ✅ mykeibadb: RA/SE/UM/KS/CH + 特別登録テーブルを読み、Ingest API へ投入。列名は候補リストで吸収。
+- ✅ mykeibadbの列分解済みRAから芝/ダート馬場状態と天候を読み、通常同期へ自動反映する。
+  既存レースは`--step race-metadata`で出走馬・成績・予想値を変更せずバックフィルできる。
+  JV-Link固定長の未確定位置は変更しない（2026-07-23）。
 - ✅ **2026-07-20〜21 確定成績未反映を解決**（§9-15）: 診断ツール`diagnose_results`で「解析は正常
   （453件解析可・DATA_KUBUN='7'）」と判明→原因は解析より下流と特定。`batch.py`が`record_results`
   失敗をexit 0に握りつぶしていた欠陥を修正し、送信成功/失敗の件数ログを常設。ユーザーが最新コードで

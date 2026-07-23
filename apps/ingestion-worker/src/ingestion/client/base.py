@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Protocol
+from typing import Protocol, runtime_checkable
+
+from ingestion.models import RaceMetadataRecord
 
 
 class JvLinkClient(Protocol):
@@ -40,3 +42,12 @@ class JvLinkClient(Protocol):
     def iter_ch_records(self) -> Iterator[str]:
         """全調教師マスタ CH レコードを返す（差分更新）。"""
         ...
+
+
+@runtime_checkable
+class RaceMetadataProvider(Protocol):
+    """固定長位置を介さず、列分解済みのレース補足情報を提供する任意機能。"""
+
+    def race_metadata(self, race_key: str) -> RaceMetadataRecord | None: ...
+
+    def iter_race_metadata(self, date_from: str, date_to: str) -> Iterator[RaceMetadataRecord]: ...

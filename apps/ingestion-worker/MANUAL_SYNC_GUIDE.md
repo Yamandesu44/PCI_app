@@ -72,6 +72,9 @@ python -m ingestion.batch --mode mykeibadb --step entries --date 20260704 --date
 # 確定成績だけ
 python -m ingestion.batch --mode mykeibadb --step results --date 20260704 --date-to 20260705
 
+# 既存レースの馬場状態・天候だけ（出走馬・成績・予想値は変更しない）
+python -m ingestion.batch --mode mykeibadb --step race-metadata --date 20250723 --date-to 20260723 --chunk-days 7
+
 # 重賞等の特別登録だけ（来週分を先取りしたい時。--step all には含まれないので単独指定が必要）
 python -m ingestion.batch --mode mykeibadb --step special-entries --date 20260704 --date-to 20260718
 
@@ -83,7 +86,11 @@ python -m ingestion.batch --mode mykeibadb --step all --date 20260704 --date-to 
 ```
 
 `--date` のみ指定して `--date-to` を省略すると、その1日だけが対象になる。
-**注意**: `--step all` は masters/entries/results のみで、`special-entries`と`forecasts`は含まれない。
+`entries`と`results`は、mykeibadbの列分解済みRAに馬場状態・天候があれば通常同期時に自動反映する。
+過去に取り込み済みのレースだけを補完する場合は、出走表を再登録しない`race-metadata`を使う。
+
+**注意**: `--step all` は masters/entries/results のみで、`race-metadata`、`special-entries`、
+`forecasts`は含まれない。
 手動同期ではデータ取込後に上記の順で個別実行する。通常の自動同期スクリプトは両方を実行する。
 
 ---

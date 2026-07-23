@@ -7,6 +7,7 @@ DB / JV-Link なしで実行可能。
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -18,6 +19,7 @@ from ingestion.batch import (
     _to_iso_date,
     ingest_entries,
     ingest_masters,
+    ingest_race_metadata,
     ingest_results,
     iter_date_chunks,
     precompute_forecasts,
@@ -28,6 +30,7 @@ from ingestion.client.fixture_client import (
     _json_to_ra,
 )
 from ingestion.ingest_api import IngestApiClient
+from ingestion.models import RaceMetadataRecord
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _RACE_KEY = "2026061805010101"
@@ -35,6 +38,23 @@ _RACE_KEY = "2026061805010101"
 
 def _client() -> FixtureJvLinkClient:
     return FixtureJvLinkClient(fixtures_dir=_FIXTURES)
+
+
+class _MetadataFixtureClient(FixtureJvLinkClient):
+    def race_metadata(self, race_key: str) -> RaceMetadataRecord | None:
+        if race_key != _RACE_KEY:
+            return None
+        return RaceMetadataRecord(
+            race_key=race_key,
+            track_condition="稍重",
+            weather="小雨",
+        )
+
+    def iter_race_metadata(self, date_from: str, date_to: str) -> Iterator[RaceMetadataRecord]:
+        del date_from, date_to
+        metadata = self.race_metadata(_RACE_KEY)
+        assert metadata is not None
+        yield metadata
 
 
 def _mock_api() -> MagicMock:
@@ -110,6 +130,43 @@ class TestPrecomputeForecasts:
 
         assert result == {"scanned": 0, "generated": 0, "skipped": 0}
         api.precompute_forecasts.assert_not_called()
+
+
+class _MetadataClient:
+    def iter_race_metadata(self, date_from: str, date_to: str) -> Iterator[RaceMetadataRecord]:
+        del date_from, date_to
+        yield RaceMetadataRecord(
+            race_key=_RACE_KEY,
+            track_condition="稍重",
+            weather="小雨",
+        )
+
+    def race_metadata(self, race_key: str) -> RaceMetadataRecord | None:
+        del race_key
+        return None
+
+
+class TestIngestRaceMetadata:
+    def test_sends_source_metadata_to_api(self) -> None:
+        api = _mock_api()
+        api.update_race_metadata.return_value = 1
+
+        accepted = ingest_race_metadata(
+            _MetadataClient(),
+            api,
+            "20260618",
+            "20260618",
+        )
+
+        assert accepted == 1
+        records = api.update_race_metadata.call_args.args[0]
+        assert records == [
+            RaceMetadataRecord(
+                race_key=_RACE_KEY,
+                track_condition="稍重",
+                weather="小雨",
+            )
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +292,16 @@ class TestIngestEntries:
         record = api.register_entries.call_args[0][0]
         assert record.track_type == "芝"
 
+    def test_applies_structured_source_metadata(self) -> None:
+        api = _mock_api()
+        client = _MetadataFixtureClient(fixtures_dir=_FIXTURES)
+
+        ingest_entries(client, api, "20260618", "20260618")
+
+        record = api.register_entries.call_args.args[0]
+        assert record.track_condition == "稍重"
+        assert record.weather == "小雨"
+
     def test_horse_supplement_upsert_called(self) -> None:
         """SE エントリから馬マスタ補完が行われること。"""
         api = _mock_api()
@@ -293,6 +360,16 @@ class TestIngestResults:
         api = _mock_api()
         ingest_results(_client(), api, "20260618", "20260618")
         assert api.record_results.call_count == 1
+
+    def test_applies_structured_source_metadata(self) -> None:
+        api = _mock_api()
+        client = _MetadataFixtureClient(fixtures_dir=_FIXTURES)
+
+        ingest_results(client, api, "20260618", "20260618")
+
+        record = api.record_results.call_args.args[0]
+        assert record.track_condition == "稍重"
+        assert record.weather == "小雨"
 
     def test_race_key_correct(self) -> None:
         api = _mock_api()
@@ -409,12 +486,36 @@ class _ConfirmedOnlyClient:
         }
         # 確定 SE に埋め込む出走情報（枠番・血統・騎手・調教師・馬体重）。
         self._entries = [
-            {"horse_no": 1, "frame_no": 1, "ketto_num": "2023200001", "weight": 472.0,
-             "jockey_code": "01001", "trainer_code": "01001", "sex": "牡", "horse_name": "カコウマ1"},
-            {"horse_no": 2, "frame_no": 2, "ketto_num": "2023200002", "weight": 456.0,
-             "jockey_code": "01002", "trainer_code": "01002", "sex": "牝", "horse_name": "カコウマ2"},
-            {"horse_no": 3, "frame_no": 3, "ketto_num": "2023200003", "weight": 484.0,
-             "jockey_code": "01003", "trainer_code": "01001", "sex": "牡", "horse_name": "カコウマ3"},
+            {
+                "horse_no": 1,
+                "frame_no": 1,
+                "ketto_num": "2023200001",
+                "weight": 472.0,
+                "jockey_code": "01001",
+                "trainer_code": "01001",
+                "sex": "牡",
+                "horse_name": "カコウマ1",
+            },
+            {
+                "horse_no": 2,
+                "frame_no": 2,
+                "ketto_num": "2023200002",
+                "weight": 456.0,
+                "jockey_code": "01002",
+                "trainer_code": "01002",
+                "sex": "牝",
+                "horse_name": "カコウマ2",
+            },
+            {
+                "horse_no": 3,
+                "frame_no": 3,
+                "ketto_num": "2023200003",
+                "weight": 484.0,
+                "jockey_code": "01003",
+                "trainer_code": "01001",
+                "sex": "牡",
+                "horse_name": "カコウマ3",
+            },
         ]
         self._results = [
             {"horse_no": 3, "finish_pos": 1, "race_time_s": 94.4, "agari_3f_s": 33.9},

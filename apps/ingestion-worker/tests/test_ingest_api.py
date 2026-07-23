@@ -19,6 +19,7 @@ from ingestion.models import (
     HorseRecord,
     JockeyRecord,
     RaceEntriesRecord,
+    RaceMetadataRecord,
     RaceResultRecord,
     ResultRecord,
     TrainerRecord,
@@ -187,6 +188,36 @@ class TestRecordResults:
         api = IngestApiClient("http://api", http_client=http)
         result = api.record_results(self._make_record())
         assert result["rpci"] == 53.5
+
+
+class TestUpdateRaceMetadata:
+    def test_batches_metadata_payload(self) -> None:
+        http = _make_http_client({"accepted": 2})
+        api = IngestApiClient("http://api", token="secret", http_client=http)
+
+        accepted = api.update_race_metadata(
+            [
+                RaceMetadataRecord(
+                    race_key="2026061805010101",
+                    track_condition="良",
+                    weather="晴",
+                ),
+                RaceMetadataRecord(
+                    race_key="2026061805010102",
+                    track_condition="重",
+                    weather="雨",
+                ),
+            ]
+        )
+
+        assert accepted == 2
+        call = http.post.call_args
+        assert "/internal/ingest/race-metadata" in call.args[0]
+        assert call.kwargs["json"][1] == {
+            "race_key": "2026061805010102",
+            "track_condition": "重",
+            "weather": "雨",
+        }
 
 
 class TestDeleteRace:

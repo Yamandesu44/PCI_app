@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-from ingestion.models import EntryRecord, HorseRecord, RaceEntriesRecord
-from ingestion.parser.common import decode_track
+from ingestion.models import EntryRecord, HorseRecord, RaceEntriesRecord, RaceMetadataRecord
+from ingestion.parser.common import decode_baba, decode_tenko, decode_track
 from ingestion.parser.jv_spec import RA_RECORD_BYTES, SE_RECORD_BYTES
 
 _RACE_TABLE_CANDIDATES = ("TOKUBETSU_TOROKUBA", "tokubetsu_torokuba")
@@ -142,6 +142,7 @@ class MyKeibaDbClient:
     ) -> None:
         self._config = config or MyKeibaDbConfig.from_env()
         self._connection = connection
+        self._race_metadata: dict[str, RaceMetadataRecord] = {}
 
     @property
     def excluded_race_keys(self) -> frozenset[str]:
@@ -206,7 +207,28 @@ class MyKeibaDbClient:
                 continue
             if _race_key_from_row(row)[10:14] == "0000":
                 continue
+            metadata = _race_metadata_from_row(row)
+            self._race_metadata[metadata.race_key] = metadata
             yield _raw_record(row) or _build_ra_record(row)
+
+    def race_metadata(self, race_key: str) -> RaceMetadataRecord | None:
+        """直前に読み込んだRA行の列分解済み補足情報を返す。"""
+        return self._race_metadata.get(race_key)
+
+    def iter_race_metadata(self, date_from: str, date_to: str) -> Iterator[RaceMetadataRecord]:
+        """既存レースのバックフィル用に、RAテーブルの補足情報だけを返す。"""
+        connection = self._connection or self._connect()
+        table = self._find_table(connection, _RA_TABLE_CANDIDATES)
+        for row in self._iter_table_by_date_range(connection, table, date_from, date_to):
+            if not _row_in_date_range(row, date_from, date_to):
+                continue
+            if _jyo_cd_from_row(row) not in _JRA_PLACE_CODES:
+                continue
+            if _race_key_from_row(row)[10:14] == "0000":
+                continue
+            metadata = _race_metadata_from_row(row)
+            if metadata.track_condition is not None or metadata.weather is not None:
+                yield metadata
 
     def iter_se_records(self, date_from: str, date_to: str) -> Iterator[str]:
         """mykeibadb の SE テーブルから指定期間の馬毎レース情報レコードを返す。"""
@@ -408,6 +430,19 @@ _RAW_RECORD_COLUMNS = ("raw_record", "jv_record", "record", "line", "data", "レ
 _DATA_KUBUN_COLUMNS = ("data_kubun", "datakubun", "データ区分")
 _RACE_S3F_COLUMNS = ("race_s3f", "haron_s3", "harontimes3", "前半3f", "前3f")
 _RACE_L3F_COLUMNS = ("race_l3f", "haron_l3", "harontimel3", "後半3f", "後3f")
+_WEATHER_COLUMNS = ("TENKO_CODE", "tenko_code", "weather", "天候コード", "天候")
+_TURF_CONDITION_COLUMNS = (
+    "SHIBA_BABAJOTAI_CODE",
+    "SIBA_BABAJOTAI_CODE",
+    "shiba_babajotai_code",
+    "siba_babajotai_code",
+    "芝馬場状態コード",
+)
+_DIRT_CONDITION_COLUMNS = (
+    "DIRT_BABAJOTAI_CODE",
+    "dirt_babajotai_code",
+    "ダート馬場状態コード",
+)
 
 # wmykeibadb が作成する MySQL テーブルは JV-Data の英字列名（大文字）で列を持つ。
 # race_shosai: KAISAI_KAI / KAISAI_NICHIME
@@ -500,6 +535,23 @@ def _race_from_row(row: dict[str, Any]) -> RaceEntriesRecord:
         field_size=1,
         grade=grade,
         race_class=f"{race_name or '特別登録'} 特別登録",
+    )
+
+
+def _race_metadata_from_row(row: dict[str, Any]) -> RaceMetadataRecord:
+    track_type = _track_type(_pick(row, _TRACK_COLUMNS))
+    if track_type == "芝":
+        condition_columns = _TURF_CONDITION_COLUMNS
+    elif track_type == "ダート":
+        condition_columns = _DIRT_CONDITION_COLUMNS
+    else:
+        condition_columns = ()
+    condition_code = _str_or_none(_pick(row, condition_columns)) or ""
+    weather_code = _str_or_none(_pick(row, _WEATHER_COLUMNS)) or ""
+    return RaceMetadataRecord(
+        race_key=_race_key_from_row(row),
+        track_condition=decode_baba(condition_code),
+        weather=decode_tenko(weather_code),
     )
 
 

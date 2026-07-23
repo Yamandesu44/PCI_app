@@ -9,34 +9,43 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新31回目・Codex が小倉芝の逆転を距離別に分解） |
+| 更新日時 | 2026-07-23（更新32回目・Codex がmykeibadb馬場状態バックフィルを実装） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（参考表示を7月小倉芝1200mだけへ限定） |
+| 直前の担当AI | OpenAI Codex（mykeibadb馬場状態・天候の安全な取り込み経路を追加） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `c6b57b7`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `bf9e2ae`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**7月小倉芝の脚質別展開有利度を距離別に分解し、参考表示を1200mだけへ限定した。**
+**mykeibadbの列分解済みRAから馬場状態・天候を安全に取り込み、既存レースも
+副作用を限定してバックフィル可能にした。**
 
-`--validate-style-advantage`へ反復指定可能な
-`--style-breakdown year|distance|track-condition`を追加し、CLI表示とJSONへ内訳を出力する。
-小倉芝1200mの確定値同士の好走率差は2022年-21.8pt、2024年-11.6pt、
-2025年-28.4pt、2026年-26.9ptで全4年再現した。1800m以上は方向が一貫しなかった。
-このため`style-advantage-v3`は「7月・小倉・芝・1200m」だけ`reference`を返す。
-係数・PAI・恩恵馬・統合順位は変更していない。
+`ra_parser.py`の未確定JV固定長位置は変更していない。`MyKeibaDbClient`が
+`SHIBA_BABAJOTAI_CODE`/`DIRT_BABAJOTAI_CODE`/`TENKO_CODE`を列名で直接読み、
+`RaceMetadataRecord`として通常のentries/results同期へ重ねる。既存レースには
+`POST /internal/ingest/race-metadata`と`--step race-metadata`を追加した。
+APIユースケースはstatus、出走馬、確定成績、RPCI/PCI3、grade、race_classを保持し、
+馬場状態・天候だけを更新する。
 
-馬場状態別の内訳は対象全件が「不明」だった。`ra_parser.py`が固定長位置未確定として
-`track_condition=None`を返す既知仕様のため、取り込みとバックフィルを別タスクへ分離した。
-実DBでは`2026071910020802`（小倉芝1200m）が`reference`、
-`2026071910020811`（小倉芝2000m）が`standard`になることを確認した。
-関連テスト108 passed、Web72 passed、Ruff、API全体mypy strict、api-client/Web typecheck、
-Web buildは成功。API非統合全体は492 passed / 3 failed / 22 deselectedで、失敗3件は既知の
-`caplog`順序依存。対象3件だけの再実行は3 passed。
+関連テストはAPI 59 passed、worker全体209 passed。API全体Ruff・mypy strict（62ファイル）、
+worker変更対象Ruff、OpenAPI同期、api-client typecheckは成功。API非統合全体は
+498 passed / 3 failed / 22 deselectedで、失敗3件は既知の`caplog`順序依存、単独再実行は成功。
+worker変更対象mypyは既存22件
+（win32com/PyMySQLスタブ、tuple連結推論、ingest_mastersの変数再利用）が残るが、
+既知違反のない3モジュールはstrictで成功し、今回追加行に新規エラーはない。
+worker全体Ruffは未編集の`windows_client.py`/`locate_corners.py`等の既知14件。
+import-linterはローカルPythonに未導入で実行不可。実DBバックフィルはこの環境から接続できないため未実行。
+Windows実行機で下記を実行し、その後に馬場状態別の小倉芝1200m診断を再実行する。
+
+```cmd
+cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
+.venv\Scripts\activate.bat
+python -m ingestion.batch --mode mykeibadb --date 20250723 --date-to 20260723 --step race-metadata --chunk-days 7
+```
 
 前タスクの4パターン診断結果は以下のとおり。
 
@@ -551,9 +560,11 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 0. **P2 実JV-Dataの人気/賞金予約オフセット検証**。Windows実行機のJV-Link COMが必要。
    `JV_SPEC_MAINTENANCE_GUIDE.md`の手順に従い、実レコードの位置を確認してから正式化する。
-1. **P2 RA取り込みで馬場状態を永続化し、既存レースをバックフィル**。
-   `ra_parser.py`の未確定固定長位置を推測で変更せず、mykeibadbの
-   `SHIBA_BABAJOTAI_CODE`/`DIRT_BABAJOTAI_CODE`を利用できる経路を実データで検証する。
+1. **P2 実DBで馬場状態を1年分バックフィルし、馬場状態別に再検証**。
+   上記`--step race-metadata`をWindows実行機で実行後、
+   `python -m scripts.backtest_forecast --validate-style-advantage --track-type 芝 --venue-code 10
+   --date-from 2025-07-01 --date-to 2026-07-31 --style-breakdown year
+   --style-breakdown track-condition --style-breakdown distance`で欠損率と小倉芝1200mを確認する。
 2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
    `FormationWeights`・`DistanceStyleWeights`・`STALE_AFTER_DAYS`・
    `AbilityWeights`の成分重み以外）
@@ -572,17 +583,13 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 ## 変更対象ファイル（直近セッション）
 
-7月小倉芝の距離別検証と参考条件の限定:
-- API/domain: `application/backtest.py`, `application/dto.py`, `application/forecast_use_cases.py`,
-  `domain/pace/style_advantage.py`, `presentation/schemas.py`, `scripts/backtest_forecast.py`
-- API tests: `tests/unit/domain/pace/test_style_advantage.py`,
-  `tests/unit/application/test_forecast_use_cases.py`, `tests/unit/application/test_backtest.py`,
-  `tests/contract/test_races_api.py`
-- Web: `apps/web/src/components/RaceForecastDashboard.tsx`, `apps/web/src/lib/pace.ts`,
-  `apps/web/src/lib/pace.test.ts`
+mykeibadb馬場状態・天候の取り込みとバックフィル:
+- API: `application/race_use_cases.py`, `presentation/routers/ingest.py`
+- worker: `models.py`, `client/base.py`, `client/mykeibadb_client.py`, `ingest_api.py`, `batch.py`
+- tests: APIのrace use case/ingest契約、workerのmykeibadb/API/batch E2E
 - generated: `packages/api-client/openapi.json`, `packages/api-client/src/schema.d.ts`
-- docs/tasks: `apps/api/README.md`, `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md`,
-  `tasks/current.md`, `tasks/backlog.md`
+- docs/tasks: worker `README.md`/`MANUAL_SYNC_GUIDE.md`/`scripts/run_batch.ps1`,
+  `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md`, `tasks/current.md`, `tasks/backlog.md`
 
 それ以前の直近セッション:
 

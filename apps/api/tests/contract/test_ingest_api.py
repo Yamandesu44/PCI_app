@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from pci.application.dto import EntryInput, RaceInfo
 from pci.application.forecast_precompute_use_cases import ForecastPrecomputeOutput
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
+from pci.domain.shared.race_key import RaceKey
 from pci.presentation.app import create_app
 from pci.presentation.dependencies import (
     get_precompute_forecasts_use_case,
@@ -259,6 +260,52 @@ class TestIngestResults:
         bad = {**RESULTS_PAYLOAD, "race_key": "9999999999999999"}
         resp = client.post("/internal/ingest/results", json=bad)
         assert resp.status_code in (400, 404, 422, 500)
+
+
+class TestIngestRaceMetadata:
+    def test_updates_existing_race_without_changing_result(
+        self,
+        seeded_client: TestClient,
+        fake_repo: FakeRaceRepository,
+    ) -> None:
+        seeded_client.post("/internal/ingest/results", json=RESULTS_PAYLOAD)
+
+        resp = seeded_client.post(
+            "/internal/ingest/race-metadata",
+            json=[
+                {
+                    "race_key": RACE_KEY,
+                    "track_condition": "重",
+                    "weather": "雨",
+                }
+            ],
+        )
+
+        race = fake_repo.find_by_key(RaceKey(RACE_KEY))
+        assert resp.status_code == 200
+        assert resp.json()["accepted"] == 1
+        assert race is not None
+        assert race.track_condition == "重"
+        assert race.weather == "雨"
+        assert race.status.value == "result"
+        assert race.rpci_actual is not None
+
+    def test_skips_unknown_race(self, client: TestClient) -> None:
+        resp = client.post(
+            "/internal/ingest/race-metadata",
+            json=[{"race_key": "9999999999999999", "track_condition": "良"}],
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["accepted"] == 0
+
+    def test_rejects_unknown_condition(self, client: TestClient) -> None:
+        resp = client.post(
+            "/internal/ingest/race-metadata",
+            json=[{"race_key": RACE_KEY, "track_condition": "普通"}],
+        )
+
+        assert resp.status_code == 422
 
 
 class TestPrecomputeForecasts:

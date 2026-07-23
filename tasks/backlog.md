@@ -60,9 +60,13 @@
 - [x] ~~7月小倉芝の脚質別有利度を追加年・距離別に再検証する~~ → **2026-07-23完了**。
   1200mだけがデータのある4年すべてで大幅な負となったため、`reference`を同距離へ限定。
   1800m以上は通常表示へ戻した。馬場状態は未登録のため下記データ品質タスクへ分離。
-- [ ] **P2 RA取り込みで馬場状態を永続化し、既存レースをバックフィルする**。
-  `ra_parser.py`は固定長位置未確定のため現在`track_condition=None`を返す。mykeibadbの
-  `SHIBA_BABAJOTAI_CODE`/`DIRT_BABAJOTAI_CODE`を安全に利用できる経路を設計し、実データで検証する。
+- [x] ~~**P2 RA取り込みで馬場状態を永続化し、既存レースをバックフィルする**~~
+  → **2026-07-23実装済み**。`ra_parser.py`の未確定固定長位置は変更せず、mykeibadbの
+  `SHIBA_BABAJOTAI_CODE`/`DIRT_BABAJOTAI_CODE`/`TENKO_CODE`を補足メタデータとして通常同期へ反映。
+  既存レース向けに`--step race-metadata`を追加した。
+- [ ] **P2 実DBで馬場状態を1年分バックフィルし、小倉芝1200mの参考条件を馬場別に再検証する**。
+  Windows実行機で`--step race-metadata --chunk-days 7`を実行し、欠損率と
+  `--style-breakdown track-condition`を確認する。実測までは`style-advantage-v3`を変更しない。
 - [ ] 脚質判定ルールの最適化（design/07 C9・データ蓄積後）。
 - [ ] 展開コメントの LLM（Gemini）本採用可否と品質基準（ADR-0008）。数値はドメイン確定・表現のみ LLM。
 - [ ] PAI 正式定義の確定（design/07 C10・実運用検証後）。
