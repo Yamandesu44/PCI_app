@@ -21,6 +21,31 @@ class DuplicateRaceGroup:
     race_keys: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class DuplicateRaceKeyAudit:
+    """重複レースキー1件に紐づく、統合判断用のデータ概要。"""
+
+    race_key: str
+    status: str
+    field_size: int
+    entry_count: int
+    finished_count: int
+    entry_signature: str
+    result_signature: str
+    predicted_pace_count: int
+    pace_fit_count: int
+
+
+@dataclass(frozen=True)
+class DuplicateRaceAuditGroup:
+    """同一レースに属するキーと、キーごとの関連データ概要。"""
+
+    race_date: datetime.date
+    jyo_cd: str
+    race_no: str
+    keys: tuple[DuplicateRaceKeyAudit, ...]
+
+
 class RaceRepository(Protocol):
     """レースデータへのアクセスを抽象化するリポジトリ界面（ADR-0001）。
 
@@ -114,3 +139,10 @@ class RaceCompletenessRepository(Protocol):
         before: datetime.date,
         limit: int = 20,
     ) -> list[DuplicateRaceGroup]: ...
+
+    def find_duplicate_race_audits(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 10_000,
+    ) -> list[DuplicateRaceAuditGroup]: ...

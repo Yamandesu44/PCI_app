@@ -9,7 +9,7 @@ from __future__ import annotations
 import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from pci.application.dto import EntryInput, RaceInfo, ResultInput
@@ -50,6 +50,62 @@ def _verify_token(x_ingest_token: Annotated[str | None, Header()] = None) -> Non
 
 
 AuthDep = Annotated[None, Depends(_verify_token)]
+
+
+class DuplicateRaceKeyAuditSchema(BaseModel):
+    """重複レースキー1件の関連データ概要。"""
+
+    race_key: str
+    status: str
+    field_size: int
+    entry_count: int
+    finished_count: int
+    entry_signature: str
+    result_signature: str
+    predicted_pace_count: int
+    pace_fit_count: int
+
+
+class DuplicateRaceAuditGroupSchema(BaseModel):
+    """同一レースとして検出されたキー群のdry-run情報。"""
+
+    race_date: datetime.date
+    jyo_cd: str
+    race_no: str
+    keys: list[DuplicateRaceKeyAuditSchema]
+
+
+@router.get(
+    "/duplicate-race-audit",
+    response_model=list[DuplicateRaceAuditGroupSchema],
+)
+def get_duplicate_race_audit(
+    repo: RaceCompletenessRepositoryDep,
+    _auth: AuthDep,
+    date_from: datetime.date,
+    date_to: datetime.date,
+    limit: int = Query(default=10_000, ge=1, le=10_000),
+) -> list[DuplicateRaceAuditGroupSchema]:
+    """指定期間の重複レースを読み取り専用で監査する。"""
+    if date_to < date_from:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_to must be on or after date_from",
+        )
+    groups = repo.find_duplicate_race_audits(
+        date_from,
+        date_to + datetime.timedelta(days=1),
+        limit=limit,
+    )
+    return [
+        DuplicateRaceAuditGroupSchema(
+            race_date=group.race_date,
+            jyo_cd=group.jyo_cd,
+            race_no=group.race_no,
+            keys=[DuplicateRaceKeyAuditSchema(**vars(key)) for key in group.keys],
+        )
+        for group in groups
+    ]
 
 
 @router.get("/incomplete-race-keys", response_model=list[str])

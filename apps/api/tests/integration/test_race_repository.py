@@ -433,6 +433,14 @@ class TestFindDuplicateRaceGroups:
             "2026061805010111",
             "2026061805030211",
         )
+        audits = repo.find_duplicate_race_audits(date_from, date_to)
+        assert len(audits) == 1
+        assert [key.race_key for key in audits[0].keys] == [
+            "2026061805010111",
+            "2026061805030211",
+        ]
+        assert all(key.entry_count == 0 for key in audits[0].keys)
+        assert all(len(key.entry_signature) == 64 for key in audits[0].keys)
 
 
 @pytest.mark.integration

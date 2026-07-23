@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from pci.application.dto import EntryInput, RaceInfo
 from pci.application.forecast_precompute_use_cases import ForecastPrecomputeOutput
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
+from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
 from pci.presentation.app import create_app
 from pci.presentation.dependencies import (
@@ -103,6 +105,48 @@ def seeded_client(fake_repo: FakeRaceRepository) -> TestClient:
     app.dependency_overrides[get_race_repository] = lambda: fake_repo
     app.dependency_overrides[get_session] = lambda: MagicMock()
     return TestClient(app)
+
+
+def test_duplicate_race_audit_is_read_only_and_exposes_key_details(
+    client: TestClient,
+    fake_repo: FakeRaceRepository,
+) -> None:
+    for race_key in ("2026062005010111", "2026062005030211"):
+        fake_repo.save_race(
+            Race(
+                race_key=RaceKey(race_key),
+                race_date=datetime.date(2026, 6, 20),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=3,
+                status=RaceStatus.RESULT,
+            )
+        )
+
+    response = client.get(
+        "/internal/ingest/duplicate-race-audit",
+        params={"date_from": "2026-06-20", "date_to": "2026-06-20"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["race_no"] == "11"
+    assert [key["race_key"] for key in body[0]["keys"]] == [
+        "2026062005010111",
+        "2026062005030211",
+    ]
+    assert all(key["entry_count"] == 0 for key in body[0]["keys"])
+
+
+def test_duplicate_race_audit_rejects_reversed_date_range(client: TestClient) -> None:
+    response = client.get(
+        "/internal/ingest/duplicate-race-audit",
+        params={"date_from": "2026-06-21", "date_to": "2026-06-20"},
+    )
+
+    assert response.status_code == 422
 
 
 class TestIngestHorses:

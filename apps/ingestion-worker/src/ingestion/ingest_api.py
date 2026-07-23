@@ -89,6 +89,23 @@ class IngestApiClient:
         payload: list[str] = resp.json()
         return set(payload)
 
+    def duplicate_race_audit(
+        self, date_from: str, date_to: str
+    ) -> list[dict[str, Any]]:
+        """指定期間の重複レースdry-run情報を取得する。"""
+        path = "/internal/ingest/duplicate-race-audit"
+        resp = self._http.get(
+            f"{self._base_url}{path}",
+            params={"date_from": date_from, "date_to": date_to, "limit": 10_000},
+            headers=self._headers(),
+        )
+        if resp.is_error:
+            raise RuntimeError(
+                f"Ingest API エラー {resp.status_code} {path}: {resp.text[:1000]}"
+            )
+        payload: list[dict[str, Any]] = resp.json()
+        return payload
+
     # ----- マスタデータ -----
 
     def upsert_horses(self, horses: list[HorseRecord]) -> int:

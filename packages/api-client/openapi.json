@@ -36,6 +36,39 @@
         "title": "CommentSchema",
         "type": "object"
       },
+      "DuplicateRaceAuditGroupSchema": {
+        "description": "同一レースとして検出されたキー群のdry-run情報。",
+        "properties": {
+          "jyo_cd": {
+            "title": "Jyo Cd",
+            "type": "string"
+          },
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateRaceKeyAuditSchema"
+            },
+            "title": "Keys",
+            "type": "array"
+          },
+          "race_date": {
+            "format": "date",
+            "title": "Race Date",
+            "type": "string"
+          },
+          "race_no": {
+            "title": "Race No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "race_date",
+          "jyo_cd",
+          "race_no",
+          "keys"
+        ],
+        "title": "DuplicateRaceAuditGroupSchema",
+        "type": "object"
+      },
       "DuplicateRaceGroupSchema": {
         "description": "同一開催日・競馬場・R番号で重複しているレースキー群。",
         "properties": {
@@ -66,6 +99,60 @@
           "race_keys"
         ],
         "title": "DuplicateRaceGroupSchema",
+        "type": "object"
+      },
+      "DuplicateRaceKeyAuditSchema": {
+        "description": "重複レースキー1件の関連データ概要。",
+        "properties": {
+          "entry_count": {
+            "title": "Entry Count",
+            "type": "integer"
+          },
+          "entry_signature": {
+            "title": "Entry Signature",
+            "type": "string"
+          },
+          "field_size": {
+            "title": "Field Size",
+            "type": "integer"
+          },
+          "finished_count": {
+            "title": "Finished Count",
+            "type": "integer"
+          },
+          "pace_fit_count": {
+            "title": "Pace Fit Count",
+            "type": "integer"
+          },
+          "predicted_pace_count": {
+            "title": "Predicted Pace Count",
+            "type": "integer"
+          },
+          "race_key": {
+            "title": "Race Key",
+            "type": "string"
+          },
+          "result_signature": {
+            "title": "Result Signature",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "race_key",
+          "status",
+          "field_size",
+          "entry_count",
+          "finished_count",
+          "entry_signature",
+          "result_signature",
+          "predicted_pace_count",
+          "pace_fit_count"
+        ],
+        "title": "DuplicateRaceKeyAuditSchema",
         "type": "object"
       },
       "EntriesBody": {
@@ -2710,6 +2797,92 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/internal/ingest/duplicate-race-audit": {
+      "get": {
+        "description": "指定期間の重複レースを読み取り専用で監査する。",
+        "operationId": "get_duplicate_race_audit_internal_ingest_duplicate_race_audit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10000,
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DuplicateRaceAuditGroupSchema"
+                  },
+                  "title": "Response Get Duplicate Race Audit Internal Ingest Duplicate Race Audit Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Duplicate Race Audit",
+        "tags": [
+          "ingest"
         ]
       }
     },

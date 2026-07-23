@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
+import json
 from collections.abc import Iterable
 from typing import Any, cast
 
@@ -14,7 +16,11 @@ from sqlalchemy.sql.elements import ColumnElement
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus, TrackType
 from pci.domain.racing.race_entry import RaceEntry
-from pci.domain.racing.repository import DuplicateRaceGroup
+from pci.domain.racing.repository import (
+    DuplicateRaceAuditGroup,
+    DuplicateRaceGroup,
+    DuplicateRaceKeyAudit,
+)
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import (
     HorseModel,
@@ -193,6 +199,108 @@ class SqlAlchemyRaceRepository:
             )
             for row in self._s.execute(stmt)
         ]
+
+    def find_duplicate_race_audits(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 10_000,
+    ) -> list[DuplicateRaceAuditGroup]:
+        """重複キーごとの関連データ件数と内容ハッシュを返す。書き込みは行わない。"""
+        groups = self.find_duplicate_race_groups(on_or_after, before, limit=limit)
+        race_keys = [key for group in groups for key in group.race_keys]
+        if not race_keys:
+            return []
+
+        races = {
+            model.race_key: model
+            for model in self._s.scalars(
+                select(RaceModel).where(RaceModel.race_key.in_(race_keys))
+            )
+        }
+        entries_by_key: dict[str, list[RaceEntryModel]] = {}
+        for entry in self._s.scalars(
+            select(RaceEntryModel)
+            .where(RaceEntryModel.race_key.in_(race_keys))
+            .order_by(RaceEntryModel.race_key, RaceEntryModel.horse_no)
+        ):
+            entries_by_key.setdefault(entry.race_key, []).append(entry)
+        predicted_counts = self._count_by_race_key(PredictedPaceModel, race_keys)
+        fit_counts = self._count_by_race_key(PaceFitModel, race_keys)
+
+        return [
+            DuplicateRaceAuditGroup(
+                race_date=group.race_date,
+                jyo_cd=group.jyo_cd,
+                race_no=group.race_no,
+                keys=tuple(
+                    self._build_duplicate_key_audit(
+                        races[key],
+                        entries_by_key.get(key, []),
+                        predicted_counts.get(key, 0),
+                        fit_counts.get(key, 0),
+                    )
+                    for key in group.race_keys
+                ),
+            )
+            for group in groups
+        ]
+
+    def _count_by_race_key(
+        self, model: type[PredictedPaceModel] | type[PaceFitModel], race_keys: list[str]
+    ) -> dict[str, int]:
+        rows = self._s.execute(
+            select(model.race_key, func.count())
+            .where(model.race_key.in_(race_keys))
+            .group_by(model.race_key)
+        )
+        return {race_key: int(count) for race_key, count in rows}
+
+    @classmethod
+    def _build_duplicate_key_audit(
+        cls,
+        race: RaceModel,
+        entries: list[RaceEntryModel],
+        predicted_pace_count: int,
+        pace_fit_count: int,
+    ) -> DuplicateRaceKeyAudit:
+        finished = [entry for entry in entries if entry.finish_pos is not None]
+        entry_values = [
+            (entry.horse_no, entry.frame_no, entry.ketto_num)
+            for entry in entries
+        ]
+        result_values = [
+            (
+                entry.horse_no,
+                entry.ketto_num,
+                entry.finish_pos,
+                entry.race_time_s,
+                entry.agari_3f_s,
+                entry.corner_1,
+                entry.corner_2,
+                entry.corner_3,
+                entry.corner_4,
+                entry.popularity,
+                entry.prize_money,
+            )
+            for entry in finished
+        ]
+        return DuplicateRaceKeyAudit(
+            race_key=race.race_key,
+            status=race.status,
+            field_size=race.field_size,
+            entry_count=len(entries),
+            finished_count=len(finished),
+            entry_signature=cls._content_signature(entry_values),
+            result_signature=cls._content_signature(result_values),
+            predicted_pace_count=predicted_pace_count,
+            pace_fit_count=pace_fit_count,
+        )
+
+    @staticmethod
+    def _content_signature(values: list[tuple[Any, ...]]) -> str:
+        payload = json.dumps(values, ensure_ascii=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("ascii")).hexdigest()
 
     @staticmethod
     def _duplicate_race_conditions(

@@ -181,6 +181,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/ingest/duplicate-race-audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Duplicate Race Audit
+         * @description 指定期間の重複レースを読み取り専用で監査する。
+         */
+        get: operations["get_duplicate_race_audit_internal_ingest_duplicate_race_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/ingest/entries": {
         parameters: {
             query?: never;
@@ -426,6 +446,23 @@ export interface components {
             reasons: components["schemas"]["ReasonSchema"][];
         };
         /**
+         * DuplicateRaceAuditGroupSchema
+         * @description 同一レースとして検出されたキー群のdry-run情報。
+         */
+        DuplicateRaceAuditGroupSchema: {
+            /** Jyo Cd */
+            jyo_cd: string;
+            /** Keys */
+            keys: components["schemas"]["DuplicateRaceKeyAuditSchema"][];
+            /**
+             * Race Date
+             * Format: date
+             */
+            race_date: string;
+            /** Race No */
+            race_no: string;
+        };
+        /**
          * DuplicateRaceGroupSchema
          * @description 同一開催日・競馬場・R番号で重複しているレースキー群。
          */
@@ -438,6 +475,30 @@ export interface components {
             race_keys: string[];
             /** Race No */
             race_no: string;
+        };
+        /**
+         * DuplicateRaceKeyAuditSchema
+         * @description 重複レースキー1件の関連データ概要。
+         */
+        DuplicateRaceKeyAuditSchema: {
+            /** Entry Count */
+            entry_count: number;
+            /** Entry Signature */
+            entry_signature: string;
+            /** Field Size */
+            field_size: number;
+            /** Finished Count */
+            finished_count: number;
+            /** Pace Fit Count */
+            pace_fit_count: number;
+            /** Predicted Pace Count */
+            predicted_pace_count: number;
+            /** Race Key */
+            race_key: string;
+            /** Result Signature */
+            result_signature: string;
+            /** Status */
+            status: string;
         };
         /** EntriesBody */
         EntriesBody: {
@@ -1591,6 +1652,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthSchema"];
+                };
+            };
+        };
+    };
+    get_duplicate_race_audit_internal_ingest_duplicate_race_audit_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+                limit?: number;
+            };
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateRaceAuditGroupSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

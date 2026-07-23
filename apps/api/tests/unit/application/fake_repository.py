@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
+import json
 from collections.abc import Iterable
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
-from pci.domain.racing.repository import DuplicateRaceGroup
+from pci.domain.racing.repository import (
+    DuplicateRaceAuditGroup,
+    DuplicateRaceGroup,
+    DuplicateRaceKeyAudit,
+)
 from pci.domain.shared.race_key import RaceKey
 
 
@@ -138,6 +144,64 @@ class FakeRaceRepository:
             reverse=True,
         )
         return duplicates[:limit]
+
+    def find_duplicate_race_audits(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 10_000,
+    ) -> list[DuplicateRaceAuditGroup]:
+        groups = self.find_duplicate_race_groups(on_or_after, before, limit=limit)
+        return [
+            DuplicateRaceAuditGroup(
+                race_date=group.race_date,
+                jyo_cd=group.jyo_cd,
+                race_no=group.race_no,
+                keys=tuple(self._duplicate_key_audit(key) for key in group.race_keys),
+            )
+            for group in groups
+        ]
+
+    def _duplicate_key_audit(self, race_key: str) -> DuplicateRaceKeyAudit:
+        race = self._races[race_key]
+        entries = self.find_entries(race.race_key)
+        finished = [entry for entry in entries if entry.finish_pos is not None]
+        entry_values = [
+            (entry.horse_no, entry.frame_no, entry.ketto_num)
+            for entry in entries
+        ]
+        result_values = [
+            (
+                entry.horse_no,
+                entry.ketto_num,
+                entry.finish_pos,
+                entry.race_time_s,
+                entry.agari_3f_s,
+                entry.corner_1,
+                entry.corner_2,
+                entry.corner_3,
+                entry.corner_4,
+                entry.popularity,
+                entry.prize_money,
+            )
+            for entry in finished
+        ]
+        return DuplicateRaceKeyAudit(
+            race_key=race_key,
+            status=str(race.status),
+            field_size=race.field_size,
+            entry_count=len(entries),
+            finished_count=len(finished),
+            entry_signature=self._signature(entry_values),
+            result_signature=self._signature(result_values),
+            predicted_pace_count=0,
+            pace_fit_count=0,
+        )
+
+    @staticmethod
+    def _signature(values: list[tuple[object, ...]]) -> str:
+        payload = json.dumps(values, ensure_ascii=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("ascii")).hexdigest()
 
     def find_horse_recent_entries(
         self, ketto_num: str, limit: int = 5, before: datetime.date | None = None
