@@ -87,6 +87,36 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
             </details>
           ) : null}
 
+          {meta.missingTrackConditionRaces.length > 0 ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
+                馬場情報未反映の対象（{meta.missingTrackConditionRaces.length}件）
+              </summary>
+              <ul className="m-0 mt-2 grid list-none gap-1.5 p-0 sm:grid-cols-2">
+                {meta.missingTrackConditionRaces.map((race) => (
+                  <li key={race.raceKey}>
+                    <Link
+                      href={race.href}
+                      className="flex items-center justify-between rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-amber-300 hover:text-slate-950"
+                    >
+                      <span className="font-semibold">{race.label}</span>
+                      <span className="ml-3 text-slate-500">{race.condition}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {status.missing_track_condition_count >
+              meta.missingTrackConditionRaces.length ? (
+                <p className="m-0 mt-2 text-xs text-slate-500">
+                  ほか
+                  {status.missing_track_condition_count -
+                    meta.missingTrackConditionRaces.length}
+                  件
+                </p>
+              ) : null}
+            </details>
+          ) : null}
+
           {meta.recoveryCommand ? (
             <details className="mt-2">
               <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
@@ -94,6 +124,16 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
               </summary>
               <p className="m-0 mt-2 text-xs text-slate-500">リポジトリ直下で実行</p>
               <IngestRecoveryCommand command={meta.recoveryCommand} />
+            </details>
+          ) : null}
+
+          {meta.metadataRecoveryCommand ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
+                馬場情報の補完コマンド
+              </summary>
+              <p className="m-0 mt-2 text-xs text-slate-500">リポジトリ直下で実行</p>
+              <IngestRecoveryCommand command={meta.metadataRecoveryCommand} />
             </details>
           ) : null}
         </div>

@@ -23,6 +23,13 @@ export interface IncompleteRaceMeta {
   href: string;
 }
 
+export interface MissingTrackConditionRaceMeta {
+  raceKey: string;
+  label: string;
+  condition: string;
+  href: string;
+}
+
 export interface IngestStatusMeta {
   visible: boolean;
   tone: IngestStatusTone;
@@ -31,7 +38,9 @@ export interface IngestStatusMeta {
   color: string;
   failures: IngestFailureMeta[];
   incompleteRaces: IncompleteRaceMeta[];
+  missingTrackConditionRaces: MissingTrackConditionRaceMeta[];
   recoveryCommand: string | null;
+  metadataRecoveryCommand: string | null;
 }
 
 const TONE_COLOR: Record<IngestStatusTone, string> = {
@@ -64,6 +73,17 @@ function buildIncompleteRaces(status: IngestStatus): IncompleteRaceMeta[] {
   }));
 }
 
+function buildMissingTrackConditionRaces(
+  status: IngestStatus,
+): MissingTrackConditionRaceMeta[] {
+  return status.missing_track_condition_races.map((race) => ({
+    raceKey: race.race_key,
+    label: `${formatRaceDate(race.race_date)} ${jyoName(race.jyo_cd)} ${raceNumber(race.race_key)}`,
+    condition: `${race.track_type}${race.distance_m}m`,
+    href: `/races/${race.race_key}/pace-analysis`,
+  }));
+}
+
 export function buildIngestRecoveryCommand(daysBack: number): string {
   const safeDaysBack = Math.max(10, Math.ceil(daysBack));
   return (
@@ -72,8 +92,30 @@ export function buildIngestRecoveryCommand(daysBack: number): string {
   );
 }
 
+export function buildRaceMetadataRecoveryCommand(
+  dateFrom: string,
+  dateTo: string,
+): string {
+  const compactFrom = dateFrom.replaceAll("-", "");
+  const compactTo = dateTo.replaceAll("-", "");
+  return (
+    "powershell -ExecutionPolicy Bypass -File " +
+    "apps\\ingestion-worker\\scripts\\run_batch.ps1 " +
+    `-Step race-metadata -Mode mykeibadb -Date ${compactFrom} ` +
+    `-DateTo ${compactTo} -ChunkDays 7`
+  );
+}
+
 function recoveryCommand(status: IngestStatus): string {
   return buildIngestRecoveryCommand(status.recommended_sync_days_back);
+}
+
+function metadataRecoveryCommand(status: IngestStatus): string | null {
+  if (!status.has_missing_track_conditions) return null;
+  return buildRaceMetadataRecoveryCommand(
+    status.race_metadata_date_from,
+    status.race_metadata_date_to,
+  );
 }
 
 const HIDDEN: IngestStatusMeta = {
@@ -84,11 +126,17 @@ const HIDDEN: IngestStatusMeta = {
   color: TONE_COLOR.ok,
   failures: [],
   incompleteRaces: [],
+  missingTrackConditionRaces: [],
   recoveryCommand: null,
+  metadataRecoveryCommand: null,
 };
 
 export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
-  if (!status.has_history && !status.has_incomplete_races) {
+  if (
+    !status.has_history &&
+    !status.has_incomplete_races &&
+    !status.has_missing_track_conditions
+  ) {
     return HIDDEN;
   }
 
@@ -103,7 +151,9 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       color: TONE_COLOR.error,
       failures: buildFailures(status),
       incompleteRaces: buildIncompleteRaces(status),
+      missingTrackConditionRaces: buildMissingTrackConditionRaces(status),
       recoveryCommand: recoveryCommand(status),
+      metadataRecoveryCommand: metadataRecoveryCommand(status),
     };
   }
 
@@ -116,7 +166,25 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       color: TONE_COLOR.warning,
       failures: buildFailures(status),
       incompleteRaces: buildIncompleteRaces(status),
+      missingTrackConditionRaces: buildMissingTrackConditionRaces(status),
       recoveryCommand: recoveryCommand(status),
+      metadataRecoveryCommand: metadataRecoveryCommand(status),
+    };
+  }
+
+  if (status.has_missing_track_conditions) {
+    return {
+      visible: true,
+      tone: "warning",
+      headline: `馬場情報未反映の確定レースが${status.missing_track_condition_count}件あります`,
+      detail:
+        "直近1年の確定レースに馬場状態の欠損があります。欠損中は馬場補正と馬場別検証を利用できません。",
+      color: TONE_COLOR.warning,
+      failures: buildFailures(status),
+      incompleteRaces: [],
+      missingTrackConditionRaces: buildMissingTrackConditionRaces(status),
+      recoveryCommand: null,
+      metadataRecoveryCommand: metadataRecoveryCommand(status),
     };
   }
 
@@ -133,7 +201,9 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       color: TONE_COLOR.warning,
       failures: buildFailures(status),
       incompleteRaces: [],
+      missingTrackConditionRaces: [],
       recoveryCommand: recoveryCommand(status),
+      metadataRecoveryCommand: null,
     };
   }
 
@@ -145,6 +215,8 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
     color: TONE_COLOR.ok,
     failures: [],
     incompleteRaces: [],
+    missingTrackConditionRaces: [],
     recoveryCommand: null,
+    metadataRecoveryCommand: null,
   };
 }

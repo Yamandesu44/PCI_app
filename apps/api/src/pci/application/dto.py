@@ -335,6 +335,17 @@ class IncompleteRaceOutput:
 
 
 @dataclass
+class MissingTrackConditionRaceOutput:
+    """確定済みだが馬場状態が反映されていないレース。"""
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    track_type: str
+    distance_m: int
+
+
+@dataclass
 class IngestStatusOutput:
     """取り込みバッチの鮮度サマリ（GetIngestStatusUseCase の出力）。
 
@@ -353,3 +364,10 @@ class IngestStatusOutput:
     has_incomplete_races: bool = False
     incomplete_race_count: int = 0
     incomplete_races: list[IncompleteRaceOutput] = field(default_factory=list)
+    race_metadata_date_from: str = ""
+    race_metadata_date_to: str = ""
+    has_missing_track_conditions: bool = False
+    missing_track_condition_count: int = 0
+    missing_track_condition_races: list[MissingTrackConditionRaceOutput] = field(
+        default_factory=list
+    )

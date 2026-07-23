@@ -69,6 +69,33 @@ class FakeRaceRepository:
         races.sort(key=lambda race: (race.race_date, str(race.race_key)), reverse=True)
         return races[:limit]
 
+    def count_missing_track_conditions(
+        self, on_or_after: datetime.date, before: datetime.date
+    ) -> int:
+        return len(
+            self.find_missing_track_conditions(
+                on_or_after, before, limit=len(self._races)
+            )
+        )
+
+    def find_missing_track_conditions(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 20,
+    ) -> list[Race]:
+        races = [
+            race
+            for race in self._races.values()
+            if on_or_after <= race.race_date < before
+            and race.status == RaceStatus.RESULT
+            and race.jyo_cd in _JRA_PLACE_CODES
+            and race.track_type != "障害"
+            and race.track_condition is None
+        ]
+        races.sort(key=lambda race: (race.race_date, str(race.race_key)), reverse=True)
+        return races[:limit]
+
     def find_horse_recent_entries(
         self, ketto_num: str, limit: int = 5, before: datetime.date | None = None
     ) -> list[RaceEntry]:

@@ -913,6 +913,11 @@
             "title": "Has Incomplete Races",
             "type": "boolean"
           },
+          "has_missing_track_conditions": {
+            "default": false,
+            "title": "Has Missing Track Conditions",
+            "type": "boolean"
+          },
           "incomplete_race_count": {
             "default": 0,
             "title": "Incomplete Race Count",
@@ -958,6 +963,27 @@
             ],
             "title": "Last Success Step"
           },
+          "missing_track_condition_count": {
+            "default": 0,
+            "title": "Missing Track Condition Count",
+            "type": "integer"
+          },
+          "missing_track_condition_races": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MissingTrackConditionRaceSchema"
+            },
+            "title": "Missing Track Condition Races",
+            "type": "array"
+          },
+          "race_metadata_date_from": {
+            "title": "Race Metadata Date From",
+            "type": "string"
+          },
+          "race_metadata_date_to": {
+            "title": "Race Metadata Date To",
+            "type": "string"
+          },
           "recent_failures": {
             "default": [],
             "items": {
@@ -973,7 +999,9 @@
         },
         "required": [
           "has_history",
-          "recommended_sync_days_back"
+          "recommended_sync_days_back",
+          "race_metadata_date_from",
+          "race_metadata_date_to"
         ],
         "title": "IngestStatusSchema",
         "type": "object"
@@ -1082,6 +1110,40 @@
           "name"
         ],
         "title": "JockeyBody",
+        "type": "object"
+      },
+      "MissingTrackConditionRaceSchema": {
+        "description": "確定済みだが馬場状態が反映されていないレース。",
+        "properties": {
+          "distance_m": {
+            "title": "Distance M",
+            "type": "integer"
+          },
+          "jyo_cd": {
+            "title": "Jyo Cd",
+            "type": "string"
+          },
+          "race_date": {
+            "title": "Race Date",
+            "type": "string"
+          },
+          "race_key": {
+            "title": "Race Key",
+            "type": "string"
+          },
+          "track_type": {
+            "title": "Track Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "race_key",
+          "race_date",
+          "jyo_cd",
+          "track_type",
+          "distance_m"
+        ],
+        "title": "MissingTrackConditionRaceSchema",
         "type": "object"
       },
       "PaceAnalysisSchema": {

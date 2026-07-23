@@ -165,7 +165,8 @@
 - ✅ `GET /api/v1/races`（一覧・limit/date）, `/races/dates`, `/races/{key}`,
   `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`, `/health`, `/ready`。
   `/health`はプロセス生存確認、`/ready`はDB接続とORM必須列を含む利用可能性確認とする。
-- ✅ 内部取り込み `POST /internal/ingest/{horses,jockeys,trainers,entries,results,log}`,
+- ✅ 内部取り込み
+  `POST /internal/ingest/{horses,jockeys,trainers,entries,results,race-metadata,log}`,
   `POST /internal/ingest/forecasts/precompute`,
   `DELETE /internal/ingest/races/{key}`。`X-Ingest-Token` 認証（未設定時はスキップ=開発モード）。
 - 🟡 `pace-analysis` に `forecast_accuracy`（predicted/actual RPCI・label・error・label_hit・model_version）を追加。
@@ -227,12 +228,20 @@
 - ✅ **完全性判定**（2026-07-22追加）: 日本時間のAPI実行日の前日以前で `races.status=entries` のレースを
   「成績未取込」と判定する。全件数と新しい順の代表20件を返し、Webでは警告と対象レースへの
   リンクを表示する。`ingest_log` が無い環境でも、未取込レースがあれば警告する。
+- ✅ **馬場状態の欠損監視**（2026-07-23追加）: JST基準の直近365日について、開催日前日までの
+  `status=result`かつJRA平地で`track_condition IS NULL`のレースを集計する。全件数と代表20件、
+  監視期間を返し、Webでは成績未取込と区別して警告する。地方・障害・出走前・365日より古いレースは
+  対象外とする。
 - ✅ **安全な手動再同期支援**（2026-07-22追加）: DBで最古の成績未取込日を集計し、標準10日以上で
   その日を含む`recommended_sync_days_back`を返す。警告バナーはWindowsのコマンドプロンプトで
   実行できる`run_mykeibadb_full_sync.ps1 -DaysBack N`を生成し、コピーできる。正常時は表示しない。
   Web/APIからWindowsプロセスを直接起動せず、認証・多重実行・実行場所の問題を持ち込まない。
-- 🧪 **暫定条件**: 当日開催分は取り込み待ちの正常状態とみなし対象外。障害競走等を個別除外せず、
-  前日以前かつ `entries` という単純な条件で検知する。誤警告が確認された場合は例外条件を見直す。
+- ✅ **馬場情報の安全な補完支援**（2026-07-23追加）: 欠損警告から
+  `run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date ... -DateTo ... -ChunkDays 7`
+  をコピーできる。出走馬・成績・予想値を再登録せず、馬場状態・天候だけを補完する。
+- 🧪 **暫定条件**: 当日開催分は取り込み待ちの正常状態とみなし対象外。成績未取込・馬場状態欠損ともに
+  JRA10場の平地だけを対象とする。馬場状態の監視窓365日はアプリの1年分検証方針に合わせた運用値で、
+  バックフィル対象期間を拡張する場合は見直す。
 - ✅ **API/UI 認証**: `/api/v1/ingest-status` は公開GET（`/internal/ingest/*` の
   X-Ingest-Token 保護とは別。MVPは個人利用のため運用者自身への表示という前提。
   多人数公開時は表示要否を再検討（§9-6 の認証・公開範囲の議論と合わせて）。

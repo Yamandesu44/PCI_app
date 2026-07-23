@@ -16,6 +16,11 @@ function status(overrides: Partial<IngestStatus>): IngestStatus {
     incomplete_race_count: 0,
     recommended_sync_days_back: 10,
     incomplete_races: [],
+    race_metadata_date_from: "2025-07-22",
+    race_metadata_date_to: "2026-07-22",
+    has_missing_track_conditions: false,
+    missing_track_condition_count: 0,
+    missing_track_condition_races: [],
     ...overrides,
   };
 }
@@ -132,5 +137,55 @@ describe("ingestStatusMeta", () => {
       "powershell -ExecutionPolicy Bypass -File " +
         "apps\\ingestion-worker\\scripts\\run_mykeibadb_full_sync.ps1 -DaysBack 32",
     );
+  });
+
+  it("馬場状態が欠けた確定レースを専用警告として表示する", () => {
+    const meta = ingestStatusMeta(
+      status({
+        has_missing_track_conditions: true,
+        missing_track_condition_count: 1,
+        missing_track_condition_races: [
+          {
+            race_key: "2026072005010111",
+            race_date: "2026-07-20",
+            jyo_cd: "05",
+            track_type: "芝",
+            distance_m: 1600,
+          },
+        ],
+      }),
+    );
+
+    expect(meta.visible).toBe(true);
+    expect(meta.tone).toBe("warning");
+    expect(meta.headline).toContain("馬場情報未反映");
+    expect(meta.missingTrackConditionRaces).toEqual([
+      {
+        raceKey: "2026072005010111",
+        label: "7月20日 東京 11R",
+        condition: "芝1600m",
+        href: "/races/2026072005010111/pace-analysis",
+      },
+    ]);
+    expect(meta.metadataRecoveryCommand).toBe(
+      "powershell -ExecutionPolicy Bypass -File " +
+        "apps\\ingestion-worker\\scripts\\run_batch.ps1 " +
+        "-Step race-metadata -Mode mykeibadb -Date 20250722 " +
+        "-DateTo 20260722 -ChunkDays 7",
+    );
+    expect(meta.recoveryCommand).toBeNull();
+  });
+
+  it("履歴が無くても馬場状態の欠損があれば警告する", () => {
+    const meta = ingestStatusMeta(
+      status({
+        has_history: false,
+        has_missing_track_conditions: true,
+        missing_track_condition_count: 3,
+      }),
+    );
+
+    expect(meta.visible).toBe(true);
+    expect(meta.headline).toContain("3件");
   });
 });

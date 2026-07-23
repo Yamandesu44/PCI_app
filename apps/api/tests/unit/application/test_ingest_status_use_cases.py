@@ -183,3 +183,72 @@ class TestGetIngestStatusUseCase:
 
         assert use_case.execute(now=utc_before_jst_midnight).has_incomplete_races is False
         assert use_case.execute(now=utc_after_jst_midnight).has_incomplete_races is True
+
+    def test_missing_track_conditions_are_reported_for_recent_results(self) -> None:
+        repo = FakeRaceRepository()
+        for key, race_date, status, track_type, track_condition in [
+            (
+                "2026072005010101",
+                datetime.date(2026, 7, 20),
+                RaceStatus.RESULT,
+                "芝",
+                None,
+            ),
+            (
+                "2026071905010102",
+                datetime.date(2026, 7, 19),
+                RaceStatus.RESULT,
+                "ダート",
+                "良",
+            ),
+            (
+                "2026071805010103",
+                datetime.date(2026, 7, 18),
+                RaceStatus.ENTRIES,
+                "芝",
+                None,
+            ),
+            (
+                "2025072105010104",
+                datetime.date(2025, 7, 21),
+                RaceStatus.RESULT,
+                "芝",
+                None,
+            ),
+            (
+                "2026071710010105",
+                datetime.date(2026, 7, 17),
+                RaceStatus.RESULT,
+                "障害",
+                None,
+            ),
+        ]:
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(key),
+                    race_date=race_date,
+                    jyo_cd=key[8:10],
+                    distance_m=1600,
+                    track_type=track_type,
+                    field_size=12,
+                    status=status,
+                    track_condition=track_condition,
+                )
+            )
+
+        output = self._execute([_entry(days_ago=0)], repo)
+
+        assert output.race_metadata_date_from == "2025-07-22"
+        assert output.race_metadata_date_to == "2026-07-22"
+        assert output.has_missing_track_conditions is True
+        assert output.missing_track_condition_count == 1
+        assert [race.race_key for race in output.missing_track_condition_races] == [
+            "2026072005010101"
+        ]
+
+    def test_no_missing_track_conditions_reports_complete(self) -> None:
+        output = self._execute([_entry(days_ago=0)])
+
+        assert output.has_missing_track_conditions is False
+        assert output.missing_track_condition_count == 0
+        assert output.missing_track_condition_races == []

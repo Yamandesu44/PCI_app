@@ -16,6 +16,11 @@ STATUS_KEYS = {
     "incomplete_race_count",
     "recommended_sync_days_back",
     "incomplete_races",
+    "race_metadata_date_from",
+    "race_metadata_date_to",
+    "has_missing_track_conditions",
+    "missing_track_condition_count",
+    "missing_track_condition_races",
 }
 
 
@@ -40,6 +45,8 @@ def test_ingest_status_reflects_recent_success(client: TestClient) -> None:
     assert body["incomplete_race_count"] == 1
     assert body["recommended_sync_days_back"] >= 10
     assert body["incomplete_races"][0]["race_key"] == "2026062005010101"
+    assert body["race_metadata_date_from"]
+    assert body["race_metadata_date_to"]
 
 
 def test_openapi_exposes_ingest_status(client: TestClient) -> None:

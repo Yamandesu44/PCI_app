@@ -313,6 +313,84 @@ class TestFindIncompletePastRaces:
 
 
 @pytest.mark.integration
+class TestFindMissingTrackConditions:
+    def test_counts_only_recent_result_jra_flat_races(self, db_session: Session) -> None:
+        repo = SqlAlchemyRaceRepository(db_session)
+        for key, race_date, status, jyo_cd, track_type, track_condition in [
+            (
+                "2026061805010101",
+                datetime.date(2026, 6, 18),
+                RaceStatus.RESULT,
+                "05",
+                TrackType.TURF,
+                None,
+            ),
+            (
+                "2026061705010102",
+                datetime.date(2026, 6, 17),
+                RaceStatus.RESULT,
+                "05",
+                TrackType.DIRT,
+                "良",
+            ),
+            (
+                "2026061605010103",
+                datetime.date(2026, 6, 16),
+                RaceStatus.ENTRIES,
+                "05",
+                TrackType.TURF,
+                None,
+            ),
+            (
+                "2025061505010104",
+                datetime.date(2025, 6, 15),
+                RaceStatus.RESULT,
+                "05",
+                TrackType.TURF,
+                None,
+            ),
+            (
+                "2026061510010105",
+                datetime.date(2026, 6, 15),
+                RaceStatus.RESULT,
+                "10",
+                TrackType.HURDLE,
+                None,
+            ),
+            (
+                "2026061442040106",
+                datetime.date(2026, 6, 14),
+                RaceStatus.RESULT,
+                "42",
+                TrackType.DIRT,
+                None,
+            ),
+        ]:
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(key),
+                    race_date=race_date,
+                    jyo_cd=jyo_cd,
+                    distance_m=1600,
+                    track_type=track_type,
+                    field_size=12,
+                    status=status,
+                    track_condition=track_condition,
+                )
+            )
+        db_session.flush()
+
+        date_from = datetime.date(2025, 6, 19)
+        date_to = datetime.date(2026, 6, 19)
+
+        assert repo.count_missing_track_conditions(date_from, date_to) == 1
+        assert [
+            str(race.race_key)
+            for race in repo.find_missing_track_conditions(date_from, date_to)
+        ] == ["2026061805010101"]
+
+
+@pytest.mark.integration
 class TestFindHorseRecentEntries:
     def test_returns_only_result_races(self, db_session: Session) -> None:
         _seed_master(db_session)

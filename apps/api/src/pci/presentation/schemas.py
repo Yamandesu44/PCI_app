@@ -407,6 +407,16 @@ class IncompleteRaceSchema(BaseModel):
     distance_m: int
 
 
+class MissingTrackConditionRaceSchema(BaseModel):
+    """確定済みだが馬場状態が反映されていないレース。"""
+
+    race_key: str
+    race_date: str
+    jyo_cd: str
+    track_type: str
+    distance_m: int
+
+
 class IngestStatusSchema(BaseModel):
     """取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。
 
@@ -424,6 +434,11 @@ class IngestStatusSchema(BaseModel):
     has_incomplete_races: bool = False
     incomplete_race_count: int = 0
     incomplete_races: list[IncompleteRaceSchema] = []
+    race_metadata_date_from: str
+    race_metadata_date_to: str
+    has_missing_track_conditions: bool = False
+    missing_track_condition_count: int = 0
+    missing_track_condition_races: list[MissingTrackConditionRaceSchema] = []
 
     @classmethod
     def from_dto(cls, dto: IngestStatusOutput) -> IngestStatusSchema:
@@ -439,6 +454,14 @@ class IngestStatusSchema(BaseModel):
             incomplete_race_count=dto.incomplete_race_count,
             recommended_sync_days_back=dto.recommended_sync_days_back,
             incomplete_races=[IncompleteRaceSchema(**vars(r)) for r in dto.incomplete_races],
+            race_metadata_date_from=dto.race_metadata_date_from,
+            race_metadata_date_to=dto.race_metadata_date_to,
+            has_missing_track_conditions=dto.has_missing_track_conditions,
+            missing_track_condition_count=dto.missing_track_condition_count,
+            missing_track_condition_races=[
+                MissingTrackConditionRaceSchema(**vars(r))
+                for r in dto.missing_track_condition_races
+            ],
         )
 
 

@@ -105,6 +105,9 @@ python -m ingestion.batch --mode mykeibadb --date 20250723 --date-to 20260723 --
 # 既に取り込み済みのレースへ、馬場状態・天候だけを安全にバックフィル
 python -m ingestion.batch --mode mykeibadb --date 20250723 --date-to 20260723 --step race-metadata --chunk-days 7
 
+# Webの馬場情報未反映警告から実行する場合（リポジトリ直下）
+powershell -ExecutionPolicy Bypass -File apps\ingestion-worker\scripts\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723 -ChunkDays 7
+
 # 週末の特別登録・出馬表など未来データの取得可否を確認する時
 python -m ingestion.probe_race_options --date 20260624 --date-to 20260628 --days-back 14
 

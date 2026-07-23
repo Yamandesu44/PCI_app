@@ -764,6 +764,11 @@ export interface components {
              */
             has_incomplete_races: boolean;
             /**
+             * Has Missing Track Conditions
+             * @default false
+             */
+            has_missing_track_conditions: boolean;
+            /**
              * Incomplete Race Count
              * @default 0
              */
@@ -787,6 +792,20 @@ export interface components {
             last_success_at?: string | null;
             /** Last Success Step */
             last_success_step?: string | null;
+            /**
+             * Missing Track Condition Count
+             * @default 0
+             */
+            missing_track_condition_count: number;
+            /**
+             * Missing Track Condition Races
+             * @default []
+             */
+            missing_track_condition_races: components["schemas"]["MissingTrackConditionRaceSchema"][];
+            /** Race Metadata Date From */
+            race_metadata_date_from: string;
+            /** Race Metadata Date To */
+            race_metadata_date_to: string;
             /**
              * Recent Failures
              * @default []
@@ -846,6 +865,22 @@ export interface components {
             code: string;
             /** Name */
             name: string;
+        };
+        /**
+         * MissingTrackConditionRaceSchema
+         * @description 確定済みだが馬場状態が反映されていないレース。
+         */
+        MissingTrackConditionRaceSchema: {
+            /** Distance M */
+            distance_m: number;
+            /** Jyo Cd */
+            jyo_cd: string;
+            /** Race Date */
+            race_date: string;
+            /** Race Key */
+            race_key: string;
+            /** Track Type */
+            track_type: string;
         };
         /**
          * PaceAnalysisSchema

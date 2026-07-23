@@ -107,6 +107,42 @@ class SqlAlchemyRaceRepository:
         )
         return [self._to_race(m) for m in self._s.scalars(stmt).all()]
 
+    def count_missing_track_conditions(
+        self, on_or_after: datetime.date, before: datetime.date
+    ) -> int:
+        """指定期間内で馬場状態が未反映の確定済みJRA平地レース件数を返す。"""
+        stmt = select(func.count()).select_from(RaceModel).where(
+            RaceModel.race_date >= on_or_after,
+            RaceModel.race_date < before,
+            RaceModel.status == str(RaceStatus.RESULT),
+            RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+            RaceModel.track_type != str(TrackType.HURDLE),
+            RaceModel.track_condition.is_(None),
+        )
+        return int(self._s.scalar(stmt) or 0)
+
+    def find_missing_track_conditions(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 20,
+    ) -> list[Race]:
+        """指定期間内で馬場状態が未反映の確定レースを新しい順に返す。"""
+        stmt = (
+            select(RaceModel)
+            .where(
+                RaceModel.race_date >= on_or_after,
+                RaceModel.race_date < before,
+                RaceModel.status == str(RaceStatus.RESULT),
+                RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+                RaceModel.track_type != str(TrackType.HURDLE),
+                RaceModel.track_condition.is_(None),
+            )
+            .order_by(RaceModel.race_date.desc(), RaceModel.race_key.desc())
+            .limit(limit)
+        )
+        return [self._to_race(m) for m in self._s.scalars(stmt).all()]
+
     def find_horse_recent_entries(
         self, ketto_num: str, limit: int = 5, before: datetime.date | None = None
     ) -> list[RaceEntry]:

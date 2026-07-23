@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import datetime
 
-from pci.application.dto import IncompleteRaceOutput, IngestFailureOutput, IngestStatusOutput
+from pci.application.dto import (
+    IncompleteRaceOutput,
+    IngestFailureOutput,
+    IngestStatusOutput,
+    MissingTrackConditionRaceOutput,
+)
 from pci.domain.ops.ingest_log import IngestLogRepository, evaluate_freshness
 from pci.domain.racing.repository import RaceCompletenessRepository
 
@@ -12,6 +17,8 @@ _HISTORY_LOOKBACK = 20
 _RECENT_FAILURES_LIMIT = 5
 _ERROR_SUMMARY_MAX_LEN = 200
 _INCOMPLETE_RACES_LIMIT = 20
+_MISSING_TRACK_CONDITIONS_LIMIT = 20
+_RACE_METADATA_LOOKBACK_DAYS = 365
 _DEFAULT_SYNC_DAYS_BACK = 10
 _JRA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=9), name="JST")
 
@@ -38,6 +45,21 @@ class GetIngestStatusUseCase:
         )
         incomplete_races = self._race_repo.find_incomplete_past_races(
             race_date_today, limit=_INCOMPLETE_RACES_LIMIT
+        )
+        metadata_date_from = race_date_today - datetime.timedelta(
+            days=_RACE_METADATA_LOOKBACK_DAYS
+        )
+        missing_track_condition_count = (
+            self._race_repo.count_missing_track_conditions(
+                metadata_date_from, race_date_today
+            )
+        )
+        missing_track_condition_races = (
+            self._race_repo.find_missing_track_conditions(
+                metadata_date_from,
+                race_date_today,
+                limit=_MISSING_TRACK_CONDITIONS_LIMIT,
+            )
         )
         recommended_sync_days_back = _DEFAULT_SYNC_DAYS_BACK
         if oldest_incomplete_date is not None:
@@ -81,5 +103,19 @@ class GetIngestStatusUseCase:
                     distance_m=race.distance_m,
                 )
                 for race in incomplete_races
+            ],
+            race_metadata_date_from=metadata_date_from.isoformat(),
+            race_metadata_date_to=race_date_today.isoformat(),
+            has_missing_track_conditions=missing_track_condition_count > 0,
+            missing_track_condition_count=missing_track_condition_count,
+            missing_track_condition_races=[
+                MissingTrackConditionRaceOutput(
+                    race_key=str(race.race_key),
+                    race_date=race.race_date.isoformat(),
+                    jyo_cd=race.jyo_cd,
+                    track_type=race.track_type,
+                    distance_m=race.distance_m,
+                )
+                for race in missing_track_condition_races
             ],
         )

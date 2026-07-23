@@ -9,42 +9,39 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新32回目・Codex がmykeibadb馬場状態バックフィルを実装） |
+| 更新日時 | 2026-07-23（更新33回目・Codex が馬場状態欠損監視と復旧導線を実装） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（mykeibadb馬場状態・天候の安全な取り込み経路を追加） |
+| 直前の担当AI | OpenAI Codex（直近1年の馬場状態欠損をWebで検知・復旧可能にした） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `bf9e2ae`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `6762077`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**mykeibadbの列分解済みRAから馬場状態・天候を安全に取り込み、既存レースも
-副作用を限定してバックフィル可能にした。**
+**馬場状態バックフィルの実行漏れ・部分失敗を、アプリ自身が検知して安全な復旧コマンドを
+提示できるようにした。**
 
-`ra_parser.py`の未確定JV固定長位置は変更していない。`MyKeibaDbClient`が
-`SHIBA_BABAJOTAI_CODE`/`DIRT_BABAJOTAI_CODE`/`TENKO_CODE`を列名で直接読み、
-`RaceMetadataRecord`として通常のentries/results同期へ重ねる。既存レースには
-`POST /internal/ingest/race-metadata`と`--step race-metadata`を追加した。
-APIユースケースはstatus、出走馬、確定成績、RPCI/PCI3、grade、race_classを保持し、
-馬場状態・天候だけを更新する。
+`GET /api/v1/ingest-status`は、従来のバッチ鮮度・成績未取込に加えて、JST基準の直近365日、
+開催日前日まで、`status=result`、JRA10場、平地、`track_condition IS NULL`の件数と
+新しい順の代表20件を返す。地方・障害・出走前・365日より古いレースは警告対象外。
+Webトップの`IngestStatusBanner`は「馬場情報未反映」として別表示し、対象レースの回顧画面と
+専用`race-metadata`コマンドへ案内する。`run_batch.ps1`へ`-ChunkDays`を追加したため、
+1年分を7日単位で処理できる。
 
-関連テストはAPI 59 passed、worker全体209 passed。API全体Ruff・mypy strict（62ファイル）、
-worker変更対象Ruff、OpenAPI同期、api-client typecheckは成功。API非統合全体は
-498 passed / 3 failed / 22 deselectedで、失敗3件は既知の`caplog`順序依存、単独再実行は成功。
-worker変更対象mypyは既存22件
-（win32com/PyMySQLスタブ、tuple連結推論、ingest_mastersの変数再利用）が残るが、
-既知違反のない3モジュールはstrictで成功し、今回追加行に新規エラーはない。
-worker全体Ruffは未編集の`windows_client.py`/`locate_corners.py`等の既知14件。
-import-linterはローカルPythonに未導入で実行不可。実DBバックフィルはこの環境から接続できないため未実行。
-Windows実行機で下記を実行し、その後に馬場状態別の小倉芝1200m診断を再実行する。
+関連API単体・契約15 passed、PostgreSQL統合1 passed、Web 74 passed。
+API全体Ruff、mypy strict（62ファイル）、OpenAPI同期、api-client/Web typecheck、Web buildは成功。
+API非統合全体は500 passed / 3 failed / 23 deselected。失敗3件は従来からの`caplog`順序依存で、
+単独再実行は3 passed。今回変更したテストに失敗はない。
+
+実mykeibadb/PostgreSQLへのバックフィルはこの環境から接続できないため未実行。
+Windows実行機でWeb警告に表示されるコマンド、または下記をリポジトリ直下から実行し、
+警告が消えることを確認してから馬場状態別の小倉芝1200m診断を再実行する。
 
 ```cmd
-cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
-.venv\Scripts\activate.bat
-python -m ingestion.batch --mode mykeibadb --date 20250723 --date-to 20260723 --step race-metadata --chunk-days 7
+powershell -ExecutionPolicy Bypass -File apps\ingestion-worker\scripts\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723 -ChunkDays 7
 ```
 
 前タスクの4パターン診断結果は以下のとおり。
@@ -549,7 +546,8 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 ## 現在止まっている箇所
 
-**特になし**。次はユーザーの新規指示、または下記「次に実施すべき作業」から着手可否を確認して進める。
+**コード実装は停止していない。実DBバックフィルだけWindows実行機でのユーザー操作待ち。**
+バックフィル前はWebトップの馬場情報未反映警告が出る想定で、完了後は件数0となり警告が消える。
 
 ---
 
@@ -558,13 +556,14 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 ユーザーからの新規指示がない場合、以下の優先順で `tasks/backlog.md` から着手を検討する。
 **どれを選ぶかはユーザー確認を推奨**（`docs/PROJECT_RULES.md` の「独断で正式仕様化しない」方針）。
 
-0. **P2 実JV-Dataの人気/賞金予約オフセット検証**。Windows実行機のJV-Link COMが必要。
-   `JV_SPEC_MAINTENANCE_GUIDE.md`の手順に従い、実レコードの位置を確認してから正式化する。
-1. **P2 実DBで馬場状態を1年分バックフィルし、馬場状態別に再検証**。
-   上記`--step race-metadata`をWindows実行機で実行後、
+0. **P2 実DBで馬場状態を1年分バックフィルし、馬場状態別に再検証**。
+   Web警告内のコマンド、または上記`run_batch.ps1 -Step race-metadata`をWindows実行機で実行し、
+   `/api/v1/ingest-status`の`missing_track_condition_count=0`とWeb警告消去を確認後、
    `python -m scripts.backtest_forecast --validate-style-advantage --track-type 芝 --venue-code 10
    --date-from 2025-07-01 --date-to 2026-07-31 --style-breakdown year
    --style-breakdown track-condition --style-breakdown distance`で欠損率と小倉芝1200mを確認する。
+1. **P2 実JV-Dataの人気/賞金予約オフセット検証**。Windows実行機のJV-Link COMが必要。
+   `JV_SPEC_MAINTENANCE_GUIDE.md`の手順に従い、実レコードの位置を確認してから正式化する。
 2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
    `FormationWeights`・`DistanceStyleWeights`・`STALE_AFTER_DAYS`・
    `AbilityWeights`の成分重み以外）
@@ -583,15 +582,23 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 ## 変更対象ファイル（直近セッション）
 
+馬場状態欠損のデータ完全性監視と復旧導線:
+- API: `application/dto.py`, `application/ingest_status_use_cases.py`,
+  `domain/racing/repository.py`, `infrastructure/repositories/race_repository.py`,
+  `presentation/schemas.py`
+- Web: `apps/web/src/lib/ingestStatus.ts`, `apps/web/src/components/IngestStatusBanner.tsx`
+- worker: `apps/ingestion-worker/scripts/run_batch.ps1`
+- tests: API unit/contract/PostgreSQL integration、Web `ingestStatus.test.ts`
+- generated: `packages/api-client/openapi.json`, `packages/api-client/src/schema.d.ts`
+- docs/tasks: worker `README.md`、`docs/SPEC.md`、`docs/DECISIONS.md`、
+  `docs/HANDOFF.md`、`tasks/current.md`、`tasks/backlog.md`
+
+それ以前の直近セッション:
+
 mykeibadb馬場状態・天候の取り込みとバックフィル:
 - API: `application/race_use_cases.py`, `presentation/routers/ingest.py`
 - worker: `models.py`, `client/base.py`, `client/mykeibadb_client.py`, `ingest_api.py`, `batch.py`
 - tests: APIのrace use case/ingest契約、workerのmykeibadb/API/batch E2E
-- generated: `packages/api-client/openapi.json`, `packages/api-client/src/schema.d.ts`
-- docs/tasks: worker `README.md`/`MANUAL_SYNC_GUIDE.md`/`scripts/run_batch.ps1`,
-  `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md`, `tasks/current.md`, `tasks/backlog.md`
-
-それ以前の直近セッション:
 
 安全な手動再同期支援で変更したファイル:
 - API: `domain/racing/repository.py`, `application/dto.py`, `application/ingest_status_use_cases.py`,

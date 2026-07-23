@@ -70,7 +70,7 @@ class RaceRepository(Protocol):
 
 
 class RaceCompletenessRepository(Protocol):
-    """確定日を過ぎても結果未反映のJRA平地レースを検出する読み取りポート。"""
+    """JRA平地レースの結果・馬場情報の完全性を検出する読み取りポート。"""
 
     def count_incomplete_past_races(self, before: datetime.date) -> int: ...
 
@@ -80,4 +80,15 @@ class RaceCompletenessRepository(Protocol):
 
     def find_incomplete_past_races(
         self, before: datetime.date, limit: int = 20
+    ) -> list[Race]: ...
+
+    def count_missing_track_conditions(
+        self, on_or_after: datetime.date, before: datetime.date
+    ) -> int: ...
+
+    def find_missing_track_conditions(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 20,
     ) -> list[Race]: ...

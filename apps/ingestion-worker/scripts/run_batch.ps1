@@ -24,17 +24,21 @@
 .PARAMETER MaxRetries
     Max retry attempts (default: 3)
 
+.PARAMETER ChunkDays
+    Split long date ranges into chunks of this many days (default: 0 = disabled).
+
 .EXAMPLE
     .\run_batch.ps1 -Step entries
     .\run_batch.ps1 -Step results -Date 20260628
     .\run_batch.ps1 -Step entries -Mode mykeibadb -Date 20260629 -DateTo 20260720
-    .\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723
+    .\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723 -ChunkDays 7
 #>
 param(
     [Parameter(Mandatory)][string]$Step,
     [string]$Mode = "jvlink",
     [string]$Date = (Get-Date -Format "yyyyMMdd"),
     [string]$DateTo = "",
+    [int]$ChunkDays = 0,
     [int]$MaxRetries = 3
 )
 
@@ -77,6 +81,7 @@ Write-Log "=== run_batch.ps1 start: step=$Step mode=$Mode date=$rangeLabel ==="
 
 $batchArgs = @("-m", "ingestion.batch", "--mode", $Mode, "--step", $Step, "--date", $Date)
 if ($DateTo) { $batchArgs += @("--date-to", $DateTo) }
+if ($ChunkDays -gt 0) { $batchArgs += @("--chunk-days", $ChunkDays) }
 
 $attempt = 0
 $success = $false
