@@ -218,6 +218,7 @@ class TestUpdateRaceMetadataUseCase:
 
         updated = UpdateRaceMetadataUseCase(repo).execute(
             RACE_KEY,
+            track_type="障害",
             track_condition="稍重",
             weather="小雨",
         )
@@ -225,6 +226,7 @@ class TestUpdateRaceMetadataUseCase:
         after = repo.find_by_key(RaceKey(RACE_KEY))
         assert updated is True
         assert after is not None
+        assert after.track_type == "障害"
         assert after.track_condition == "稍重"
         assert after.weather == "小雨"
         assert after.status == RaceStatus.RESULT

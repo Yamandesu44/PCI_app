@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ingestion.batch import (
     _to_iso_date,
+    includes_race_metadata,
     ingest_entries,
     ingest_masters,
     ingest_race_metadata,
@@ -87,6 +88,18 @@ class TestDateChunks:
     def test_rejects_reversed_range(self) -> None:
         with pytest.raises(ValueError):
             iter_date_chunks("20000110", "20000101", 4)
+
+
+class TestMetadataStepSelection:
+    def test_all_includes_metadata_for_mykeibadb(self) -> None:
+        assert includes_race_metadata("all", "mykeibadb") is True
+
+    def test_all_does_not_require_metadata_for_other_sources(self) -> None:
+        assert includes_race_metadata("all", "fixture") is False
+        assert includes_race_metadata("all", "jvlink") is False
+
+    def test_explicit_metadata_step_is_always_selected(self) -> None:
+        assert includes_race_metadata("race-metadata", "mykeibadb") is True
 
 
 class TestToIsoDate:

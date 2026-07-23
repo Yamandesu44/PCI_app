@@ -204,6 +204,7 @@ class TestUpdateRaceMetadata:
                 ),
                 RaceMetadataRecord(
                     race_key="2026061805010102",
+                    track_type="障害",
                     track_condition="重",
                     weather="雨",
                 ),
@@ -215,6 +216,7 @@ class TestUpdateRaceMetadata:
         assert "/internal/ingest/race-metadata" in call.args[0]
         assert call.kwargs["json"][1] == {
             "race_key": "2026061805010102",
+            "track_type": "障害",
             "track_condition": "重",
             "weather": "雨",
         }

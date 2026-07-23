@@ -8,12 +8,13 @@
        Waits with a timeout so an unattended run doesn't hang forever if
        "pause on exit" is left enabled in wmykeibadb.exe.
     2. batch.py --mode mykeibadb --step entries          -> pushes entries to PostgreSQL.
-    3. batch.py --mode mykeibadb --step results           -> pushes confirmed results.
-    4. batch.py --mode mykeibadb --step special-entries  -> pushes graded-stakes advance
+    3. batch.py --mode mykeibadb --step race-metadata     -> backfills track condition/weather.
+    4. batch.py --mode mykeibadb --step results           -> pushes confirmed results.
+    5. batch.py --mode mykeibadb --step special-entries  -> pushes graded-stakes advance
        entries (TOKUBETSU_TOROKUBA/TOKUBETSU_TOROKUBAGOTO_JOHO tables) for next week's races.
        This reads a different mykeibadb table than step 2, so it was silently never run
        by this script until 2026-07-13 -- see docs/DECISIONS.md.
-    5. batch.py --step forecasts -> precomputes upcoming forecasts after all entry updates.
+    6. batch.py --step forecasts -> precomputes upcoming forecasts after all entry updates.
 
     Intended to be run from Windows Task Scheduler on a JRA-calendar-aware
     schedule (Fri/Sat 10:00, Sun 18:00 -- see setup_task_scheduler.ps1).
@@ -106,7 +107,7 @@ if ($proc.ExitCode -ne 0) {
     Write-Log "mykeibadb.exe finished (exit code 0)"
 }
 
-# --- Step 2/3/4/5: batch.py (local MySQL -> PostgreSQL -> forecast mart) ---
+# --- Step 2-6: batch.py (local MySQL -> PostgreSQL -> forecast mart) ---
 $RunBatch = Join-Path $PSScriptRoot "run_batch.ps1"
 $DateFrom = (Get-Date).AddDays(-$DaysBack).ToString("yyyyMMdd")
 $DateTo   = (Get-Date).AddDays($DaysForward).ToString("yyyyMMdd")
@@ -114,6 +115,10 @@ $DateTo   = (Get-Date).AddDays($DaysForward).ToString("yyyyMMdd")
 Write-Log "--- entries sync (batch.py --mode mykeibadb --step entries, $DateFrom to $DateTo) ---"
 & $RunBatch -Step entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
 $entriesExit = $LASTEXITCODE
+
+Write-Log "--- race-metadata sync (batch.py --mode mykeibadb --step race-metadata, $DateFrom to $DateTo) ---"
+& $RunBatch -Step race-metadata -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+$metadataExit = $LASTEXITCODE
 
 Write-Log "--- results sync (batch.py --mode mykeibadb --step results, $DateFrom to $DateTo) ---"
 & $RunBatch -Step results -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
@@ -127,9 +132,9 @@ Write-Log "--- forecast precompute (batch.py --step forecasts, $DateFrom to $Dat
 & $RunBatch -Step forecasts -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
 $forecastsExit = $LASTEXITCODE
 
-Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit results=$resultsExit special-entries=$specialEntriesExit forecasts=$forecastsExit) ==="
+Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit race-metadata=$metadataExit results=$resultsExit special-entries=$specialEntriesExit forecasts=$forecastsExit) ==="
 
-if ($entriesExit -ne 0 -or $resultsExit -ne 0 -or $specialEntriesExit -ne 0 -or $forecastsExit -ne 0) {
+if ($entriesExit -ne 0 -or $metadataExit -ne 0 -or $resultsExit -ne 0 -or $specialEntriesExit -ne 0 -or $forecastsExit -ne 0) {
     exit 1
 }
 exit 0

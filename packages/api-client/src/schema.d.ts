@@ -312,7 +312,7 @@ export interface paths {
         put?: never;
         /**
          * Ingest Race Metadata
-         * @description 既存レースへ馬場状態・天候を上書きし、成績や出走馬は変更しない。
+         * @description 既存レースへコース種別・馬場状態・天候を上書きし、成績や出走馬は変更しない。
          */
         post: operations["ingest_race_metadata_internal_ingest_race_metadata_post"];
         delete?: never;
@@ -1128,6 +1128,8 @@ export interface components {
             race_key: string;
             /** Track Condition */
             track_condition?: string | null;
+            /** Track Type */
+            track_type?: string | null;
             /** Weather */
             weather?: string | null;
         };

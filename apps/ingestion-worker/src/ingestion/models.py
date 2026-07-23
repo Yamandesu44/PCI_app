@@ -103,5 +103,6 @@ class RaceMetadataRecord:
     """列分解済みデータソースから得た、固定長位置に依存しないレース補足情報。"""
 
     race_key: str
+    track_type: str | None = None
     track_condition: str | None = None
     weather: str | None = None

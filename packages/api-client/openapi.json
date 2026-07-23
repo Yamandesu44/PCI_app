@@ -1741,6 +1741,18 @@
             ],
             "title": "Track Condition"
           },
+          "track_type": {
+            "anyOf": [
+              {
+                "pattern": "^(芝|ダート|障害)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Type"
+          },
           "weather": {
             "anyOf": [
               {
@@ -3015,7 +3027,7 @@
     },
     "/internal/ingest/race-metadata": {
       "post": {
-        "description": "既存レースへ馬場状態・天候を上書きし、成績や出走馬は変更しない。",
+        "description": "既存レースへコース種別・馬場状態・天候を上書きし、成績や出走馬は変更しない。",
         "operationId": "ingest_race_metadata_internal_ingest_race_metadata_post",
         "parameters": [
           {

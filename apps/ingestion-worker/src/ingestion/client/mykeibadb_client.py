@@ -550,6 +550,7 @@ def _race_metadata_from_row(row: dict[str, Any]) -> RaceMetadataRecord:
     weather_code = _str_or_none(_pick(row, _WEATHER_COLUMNS)) or ""
     return RaceMetadataRecord(
         race_key=_race_key_from_row(row),
+        track_type=track_type,
         track_condition=decode_baba(condition_code),
         weather=decode_tenko(weather_code),
     )

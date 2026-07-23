@@ -116,7 +116,7 @@ class RegisterRaceEntriesUseCase:
 
 
 class UpdateRaceMetadataUseCase:
-    """既存レースの馬場状態・天候だけを安全に更新する。"""
+    """既存レースのコース種別・馬場状態・天候だけを安全に更新する。"""
 
     def __init__(self, repo: RaceRepository) -> None:
         self._repo = repo
@@ -125,12 +125,15 @@ class UpdateRaceMetadataUseCase:
         self,
         race_key_str: str,
         *,
+        track_type: str | None = None,
         track_condition: str | None = None,
         weather: str | None = None,
     ) -> bool:
         key = RaceKey(race_key_str)
         race = self._repo.find_by_key(key)
-        if race is None or (track_condition is None and weather is None):
+        if race is None or (
+            track_type is None and track_condition is None and weather is None
+        ):
             return False
 
         self._repo.save_race(
@@ -139,7 +142,7 @@ class UpdateRaceMetadataUseCase:
                 race_date=race.race_date,
                 jyo_cd=race.jyo_cd,
                 distance_m=race.distance_m,
-                track_type=race.track_type,
+                track_type=track_type or race.track_type,
                 field_size=race.field_size,
                 status=race.status,
                 track_condition=track_condition or race.track_condition,

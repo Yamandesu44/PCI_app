@@ -275,6 +275,7 @@ class TestIngestRaceMetadata:
             json=[
                 {
                     "race_key": RACE_KEY,
+                    "track_type": "障害",
                     "track_condition": "重",
                     "weather": "雨",
                 }
@@ -285,6 +286,7 @@ class TestIngestRaceMetadata:
         assert resp.status_code == 200
         assert resp.json()["accepted"] == 1
         assert race is not None
+        assert race.track_type == "障害"
         assert race.track_condition == "重"
         assert race.weather == "雨"
         assert race.status.value == "result"
@@ -298,6 +300,14 @@ class TestIngestRaceMetadata:
 
         assert resp.status_code == 200
         assert resp.json()["accepted"] == 0
+
+    def test_rejects_unknown_track_type(self, client: TestClient) -> None:
+        resp = client.post(
+            "/internal/ingest/race-metadata",
+            json=[{"race_key": RACE_KEY, "track_type": "直線"}],
+        )
+
+        assert resp.status_code == 422
 
     def test_rejects_unknown_condition(self, client: TestClient) -> None:
         resp = client.post(

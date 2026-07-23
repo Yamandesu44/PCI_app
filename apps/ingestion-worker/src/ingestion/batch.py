@@ -468,6 +468,7 @@ def _apply_source_metadata(client: JvLinkClient, race: RaceEntriesRecord) -> Non
     metadata = client.race_metadata(race.race_key)
     if metadata is None:
         return
+    race.track_type = metadata.track_type or race.track_type
     race.track_condition = metadata.track_condition or race.track_condition
     race.weather = metadata.weather or race.weather
 
@@ -531,6 +532,11 @@ def iter_date_chunks(date_from: str, date_to: str, chunk_days: int) -> list[tupl
         chunks.append((current.strftime("%Y%m%d"), chunk_end.strftime("%Y%m%d")))
         current = chunk_end + datetime.timedelta(days=1)
     return chunks
+
+
+def includes_race_metadata(step: str, mode: str) -> bool:
+    """指定ステップで馬場状態・天候の補完も実行するかを返す。"""
+    return step == "race-metadata" or (step == "all" and mode == "mykeibadb")
 
 
 # ---------------------------------------------------------------------------
@@ -690,7 +696,7 @@ def main() -> None:
                     race_keys=incomplete_race_keys,
                 )
 
-            if args.step == "race-metadata":
+            if includes_race_metadata(args.step, args.mode):
                 if not isinstance(client, RaceMetadataProvider):
                     raise RuntimeError("選択したデータソースはレース補足情報に対応していません。")
                 _log.info("--- 馬場状態・天候バックフィル ---")

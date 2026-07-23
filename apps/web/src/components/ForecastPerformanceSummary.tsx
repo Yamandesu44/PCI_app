@@ -47,7 +47,7 @@ export function ForecastPerformanceSummary({
   }
 
   return (
-    <section className="mb-8 border-y border-slate-200 bg-white py-5">
+    <section className="mb-8 border-y border-slate-200 bg-white px-4 py-5 sm:px-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="flex items-center gap-2 text-xs font-semibold uppercase text-emerald-700">

@@ -292,9 +292,12 @@ def test_iter_race_metadata_uses_condition_for_actual_track() -> None:
 
     records = list(client.iter_race_metadata("20260621", "20260621"))
 
-    assert [(record.track_condition, record.weather) for record in records] == [
-        ("稍重", "晴"),
-        ("重", "雨"),
+    assert [
+        (record.track_type, record.track_condition, record.weather)
+        for record in records
+    ] == [
+        ("芝", "稍重", "晴"),
+        ("ダート", "重", "雨"),
     ]
 
 

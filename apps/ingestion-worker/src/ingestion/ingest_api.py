@@ -205,13 +205,14 @@ class IngestApiClient:
         return result
 
     def update_race_metadata(self, records: list[RaceMetadataRecord]) -> int:
-        """既存レースへ馬場状態・天候を一括反映する。"""
+        """既存レースへコース種別・馬場状態・天候を一括反映する。"""
         total = 0
         for i in range(0, len(records), _BATCH_SIZE):
             batch = records[i : i + _BATCH_SIZE]
             payload = [
                 {
                     "race_key": record.race_key,
+                    "track_type": record.track_type,
                     "track_condition": record.track_condition,
                     "weather": record.weather,
                 }

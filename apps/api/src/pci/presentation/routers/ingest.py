@@ -130,6 +130,7 @@ class ResultBody(BaseModel):
 
 class RaceMetadataBody(BaseModel):
     race_key: str = Field(pattern=r"^\d{16}$")
+    track_type: str | None = Field(default=None, pattern=r"^(芝|ダート|障害)$")
     track_condition: str | None = Field(default=None, pattern=r"^(良|稍重|重|不良)$")
     weather: str | None = Field(default=None, pattern=r"^(晴|曇|小雨|雨|小雪|雪)$")
 
@@ -312,11 +313,12 @@ def ingest_race_metadata(
     session: SessionDep,
     _auth: AuthDep,
 ) -> IngestResponse:
-    """既存レースへ馬場状態・天候を上書きし、成績や出走馬は変更しない。"""
+    """既存レースへコース種別・馬場状態・天候を上書きし、成績や出走馬は変更しない。"""
     uc = UpdateRaceMetadataUseCase(repo)
     accepted = sum(
         uc.execute(
             item.race_key,
+            track_type=item.track_type,
             track_condition=item.track_condition,
             weather=item.weather,
         )
