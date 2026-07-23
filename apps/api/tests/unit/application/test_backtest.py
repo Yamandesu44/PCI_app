@@ -14,6 +14,7 @@ import pytest
 
 from pci.application.backtest import (
     DEFAULT_ABILITY_WEIGHT_PROFILES,
+    DEFAULT_PAI_WEIGHT_PROFILES,
     DEFAULT_RULE_WEIGHT_PROFILES,
     BacktestReport,
     ForecastBacktester,
@@ -32,14 +33,17 @@ from pci.application.backtest import (
     build_actual_style_advantage_breakdown,
     collect_actual_style_advantage_samples,
     compare_ability_weight_reports,
+    compare_pai_weight_reports,
     compare_rule_weight_reports,
     format_ability_weight_comparison,
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
+    format_pai_weight_comparison,
     format_report,
     format_rule_weight_comparison,
     format_style_advantage_attribution,
     group_races_by_track,
+    pai_weight_comparisons_to_dict,
     report_to_dict,
     rule_weight_comparisons_to_dict,
     style_advantage_attribution_to_dict,
@@ -508,6 +512,101 @@ class TestRuleWeightComparison:
         assert "ダート" in text
 
 
+class TestPaiWeightComparison:
+    @staticmethod
+    def _sample(
+        race_key: str,
+        horse_no: int,
+        track_type: str,
+        pai: float,
+        good_run: bool,
+    ) -> HorseSample:
+        return HorseSample(
+            race_key=race_key,
+            horse_no=horse_no,
+            pai=pai,
+            good_run=good_run,
+            track_type=track_type,
+        )
+
+    def _report(self, samples: list[HorseSample]) -> BacktestReport:
+        return BacktestReport(
+            model_version="rule-v4",
+            n_races=2,
+            n_horses=len(samples),
+            skipped=0,
+            rpci=None,
+            pai=summarize_pai_lift(samples),
+            horse_samples=samples,
+        )
+
+    def test_compares_overall_turf_and_dirt_with_current(self) -> None:
+        baseline_samples = [
+            self._sample("R1", 1, "芝", 90.0, True),
+            self._sample("R1", 2, "芝", 10.0, False),
+            self._sample("R2", 1, "ダート", 80.0, True),
+            self._sample("R2", 2, "ダート", 20.0, False),
+        ]
+        candidate_samples = [
+            self._sample("R1", 1, "芝", 10.0, True),
+            self._sample("R1", 2, "芝", 90.0, False),
+            self._sample("R2", 1, "ダート", 80.0, True),
+            self._sample("R2", 2, "ダート", 20.0, False),
+        ]
+        reports = {
+            profile.name: self._report(baseline_samples)
+            for profile in DEFAULT_PAI_WEIGHT_PROFILES
+        }
+        reports["rpci-light"] = self._report(candidate_samples)
+
+        comparisons = compare_pai_weight_reports(reports)
+
+        candidate = next(item for item in comparisons if item.profile.name == "rpci-light")
+        assert candidate.turf.delta_point_biserial == -2.0
+        assert candidate.turf.delta_top_band_lift == -2.0
+        assert candidate.dirt.delta_point_biserial == 0.0
+        assert candidate.dirt.delta_top_band_lift == 0.0
+
+    def test_missing_baseline_and_different_horses_raise(self) -> None:
+        with pytest.raises(ValueError, match="基準プロファイル"):
+            compare_pai_weight_reports({})
+
+        baseline = self._report([self._sample("R1", 1, "芝", 80.0, True)])
+        reports = {
+            profile.name: baseline for profile in DEFAULT_PAI_WEIGHT_PROFILES
+        }
+        reports["rpci-heavy"] = self._report(
+            [self._sample("R1", 2, "芝", 80.0, True)]
+        )
+        with pytest.raises(ValueError, match="比較対象馬"):
+            compare_pai_weight_reports(reports)
+
+    def test_json_and_text_include_weights_track_metrics_and_deltas(self) -> None:
+        report = self._report(
+            [
+                self._sample("R1", 1, "芝", 90.0, True),
+                self._sample("R1", 2, "芝", 10.0, False),
+            ]
+        )
+        reports = {
+            profile.name: report for profile in DEFAULT_PAI_WEIGHT_PROFILES
+        }
+
+        comparisons = compare_pai_weight_reports(reports)
+        payload = pai_weight_comparisons_to_dict(comparisons)
+
+        assert payload[0]["name"] == "current"
+        assert payload[0]["weights"]["rpci_diff_weight"] == 5.0
+        assert payload[0]["weights"]["preferred_escape"] == 55.0
+        assert payload[0]["turf"]["pai"]["n"] == 2
+        assert payload[0]["dirt"]["pai"] is None
+        assert payload[0]["combined"]["delta_vs_current"]["point_biserial"] == 0.0
+        text = format_pai_weight_comparison(comparisons)
+        assert "候補は自動採用しません" in text
+        assert "全体" in text
+        assert "ダート" in text
+
+
 class TestGroupRacesByTrack:
     @staticmethod
     def _race(key: str, track_type: str) -> Race:
@@ -904,7 +1003,13 @@ class TestReportToDict:
             }
         ]
         assert result["horse_samples"] == [
-            {"race_key": "2026010105010101", "horse_no": 1, "pai": 80.0, "good_run": True}
+            {
+                "race_key": "2026010105010101",
+                "horse_no": 1,
+                "pai": 80.0,
+                "good_run": True,
+                "track_type": "",
+            }
         ]
         assert result["integrated"] is None
         assert result["style_advantage"] is None

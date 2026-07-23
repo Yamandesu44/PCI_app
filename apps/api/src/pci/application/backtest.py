@@ -34,6 +34,13 @@ from pci.domain.pace.ability import (
     AbilityScorer,
     AbilityWeights,
 )
+from pci.domain.pace.adaptability import (
+    DEFAULT_WEIGHTS as DEFAULT_PAI_WEIGHTS,
+)
+from pci.domain.pace.adaptability import (
+    PaceAdaptabilityScorer,
+    PaiWeights,
+)
 from pci.domain.pace.affinity import is_good_run
 from pci.domain.pace.commentary import CommentGenerator
 from pci.domain.pace.rpci_forecast import (
@@ -166,6 +173,7 @@ class HorseSample:
     horse_no: int
     pai: float
     good_run: bool
+    track_type: str = ""
 
 
 @dataclass(frozen=True)
@@ -385,6 +393,75 @@ class RuleWeightComparison:
     combined: RuleWeightMetrics
     turf: RuleWeightMetrics
     dirt: RuleWeightMetrics
+
+
+@dataclass(frozen=True)
+class PaiWeightProfile:
+    """実DB比較に使うPAI重みの候補。本番設定は書き換えない。"""
+
+    name: str
+    description: str
+    weights: PaiWeights
+
+
+DEFAULT_PAI_WEIGHT_PROFILES: tuple[PaiWeightProfile, ...] = (
+    PaiWeightProfile(
+        name="current",
+        description="現行重み",
+        weights=DEFAULT_PAI_WEIGHTS,
+    ),
+    PaiWeightProfile(
+        name="rpci-light",
+        description="想定ペース差の減点を弱める",
+        weights=replace(DEFAULT_PAI_WEIGHTS, rpci_diff_weight=4.0),
+    ),
+    PaiWeightProfile(
+        name="rpci-heavy",
+        description="想定ペース差の減点を強める",
+        weights=replace(DEFAULT_PAI_WEIGHTS, rpci_diff_weight=6.0),
+    ),
+    PaiWeightProfile(
+        name="preference-compressed",
+        description="脚質ごとの好ペース差を縮める",
+        weights=replace(
+            DEFAULT_PAI_WEIGHTS,
+            preferred_escape=53.0,
+            preferred_front=52.0,
+            preferred_stalker=48.0,
+            preferred_closer=47.0,
+        ),
+    ),
+    PaiWeightProfile(
+        name="preference-expanded",
+        description="脚質ごとの好ペース差を広げる",
+        weights=replace(
+            DEFAULT_PAI_WEIGHTS,
+            preferred_escape=57.0,
+            preferred_front=54.0,
+            preferred_stalker=46.0,
+            preferred_closer=43.0,
+        ),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class PaiWeightMetrics:
+    """候補PAI重みのリフトと現行値との差。"""
+
+    lift: PaiLift | None
+    delta_point_biserial: float | None
+    delta_top_band_lift: float | None
+
+
+@dataclass(frozen=True)
+class PaiWeightComparison:
+    """同一対象レースでのPAI重み候補の比較結果。"""
+
+    profile: PaiWeightProfile
+    combined: PaiWeightMetrics
+    turf: PaiWeightMetrics
+    dirt: PaiWeightMetrics
 
 
 @dataclass(frozen=True)
@@ -692,6 +769,80 @@ def compare_rule_weight_reports(
     return comparisons
 
 
+def compare_pai_weight_reports(
+    reports: dict[str, BacktestReport],
+    profiles: tuple[PaiWeightProfile, ...] = DEFAULT_PAI_WEIGHT_PROFILES,
+    *,
+    baseline_name: str = "current",
+) -> list[PaiWeightComparison]:
+    """同一レース・同一馬のPAI重み候補を全体・芝・ダートで比較する。"""
+    baseline_report = reports.get(baseline_name)
+    if baseline_report is None:
+        raise ValueError(f"基準プロファイルがありません: {baseline_name}")
+    baseline_keys = [
+        (sample.race_key, sample.horse_no) for sample in baseline_report.horse_samples
+    ]
+
+    comparisons: list[PaiWeightComparison] = []
+    for profile in profiles:
+        report = reports.get(profile.name)
+        if report is None:
+            raise ValueError(f"比較レポートがありません: {profile.name}")
+        candidate_keys = [(sample.race_key, sample.horse_no) for sample in report.horse_samples]
+        if candidate_keys != baseline_keys:
+            raise ValueError(f"比較対象馬が現行重みと一致しません: {profile.name}")
+
+        comparisons.append(
+            PaiWeightComparison(
+                profile=profile,
+                combined=_compare_pai_scope(
+                    baseline_report.horse_samples,
+                    report.horse_samples,
+                ),
+                turf=_compare_pai_scope(
+                    _filter_horse_samples(baseline_report.horse_samples, "芝"),
+                    _filter_horse_samples(report.horse_samples, "芝"),
+                ),
+                dirt=_compare_pai_scope(
+                    _filter_horse_samples(baseline_report.horse_samples, "ダート"),
+                    _filter_horse_samples(report.horse_samples, "ダート"),
+                ),
+            )
+        )
+    return comparisons
+
+
+def _filter_horse_samples(
+    samples: list[HorseSample], track_type: str
+) -> list[HorseSample]:
+    return [sample for sample in samples if sample.track_type == track_type]
+
+
+def _compare_pai_scope(
+    baseline_samples: list[HorseSample],
+    candidate_samples: list[HorseSample],
+) -> PaiWeightMetrics:
+    baseline = summarize_pai_lift(baseline_samples)
+    candidate = summarize_pai_lift(candidate_samples)
+    if baseline is None or candidate is None:
+        return PaiWeightMetrics(
+            lift=candidate,
+            delta_point_biserial=None,
+            delta_top_band_lift=None,
+        )
+    return PaiWeightMetrics(
+        lift=candidate,
+        delta_point_biserial=round(
+            candidate.point_biserial - baseline.point_biserial,
+            4,
+        ),
+        delta_top_band_lift=round(
+            candidate.top_band_lift - baseline.top_band_lift,
+            4,
+        ),
+    )
+
+
 def _filter_rpci_samples(samples: list[RpciSample], track_type: str) -> list[RpciSample]:
     return [sample for sample in samples if sample.track_type == track_type]
 
@@ -827,6 +978,40 @@ def rule_weight_comparisons_to_dict(
     ]
 
 
+def pai_weight_comparisons_to_dict(
+    comparisons: list[PaiWeightComparison],
+) -> list[dict[str, Any]]:
+    """PAI重み比較結果をJSON保存用の辞書へ変換する。"""
+    return [
+        {
+            "name": item.profile.name,
+            "description": item.profile.description,
+            "weights": {
+                "preferred_escape": item.profile.weights.preferred_escape,
+                "preferred_front": item.profile.weights.preferred_front,
+                "preferred_flexible": item.profile.weights.preferred_flexible,
+                "preferred_stalker": item.profile.weights.preferred_stalker,
+                "preferred_closer": item.profile.weights.preferred_closer,
+                "rpci_diff_weight": item.profile.weights.rpci_diff_weight,
+            },
+            "combined": _pai_weight_metrics_to_dict(item.combined),
+            "turf": _pai_weight_metrics_to_dict(item.turf),
+            "dirt": _pai_weight_metrics_to_dict(item.dirt),
+        }
+        for item in comparisons
+    ]
+
+
+def _pai_weight_metrics_to_dict(metrics: PaiWeightMetrics) -> dict[str, Any]:
+    return {
+        "pai": _pai_lift_to_dict(metrics.lift),
+        "delta_vs_current": {
+            "point_biserial": metrics.delta_point_biserial,
+            "top_band_lift": metrics.delta_top_band_lift,
+        },
+    }
+
+
 def _rule_weight_metrics_to_dict(metrics: RuleWeightMetrics) -> dict[str, Any]:
     return {
         "rpci": _rpci_accuracy_to_dict(metrics.accuracy),
@@ -916,6 +1101,7 @@ def _horse_sample_to_dict(sample: HorseSample) -> dict[str, Any]:
         "horse_no": sample.horse_no,
         "pai": sample.pai,
         "good_run": sample.good_run,
+        "track_type": sample.track_type,
     }
 
 
@@ -1063,6 +1249,43 @@ def format_rule_weight_comparison(comparisons: list[RuleWeightComparison]) -> st
                     f"({_format_number_delta(metrics.delta_mae)}) "
                     f"一致率={metrics.accuracy.label_accuracy:6.1%}"
                     f"({_format_delta(metrics.delta_label_accuracy)})"
+                )
+            lines.append(f"  {label:<4} {summary}")
+    lines.append("=" * 96)
+    return "\n".join(lines)
+
+
+def format_pai_weight_comparison(comparisons: list[PaiWeightComparison]) -> str:
+    """PAI重み候補の比較をCLI向けの表に整形する。"""
+    lines = [
+        "=" * 96,
+        "PaiWeightsの同一期間比較（候補は自動採用しません）",
+        "相関と最上位帯リフトは高いほど良い指標です。",
+        "-" * 96,
+    ]
+    for item in comparisons:
+        weights = item.profile.weights
+        lines.append(
+            f"{item.profile.name} "
+            f"(preferred={weights.preferred_escape:.1f}/"
+            f"{weights.preferred_front:.1f}/{weights.preferred_flexible:.1f}/"
+            f"{weights.preferred_stalker:.1f}/{weights.preferred_closer:.1f}, "
+            f"rpci_weight={weights.rpci_diff_weight:.1f})"
+        )
+        for label, metrics in (
+            ("全体", item.combined),
+            ("芝", item.turf),
+            ("ダート", item.dirt),
+        ):
+            if metrics.lift is None:
+                summary = "有効サンプルなし"
+            else:
+                summary = (
+                    f"n={metrics.lift.n:5d} "
+                    f"相関={metrics.lift.point_biserial:+.3f}"
+                    f"({_format_number_delta(metrics.delta_point_biserial)}) "
+                    f"上位帯={metrics.lift.top_band_lift:5.2f}x"
+                    f"({_format_number_delta(metrics.delta_top_band_lift)})"
                 )
             lines.append(f"  {label:<4} {summary}")
     lines.append("=" * 96)
@@ -1228,12 +1451,14 @@ class ForecastBacktester:
         forecaster: RpciForecaster | None = None,
         comment_generator: CommentGenerator | None = None,
         ability_scorer: AbilityScorer | None = None,
+        pai_scorer: PaceAdaptabilityScorer | None = None,
         band_edges: tuple[int, ...] = DEFAULT_BAND_EDGES,
     ) -> None:
         self._repo = repo
         self._forecaster = forecaster
         self._commenter = comment_generator
         self._ability_scorer = ability_scorer
+        self._pai_scorer = pai_scorer
         self._band_edges = band_edges
 
     def run(self, targets: Iterable[Race]) -> BacktestReport:
@@ -1285,6 +1510,7 @@ class ForecastBacktester:
                         horse_no=horse.horse_no,
                         pai=horse.pai,
                         good_run=good_run,
+                        track_type=race.track_type,
                     )
                 )
                 style_score = style_scores.get(horse.running_style)
@@ -1430,6 +1656,7 @@ class ForecastBacktester:
             mart_repo=None,
             comment_generator=self._commenter,
             ability_scorer=self._ability_scorer,
+            scorer=self._pai_scorer,
         )
         return use_case.execute(str(race.race_key))
 
