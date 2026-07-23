@@ -30,6 +30,11 @@ export interface MissingTrackConditionRaceMeta {
   href: string;
 }
 
+export interface DuplicateRaceGroupMeta {
+  label: string;
+  raceKeys: string[];
+}
+
 export interface IngestStatusMeta {
   visible: boolean;
   tone: IngestStatusTone;
@@ -39,6 +44,7 @@ export interface IngestStatusMeta {
   failures: IngestFailureMeta[];
   incompleteRaces: IncompleteRaceMeta[];
   missingTrackConditionRaces: MissingTrackConditionRaceMeta[];
+  duplicateRaceGroups: DuplicateRaceGroupMeta[];
   recoveryCommand: string | null;
   metadataRecoveryCommand: string | null;
 }
@@ -81,6 +87,13 @@ function buildMissingTrackConditionRaces(
     label: `${formatRaceDate(race.race_date)} ${jyoName(race.jyo_cd)} ${raceNumber(race.race_key)}`,
     condition: `${race.track_type}${race.distance_m}m`,
     href: `/races/${race.race_key}/pace-analysis`,
+  }));
+}
+
+function buildDuplicateRaceGroups(status: IngestStatus): DuplicateRaceGroupMeta[] {
+  return status.duplicate_race_groups.map((group) => ({
+    label: `${formatRaceDate(group.race_date)} ${jyoName(group.jyo_cd)} ${Number(group.race_no)}R`,
+    raceKeys: group.race_keys,
   }));
 }
 
@@ -127,6 +140,7 @@ const HIDDEN: IngestStatusMeta = {
   failures: [],
   incompleteRaces: [],
   missingTrackConditionRaces: [],
+  duplicateRaceGroups: [],
   recoveryCommand: null,
   metadataRecoveryCommand: null,
 };
@@ -135,7 +149,8 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
   if (
     !status.has_history &&
     !status.has_incomplete_races &&
-    !status.has_missing_track_conditions
+    !status.has_missing_track_conditions &&
+    !status.has_duplicate_races
   ) {
     return HIDDEN;
   }
@@ -152,6 +167,7 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       failures: buildFailures(status),
       incompleteRaces: buildIncompleteRaces(status),
       missingTrackConditionRaces: buildMissingTrackConditionRaces(status),
+      duplicateRaceGroups: buildDuplicateRaceGroups(status),
       recoveryCommand: recoveryCommand(status),
       metadataRecoveryCommand: metadataRecoveryCommand(status),
     };
@@ -167,6 +183,7 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       failures: buildFailures(status),
       incompleteRaces: buildIncompleteRaces(status),
       missingTrackConditionRaces: buildMissingTrackConditionRaces(status),
+      duplicateRaceGroups: buildDuplicateRaceGroups(status),
       recoveryCommand: recoveryCommand(status),
       metadataRecoveryCommand: metadataRecoveryCommand(status),
     };
@@ -183,8 +200,26 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       failures: buildFailures(status),
       incompleteRaces: [],
       missingTrackConditionRaces: buildMissingTrackConditionRaces(status),
+      duplicateRaceGroups: buildDuplicateRaceGroups(status),
       recoveryCommand: null,
       metadataRecoveryCommand: metadataRecoveryCommand(status),
+    };
+  }
+
+  if (status.has_duplicate_races) {
+    return {
+      visible: true,
+      tone: "warning",
+      headline: `重複レースが${status.duplicate_race_group_count}組あります`,
+      detail:
+        "同じ開催日・競馬場・R番号に複数のレースキーがあります。集計や一覧に影響するため、統合対象をご確認ください。",
+      color: TONE_COLOR.warning,
+      failures: buildFailures(status),
+      incompleteRaces: [],
+      missingTrackConditionRaces: [],
+      duplicateRaceGroups: buildDuplicateRaceGroups(status),
+      recoveryCommand: null,
+      metadataRecoveryCommand: null,
     };
   }
 
@@ -202,6 +237,7 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       failures: buildFailures(status),
       incompleteRaces: [],
       missingTrackConditionRaces: [],
+      duplicateRaceGroups: [],
       recoveryCommand: recoveryCommand(status),
       metadataRecoveryCommand: null,
     };
@@ -216,6 +252,7 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
     failures: [],
     incompleteRaces: [],
     missingTrackConditionRaces: [],
+    duplicateRaceGroups: [],
     recoveryCommand: null,
     metadataRecoveryCommand: null,
   };

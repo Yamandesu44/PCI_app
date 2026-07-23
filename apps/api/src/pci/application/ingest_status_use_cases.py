@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 
 from pci.application.dto import (
+    DuplicateRaceGroupOutput,
     IncompleteRaceOutput,
     IngestFailureOutput,
     IngestStatusOutput,
@@ -18,6 +19,7 @@ _RECENT_FAILURES_LIMIT = 5
 _ERROR_SUMMARY_MAX_LEN = 200
 _INCOMPLETE_RACES_LIMIT = 20
 _MISSING_TRACK_CONDITIONS_LIMIT = 20
+_DUPLICATE_RACE_GROUPS_LIMIT = 20
 _RACE_METADATA_LOOKBACK_DAYS = 365
 _DEFAULT_SYNC_DAYS_BACK = 10
 _JRA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=9), name="JST")
@@ -60,6 +62,14 @@ class GetIngestStatusUseCase:
                 race_date_today,
                 limit=_MISSING_TRACK_CONDITIONS_LIMIT,
             )
+        )
+        duplicate_race_group_count = self._race_repo.count_duplicate_race_groups(
+            metadata_date_from, race_date_today
+        )
+        duplicate_race_groups = self._race_repo.find_duplicate_race_groups(
+            metadata_date_from,
+            race_date_today,
+            limit=_DUPLICATE_RACE_GROUPS_LIMIT,
         )
         recommended_sync_days_back = _DEFAULT_SYNC_DAYS_BACK
         if oldest_incomplete_date is not None:
@@ -117,5 +127,16 @@ class GetIngestStatusUseCase:
                     distance_m=race.distance_m,
                 )
                 for race in missing_track_condition_races
+            ],
+            has_duplicate_races=duplicate_race_group_count > 0,
+            duplicate_race_group_count=duplicate_race_group_count,
+            duplicate_race_groups=[
+                DuplicateRaceGroupOutput(
+                    race_date=group.race_date.isoformat(),
+                    jyo_cd=group.jyo_cd,
+                    race_no=group.race_no,
+                    race_keys=list(group.race_keys),
+                )
+                for group in duplicate_race_groups
             ],
         )

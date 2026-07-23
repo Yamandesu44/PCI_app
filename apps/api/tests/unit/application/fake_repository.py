@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
+from pci.domain.racing.repository import DuplicateRaceGroup
 from pci.domain.shared.race_key import RaceKey
 
 
@@ -95,6 +96,48 @@ class FakeRaceRepository:
         ]
         races.sort(key=lambda race: (race.race_date, str(race.race_key)), reverse=True)
         return races[:limit]
+
+    def count_duplicate_race_groups(
+        self, on_or_after: datetime.date, before: datetime.date
+    ) -> int:
+        return len(
+            self.find_duplicate_race_groups(
+                on_or_after, before, limit=len(self._races)
+            )
+        )
+
+    def find_duplicate_race_groups(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 20,
+    ) -> list[DuplicateRaceGroup]:
+        grouped: dict[tuple[datetime.date, str, str], list[str]] = {}
+        for race in self._races.values():
+            race_key = str(race.race_key)
+            if (
+                on_or_after <= race.race_date < before
+                and race.jyo_cd in _JRA_PLACE_CODES
+                and race.track_type != "障害"
+                and len(race_key) == 16
+            ):
+                identity = (race.race_date, race.jyo_cd, race_key[-2:])
+                grouped.setdefault(identity, []).append(race_key)
+        duplicates = [
+            DuplicateRaceGroup(
+                race_date=identity[0],
+                jyo_cd=identity[1],
+                race_no=identity[2],
+                race_keys=tuple(sorted(race_keys)),
+            )
+            for identity, race_keys in grouped.items()
+            if len(race_keys) > 1
+        ]
+        duplicates.sort(
+            key=lambda group: (group.race_date, group.jyo_cd, group.race_no),
+            reverse=True,
+        )
+        return duplicates[:limit]
 
     def find_horse_recent_entries(
         self, ketto_num: str, limit: int = 5, before: datetime.date | None = None

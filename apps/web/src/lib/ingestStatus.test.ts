@@ -21,6 +21,9 @@ function status(overrides: Partial<IngestStatus>): IngestStatus {
     has_missing_track_conditions: false,
     missing_track_condition_count: 0,
     missing_track_condition_races: [],
+    has_duplicate_races: false,
+    duplicate_race_group_count: 0,
+    duplicate_race_groups: [],
     ...overrides,
   };
 }
@@ -187,5 +190,47 @@ describe("ingestStatusMeta", () => {
 
     expect(meta.visible).toBe(true);
     expect(meta.headline).toContain("3件");
+  });
+
+  it("同一開催日・競馬場・R番号の重複を独立した警告として表示する", () => {
+    const meta = ingestStatusMeta(
+      status({
+        has_duplicate_races: true,
+        duplicate_race_group_count: 1,
+        duplicate_race_groups: [
+          {
+            race_date: "2026-07-19",
+            jyo_cd: "10",
+            race_no: "11",
+            race_keys: ["2026071902011211", "2026071910010111"],
+          },
+        ],
+      }),
+    );
+
+    expect(meta.visible).toBe(true);
+    expect(meta.tone).toBe("warning");
+    expect(meta.headline).toContain("重複レースが1組");
+    expect(meta.duplicateRaceGroups).toEqual([
+      {
+        label: "7月19日 小倉 11R",
+        raceKeys: ["2026071902011211", "2026071910010111"],
+      },
+    ]);
+    expect(meta.recoveryCommand).toBeNull();
+    expect(meta.metadataRecoveryCommand).toBeNull();
+  });
+
+  it("履歴が無くても重複レースがあれば警告する", () => {
+    const meta = ingestStatusMeta(
+      status({
+        has_history: false,
+        has_duplicate_races: true,
+        duplicate_race_group_count: 2,
+      }),
+    );
+
+    expect(meta.visible).toBe(true);
+    expect(meta.headline).toContain("2組");
   });
 });

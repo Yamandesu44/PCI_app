@@ -6,13 +6,15 @@ import datetime
 from collections.abc import Iterable
 from typing import Any, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, literal_column, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus, TrackType
 from pci.domain.racing.race_entry import RaceEntry
+from pci.domain.racing.repository import DuplicateRaceGroup
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import (
     HorseModel,
@@ -142,6 +144,67 @@ class SqlAlchemyRaceRepository:
             .limit(limit)
         )
         return [self._to_race(m) for m in self._s.scalars(stmt).all()]
+
+    def count_duplicate_race_groups(
+        self, on_or_after: datetime.date, before: datetime.date
+    ) -> int:
+        """指定期間内の、日付・競馬場・R番号が重複するJRA平地レース組数を返す。"""
+        race_no: ColumnElement[Any] = literal_column("right(races.race_key, 2)")
+        groups = (
+            select(
+                RaceModel.race_date,
+                RaceModel.jyo_cd,
+                race_no.label("race_no"),
+            )
+            .where(*self._duplicate_race_conditions(on_or_after, before))
+            .group_by(RaceModel.race_date, RaceModel.jyo_cd, race_no)
+            .having(func.count() > 1)
+            .subquery()
+        )
+        return int(self._s.scalar(select(func.count()).select_from(groups)) or 0)
+
+    def find_duplicate_race_groups(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 20,
+    ) -> list[DuplicateRaceGroup]:
+        """指定期間内の重複レース組を新しい順に返す。"""
+        race_no: ColumnElement[Any] = literal_column("right(races.race_key, 2)")
+        stmt = (
+            select(
+                RaceModel.race_date,
+                RaceModel.jyo_cd,
+                race_no.label("race_no"),
+                func.array_agg(RaceModel.race_key).label("race_keys"),
+            )
+            .where(*self._duplicate_race_conditions(on_or_after, before))
+            .group_by(RaceModel.race_date, RaceModel.jyo_cd, race_no)
+            .having(func.count() > 1)
+            .order_by(RaceModel.race_date.desc(), RaceModel.jyo_cd, race_no)
+            .limit(limit)
+        )
+        return [
+            DuplicateRaceGroup(
+                race_date=row.race_date,
+                jyo_cd=row.jyo_cd,
+                race_no=row.race_no,
+                race_keys=tuple(sorted(row.race_keys)),
+            )
+            for row in self._s.execute(stmt)
+        ]
+
+    @staticmethod
+    def _duplicate_race_conditions(
+        on_or_after: datetime.date, before: datetime.date
+    ) -> tuple[Any, ...]:
+        return (
+            RaceModel.race_date >= on_or_after,
+            RaceModel.race_date < before,
+            RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+            RaceModel.track_type != str(TrackType.HURDLE),
+            func.length(RaceModel.race_key) == 16,
+        )
 
     def find_horse_recent_entries(
         self, ketto_num: str, limit: int = 5, before: datetime.date | None = None

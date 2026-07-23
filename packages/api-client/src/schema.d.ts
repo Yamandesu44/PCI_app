@@ -425,6 +425,20 @@ export interface components {
              */
             reasons: components["schemas"]["ReasonSchema"][];
         };
+        /**
+         * DuplicateRaceGroupSchema
+         * @description 同一開催日・競馬場・R番号で重複しているレースキー群。
+         */
+        DuplicateRaceGroupSchema: {
+            /** Jyo Cd */
+            jyo_cd: string;
+            /** Race Date */
+            race_date: string;
+            /** Race Keys */
+            race_keys: string[];
+            /** Race No */
+            race_no: string;
+        };
         /** EntriesBody */
         EntriesBody: {
             /** Distance M */
@@ -903,6 +917,21 @@ export interface components {
         IngestStatusSchema: {
             /** Days Since Last Success */
             days_since_last_success?: number | null;
+            /**
+             * Duplicate Race Group Count
+             * @default 0
+             */
+            duplicate_race_group_count: number;
+            /**
+             * Duplicate Race Groups
+             * @default []
+             */
+            duplicate_race_groups: components["schemas"]["DuplicateRaceGroupSchema"][];
+            /**
+             * Has Duplicate Races
+             * @default false
+             */
+            has_duplicate_races: boolean;
             /** Has History */
             has_history: boolean;
             /**

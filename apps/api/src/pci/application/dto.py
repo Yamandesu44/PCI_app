@@ -345,6 +345,16 @@ class MissingTrackConditionRaceOutput:
     distance_m: int
 
 
+@dataclass
+class DuplicateRaceGroupOutput:
+    """同一レースとして扱うべき複数レースキー。"""
+
+    race_date: str
+    jyo_cd: str
+    race_no: str
+    race_keys: list[str]
+
+
 @dataclass(frozen=True)
 class ForecastPerformanceGroupOutput:
     """予想精度の表示用集計。PCI/RPCI実数値は含めない。"""
@@ -445,3 +455,6 @@ class IngestStatusOutput:
     missing_track_condition_races: list[MissingTrackConditionRaceOutput] = field(
         default_factory=list
     )
+    has_duplicate_races: bool = False
+    duplicate_race_group_count: int = 0
+    duplicate_race_groups: list[DuplicateRaceGroupOutput] = field(default_factory=list)

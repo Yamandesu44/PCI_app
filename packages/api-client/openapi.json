@@ -36,6 +36,38 @@
         "title": "CommentSchema",
         "type": "object"
       },
+      "DuplicateRaceGroupSchema": {
+        "description": "同一開催日・競馬場・R番号で重複しているレースキー群。",
+        "properties": {
+          "jyo_cd": {
+            "title": "Jyo Cd",
+            "type": "string"
+          },
+          "race_date": {
+            "title": "Race Date",
+            "type": "string"
+          },
+          "race_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Race Keys",
+            "type": "array"
+          },
+          "race_no": {
+            "title": "Race No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "race_date",
+          "jyo_cd",
+          "race_no",
+          "race_keys"
+        ],
+        "title": "DuplicateRaceGroupSchema",
+        "type": "object"
+      },
       "EntriesBody": {
         "properties": {
           "distance_m": {
@@ -1204,6 +1236,24 @@
               }
             ],
             "title": "Days Since Last Success"
+          },
+          "duplicate_race_group_count": {
+            "default": 0,
+            "title": "Duplicate Race Group Count",
+            "type": "integer"
+          },
+          "duplicate_race_groups": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DuplicateRaceGroupSchema"
+            },
+            "title": "Duplicate Race Groups",
+            "type": "array"
+          },
+          "has_duplicate_races": {
+            "default": false,
+            "title": "Has Duplicate Races",
+            "type": "boolean"
           },
           "has_history": {
             "title": "Has History",

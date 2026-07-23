@@ -391,6 +391,51 @@ class TestFindMissingTrackConditions:
 
 
 @pytest.mark.integration
+class TestFindDuplicateRaceGroups:
+    def test_counts_and_lists_only_recent_jra_flat_duplicates(
+        self, db_session: Session
+    ) -> None:
+        repo = SqlAlchemyRaceRepository(db_session)
+        for key, race_date, jyo_cd, track_type in [
+            ("2026061805010111", datetime.date(2026, 6, 18), "05", TrackType.TURF),
+            ("2026061805030211", datetime.date(2026, 6, 18), "05", TrackType.TURF),
+            ("2026061705010110", datetime.date(2026, 6, 17), "05", TrackType.DIRT),
+            ("2026061842040411", datetime.date(2026, 6, 18), "42", TrackType.DIRT),
+            ("2026061842040511", datetime.date(2026, 6, 18), "42", TrackType.DIRT),
+            ("2026061810010112", datetime.date(2026, 6, 18), "10", TrackType.HURDLE),
+            ("2026061810030212", datetime.date(2026, 6, 18), "10", TrackType.HURDLE),
+            ("2025061805010111", datetime.date(2025, 6, 18), "05", TrackType.TURF),
+            ("2025061805030211", datetime.date(2025, 6, 18), "05", TrackType.TURF),
+        ]:
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(key),
+                    race_date=race_date,
+                    jyo_cd=jyo_cd,
+                    distance_m=1600,
+                    track_type=track_type,
+                    field_size=12,
+                    status=RaceStatus.RESULT,
+                )
+            )
+        db_session.flush()
+
+        date_from = datetime.date(2025, 6, 19)
+        date_to = datetime.date(2026, 6, 19)
+
+        assert repo.count_duplicate_race_groups(date_from, date_to) == 1
+        groups = repo.find_duplicate_race_groups(date_from, date_to)
+        assert len(groups) == 1
+        assert groups[0].race_date == datetime.date(2026, 6, 18)
+        assert groups[0].jyo_cd == "05"
+        assert groups[0].race_no == "11"
+        assert groups[0].race_keys == (
+            "2026061805010111",
+            "2026061805030211",
+        )
+
+
+@pytest.mark.integration
 class TestFindHorseRecentEntries:
     def test_returns_only_result_races(self, db_session: Session) -> None:
         _seed_master(db_session)

@@ -21,6 +21,9 @@ STATUS_KEYS = {
     "has_missing_track_conditions",
     "missing_track_condition_count",
     "missing_track_condition_races",
+    "has_duplicate_races",
+    "duplicate_race_group_count",
+    "duplicate_race_groups",
 }
 
 

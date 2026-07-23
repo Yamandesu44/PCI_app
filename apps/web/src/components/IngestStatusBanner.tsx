@@ -117,6 +117,41 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
             </details>
           ) : null}
 
+          {meta.duplicateRaceGroups.length > 0 ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
+                重複レース（{meta.duplicateRaceGroups.length}組）
+              </summary>
+              <ul className="m-0 mt-2 grid list-none gap-1.5 p-0 sm:grid-cols-2">
+                {meta.duplicateRaceGroups.map((group) => (
+                  <li
+                    key={`${group.label}-${group.raceKeys.join("-")}`}
+                    className="rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700"
+                  >
+                    <p className="m-0 font-semibold text-slate-900">{group.label}</p>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                      {group.raceKeys.map((raceKey) => (
+                        <Link
+                          key={raceKey}
+                          href={`/races/${raceKey}/forecast`}
+                          className="font-mono text-[11px] text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-950"
+                        >
+                          {raceKey}
+                        </Link>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {status.duplicate_race_group_count > meta.duplicateRaceGroups.length ? (
+                <p className="m-0 mt-2 text-xs text-slate-500">
+                  ほか
+                  {status.duplicate_race_group_count - meta.duplicateRaceGroups.length}組
+                </p>
+              ) : null}
+            </details>
+          ) : null}
+
           {meta.recoveryCommand ? (
             <details className="mt-2">
               <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">

@@ -252,3 +252,45 @@ class TestGetIngestStatusUseCase:
         assert output.has_missing_track_conditions is False
         assert output.missing_track_condition_count == 0
         assert output.missing_track_condition_races == []
+
+    def test_duplicate_race_identities_are_reported(self) -> None:
+        repo = FakeRaceRepository()
+        for key, race_date, jyo_cd, track_type in [
+            ("2026071902011211", datetime.date(2026, 7, 19), "10", "芝"),
+            ("2026071910010111", datetime.date(2026, 7, 19), "10", "芝"),
+            ("2026071903011209", datetime.date(2026, 7, 19), "03", "ダート"),
+            ("2026071910030109", datetime.date(2026, 7, 19), "10", "障害"),
+            ("2025071902011211", datetime.date(2025, 7, 19), "10", "芝"),
+        ]:
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(key),
+                    race_date=race_date,
+                    jyo_cd=jyo_cd,
+                    distance_m=1200,
+                    track_type=track_type,
+                    field_size=16,
+                    status=RaceStatus.RESULT,
+                )
+            )
+
+        output = self._execute([_entry(days_ago=0)], repo)
+
+        assert output.has_duplicate_races is True
+        assert output.duplicate_race_group_count == 1
+        assert len(output.duplicate_race_groups) == 1
+        group = output.duplicate_race_groups[0]
+        assert group.race_date == "2026-07-19"
+        assert group.jyo_cd == "10"
+        assert group.race_no == "11"
+        assert group.race_keys == [
+            "2026071902011211",
+            "2026071910010111",
+        ]
+
+    def test_no_duplicate_race_identities_reports_complete(self) -> None:
+        output = self._execute([_entry(days_ago=0)])
+
+        assert output.has_duplicate_races is False
+        assert output.duplicate_race_group_count == 0
+        assert output.duplicate_race_groups == []

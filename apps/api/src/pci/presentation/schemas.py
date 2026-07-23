@@ -418,6 +418,15 @@ class MissingTrackConditionRaceSchema(BaseModel):
     distance_m: int
 
 
+class DuplicateRaceGroupSchema(BaseModel):
+    """同一開催日・競馬場・R番号で重複しているレースキー群。"""
+
+    race_date: str
+    jyo_cd: str
+    race_no: str
+    race_keys: list[str]
+
+
 class IngestStatusSchema(BaseModel):
     """取り込みバッチの鮮度サマリ（トップ画面の更新状況表示に使用）。
 
@@ -440,6 +449,9 @@ class IngestStatusSchema(BaseModel):
     has_missing_track_conditions: bool = False
     missing_track_condition_count: int = 0
     missing_track_condition_races: list[MissingTrackConditionRaceSchema] = []
+    has_duplicate_races: bool = False
+    duplicate_race_group_count: int = 0
+    duplicate_race_groups: list[DuplicateRaceGroupSchema] = []
 
     @classmethod
     def from_dto(cls, dto: IngestStatusOutput) -> IngestStatusSchema:
@@ -462,6 +474,12 @@ class IngestStatusSchema(BaseModel):
             missing_track_condition_races=[
                 MissingTrackConditionRaceSchema(**vars(r))
                 for r in dto.missing_track_condition_races
+            ],
+            has_duplicate_races=dto.has_duplicate_races,
+            duplicate_race_group_count=dto.duplicate_race_group_count,
+            duplicate_race_groups=[
+                DuplicateRaceGroupSchema(**vars(group))
+                for group in dto.duplicate_race_groups
             ],
         )
 

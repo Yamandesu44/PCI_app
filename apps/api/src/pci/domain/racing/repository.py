@@ -2,12 +2,23 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Protocol
 
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
+
+
+@dataclass(frozen=True)
+class DuplicateRaceGroup:
+    """同一開催日・競馬場・R番号に複数キーが存在するレース群。"""
+
+    race_date: datetime.date
+    jyo_cd: str
+    race_no: str
+    race_keys: tuple[str, ...]
 
 
 class RaceRepository(Protocol):
@@ -92,3 +103,14 @@ class RaceCompletenessRepository(Protocol):
         before: datetime.date,
         limit: int = 20,
     ) -> list[Race]: ...
+
+    def count_duplicate_race_groups(
+        self, on_or_after: datetime.date, before: datetime.date
+    ) -> int: ...
+
+    def find_duplicate_race_groups(
+        self,
+        on_or_after: datetime.date,
+        before: datetime.date,
+        limit: int = 20,
+    ) -> list[DuplicateRaceGroup]: ...
