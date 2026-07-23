@@ -1,5 +1,56 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 22:01 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `55ec4f9`
+- 実装コミット: `86067e9`
+- 目的: 予想検証の集計から、具体的な不一致レースの回顧へ移動できるようにする。
+
+### 完了した内容
+
+- `PredictionEvaluationRecord`へ競馬場・距離・レース名を追加し、既存の評価クエリで取得するようにした。
+- `GetForecastPerformanceUseCase._build_recent_misses`で選択期間内の不一致を最新順に最大5件返す。
+- `ForecastMissSchema`とOpenAPI/api-client型を追加した。PCI/RPCI実数値と生の信頼度は返さない。
+- `ForecastRecentMisses.tsx`を追加し、予想区分・実績区分と確定後分析へのリンクを表示する。
+- `tasks/current.md`に残っていた完了済み重複統合タスクの未完了表記を修正した。
+
+### 未完了・既知事項
+
+- 今回の機能に未完了実装はない。
+- 不一致一覧は最大5件固定で、検索・ページングは未実装。必要になった段階で専用画面へ分離する。
+- 実JV-Dataオフセット検証、Webhook実地確認、暫定定数の正式化は引き続き外部条件または仕様確定待ち。
+
+### テスト結果
+
+- API単体・契約: 12 passed
+- PostgreSQL統合: 1 passed
+- API Ruff: passed
+- API mypy strict: 63 files passed
+- api-client typecheck: passed
+- Web: 76 passed、typecheck passed、production build passed
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `tasks/backlog.md`
+3. `apps/api/src/pci/application/forecast_performance_use_cases.py`
+4. `apps/web/src/components/ForecastRecentMisses.tsx`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/application/test_forecast_performance_use_cases.py `
+  tests/contract/test_status_api.py -q
+cd ..\..\apps\web
+npm test
+```
+
 ## 2026-07-23 21:33 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
