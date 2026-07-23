@@ -12,14 +12,22 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from pci.domain.pace.adaptability import PaiResult
-from pci.domain.pace.mart_repository import PredictedPaceRecord, RaceBoardForecastRecord
+from pci.domain.pace.mart_repository import (
+    PredictedPaceRecord,
+    PredictionEvaluationRecord,
+    RaceBoardForecastRecord,
+)
 from pci.domain.pace.rpci_forecast import RpciForecast
+from pci.domain.racing.race import RaceStatus, TrackType
 from pci.infrastructure.database.models import (
     HorseModel,
     PaceFitModel,
     PredictedPaceModel,
     RaceEntryModel,
+    RaceModel,
 )
+
+_JRA_PLACE_CODES = tuple(f"{code:02d}" for code in range(1, 11))
 
 
 class SqlAlchemyMartRepository:
@@ -147,5 +155,51 @@ class SqlAlchemyMartRepository:
                 top_horse_name=horse_name,
                 top_pai=fit.pai,
                 top_fit_label=fit.fit_label,
+            )
+        return result
+
+    def find_prediction_evaluations(
+        self,
+        date_from: datetime.date,
+        date_to: datetime.date,
+    ) -> list[PredictionEvaluationRecord]:
+        """期間内の確定レースごとに、結果日までに生成された最新予想を返す。"""
+        rows = self._s.execute(
+            select(PredictedPaceModel, RaceModel)
+            .join(RaceModel, RaceModel.race_key == PredictedPaceModel.race_key)
+            .where(
+                RaceModel.race_date >= date_from,
+                RaceModel.race_date <= date_to,
+                RaceModel.status == str(RaceStatus.RESULT),
+                RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+                RaceModel.track_type != str(TrackType.HURDLE),
+                RaceModel.rpci_actual.is_not(None),
+            )
+            .order_by(
+                PredictedPaceModel.race_key,
+                PredictedPaceModel.generated_at.desc(),
+                PredictedPaceModel.model_version.desc(),
+            )
+        )
+        result: list[PredictionEvaluationRecord] = []
+        seen_race_keys: set[str] = set()
+        for prediction, race in rows:
+            if prediction.race_key in seen_race_keys:
+                continue
+            if prediction.generated_at.date() > race.race_date:
+                continue
+            if race.rpci_actual is None:
+                continue
+            seen_race_keys.add(prediction.race_key)
+            result.append(
+                PredictionEvaluationRecord(
+                    race_key=prediction.race_key,
+                    race_date=race.race_date,
+                    track_type=race.track_type,
+                    predicted_label=prediction.pace_label,
+                    actual_rpci=race.rpci_actual,
+                    confidence=prediction.confidence,
+                    model_version=prediction.model_version,
+                )
             )
         return result

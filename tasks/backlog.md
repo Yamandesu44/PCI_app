@@ -13,6 +13,8 @@
 - [x] ~~P1 未達なら要因追加の判断~~ → **方針決定済み**（2026-07-11、`docs/DECISIONS.md`）。
   当面は追加投資せず現行モデルを継続、`forecast_accuracy` 蓄積で継続監視。見直し条件あり。
 - [x] ~~P1 `forecast_accuracy` のフロント表示~~ → 完了（コミット `e65f919`）。
+- [x] ~~P1 保存済み事前予想の直近成績サマリー~~ → 完了（2026-07-23）。
+  全体・芝・ダートの展開区分一致率と母数をWebトップへ表示し、内部実数値は非公開とした。
 - [x] ~~P2 backtest_forecast.py の PAI希釈対策（track別内訳表示）~~ → 完了（2026-07-11、
   `group_races_by_track` + `_print_track_breakdown`）。
 - [x] ~~P2 バックテスト結果の可視化/保存~~ → 完了（2026-07-12、`report_to_dict` + `--output`）。

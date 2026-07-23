@@ -7,6 +7,7 @@ predicted_pace / pace_fit の読み書きを担う戦略インターフェース
 
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -38,6 +39,19 @@ class RaceBoardForecastRecord:
     top_fit_label: str
 
 
+@dataclass(frozen=True)
+class PredictionEvaluationRecord:
+    """確定結果との集計評価に使う、レース単位の最新事前予想。"""
+
+    race_key: str
+    race_date: datetime.date
+    track_type: str
+    predicted_label: str
+    actual_rpci: float
+    confidence: float
+    model_version: str
+
+
 class MartRepository(Protocol):
     """mart 層（predicted_pace / pace_fit）の読み書きインターフェース（ADR-0006）。
 
@@ -63,3 +77,9 @@ class MartRepository(Protocol):
     def find_race_board_forecasts(
         self, race_keys: list[str]
     ) -> dict[str, RaceBoardForecastRecord]: ...
+
+    def find_prediction_evaluations(
+        self,
+        date_from: datetime.date,
+        date_to: datetime.date,
+    ) -> list[PredictionEvaluationRecord]: ...

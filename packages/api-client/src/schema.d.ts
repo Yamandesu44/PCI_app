@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/forecast-performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Forecast Performance
+         * @description 直近90日の保存済み事前予想について、展開ラベル的中率を返す。
+         */
+        get: operations["get_forecast_performance_api_v1_forecast_performance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingest-status": {
         parameters: {
             query?: never;
@@ -485,6 +505,45 @@ export interface components {
             predicted_label: string;
             /** Predicted Rpci */
             predicted_rpci: number;
+        };
+        /**
+         * ForecastPerformanceGroupSchema
+         * @description コース種別ごとの展開ラベル的中率。
+         */
+        ForecastPerformanceGroupSchema: {
+            /** Hit Count */
+            hit_count: number;
+            /** Hit Rate */
+            hit_rate?: number | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Sample Size */
+            sample_size: number;
+        };
+        /**
+         * ForecastPerformanceSchema
+         * @description 直近期間の予想精度サマリー。PCI/RPCI実数値は公開しない。
+         */
+        ForecastPerformanceSchema: {
+            /** Date From */
+            date_from: string;
+            /** Date To */
+            date_to: string;
+            /**
+             * Groups
+             * @default []
+             */
+            groups: components["schemas"]["ForecastPerformanceGroupSchema"][];
+            /** Hit Count */
+            hit_count: number;
+            /** Hit Rate */
+            hit_rate?: number | null;
+            /** Period Days */
+            period_days: number;
+            /** Sample Size */
+            sample_size: number;
         };
         /** ForecastPrecomputeBody */
         ForecastPrecomputeBody: {
@@ -1164,6 +1223,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_forecast_performance_api_v1_forecast_performance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastPerformanceSchema"];
+                };
+            };
+        };
+    };
     get_ingest_status_api_v1_ingest_status_get: {
         parameters: {
             query?: never;

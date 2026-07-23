@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from pci.application.dto import (
     CommentOutput,
     ForecastOutput,
+    ForecastPerformanceOutput,
     IngestStatusOutput,
     PaceAnalysisOutput,
     RaceBoardItemOutput,
@@ -461,6 +462,45 @@ class IngestStatusSchema(BaseModel):
             missing_track_condition_races=[
                 MissingTrackConditionRaceSchema(**vars(r))
                 for r in dto.missing_track_condition_races
+            ],
+        )
+
+
+class ForecastPerformanceGroupSchema(BaseModel):
+    """コース種別ごとの展開ラベル的中率。"""
+
+    key: str
+    label: str
+    sample_size: int = Field(ge=0)
+    hit_count: int = Field(ge=0)
+    hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class ForecastPerformanceSchema(BaseModel):
+    """直近期間の予想精度サマリー。PCI/RPCI実数値は公開しない。"""
+
+    date_from: str
+    date_to: str
+    period_days: int = Field(ge=1)
+    sample_size: int = Field(ge=0)
+    hit_count: int = Field(ge=0)
+    hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    groups: list[ForecastPerformanceGroupSchema] = []
+
+    @classmethod
+    def from_dto(
+        cls, dto: ForecastPerformanceOutput
+    ) -> ForecastPerformanceSchema:
+        return cls(
+            date_from=dto.date_from,
+            date_to=dto.date_to,
+            period_days=dto.period_days,
+            sample_size=dto.sample_size,
+            hit_count=dto.hit_count,
+            hit_rate=dto.hit_rate,
+            groups=[
+                ForecastPerformanceGroupSchema(**vars(group))
+                for group in dto.groups
             ],
         )
 

@@ -9,6 +9,7 @@ import {
   ListFilter,
   Search,
 } from "lucide-react";
+import { ForecastPerformanceSummary } from "@/components/ForecastPerformanceSummary";
 import { IngestStatusBanner } from "@/components/IngestStatusBanner";
 import { RaceDateCalendar } from "@/components/RaceDateCalendar";
 
@@ -34,6 +35,7 @@ import {
   statusTone,
 } from "@/lib/races";
 import {
+  type ForecastPerformance,
   type IngestStatus,
   type RaceBoardForecast,
   type RaceBoardItem,
@@ -99,6 +101,14 @@ async function loadIngestStatus(): Promise<IngestStatus | null> {
     return await api.getIngestStatus();
   } catch {
     // 取得失敗時はバナーを出さない（ページ全体を壊さない）。
+    return null;
+  }
+}
+
+async function loadForecastPerformance(): Promise<ForecastPerformance | null> {
+  try {
+    return await api.getForecastPerformance();
+  } catch {
     return null;
   }
 }
@@ -359,7 +369,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const today = todayKey();
 
   // カレンダー用の全開催日・取り込み状況は並列で取得する。
-  const [allDates, ingestStatus] = await Promise.all([loadAllRaceDates(), loadIngestStatus()]);
+  const [allDates, ingestStatus, forecastPerformance] = await Promise.all([
+    loadAllRaceDates(),
+    loadIngestStatus(),
+    loadForecastPerformance(),
+  ]);
   const selectedDate = selectRaceDate(allDates, params?.date, weekend);
 
   // 選択日のレースを取得（過去日付でも正確に取得できるよう日付指定フェッチを使う）。
@@ -451,6 +465,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <StatTile tone="violet" icon={<CheckCircle2 className="h-4 w-4" />} label="確定後" value={confirmedItems.length} />
         <StatTile tone="amber" icon={<ListFilter className="h-4 w-4" />} label="開催場" value={venueCount} />
       </section>
+
+      {forecastPerformance ? (
+        <ForecastPerformanceSummary performance={forecastPerformance} />
+      ) : null}
 
       <div className="grid items-start gap-7 lg:grid-cols-[272px_minmax(0,1fr)]">
         <aside className="lg:sticky lg:top-24">

@@ -9,20 +9,50 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新33回目・Codex が馬場状態欠損監視と復旧導線を実装） |
+| 更新日時 | 2026-07-23（更新34回目・Codex が直近90日の予想検証サマリーを実装） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（直近1年の馬場状態欠損をWebで検知・復旧可能にした） |
+| 直前の担当AI | OpenAI Codex（保存済み事前予想の展開一致率をWebトップへ追加した） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `6762077`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `627783c`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**馬場状態バックフィルの実行漏れ・部分失敗を、アプリ自身が検知して安全な復旧コマンドを
-提示できるようにした。**
+**保存済みの事前予想をレース結果と継続的に照合し、直近90日の展開区分一致率を
+レース一覧から確認できるようにした。**
+
+`MartRepository.find_prediction_evaluations()`は、JST基準の直近90日にある確定済みJRA平地から、
+レース日以前に生成された最新の予想を1件だけ選ぶ。application層で確定RPCIを展開区分へ変換し、
+全体・芝・ダートの一致率、的中数、母数を集計する。公開
+`GET /api/v1/forecast-performance`と`ForecastPerformanceSummary`は期間と集計結果だけを扱い、
+PCI/RPCIの内部実数値をAPI・画面へ露出しない。データがない場合は「蓄積中」と表示する。
+
+今回の検証は新規単体・契約7 passed、PostgreSQL統合1 passed、Web 74 passed。
+API Ruff、API全体63ファイルのmypy strict、OpenAPI生成、api-client/Web typecheck、
+Web production buildは成功。API非統合全体は504 passed / 3 failed / 24 deselected。
+失敗3件は既知の全体実行時`caplog`捕捉問題で、今回の変更対象ではない。Web workspaceには
+lintスクリプトがないため実行不可（Next buildもlintをskipする）。グローバルPythonには
+`lint_imports`が未導入のためimport境界チェックも実行不可だが、application/domainの依存方向は
+既存構成に従っている。
+
+既知の制約として、レース発走・結果確定時刻をDBに保持していないため、レース当日に終了後生成された
+予想は日付比較だけでは除外できない。通常の`--step forecasts`による事前生成を前提とし、時刻列を
+導入した場合に厳密化する。コード実装は完了しており、作業が止まっている箇所はない。
+
+Claude Codeが最初に確認するファイル:
+`apps/api/src/pci/application/forecast_performance_use_cases.py`,
+`apps/api/src/pci/infrastructure/repositories/mart_repository.py`,
+`apps/web/src/components/ForecastPerformanceSummary.tsx`,
+`docs/DECISIONS.md`。
+最初に実行するコマンド:
+`git status --short --branch`、
+`cd apps/api && set PYTHONPATH=src && python -m pytest tests/unit/application/test_forecast_performance_use_cases.py tests/contract/test_status_api.py -q`、
+`npm.cmd run typecheck --workspace=@pci/web`。
+
+### 前タスク（馬場状態欠損監視）
 
 `GET /api/v1/ingest-status`は、従来のバッチ鮮度・成績未取込に加えて、JST基準の直近365日、
 開催日前日まで、`status=result`、JRA10場、平地、`track_condition IS NULL`の件数と

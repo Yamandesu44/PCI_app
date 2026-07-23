@@ -29,6 +29,9 @@ export type IntegratedRanking = components["schemas"]["IntegratedRankingSchema"]
 export type IntegratedEntry = components["schemas"]["IntegratedEntrySchema"];
 export type IngestStatus = components["schemas"]["IngestStatusSchema"];
 export type IngestFailure = components["schemas"]["IngestFailureSchema"];
+export type ForecastPerformance = components["schemas"]["ForecastPerformanceSchema"];
+export type ForecastPerformanceGroup =
+  components["schemas"]["ForecastPerformanceGroupSchema"];
 export type Readiness = components["schemas"]["ReadinessSchema"];
 
 export type { components, paths } from "./schema";
@@ -60,6 +63,7 @@ export interface ApiClient {
   getRaceDetail(raceKey: string): Promise<RaceDetail>;
   getPaceAnalysis(raceKey: string): Promise<PaceAnalysis>;
   getIngestStatus(): Promise<IngestStatus>;
+  getForecastPerformance(): Promise<ForecastPerformance>;
   getReadiness(): Promise<Readiness>;
 }
 
@@ -95,6 +99,8 @@ export function createClient(options: ApiClientOptions): ApiClient {
     getPaceAnalysis: (raceKey) =>
       getJson<PaceAnalysis>(`/api/v1/races/${encodeURIComponent(raceKey)}/pace-analysis`),
     getIngestStatus: () => getJson<IngestStatus>("/api/v1/ingest-status"),
+    getForecastPerformance: () =>
+      getJson<ForecastPerformance>("/api/v1/forecast-performance"),
     getReadiness: async () => {
       const path = "/ready";
       const res = await doFetch(`${base}${path}`);

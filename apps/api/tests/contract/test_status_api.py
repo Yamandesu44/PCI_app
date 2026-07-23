@@ -52,3 +52,36 @@ def test_ingest_status_reflects_recent_success(client: TestClient) -> None:
 def test_openapi_exposes_ingest_status(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
     assert "/api/v1/ingest-status" in schema["paths"]
+
+
+def test_forecast_performance_contract_hides_internal_values(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/forecast-performance")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {
+        "date_from",
+        "date_to",
+        "period_days",
+        "sample_size",
+        "hit_count",
+        "hit_rate",
+        "groups",
+    }
+    assert body["period_days"] == 90
+    assert body["sample_size"] == 0
+    assert body["hit_rate"] is None
+    assert [group["key"] for group in body["groups"]] == [
+        "overall",
+        "turf",
+        "dirt",
+    ]
+    assert "rpci" not in response.text.lower()
+    assert "pci" not in response.text.lower()
+
+
+def test_openapi_exposes_forecast_performance(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+    assert "/api/v1/forecast-performance" in schema["paths"]

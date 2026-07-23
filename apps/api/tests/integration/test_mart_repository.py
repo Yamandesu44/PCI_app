@@ -126,6 +126,106 @@ def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) ->
     assert predicted.model_version == "rule-v4"
 
 
+def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
+    db_session: Session,
+) -> None:
+    race_key = "2026072005010101"
+    db_session.add_all(
+        [
+            RaceModel(
+                race_key=race_key,
+                race_date=datetime.date(2026, 7, 20),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=12,
+                status="result",
+                rpci_actual=55.0,
+            ),
+            RaceModel(
+                race_key="2026071905010102",
+                race_date=datetime.date(2026, 7, 19),
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=12,
+                status="entries",
+                rpci_actual=None,
+            ),
+            RaceModel(
+                race_key="2026071842010103",
+                race_date=datetime.date(2026, 7, 18),
+                jyo_cd="42",
+                distance_m=1400,
+                track_type="ダート",
+                field_size=12,
+                status="result",
+                rpci_actual=43.0,
+            ),
+        ]
+    )
+    db_session.flush()
+    db_session.add_all(
+        [
+            PredictedPaceModel(
+                race_key=race_key,
+                model_version="rule-v3",
+                predicted_rpci=50.0,
+                pace_label="平均",
+                confidence=0.55,
+                factors=[],
+                generated_at=datetime.datetime(
+                    2026, 7, 19, 8, 0, tzinfo=datetime.UTC
+                ),
+            ),
+            PredictedPaceModel(
+                race_key=race_key,
+                model_version="rule-v4",
+                predicted_rpci=55.0,
+                pace_label="スロー",
+                confidence=0.72,
+                factors=[],
+                generated_at=datetime.datetime(
+                    2026, 7, 20, 8, 0, tzinfo=datetime.UTC
+                ),
+            ),
+            PredictedPaceModel(
+                race_key=race_key,
+                model_version="post-result",
+                predicted_rpci=45.0,
+                pace_label="ハイ",
+                confidence=0.99,
+                factors=[],
+                generated_at=datetime.datetime(
+                    2026, 7, 21, 8, 0, tzinfo=datetime.UTC
+                ),
+            ),
+            PredictedPaceModel(
+                race_key="2026071842010103",
+                model_version="rule-v4",
+                predicted_rpci=43.0,
+                pace_label="平均",
+                confidence=0.7,
+                factors=[],
+                generated_at=datetime.datetime(
+                    2026, 7, 18, 7, 0, tzinfo=datetime.UTC
+                ),
+            ),
+        ]
+    )
+    db_session.flush()
+
+    records = SqlAlchemyMartRepository(db_session).find_prediction_evaluations(
+        datetime.date(2026, 7, 1),
+        datetime.date(2026, 7, 31),
+    )
+
+    assert len(records) == 1
+    assert records[0].race_key == race_key
+    assert records[0].model_version == "rule-v4"
+    assert records[0].predicted_label == "スロー"
+
+
 def test_entry_draw_change_invalidates_saved_forecast(db_session: Session) -> None:
     race_key = "2026072205010102"
     db_session.add(

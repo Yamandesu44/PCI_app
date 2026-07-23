@@ -345,6 +345,30 @@ class MissingTrackConditionRaceOutput:
     distance_m: int
 
 
+@dataclass(frozen=True)
+class ForecastPerformanceGroupOutput:
+    """予想精度の表示用集計。PCI/RPCI実数値は含めない。"""
+
+    key: str
+    label: str
+    sample_size: int
+    hit_count: int
+    hit_rate: float | None
+
+
+@dataclass(frozen=True)
+class ForecastPerformanceOutput:
+    """直近期間の展開ラベル的中率サマリー。"""
+
+    date_from: str
+    date_to: str
+    period_days: int
+    sample_size: int
+    hit_count: int
+    hit_rate: float | None
+    groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
+
+
 @dataclass
 class IngestStatusOutput:
     """取り込みバッチの鮮度サマリ（GetIngestStatusUseCase の出力）。

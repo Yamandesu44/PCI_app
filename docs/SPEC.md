@@ -163,8 +163,12 @@
 ## 5. API（presentation）
 
 - ✅ `GET /api/v1/races`（一覧・limit/date）, `/races/dates`, `/races/{key}`,
-  `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`, `/health`, `/ready`。
+  `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`,
+  `/api/v1/forecast-performance`, `/health`, `/ready`。
   `/health`はプロセス生存確認、`/ready`はDB接続とORM必須列を含む利用可能性確認とする。
+- ✅ `GET /api/v1/forecast-performance`はJST基準の直近90日、確定済みJRA平地について、
+  レース日以前に生成された最新の保存済み予想と実際の展開区分を比較する。全体・芝・ダートの
+  一致率、的中数、母数、対象期間だけを公開し、PCI/RPCIの内部実数値は返さない。
 - ✅ 内部取り込み
   `POST /internal/ingest/{horses,jockeys,trainers,entries,results,race-metadata,log}`,
   `POST /internal/ingest/forecasts/precompute`,

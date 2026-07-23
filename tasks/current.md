@@ -4,7 +4,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-23（直近1年の馬場状態欠損監視と復旧コマンドを実装） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-23（直近90日の展開予想検証サマリーを実装） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -18,6 +18,13 @@
 
 ## 最近完了したタスク
 
+- [x] ✅ **P1 保存済み事前予想の展開一致率をレース一覧へ表示する**
+  - 直近90日の確定済みJRA平地を対象に、レースごとの最新の有効な事前予想と実際の展開区分を比較する。
+  - 全体・芝・ダートの一致率と検証レース数を`GET /api/v1/forecast-performance`で返す。
+  - Webトップへ期間・母数付きの検証サマリーを追加し、PCI/RPCIの内部実数値は公開しない。
+  - 同日内のレース終了後生成は時刻情報がないため完全には除外できず、運用上は事前生成を前提とする。
+  - 検証: 新規API単体・契約7 passed、PostgreSQL統合1 passed、Web 74 passed、
+    API Ruff・mypy strict、api-client/Web typecheck、Web build成功。
 - [x] ✅ **P2 馬場状態バックフィルの完了判定をデータ完全性監視へ統合する**
   - 直近365日の確定済みJRA平地で`track_condition`欠損をDB集計し、代表20件を返す。
   - Webトップで成績未取込と区別して警告し、専用`race-metadata`コマンドをコピー可能にした。

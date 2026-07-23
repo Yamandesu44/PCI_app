@@ -17,6 +17,9 @@ from typing import Annotated, cast
 from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
 
+from pci.application.forecast_performance_use_cases import (
+    GetForecastPerformanceUseCase,
+)
 from pci.application.forecast_precompute_use_cases import PrecomputeUpcomingForecastsUseCase
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.ingest_status_use_cases import GetIngestStatusUseCase
@@ -207,3 +210,14 @@ ListRaceBoardUseCaseDep = Annotated[
 ]
 ListRaceDatesUseCaseDep = Annotated[ListRaceDatesUseCase, Depends(get_list_race_dates_use_case)]
 IngestStatusUseCaseDep = Annotated[GetIngestStatusUseCase, Depends(get_ingest_status_use_case)]
+
+
+def get_forecast_performance_use_case(
+    mart_repo: MartRepositoryDep,
+) -> GetForecastPerformanceUseCase:
+    return GetForecastPerformanceUseCase(mart_repo)
+
+
+ForecastPerformanceUseCaseDep = Annotated[
+    GetForecastPerformanceUseCase, Depends(get_forecast_performance_use_case)
+]

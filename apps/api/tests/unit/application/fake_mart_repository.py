@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import datetime
+
 from pci.domain.pace.adaptability import PaiResult
-from pci.domain.pace.mart_repository import PredictedPaceRecord, RaceBoardForecastRecord
+from pci.domain.pace.mart_repository import (
+    PredictedPaceRecord,
+    PredictionEvaluationRecord,
+    RaceBoardForecastRecord,
+)
 from pci.domain.pace.rpci_forecast import RpciForecast
 
 
@@ -15,6 +21,7 @@ class FakeMartRepository:
         self.pace_fit: dict[tuple[str, int, str], PaiResult] = {}
         self._latest_prediction_version: dict[str, str] = {}
         self._latest_fit_version: dict[str, str] = {}
+        self.prediction_evaluations: list[PredictionEvaluationRecord] = []
 
     def save_predicted_pace(self, race_key: str, forecast: RpciForecast) -> None:
         self.predicted_pace[(race_key, forecast.model_version)] = forecast
@@ -59,3 +66,14 @@ class FakeMartRepository:
                 top_fit_label=str(top.fit_label),
             )
         return result
+
+    def find_prediction_evaluations(
+        self,
+        date_from: datetime.date,
+        date_to: datetime.date,
+    ) -> list[PredictionEvaluationRecord]:
+        return [
+            record
+            for record in self.prediction_evaluations
+            if date_from <= record.race_date <= date_to
+        ]
