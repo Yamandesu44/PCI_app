@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+
 from pci.application.dto import EntryInput, RaceInfo, RaceResultOutput, ResultInput
 from pci.domain.pace.pci import aggregate_rpci, calculate_pci, calculate_rpci_from_lap
 from pci.domain.pace.running_style import classify_running_style
@@ -130,7 +132,7 @@ class UpdateRaceMetadataUseCase:
         weather: str | None = None,
     ) -> bool:
         key = RaceKey(race_key_str)
-        race = self._repo.find_by_key(key)
+        race = self._find_target_race(key)
         if race is None or (
             track_type is None and track_condition is None and weather is None
         ):
@@ -154,6 +156,30 @@ class UpdateRaceMetadataUseCase:
             )
         )
         return True
+
+    def _find_target_race(self, source_key: RaceKey) -> Race | None:
+        """完全一致を優先し、旧形式キーは日付・場・R番号で一意に照合する。"""
+        exact = self._repo.find_by_key(source_key)
+        if exact is not None:
+            return exact
+
+        value = source_key.value
+        try:
+            race_date = datetime.date(
+                int(value[0:4]),
+                int(value[4:6]),
+                int(value[6:8]),
+            )
+        except ValueError:
+            return None
+        jyo_cd = value[8:10]
+        race_no = value[14:16]
+        candidates = [
+            race
+            for race in self._repo.list_races_by_date(race_date)
+            if race.jyo_cd == jyo_cd and race.race_key.value[14:16] == race_no
+        ]
+        return candidates[0] if len(candidates) == 1 else None
 
 
 class RecordRaceResultUseCase:

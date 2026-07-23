@@ -234,6 +234,43 @@ class TestUpdateRaceMetadataUseCase:
         assert after.pci3_actual == before.pci3_actual
         assert len(repo.find_entries(RaceKey(RACE_KEY))) == 3
 
+    def test_legacy_key_is_matched_by_date_place_and_race_no(self) -> None:
+        repo = FakeRaceRepository()
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+        source_key = "2026061805020301"
+
+        updated = UpdateRaceMetadataUseCase(repo).execute(
+            source_key,
+            track_condition="重",
+            weather="雨",
+        )
+
+        legacy = repo.find_by_key(RaceKey(RACE_KEY))
+        assert updated is True
+        assert legacy is not None
+        assert legacy.track_condition == "重"
+        assert legacy.weather == "雨"
+        assert repo.find_by_key(RaceKey(source_key)) is None
+
+    def test_legacy_key_is_not_matched_when_identity_is_ambiguous(self) -> None:
+        repo = FakeRaceRepository()
+        RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
+        duplicate = Race(
+            race_key=RaceKey("2026061805999901"),
+            race_date=RACE_DATE,
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=3,
+        )
+        repo.save_race(duplicate)
+
+        updated = UpdateRaceMetadataUseCase(repo).execute(
+            "2026061805020301",
+            track_condition="重",
+        )
+
+        assert updated is False
     def test_unknown_race_is_skipped(self) -> None:
         repo = FakeRaceRepository()
 
