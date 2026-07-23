@@ -6,13 +6,14 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from pci.infrastructure.database.base import Base
 import pci.infrastructure.database.models  # noqa: F401 – モデル登録
+from pci.infrastructure.database.base import Base
 
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # テストや管理CLIから同一プロセスで実行しても、既存のアプリロガーを無効化しない。
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
