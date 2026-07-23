@@ -36,6 +36,53 @@
         "title": "CommentSchema",
         "type": "object"
       },
+      "DeleteDuplicateRaceBody": {
+        "description": "再同期後の旧レースキー削除に必要な検証値。",
+        "properties": {
+          "canonical_race_key": {
+            "pattern": "^\\d{16}$",
+            "title": "Canonical Race Key",
+            "type": "string"
+          },
+          "expected_entry_count": {
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Entry Count",
+            "type": "integer"
+          },
+          "expected_finished_count": {
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Finished Count",
+            "type": "integer"
+          },
+          "stale_entry_signature": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Stale Entry Signature",
+            "type": "string"
+          },
+          "stale_race_key": {
+            "pattern": "^\\d{16}$",
+            "title": "Stale Race Key",
+            "type": "string"
+          },
+          "stale_result_signature": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Stale Result Signature",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stale_race_key",
+          "canonical_race_key",
+          "expected_entry_count",
+          "expected_finished_count",
+          "stale_entry_signature",
+          "stale_result_signature"
+        ],
+        "title": "DeleteDuplicateRaceBody",
+        "type": "object"
+      },
       "DuplicateRaceAuditGroupSchema": {
         "description": "同一レースとして検出されたキー群のdry-run情報。",
         "properties": {
@@ -2881,6 +2928,66 @@
           }
         },
         "summary": "Get Duplicate Race Audit",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/internal/ingest/duplicate-races/delete-stale": {
+      "post": {
+        "description": "正規キーの再同期結果を再検証し、安全な場合だけ旧キーを削除する。",
+        "operationId": "delete_stale_duplicate_race_internal_ingest_duplicate_races_delete_stale_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteDuplicateRaceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Stale Duplicate Race",
         "tags": [
           "ingest"
         ]

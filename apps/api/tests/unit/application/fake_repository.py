@@ -173,7 +173,6 @@ class FakeRaceRepository:
         result_values = [
             (
                 entry.horse_no,
-                entry.ketto_num,
                 entry.finish_pos,
                 entry.race_time_s,
                 entry.agari_3f_s,
@@ -181,8 +180,6 @@ class FakeRaceRepository:
                 entry.corner_2,
                 entry.corner_3,
                 entry.corner_4,
-                entry.popularity,
-                entry.prize_money,
             )
             for entry in finished
         ]

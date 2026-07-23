@@ -31,7 +31,7 @@ from ingestion.client.fixture_client import (
     _json_to_ra,
 )
 from ingestion.ingest_api import IngestApiClient
-from ingestion.models import RaceMetadataRecord
+from ingestion.models import DuplicateDeleteGuard, RaceMetadataRecord
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _RACE_KEY = "2026061805010101"
@@ -368,6 +368,57 @@ class TestIngestResults:
         api.delete_race.assert_called_once_with(stale_key)
         assert api.register_entries.call_args.args[0].race_key == _RACE_KEY
         assert api.record_results.call_args.args[0].race_key == _RACE_KEY
+        method_names = [call[0] for call in api.method_calls]
+        assert method_names.index("register_entries") < method_names.index("record_results")
+        assert method_names.index("record_results") < method_names.index("delete_race")
+
+    def test_keeps_stale_key_when_authoritative_result_sync_fails(self) -> None:
+        api = _mock_api()
+        api.record_results.side_effect = RuntimeError("result sync failed")
+        stale_key = "2026061805999901"
+
+        summary = ingest_results(
+            _client(),
+            api,
+            "20260618",
+            "20260618",
+            race_keys={stale_key},
+        )
+
+        api.delete_race.assert_not_called()
+        assert summary.sent_fail == 1
+        assert summary.deleted_stale == 0
+
+    def test_uses_guarded_delete_after_authoritative_result_sync(self) -> None:
+        api = _mock_api()
+        stale_key = "2026061805999901"
+        guard = DuplicateDeleteGuard(
+            stale_race_key=stale_key,
+            canonical_race_key=_RACE_KEY,
+            stale_entry_signature="e" * 64,
+            stale_result_signature="r" * 64,
+        )
+        api.delete_duplicate_race.return_value = 1
+
+        summary = ingest_results(
+            _client(),
+            api,
+            "20260618",
+            "20260618",
+            race_keys={stale_key},
+            duplicate_guards={_RACE_KEY: (guard,)},
+        )
+
+        api.delete_race.assert_not_called()
+        api.delete_duplicate_race.assert_called_once_with(
+            stale_race_key=stale_key,
+            canonical_race_key=_RACE_KEY,
+            expected_entry_count=3,
+            expected_finished_count=3,
+            stale_entry_signature="e" * 64,
+            stale_result_signature="r" * 64,
+        )
+        assert summary.deleted_stale == 1
 
     def test_record_results_called_once(self) -> None:
         api = _mock_api()

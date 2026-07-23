@@ -11,6 +11,7 @@ import datetime
 import pytest
 from sqlalchemy.orm import Session
 
+from pci.application.race_use_cases import DeleteDuplicateRaceUseCase
 from pci.domain.racing.race import Race, RaceStatus, TrackType
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
@@ -441,6 +442,66 @@ class TestFindDuplicateRaceGroups:
         ]
         assert all(key.entry_count == 0 for key in audits[0].keys)
         assert all(len(key.entry_signature) == 64 for key in audits[0].keys)
+
+
+@pytest.mark.integration
+class TestDeleteDuplicateRaceUseCase:
+    def test_deletes_stale_key_only_after_current_values_match(
+        self, db_session: Session
+    ) -> None:
+        _seed_master(db_session)
+        repo = SqlAlchemyRaceRepository(db_session)
+        stale_key = "2026061805010111"
+        canonical_key = "2026061805030211"
+        for key in (stale_key, canonical_key):
+            repo.save_race(
+                Race(
+                    race_key=RaceKey(key),
+                    race_date=RACE_DATE,
+                    jyo_cd="05",
+                    distance_m=1600,
+                    track_type=TrackType.TURF,
+                    field_size=1,
+                    status=RaceStatus.RESULT,
+                )
+            )
+        db_session.flush()
+        for key in (stale_key, canonical_key):
+            repo.save_entry(
+                RaceEntry(
+                    race_key=RaceKey(key),
+                    horse_no=1,
+                    frame_no=1,
+                    ketto_num="2020100001",
+                    weight=480.0,
+                    jockey_code="01001",
+                    trainer_code="01001",
+                    finish_pos=1,
+                    race_time_s=94.4,
+                    agari_3f_s=34.0,
+                    corner_4=1,
+                )
+            )
+        db_session.flush()
+        audit = repo.find_duplicate_race_audits(
+            RACE_DATE,
+            RACE_DATE + datetime.timedelta(days=1),
+        )[0]
+        stale = next(key for key in audit.keys if key.race_key == stale_key)
+
+        deleted = DeleteDuplicateRaceUseCase(repo, repo).execute(
+            stale_race_key=stale_key,
+            canonical_race_key=canonical_key,
+            expected_entry_count=1,
+            expected_finished_count=1,
+            stale_entry_signature=stale.entry_signature,
+            stale_result_signature=stale.result_signature,
+        )
+        db_session.flush()
+
+        assert deleted is True
+        assert repo.find_by_key(RaceKey(stale_key)) is None
+        assert repo.find_by_key(RaceKey(canonical_key)) is not None
 
 
 @pytest.mark.integration

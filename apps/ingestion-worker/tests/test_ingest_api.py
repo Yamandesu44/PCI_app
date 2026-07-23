@@ -234,6 +234,29 @@ class TestDeleteRace:
         assert "/internal/ingest/races/2026062809011111" in url
 
 
+class TestDeleteDuplicateRace:
+    def test_sends_guard_values_to_reconciliation_endpoint(self) -> None:
+        http = _make_http_client({"accepted": 1})
+        api = IngestApiClient("http://api", token="secret", http_client=http)
+
+        result = api.delete_duplicate_race(
+            stale_race_key="2026062005010111",
+            canonical_race_key="2026062005030211",
+            expected_entry_count=12,
+            expected_finished_count=11,
+            stale_entry_signature="e" * 64,
+            stale_result_signature="r" * 64,
+        )
+
+        assert result == 1
+        call = http.post.call_args
+        assert call.args[0].endswith(
+            "/internal/ingest/duplicate-races/delete-stale"
+        )
+        assert call.kwargs["json"]["expected_entry_count"] == 12
+        assert call.kwargs["json"]["stale_result_signature"] == "r" * 64
+
+
 class TestPrecomputeForecasts:
     def test_sends_date_range_and_returns_summary(self) -> None:
         http = _make_http_client({"scanned": 12, "generated": 10, "skipped": 2})

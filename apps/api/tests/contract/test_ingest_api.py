@@ -12,6 +12,7 @@ from pci.application.dto import EntryInput, RaceInfo
 from pci.application.forecast_precompute_use_cases import ForecastPrecomputeOutput
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
 from pci.domain.racing.race import Race, RaceStatus
+from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 from pci.presentation.app import create_app
 from pci.presentation.dependencies import (
@@ -147,6 +148,101 @@ def test_duplicate_race_audit_rejects_reversed_date_range(client: TestClient) ->
     )
 
     assert response.status_code == 422
+
+
+def _save_duplicate_result(
+    repo: FakeRaceRepository,
+    race_key: str,
+    ketto_num: str,
+) -> None:
+    repo.save_race(
+        Race(
+            race_key=RaceKey(race_key),
+            race_date=datetime.date(2026, 6, 20),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=1,
+            status=RaceStatus.RESULT,
+        )
+    )
+    repo.save_entry(
+        RaceEntry(
+            race_key=RaceKey(race_key),
+            horse_no=1,
+            frame_no=1,
+            ketto_num=ketto_num,
+            weight=480.0,
+            jockey_code="J001",
+            trainer_code="T001",
+            finish_pos=1,
+            race_time_s=94.4,
+            agari_3f_s=34.0,
+            corner_4=1,
+        )
+    )
+
+
+def test_delete_stale_duplicate_race_rechecks_and_deletes(
+    client: TestClient,
+    fake_repo: FakeRaceRepository,
+) -> None:
+    stale_key = "2026062005010111"
+    canonical_key = "2026062005030211"
+    _save_duplicate_result(fake_repo, stale_key, "2020100001")
+    _save_duplicate_result(fake_repo, canonical_key, "2020100002")
+    audit = fake_repo.find_duplicate_race_audits(
+        datetime.date(2026, 6, 20),
+        datetime.date(2026, 6, 21),
+    )[0]
+    stale = next(key for key in audit.keys if key.race_key == stale_key)
+
+    response = client.post(
+        "/internal/ingest/duplicate-races/delete-stale",
+        json={
+            "stale_race_key": stale_key,
+            "canonical_race_key": canonical_key,
+            "expected_entry_count": 1,
+            "expected_finished_count": 1,
+            "stale_entry_signature": stale.entry_signature,
+            "stale_result_signature": stale.result_signature,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["accepted"] == 1
+    assert fake_repo.find_by_key(RaceKey(stale_key)) is None
+    assert fake_repo.find_by_key(RaceKey(canonical_key)) is not None
+
+
+def test_delete_stale_duplicate_race_rejects_changed_counts(
+    client: TestClient,
+    fake_repo: FakeRaceRepository,
+) -> None:
+    stale_key = "2026062005010111"
+    canonical_key = "2026062005030211"
+    _save_duplicate_result(fake_repo, stale_key, "2020100001")
+    _save_duplicate_result(fake_repo, canonical_key, "2020100002")
+    audit = fake_repo.find_duplicate_race_audits(
+        datetime.date(2026, 6, 20),
+        datetime.date(2026, 6, 21),
+    )[0]
+    stale = next(key for key in audit.keys if key.race_key == stale_key)
+
+    response = client.post(
+        "/internal/ingest/duplicate-races/delete-stale",
+        json={
+            "stale_race_key": stale_key,
+            "canonical_race_key": canonical_key,
+            "expected_entry_count": 2,
+            "expected_finished_count": 1,
+            "stale_entry_signature": stale.entry_signature,
+            "stale_result_signature": stale.result_signature,
+        },
+    )
+
+    assert response.status_code == 409
+    assert fake_repo.find_by_key(RaceKey(stale_key)) is not None
 
 
 class TestIngestHorses:

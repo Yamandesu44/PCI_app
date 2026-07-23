@@ -106,3 +106,22 @@ class RaceMetadataRecord:
     track_type: str | None = None
     track_condition: str | None = None
     weather: str | None = None
+
+
+@dataclass(frozen=True)
+class DuplicateDeleteGuard:
+    """旧レースキー削除時にAPIで再検証する監査値。"""
+
+    stale_race_key: str
+    canonical_race_key: str
+    stale_entry_signature: str
+    stale_result_signature: str
+
+
+@dataclass(frozen=True)
+class IngestResultsSummary:
+    """確定成績同期と旧キー整理の実行件数。"""
+
+    sent_ok: int
+    sent_fail: int
+    deleted_stale: int

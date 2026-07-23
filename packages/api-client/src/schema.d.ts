@@ -201,6 +201,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/ingest/duplicate-races/delete-stale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Stale Duplicate Race
+         * @description 正規キーの再同期結果を再検証し、安全な場合だけ旧キーを削除する。
+         */
+        post: operations["delete_stale_duplicate_race_internal_ingest_duplicate_races_delete_stale_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/ingest/entries": {
         parameters: {
             query?: never;
@@ -444,6 +464,24 @@ export interface components {
              * @default []
              */
             reasons: components["schemas"]["ReasonSchema"][];
+        };
+        /**
+         * DeleteDuplicateRaceBody
+         * @description 再同期後の旧レースキー削除に必要な検証値。
+         */
+        DeleteDuplicateRaceBody: {
+            /** Canonical Race Key */
+            canonical_race_key: string;
+            /** Expected Entry Count */
+            expected_entry_count: number;
+            /** Expected Finished Count */
+            expected_finished_count: number;
+            /** Stale Entry Signature */
+            stale_entry_signature: string;
+            /** Stale Race Key */
+            stale_race_key: string;
+            /** Stale Result Signature */
+            stale_result_signature: string;
         };
         /**
          * DuplicateRaceAuditGroupSchema
@@ -1678,6 +1716,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DuplicateRaceAuditGroupSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_stale_duplicate_race_internal_ingest_duplicate_races_delete_stale_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-ingest-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteDuplicateRaceBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestResponse"];
                 };
             };
             /** @description Validation Error */

@@ -28,7 +28,9 @@ from ingestion.client.base import JvLinkClient, RaceMetadataProvider
 from ingestion.client.fixture_client import FixtureJvLinkClient
 from ingestion.ingest_api import IngestApiClient
 from ingestion.models import (
+    DuplicateDeleteGuard,
     HorseRecord,
+    IngestResultsSummary,
     JockeyRecord,
     RaceEntriesRecord,
     RaceResultRecord,
@@ -156,9 +158,9 @@ def ingest_masters(client: JvLinkClient, api: IngestApiClient) -> None:
     horses: list[HorseRecord] = []
     for rec in client.iter_um_records():
         try:
-            parsed = parse_um(rec)
-            if parsed:
-                horses.append(parsed)
+            parsed_horse = parse_um(rec)
+            if parsed_horse:
+                horses.append(parsed_horse)
                 if len(horses) >= _MASTER_FLUSH_SIZE:
                     api.upsert_horses(horses)
                     horses.clear()
@@ -170,9 +172,9 @@ def ingest_masters(client: JvLinkClient, api: IngestApiClient) -> None:
     jockeys: list[JockeyRecord] = []
     for rec in client.iter_ks_records():
         try:
-            parsed = parse_ks(rec)
-            if parsed:
-                jockeys.append(parsed)
+            parsed_jockey = parse_ks(rec)
+            if parsed_jockey:
+                jockeys.append(parsed_jockey)
                 if len(jockeys) >= _MASTER_FLUSH_SIZE:
                     api.upsert_jockeys(jockeys)
                     jockeys.clear()
@@ -184,9 +186,9 @@ def ingest_masters(client: JvLinkClient, api: IngestApiClient) -> None:
     trainers: list[TrainerRecord] = []
     for rec in client.iter_ch_records():
         try:
-            parsed = parse_ch(rec)
-            if parsed:
-                trainers.append(parsed)
+            parsed_trainer = parse_ch(rec)
+            if parsed_trainer:
+                trainers.append(parsed_trainer)
                 if len(trainers) >= _MASTER_FLUSH_SIZE:
                     api.upsert_trainers(trainers)
                     trainers.clear()
@@ -302,7 +304,8 @@ def ingest_results(
     date_to: str,
     *,
     race_keys: set[str] | None = None,
-) -> None:
+    duplicate_guards: dict[str, tuple[DuplicateDeleteGuard, ...]] | None = None,
+) -> IngestResultsSummary:
     """SE レコード（DataKubun=4/7）+ RA レコード（DataKubun=7）から確定成績を取り込む。"""
     # race_key → RaceResultRecord のバッファ
     race_results: dict[str, RaceResultRecord] = {}
@@ -310,7 +313,7 @@ def ingest_results(
     if race_keys is not None:
         for target_key in race_keys:
             target_by_identity.setdefault(_race_identity(target_key), set()).add(target_key)
-    stale_race_keys: set[str] = set()
+    stale_by_canonical: dict[str, set[str]] = {}
 
     # RA 確定レコード（DataKubun=7）から HaronTimeL3（後半3F）を収集する。
     # ingest_entries より後に呼ばれるが、RA は SE と独立したデータ種別のため再取得可能。
@@ -329,7 +332,9 @@ def ingest_results(
                     matching = target_by_identity.get(_race_identity(ra.race_key), set())
                     if ra.race_key not in race_keys and not matching:
                         continue
-                    stale_race_keys.update(key for key in matching if key != ra.race_key)
+                    stale = {key for key in matching if key != ra.race_key}
+                    if stale:
+                        stale_by_canonical.setdefault(ra.race_key, set()).update(stale)
                 entry_snapshots[ra.race_key] = ra
                 if ra.race_s3f is not None:
                     race_s3f_map[ra.race_key] = ra.race_s3f
@@ -397,12 +402,7 @@ def ingest_results(
 
     sent_ok = 0
     sent_fail = 0
-    for stale_race_key in sorted(stale_race_keys):
-        try:
-            api.delete_race(stale_race_key)
-        except Exception as exc:
-            sent_fail += 1
-            _log.error("旧レースキー削除エラー %s: %s", stale_race_key, exc)
+    deleted_stale = 0
 
     snapshots_to_send = (
         entry_snapshots
@@ -442,6 +442,35 @@ def ingest_results(
         except Exception as exc:
             sent_fail += 1
             _log.error("成績送信エラー %s: %s", race_key, exc)
+            continue
+
+        guards = duplicate_guards.get(race_key, ()) if duplicate_guards else ()
+        if guards:
+            for guard in guards:
+                try:
+                    deleted_stale += api.delete_duplicate_race(
+                        stale_race_key=guard.stale_race_key,
+                        canonical_race_key=guard.canonical_race_key,
+                        expected_entry_count=len(snapshot.entries),
+                        expected_finished_count=len(rr.results),
+                        stale_entry_signature=guard.stale_entry_signature,
+                        stale_result_signature=guard.stale_result_signature,
+                    )
+                except Exception as exc:
+                    sent_fail += 1
+                    _log.error(
+                        "検証付き旧レースキー削除エラー %s: %s",
+                        guard.stale_race_key,
+                        exc,
+                    )
+        else:
+            # 通常の対象限定再同期でも、正規キーの出走表・成績が成功するまで旧キーを残す。
+            for stale_race_key in sorted(stale_by_canonical.get(race_key, set())):
+                try:
+                    deleted_stale += api.delete_race(stale_race_key)
+                except Exception as exc:
+                    sent_fail += 1
+                    _log.error("旧レースキー削除エラー %s: %s", stale_race_key, exc)
 
     # 解析はできたのに送信で全滅している状態（＝APIレイヤの問題。レース未登録で
     # find_by_key が None を返す等）を exit 0 に埋もれさせない。件数を明示する。
@@ -459,6 +488,11 @@ def ingest_results(
             "上の『成績送信エラー』の内容（例: レースが見つかりません=出走表未登録、"
             "HTTPエラー=API/DB接続先の相違）を確認してください。"
         )
+    return IngestResultsSummary(
+        sent_ok=sent_ok,
+        sent_fail=sent_fail,
+        deleted_stale=deleted_stale,
+    )
 
 
 def _apply_source_metadata(client: JvLinkClient, race: RaceEntriesRecord) -> None:

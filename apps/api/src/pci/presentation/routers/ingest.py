@@ -20,6 +20,7 @@ from pci.application.ingest_use_cases import (
     TrainerInput,
 )
 from pci.application.race_use_cases import (
+    DeleteDuplicateRaceUseCase,
     RecordRaceResultUseCase,
     RegisterRaceEntriesUseCase,
     UpdateRaceMetadataUseCase,
@@ -73,6 +74,17 @@ class DuplicateRaceAuditGroupSchema(BaseModel):
     jyo_cd: str
     race_no: str
     keys: list[DuplicateRaceKeyAuditSchema]
+
+
+class DeleteDuplicateRaceBody(BaseModel):
+    """再同期後の旧レースキー削除に必要な検証値。"""
+
+    stale_race_key: str = Field(pattern=r"^\d{16}$")
+    canonical_race_key: str = Field(pattern=r"^\d{16}$")
+    expected_entry_count: int = Field(gt=0)
+    expected_finished_count: int = Field(gt=0)
+    stale_entry_signature: str = Field(min_length=64, max_length=64)
+    stale_result_signature: str = Field(min_length=64, max_length=64)
 
 
 @router.get(
@@ -234,6 +246,34 @@ class ForecastPrecomputeResponse(BaseModel):
 
 
 # ----- エンドポイント -----
+
+@router.post(
+    "/duplicate-races/delete-stale",
+    response_model=IngestResponse,
+    status_code=status.HTTP_200_OK,
+)
+def delete_stale_duplicate_race(
+    body: DeleteDuplicateRaceBody,
+    repo: RepositoryDep,
+    audit_repo: RaceCompletenessRepositoryDep,
+    session: SessionDep,
+    _auth: AuthDep,
+) -> IngestResponse:
+    """正規キーの再同期結果を再検証し、安全な場合だけ旧キーを削除する。"""
+    use_case = DeleteDuplicateRaceUseCase(repo, audit_repo)
+    try:
+        deleted = use_case.execute(**body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    session.commit()
+    return IngestResponse(
+        accepted=int(deleted),
+        message="stale duplicate race deleted" if deleted else "race not found",
+    )
+
 
 @router.post("/horses", response_model=IngestResponse, status_code=status.HTTP_200_OK)
 def ingest_horses(

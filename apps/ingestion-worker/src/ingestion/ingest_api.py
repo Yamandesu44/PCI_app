@@ -106,6 +106,37 @@ class IngestApiClient:
         payload: list[dict[str, Any]] = resp.json()
         return payload
 
+    def delete_duplicate_race(
+        self,
+        *,
+        stale_race_key: str,
+        canonical_race_key: str,
+        expected_entry_count: int,
+        expected_finished_count: int,
+        stale_entry_signature: str,
+        stale_result_signature: str,
+    ) -> int:
+        """再同期後の検証値を送り、安全条件を満たす旧キーだけを削除する。"""
+        result = self._post(
+            "/internal/ingest/duplicate-races/delete-stale",
+            {
+                "stale_race_key": stale_race_key,
+                "canonical_race_key": canonical_race_key,
+                "expected_entry_count": expected_entry_count,
+                "expected_finished_count": expected_finished_count,
+                "stale_entry_signature": stale_entry_signature,
+                "stale_result_signature": stale_result_signature,
+            },
+        )
+        accepted = int(result.get("accepted", 0))
+        _log.info(
+            "重複旧キー削除 %s → %s: %d 件",
+            stale_race_key,
+            canonical_race_key,
+            accepted,
+        )
+        return accepted
+
     # ----- マスタデータ -----
 
     def upsert_horses(self, horses: list[HorseRecord]) -> int:

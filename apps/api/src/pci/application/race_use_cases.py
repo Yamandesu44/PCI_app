@@ -9,7 +9,7 @@ from pci.domain.pace.pci import aggregate_rpci, calculate_pci, calculate_rpci_fr
 from pci.domain.pace.running_style import classify_running_style
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
-from pci.domain.racing.repository import RaceRepository
+from pci.domain.racing.repository import RaceCompletenessRepository, RaceRepository
 from pci.domain.shared.measurements import Distance, Furlong3Time, RaceTime
 from pci.domain.shared.race_key import RaceKey
 
@@ -182,6 +182,75 @@ class UpdateRaceMetadataUseCase:
         return candidates if len(candidates) == 1 else []
 
 
+class DeleteDuplicateRaceUseCase:
+    """再同期済み正規キーを検証してから旧キーだけを削除する。"""
+
+    def __init__(
+        self,
+        repo: RaceRepository,
+        audit_repo: RaceCompletenessRepository,
+    ) -> None:
+        self._repo = repo
+        self._audit_repo = audit_repo
+
+    def execute(
+        self,
+        *,
+        stale_race_key: str,
+        canonical_race_key: str,
+        expected_entry_count: int,
+        expected_finished_count: int,
+        stale_entry_signature: str,
+        stale_result_signature: str,
+    ) -> bool:
+        if stale_race_key == canonical_race_key:
+            raise ValueError("旧キーと正規キーには異なる値を指定してください")
+        race_date = _race_date_from_key(canonical_race_key)
+        if (
+            stale_race_key[:10] != canonical_race_key[:10]
+            or stale_race_key[-2:] != canonical_race_key[-2:]
+        ):
+            raise ValueError("旧キーと正規キーの開催日・競馬場・R番号が一致しません")
+
+        groups = self._audit_repo.find_duplicate_race_audits(
+            race_date,
+            race_date + datetime.timedelta(days=1),
+        )
+        group = next(
+            (
+                candidate
+                for candidate in groups
+                if {key.race_key for key in candidate.keys}
+                >= {stale_race_key, canonical_race_key}
+            ),
+            None,
+        )
+        if group is None:
+            raise ValueError("指定されたキーを含む重複レースが見つかりません")
+
+        keys = {key.race_key: key for key in group.keys}
+        stale = keys[stale_race_key]
+        canonical = keys[canonical_race_key]
+        if (
+            stale.entry_signature != stale_entry_signature
+            or stale.result_signature != stale_result_signature
+        ):
+            raise ValueError("監査後に旧キーデータが変更されたため削除を中止しました")
+        if canonical.status != RaceStatus.RESULT:
+            raise ValueError("正規キーの確定成績が登録されていません")
+        if (
+            canonical.entry_count != expected_entry_count
+            or canonical.field_size != expected_entry_count
+            or canonical.finished_count != expected_finished_count
+        ):
+            raise ValueError("正規キーの再同期件数がmykeibadbと一致しません")
+        if canonical.result_signature != stale.result_signature:
+            raise ValueError("旧キーと正規キーの中核成績が一致しません")
+        if stale.predicted_pace_count > 0 or stale.pace_fit_count > 0:
+            raise ValueError("旧キーに予想martが残っているため削除できません")
+        return self._repo.delete_race(RaceKey(stale_race_key))
+
+
 class RecordRaceResultUseCase:
     """レース確定結果記録ユースケース。
 
@@ -345,3 +414,15 @@ def _entry_snapshot_matches(
         and current.ketto_num == entry.ketto_num
         for entry in incoming
     )
+
+
+def _race_date_from_key(race_key: str) -> datetime.date:
+    """16桁レースキーの先頭8桁を開催日に変換する。"""
+    try:
+        return datetime.date(
+            int(race_key[0:4]),
+            int(race_key[4:6]),
+            int(race_key[6:8]),
+        )
+    except (ValueError, IndexError) as exc:
+        raise ValueError("レースキーから開催日を取得できません") from exc
