@@ -262,6 +262,11 @@
   `canonical_incomplete`、`source_unresolved`へ分類してJSON保存する。DB書き込みは行わない。
   中核成績署名は馬番・着順・走破時計・上がり3F・通過順だけを対象とし、再取込時期で欠損し得る
   人気・賞金と、別途出走馬署名で検出する馬IDは含めない。
+- ✅ **安全な重複統合**（2026-07-23追加）:
+  `python -m ingestion.reconcile_duplicate_races`は既定で計画表示のみとし、`--apply`時は
+  `--expected-groups`一致を必須とする。正規キーの出走表・成績送信後、認証付き内部APIが
+  旧キー監査署名の不変、正規頭数・確定頭数、中核成績一致、旧キー側予想martゼロを再確認した
+  組だけ旧キーを削除する。条件不一致は409で保持する。
 - ✅ **安全な手動再同期支援**（2026-07-22追加）: DBで最古の成績未取込日を集計し、標準10日以上で
   その日を含む`recommended_sync_days_back`を返す。警告バナーはWindowsのコマンドプロンプトで
   実行できる`run_mykeibadb_full_sync.ps1 -DaysBack N`を生成し、コピーできる。正常時は表示しない。

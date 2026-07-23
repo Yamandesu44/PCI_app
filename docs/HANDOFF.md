@@ -1,5 +1,47 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 20:58 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 実装最新コミット: `0523039`
+- 目的: dry-run済み重複レースを正規キーへ安全に統合する。
+
+### 完了した内容
+
+- `DeleteDuplicateRaceUseCase`と`POST /internal/ingest/duplicate-races/delete-stale`を追加。
+- `ingest_results`の旧キー削除を正規出走表・成績登録後へ移動。失敗組は旧キーを保持する。
+- `reconcile_duplicate_races.py`を追加。dry-run既定、適用時は対象組数一致を必須化。
+- 実DB: 自動統合対象449組を同期し、旧キー449件を削除。失敗0件。重複450組から1組へ削減。
+
+### 未完了・次に実施する具体的な作業
+
+1. 残存組: 2026-02-01東京9R、旧`2026020105010109`、正規`2026020105010209`。
+2. 両キーとも12頭・確定12頭、`predicted_pace` 1件、`pace_fit` 12件。
+3. 両方に`rule-v4`/`pai-v1`があり正規側が約6秒後に生成済み。旧側は誤った出走馬対応のため、
+   `race_repository.py`の監査へモデル世代別martカバレッジを追加し、正規側が完全代替すると
+   検証できた場合だけ旧mart破棄を許可する。
+4. 処理後に`count_duplicate_race_groups(...) == 0`を確認する。
+
+### テスト結果
+
+- API対象42 passed、PostgreSQL統合1 passed
+- worker対象76 passed、worker全体229 passed
+- API Ruff・mypy strict成功、worker変更ファイルRuff・mypy strict成功
+- OpenAPI 2 passed、api-client typecheck成功
+- API非統合全体519 passed / 既知caplog 3 failed
+
+### 最初に確認・実行するもの
+
+1. `tasks/backlog.md`
+2. `apps/api/src/pci/application/race_use_cases.py`
+3. `apps/ingestion-worker/src/ingestion/reconcile_duplicate_races.py`
+
+```powershell
+python -m ingestion.reconcile_duplicate_races --date 2025-07-23 --date-to 2026-07-23
+```
+
 ## 2026-07-23 20:32 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
