@@ -1,5 +1,76 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 01:39 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `7d2beaa`
+- 実装コミット: `b5812bc`
+- 目的: RPCI回帰モデルの少数展開区分を学習時に補正し、独立期間で採否を判断できるようにする。
+
+### 完了した内容
+
+- `apps/api/scripts/train_rpci_lgbm.py`
+  - `--label-balance none|sqrt-inverse|inverse`を追加した。
+  - 芝・ダート固有の3区分ごとに、逆頻度平方根または逆頻度のサンプル重みを算出する。
+  - 重みは平均1.0へ正規化し、LightGBMの学習データだけへ適用する。検証指標は加重しない。
+  - 区分別の学習件数と適用重みを表示する。
+  - 加重学習では`--output`を必須とし、既定の本番モデルパスを誤って上書きできない。
+- `apps/api/tests/unit/test_train_rpci_lgbm.py`
+  - 重みなし、少数区分の加重、コース別グループ、区分総重みの均等化、保存先必須を検証した。
+
+### 実DB診断と採用判断
+
+- 芝`√逆頻度`候補（独立200レース）:
+  - MAE `4.310`（現行`5.625`）、総合一致率`63.0%`（現行`63.5%`）。
+  - 平均再現率`40.0%`（現行`23.3%`）へ改善したが、ハイは`66.7%`（現行`80.2%`）へ悪化。
+  - PAI相関`-0.016`、最上位帯リフト`1.05x`。
+- 芝`完全逆頻度`候補（独立200レース）:
+  - 平均再現率`43.3%`まで改善したが、総合一致率`55.5%`、スロー再現率`46.0%`へ悪化。
+- ダート`√逆頻度`候補:
+  - 検証セットでもハイ再現率`0%`のため独立候補から除外した。
+- ダート`完全逆頻度`候補:
+  - 検証セットではハイ再現率`17.4%`だったが、独立200レースでは`0%`。
+  - 独立期間のMAE`3.233`、総合一致率`53.0%`で、期間外再現性を確認できなかった。
+- 少数区分の改善と主要区分の悪化が交換条件になり、ダートは期間外でハイを再現できないため、
+  4候補とも不採用。本番モデルと既定`none`は維持し、候補ファイルは削除した。
+
+### 未完了・未確定仕様・既知事項
+
+- `tasks/backlog.md`のダート「ハイ」・芝「平均」の構造的課題は継続する。
+  ラベル頻度だけでは解消せず、前半ラップ傾向、逃げ競合の質、距離・競馬場の交互作用など
+  予測時点で取得できる追加特徴量が必要。
+- 採用条件となる区分別再現率の最低値は未確定。今回も全体指標と各区分が同時改善する候補だけを
+  採用する保守方針を維持した。
+- `ruff check src tests scripts`の既存`seed_dev.py`10件と、Codex領域のpytestキャッシュ警告は継続。
+
+### テスト結果
+
+- `python -m pytest tests/unit/test_train_rpci_lgbm.py -q`: 8 passed
+- `python -m pytest -m "not integration" -q`: 553 passed、28 deselected
+- 変更対象Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 64 files passed
+- Web変更なしのためWeb typecheck/buildは未実行
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/scripts/train_rpci_lgbm.py`
+2. `apps/api/tests/unit/test_train_rpci_lgbm.py`
+3. `docs/DECISIONS.md`
+4. `tasks/backlog.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests\unit\test_train_rpci_lgbm.py -q
+python -m scripts.train_rpci_lgbm --track-type dirt --label-balance inverse `
+  --output models\rpci_lgbm_dirt_candidate.txt
+```
+
 ## 2026-07-24 00:33 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
