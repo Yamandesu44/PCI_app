@@ -544,6 +544,27 @@ export interface components {
             period_days: number;
             /** Sample Size */
             sample_size: number;
+            /**
+             * Weekly Trend
+             * @default []
+             */
+            weekly_trend: components["schemas"]["ForecastPerformanceTrendPointSchema"][];
+        };
+        /**
+         * ForecastPerformanceTrendPointSchema
+         * @description 完了した1週間の展開ラベル的中率。
+         */
+        ForecastPerformanceTrendPointSchema: {
+            /** Date From */
+            date_from: string;
+            /** Date To */
+            date_to: string;
+            /** Hit Count */
+            hit_count: number;
+            /** Hit Rate */
+            hit_rate?: number | null;
+            /** Sample Size */
+            sample_size: number;
         };
         /** ForecastPrecomputeBody */
         ForecastPrecomputeBody: {

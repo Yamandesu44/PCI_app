@@ -32,6 +32,8 @@ export type IngestFailure = components["schemas"]["IngestFailureSchema"];
 export type ForecastPerformance = components["schemas"]["ForecastPerformanceSchema"];
 export type ForecastPerformanceGroup =
   components["schemas"]["ForecastPerformanceGroupSchema"];
+export type ForecastPerformanceTrendPoint =
+  components["schemas"]["ForecastPerformanceTrendPointSchema"];
 export type Readiness = components["schemas"]["ReadinessSchema"];
 
 export type { components, paths } from "./schema";

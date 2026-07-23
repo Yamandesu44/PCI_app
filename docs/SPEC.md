@@ -169,6 +169,7 @@
 - ✅ `GET /api/v1/forecast-performance`はJST基準の直近90日、確定済みJRA平地について、
   レース日以前に生成された最新の保存済み予想と実際の展開区分を比較する。全体・芝・ダートの
   一致率、的中数、母数、対象期間だけを公開し、PCI/RPCIの内部実数値は返さない。
+  `weekly_trend`は進行中の週を除き、直近8完了週を月曜から日曜の固定区間で返す。
 - ✅ 内部取り込み
   `POST /internal/ingest/{horses,jockeys,trainers,entries,results,race-metadata,log}`,
   `POST /internal/ingest/forecasts/precompute`,

@@ -69,6 +69,7 @@ def test_forecast_performance_contract_hides_internal_values(
         "hit_count",
         "hit_rate",
         "groups",
+        "weekly_trend",
     }
     assert body["period_days"] == 90
     assert body["sample_size"] == 0
@@ -78,6 +79,14 @@ def test_forecast_performance_contract_hides_internal_values(
         "turf",
         "dirt",
     ]
+    assert len(body["weekly_trend"]) == 8
+    assert set(body["weekly_trend"][0]) == {
+        "date_from",
+        "date_to",
+        "sample_size",
+        "hit_count",
+        "hit_rate",
+    }
     assert "rpci" not in response.text.lower()
     assert "pci" not in response.text.lower()
 

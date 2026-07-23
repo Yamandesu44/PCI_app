@@ -2,6 +2,7 @@ import { Activity, Database } from "lucide-react";
 import type { ForecastPerformance } from "@pci/api-client";
 
 import { formatRaceDate } from "@/lib/races";
+import { ForecastPerformanceTrendLazy } from "@/components/ForecastPerformanceTrendLazy";
 
 function rateLabel(rate: number | null | undefined): string {
   return rate == null ? "集計前" : `${Math.round(rate * 100)}%`;
@@ -15,6 +16,9 @@ export function ForecastPerformanceSummary({
 }) {
   const groups = performance.groups.filter((group) =>
     ["overall", "turf", "dirt"].includes(group.key),
+  );
+  const hasWeeklyTrend = performance.weekly_trend.some(
+    (point) => point.sample_size > 0,
   );
 
   return (
@@ -38,19 +42,24 @@ export function ForecastPerformanceSummary({
       </div>
 
       {performance.sample_size > 0 ? (
-        <dl className="mt-5 grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 pt-4">
-          {groups.map((group) => (
-            <div className="px-3 first:pl-0 sm:px-6 sm:first:pl-0" key={group.key}>
-              <dt className="text-xs font-medium text-slate-500">{group.label}</dt>
-              <dd className="mt-1 text-2xl font-bold tabular-nums text-slate-950">
-                {rateLabel(group.hit_rate)}
-              </dd>
-              <dd className="mt-1 text-xs text-slate-500">
-                {group.sample_size}レースを検証
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <>
+          <dl className="mt-5 grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 pt-4">
+            {groups.map((group) => (
+              <div className="px-3 first:pl-0 sm:px-6 sm:first:pl-0" key={group.key}>
+                <dt className="text-xs font-medium text-slate-500">{group.label}</dt>
+                <dd className="mt-1 text-2xl font-bold tabular-nums text-slate-950">
+                  {rateLabel(group.hit_rate)}
+                </dd>
+                <dd className="mt-1 text-xs text-slate-500">
+                  {group.sample_size}レースを検証
+                </dd>
+              </div>
+            ))}
+          </dl>
+          {hasWeeklyTrend ? (
+            <ForecastPerformanceTrendLazy points={performance.weekly_trend} />
+          ) : null}
+        </>
       ) : (
         <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">
           <Database className="h-4 w-4 text-slate-400" aria-hidden />

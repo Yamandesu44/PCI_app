@@ -53,8 +53,15 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
         ("turf", 2, 0.5),
         ("dirt", 1, 1.0),
     ]
+    assert len(output.weekly_trend) == 8
+    assert output.weekly_trend[-1].date_from == "2026-07-13"
+    assert output.weekly_trend[-1].date_to == "2026-07-19"
+    assert output.weekly_trend[-1].sample_size == 2
+    assert output.weekly_trend[-1].hit_rate == 0.5
+    assert all(point.date_to < output.date_to for point in output.weekly_trend)
     assert "rpci" not in vars(output)
     assert all("rpci" not in vars(group) for group in output.groups)
+    assert all("rpci" not in vars(point) for point in output.weekly_trend)
 
 
 def test_empty_period_returns_null_rate() -> None:
@@ -64,3 +71,5 @@ def test_empty_period_returns_null_rate() -> None:
     assert output.hit_count == 0
     assert output.hit_rate is None
     assert all(group.hit_rate is None for group in output.groups)
+    assert len(output.weekly_trend) == 8
+    assert all(point.hit_rate is None for point in output.weekly_trend)

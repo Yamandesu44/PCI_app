@@ -7,6 +7,7 @@ import datetime
 from pci.application.dto import (
     ForecastPerformanceGroupOutput,
     ForecastPerformanceOutput,
+    ForecastPerformanceTrendPointOutput,
 )
 from pci.domain.pace.mart_repository import (
     MartRepository,
@@ -15,6 +16,7 @@ from pci.domain.pace.mart_repository import (
 from pci.domain.pace.rpci_forecast import classify_pace
 
 _PERIOD_DAYS = 90
+_TREND_WEEKS = 8
 _JRA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=9), name="JST")
 _GROUPS = (
     ("overall", "全体", None),
@@ -40,6 +42,7 @@ class GetForecastPerformanceUseCase:
             _summarize(records, key=key, label=label, track_type=track_type)
             for key, label, track_type in _GROUPS
         ]
+        weekly_trend = _build_weekly_trend(records, date_to)
         overall = groups[0]
         return ForecastPerformanceOutput(
             date_from=date_from.isoformat(),
@@ -49,6 +52,7 @@ class GetForecastPerformanceUseCase:
             hit_count=overall.hit_count,
             hit_rate=overall.hit_rate,
             groups=groups,
+            weekly_trend=weekly_trend,
         )
 
 
@@ -77,3 +81,41 @@ def _summarize(
         hit_count=hit_count,
         hit_rate=round(hit_count / sample_size, 3) if sample_size else None,
     )
+
+
+def _build_weekly_trend(
+    records: list[PredictionEvaluationRecord],
+    date_to: datetime.date,
+) -> list[ForecastPerformanceTrendPointOutput]:
+    """進行中の週を除き、直近8完了週を月曜始まりで集計する。"""
+    last_sunday = date_to - datetime.timedelta(days=date_to.weekday() + 1)
+    first_monday = last_sunday - datetime.timedelta(days=(_TREND_WEEKS * 7) - 1)
+    points: list[ForecastPerformanceTrendPointOutput] = []
+    for week_index in range(_TREND_WEEKS):
+        week_from = first_monday + datetime.timedelta(days=week_index * 7)
+        week_to = week_from + datetime.timedelta(days=6)
+        targets = [
+            record
+            for record in records
+            if week_from <= record.race_date <= week_to
+        ]
+        hit_count = sum(
+            str(classify_pace(record.actual_rpci, record.track_type))
+            == record.predicted_label
+            for record in targets
+        )
+        sample_size = len(targets)
+        points.append(
+            ForecastPerformanceTrendPointOutput(
+                date_from=week_from.isoformat(),
+                date_to=week_to.isoformat(),
+                sample_size=sample_size,
+                hit_count=hit_count,
+                hit_rate=(
+                    round(hit_count / sample_size, 3)
+                    if sample_size
+                    else None
+                ),
+            )
+        )
+    return points

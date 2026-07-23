@@ -9,26 +9,32 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新34回目・Codex が直近90日の予想検証サマリーを実装） |
+| 更新日時 | 2026-07-23（更新35回目・Codex が予想一致率の直近8週トレンドを実装） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（保存済み事前予想の展開一致率をWebトップへ追加した） |
+| 直前の担当AI | OpenAI Codex（展開予想一致率を週次トレンドで可視化した） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `627783c`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `baa7796`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**保存済みの事前予想をレース結果と継続的に照合し、直近90日の展開区分一致率を
-レース一覧から確認できるようにした。**
+**直近90日の平均だけでなく、展開予想一致率が最近どう推移しているかを
+直近8完了週のグラフで確認できるようにした。**
 
 `MartRepository.find_prediction_evaluations()`は、JST基準の直近90日にある確定済みJRA平地から、
 レース日以前に生成された最新の予想を1件だけ選ぶ。application層で確定RPCIを展開区分へ変換し、
 全体・芝・ダートの一致率、的中数、母数を集計する。公開
 `GET /api/v1/forecast-performance`と`ForecastPerformanceSummary`は期間と集計結果だけを扱い、
-PCI/RPCIの内部実数値をAPI・画面へ露出しない。データがない場合は「蓄積中」と表示する。
+PCI/RPCIの内部実数値をAPI・画面へ露出しない。`weekly_trend`は進行中の週を除き、
+直近8完了週を月曜から日曜の固定区間で返す。WebはRechartsの棒グラフと最新週の母数を表示し、
+完了週のデータがない場合は空グラフを出さない。
+
+`ForecastPerformanceTrend`は約100KBのRecharts依存を持つため、
+`ForecastPerformanceTrendLazy`から`next/dynamic`で遅延読み込みする。直接importした試作では
+一覧のFirst Load JSが214KBまで増えたが、遅延化後は110KBへ戻った。
 
 今回の検証は新規単体・契約7 passed、PostgreSQL統合1 passed、Web 74 passed。
 API Ruff、API全体63ファイルのmypy strict、OpenAPI生成、api-client/Web typecheck、
@@ -44,7 +50,8 @@ lintスクリプトがないため実行不可（Next buildもlintをskipする�
 
 Claude Codeが最初に確認するファイル:
 `apps/api/src/pci/application/forecast_performance_use_cases.py`,
-`apps/api/src/pci/infrastructure/repositories/mart_repository.py`,
+`apps/web/src/components/ForecastPerformanceTrend.tsx`,
+`apps/web/src/components/ForecastPerformanceTrendLazy.tsx`,
 `apps/web/src/components/ForecastPerformanceSummary.tsx`,
 `docs/DECISIONS.md`。
 最初に実行するコマンド:

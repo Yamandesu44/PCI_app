@@ -476,6 +476,16 @@ class ForecastPerformanceGroupSchema(BaseModel):
     hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
+class ForecastPerformanceTrendPointSchema(BaseModel):
+    """完了した1週間の展開ラベル的中率。"""
+
+    date_from: str
+    date_to: str
+    sample_size: int = Field(ge=0)
+    hit_count: int = Field(ge=0)
+    hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
 class ForecastPerformanceSchema(BaseModel):
     """直近期間の予想精度サマリー。PCI/RPCI実数値は公開しない。"""
 
@@ -486,6 +496,7 @@ class ForecastPerformanceSchema(BaseModel):
     hit_count: int = Field(ge=0)
     hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     groups: list[ForecastPerformanceGroupSchema] = []
+    weekly_trend: list[ForecastPerformanceTrendPointSchema] = []
 
     @classmethod
     def from_dto(
@@ -501,6 +512,10 @@ class ForecastPerformanceSchema(BaseModel):
             groups=[
                 ForecastPerformanceGroupSchema(**vars(group))
                 for group in dto.groups
+            ],
+            weekly_trend=[
+                ForecastPerformanceTrendPointSchema(**vars(point))
+                for point in dto.weekly_trend
             ],
         )
 

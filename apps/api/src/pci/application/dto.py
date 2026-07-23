@@ -357,6 +357,17 @@ class ForecastPerformanceGroupOutput:
 
 
 @dataclass(frozen=True)
+class ForecastPerformanceTrendPointOutput:
+    """完了した1週間の予想精度。内部実数値は含めない。"""
+
+    date_from: str
+    date_to: str
+    sample_size: int
+    hit_count: int
+    hit_rate: float | None
+
+
+@dataclass(frozen=True)
 class ForecastPerformanceOutput:
     """直近期間の展開ラベル的中率サマリー。"""
 
@@ -367,6 +378,9 @@ class ForecastPerformanceOutput:
     hit_count: int
     hit_rate: float | None
     groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
+    weekly_trend: list[ForecastPerformanceTrendPointOutput] = field(
+        default_factory=list
+    )
 
 
 @dataclass

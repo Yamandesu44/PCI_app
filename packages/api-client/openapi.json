@@ -363,6 +363,14 @@
             "minimum": 0.0,
             "title": "Sample Size",
             "type": "integer"
+          },
+          "weekly_trend": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ForecastPerformanceTrendPointSchema"
+            },
+            "title": "Weekly Trend",
+            "type": "array"
           }
         },
         "required": [
@@ -373,6 +381,50 @@
           "hit_count"
         ],
         "title": "ForecastPerformanceSchema",
+        "type": "object"
+      },
+      "ForecastPerformanceTrendPointSchema": {
+        "description": "完了した1週間の展開ラベル的中率。",
+        "properties": {
+          "date_from": {
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "title": "Date To",
+            "type": "string"
+          },
+          "hit_count": {
+            "minimum": 0.0,
+            "title": "Hit Count",
+            "type": "integer"
+          },
+          "hit_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Rate"
+          },
+          "sample_size": {
+            "minimum": 0.0,
+            "title": "Sample Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to",
+          "sample_size",
+          "hit_count"
+        ],
+        "title": "ForecastPerformanceTrendPointSchema",
         "type": "object"
       },
       "ForecastPrecomputeBody": {
