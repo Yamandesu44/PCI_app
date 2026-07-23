@@ -527,6 +527,11 @@ export interface components {
          * @description 直近期間の予想精度サマリー。PCI/RPCI実数値は公開しない。
          */
         ForecastPerformanceSchema: {
+            /**
+             * Confidence Groups
+             * @default []
+             */
+            confidence_groups: components["schemas"]["ForecastPerformanceGroupSchema"][];
             /** Date From */
             date_from: string;
             /** Date To */

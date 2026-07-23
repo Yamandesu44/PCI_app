@@ -9,20 +9,20 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新35回目・Codex が予想一致率の直近8週トレンドを実装） |
+| 更新日時 | 2026-07-23（更新36回目・Codex が信頼度別の予想一致率を実装） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（展開予想一致率を週次トレンドで可視化した） |
+| 直前の担当AI | OpenAI Codex（表示信頼度を実績一致率で検証可能にした） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `baa7796`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `09c2480`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**直近90日の平均だけでなく、展開予想一致率が最近どう推移しているかを
-直近8完了週のグラフで確認できるようにした。**
+**画面に表示する「読みやすい・標準・変動注意」という信頼度が、実際の展開一致率と
+整合しているかを母数付きで確認できるようにした。**
 
 `MartRepository.find_prediction_evaluations()`は、JST基準の直近90日にある確定済みJRA平地から、
 レース日以前に生成された最新の予想を1件だけ選ぶ。application層で確定RPCIを展開区分へ変換し、
@@ -31,6 +31,11 @@
 PCI/RPCIの内部実数値をAPI・画面へ露出しない。`weekly_trend`は進行中の週を除き、
 直近8完了週を月曜から日曜の固定区間で返す。WebはRechartsの棒グラフと最新週の母数を表示し、
 完了週のデータがない場合は空グラフを出さない。
+
+`confidence_groups`は既存の`confidenceInsight()`と同じ境界を使い、70%以上を「読みやすい」、
+50%以上70%未満を「標準」、50%未満を「変動注意」として一致率・的中数・母数を返す。
+`ForecastConfidenceCalibration`は3本の横棒と母数を表示する。信頼度別集計は複数モデル世代を
+横断するため、個別モデルの校正指標ではなく現在の画面表示全体の実績として解釈すること。
 
 `ForecastPerformanceTrend`は約100KBのRecharts依存を持つため、
 `ForecastPerformanceTrendLazy`から`next/dynamic`で遅延読み込みする。直接importした試作では
@@ -50,6 +55,7 @@ lintスクリプトがないため実行不可（Next buildもlintをskipする�
 
 Claude Codeが最初に確認するファイル:
 `apps/api/src/pci/application/forecast_performance_use_cases.py`,
+`apps/web/src/components/ForecastConfidenceCalibration.tsx`,
 `apps/web/src/components/ForecastPerformanceTrend.tsx`,
 `apps/web/src/components/ForecastPerformanceTrendLazy.tsx`,
 `apps/web/src/components/ForecastPerformanceSummary.tsx`,

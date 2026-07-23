@@ -19,6 +19,7 @@ def _record(
     track_type: str,
     predicted_label: str,
     actual_rpci: float,
+    confidence: float = 0.7,
 ) -> PredictionEvaluationRecord:
     return PredictionEvaluationRecord(
         race_key=race_key,
@@ -26,7 +27,7 @@ def _record(
         track_type=track_type,
         predicted_label=predicted_label,
         actual_rpci=actual_rpci,
-        confidence=0.7,
+        confidence=confidence,
         model_version="rule-v4",
     )
 
@@ -34,9 +35,30 @@ def _record(
 def test_summarizes_overall_and_track_type_without_internal_values() -> None:
     repo = FakeMartRepository()
     repo.prediction_evaluations = [
-        _record("2026072005010101", datetime.date(2026, 7, 20), "芝", "スロー", 55.0),
-        _record("2026071905010102", datetime.date(2026, 7, 19), "芝", "平均", 45.0),
-        _record("2026071805010103", datetime.date(2026, 7, 18), "ダート", "平均", 43.0),
+        _record(
+            "2026072005010101",
+            datetime.date(2026, 7, 20),
+            "芝",
+            "スロー",
+            55.0,
+            0.72,
+        ),
+        _record(
+            "2026071905010102",
+            datetime.date(2026, 7, 19),
+            "芝",
+            "平均",
+            45.0,
+            0.55,
+        ),
+        _record(
+            "2026071805010103",
+            datetime.date(2026, 7, 18),
+            "ダート",
+            "平均",
+            43.0,
+            0.31,
+        ),
         _record("2026042405010104", datetime.date(2026, 4, 24), "芝", "ハイ", 45.0),
     ]
 
@@ -62,6 +84,15 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
     assert "rpci" not in vars(output)
     assert all("rpci" not in vars(group) for group in output.groups)
     assert all("rpci" not in vars(point) for point in output.weekly_trend)
+    assert [
+        (group.key, group.sample_size, group.hit_rate)
+        for group in output.confidence_groups
+    ] == [
+        ("strong", 1, 1.0),
+        ("normal", 1, 0.0),
+        ("caution", 1, 1.0),
+    ]
+    assert all("rpci" not in vars(group) for group in output.confidence_groups)
 
 
 def test_empty_period_returns_null_rate() -> None:
@@ -71,5 +102,6 @@ def test_empty_period_returns_null_rate() -> None:
     assert output.hit_count == 0
     assert output.hit_rate is None
     assert all(group.hit_rate is None for group in output.groups)
+    assert all(group.hit_rate is None for group in output.confidence_groups)
     assert len(output.weekly_trend) == 8
     assert all(point.hit_rate is None for point in output.weekly_trend)

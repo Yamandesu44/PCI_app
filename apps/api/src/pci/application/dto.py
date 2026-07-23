@@ -378,6 +378,9 @@ class ForecastPerformanceOutput:
     hit_count: int
     hit_rate: float | None
     groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
+    confidence_groups: list[ForecastPerformanceGroupOutput] = field(
+        default_factory=list
+    )
     weekly_trend: list[ForecastPerformanceTrendPointOutput] = field(
         default_factory=list
     )

@@ -170,6 +170,8 @@
   レース日以前に生成された最新の保存済み予想と実際の展開区分を比較する。全体・芝・ダートの
   一致率、的中数、母数、対象期間だけを公開し、PCI/RPCIの内部実数値は返さない。
   `weekly_trend`は進行中の週を除き、直近8完了週を月曜から日曜の固定区間で返す。
+  `confidence_groups`は既存UIと同じ境界で「読みやすい（70%以上）」「標準（50%以上70%未満）」
+  「変動注意（50%未満）」ごとの一致率・的中数・母数を返す。
 - ✅ 内部取り込み
   `POST /internal/ingest/{horses,jockeys,trainers,entries,results,race-metadata,log}`,
   `POST /internal/ingest/forecasts/precompute`,

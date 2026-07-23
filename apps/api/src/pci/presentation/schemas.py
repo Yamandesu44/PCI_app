@@ -496,6 +496,7 @@ class ForecastPerformanceSchema(BaseModel):
     hit_count: int = Field(ge=0)
     hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     groups: list[ForecastPerformanceGroupSchema] = []
+    confidence_groups: list[ForecastPerformanceGroupSchema] = []
     weekly_trend: list[ForecastPerformanceTrendPointSchema] = []
 
     @classmethod
@@ -512,6 +513,10 @@ class ForecastPerformanceSchema(BaseModel):
             groups=[
                 ForecastPerformanceGroupSchema(**vars(group))
                 for group in dto.groups
+            ],
+            confidence_groups=[
+                ForecastPerformanceGroupSchema(**vars(group))
+                for group in dto.confidence_groups
             ],
             weekly_trend=[
                 ForecastPerformanceTrendPointSchema(**vars(point))

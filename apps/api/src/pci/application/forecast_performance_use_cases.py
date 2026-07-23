@@ -23,6 +23,11 @@ _GROUPS = (
     ("turf", "芝", "芝"),
     ("dirt", "ダート", "ダート"),
 )
+_CONFIDENCE_GROUPS = (
+    ("strong", "読みやすい", 0.7, None),
+    ("normal", "標準", 0.5, 0.7),
+    ("caution", "変動注意", None, 0.5),
+)
 
 
 class GetForecastPerformanceUseCase:
@@ -42,6 +47,16 @@ class GetForecastPerformanceUseCase:
             _summarize(records, key=key, label=label, track_type=track_type)
             for key, label, track_type in _GROUPS
         ]
+        confidence_groups = [
+            _summarize_confidence(
+                records,
+                key=key,
+                label=label,
+                minimum=minimum,
+                maximum=maximum,
+            )
+            for key, label, minimum, maximum in _CONFIDENCE_GROUPS
+        ]
         weekly_trend = _build_weekly_trend(records, date_to)
         overall = groups[0]
         return ForecastPerformanceOutput(
@@ -52,6 +67,7 @@ class GetForecastPerformanceUseCase:
             hit_count=overall.hit_count,
             hit_rate=overall.hit_rate,
             groups=groups,
+            confidence_groups=confidence_groups,
             weekly_trend=weekly_trend,
         )
 
@@ -119,3 +135,32 @@ def _build_weekly_trend(
             )
         )
     return points
+
+
+def _summarize_confidence(
+    records: list[PredictionEvaluationRecord],
+    *,
+    key: str,
+    label: str,
+    minimum: float | None,
+    maximum: float | None,
+) -> ForecastPerformanceGroupOutput:
+    targets = [
+        record
+        for record in records
+        if (minimum is None or record.confidence >= minimum)
+        and (maximum is None or record.confidence < maximum)
+    ]
+    hit_count = sum(
+        str(classify_pace(record.actual_rpci, record.track_type))
+        == record.predicted_label
+        for record in targets
+    )
+    sample_size = len(targets)
+    return ForecastPerformanceGroupOutput(
+        key=key,
+        label=label,
+        sample_size=sample_size,
+        hit_count=hit_count,
+        hit_rate=round(hit_count / sample_size, 3) if sample_size else None,
+    )

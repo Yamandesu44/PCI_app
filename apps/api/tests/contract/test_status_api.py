@@ -69,6 +69,7 @@ def test_forecast_performance_contract_hides_internal_values(
         "hit_count",
         "hit_rate",
         "groups",
+        "confidence_groups",
         "weekly_trend",
     }
     assert body["period_days"] == 90
@@ -80,6 +81,11 @@ def test_forecast_performance_contract_hides_internal_values(
         "dirt",
     ]
     assert len(body["weekly_trend"]) == 8
+    assert [group["key"] for group in body["confidence_groups"]] == [
+        "strong",
+        "normal",
+        "caution",
+    ]
     assert set(body["weekly_trend"][0]) == {
         "date_from",
         "date_to",

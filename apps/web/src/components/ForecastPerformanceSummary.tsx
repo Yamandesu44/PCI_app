@@ -1,8 +1,9 @@
 import { Activity, Database } from "lucide-react";
 import type { ForecastPerformance } from "@pci/api-client";
 
-import { formatRaceDate } from "@/lib/races";
+import { ForecastConfidenceCalibration } from "@/components/ForecastConfidenceCalibration";
 import { ForecastPerformanceTrendLazy } from "@/components/ForecastPerformanceTrendLazy";
+import { formatRaceDate } from "@/lib/races";
 
 function rateLabel(rate: number | null | undefined): string {
   return rate == null ? "集計前" : `${Math.round(rate * 100)}%`;
@@ -56,9 +57,18 @@ export function ForecastPerformanceSummary({
               </div>
             ))}
           </dl>
-          {hasWeeklyTrend ? (
-            <ForecastPerformanceTrendLazy points={performance.weekly_trend} />
-          ) : null}
+          <div
+            className={
+              hasWeeklyTrend
+                ? "grid gap-6 lg:grid-cols-[minmax(240px,0.7fr)_minmax(0,1.3fr)]"
+                : ""
+            }
+          >
+            <ForecastConfidenceCalibration groups={performance.confidence_groups} />
+            {hasWeeklyTrend ? (
+              <ForecastPerformanceTrendLazy points={performance.weekly_trend} />
+            ) : null}
+          </div>
         </>
       ) : (
         <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">
