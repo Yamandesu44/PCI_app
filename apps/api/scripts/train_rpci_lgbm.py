@@ -16,6 +16,10 @@
 
     python -m scripts.train_rpci_lgbm --track-type turf --limit 5000 --early-stopping 50
 
+    # 少数の展開区分を穏やかに補正する検証用学習
+    python -m scripts.train_rpci_lgbm --track-type dirt --label-balance sqrt-inverse \
+        --output models/rpci_lgbm_dirt_balanced_candidate.txt
+
 特徴量 (FEATURE_NAMES 参照, lgbm_forecaster.py と一致):
     distance_m, is_dirt, jyo_cd, escape_count,
     front_ratio, closer_ratio, style_balance, track_cond
@@ -160,7 +164,22 @@ def _parse_args() -> argparse.Namespace:
         default=50,
         help="early stopping ラウンド数（default: 50）",
     )
-    return p.parse_args()
+    p.add_argument(
+        "--label-balance",
+        choices=["none", "sqrt-inverse", "inverse"],
+        default="none",
+        help=(
+            "展開区分の学習重み。sqrt-inverseは穏やかな加重、inverseは"
+            "区分ごとの総重みを均等化する（default: none）"
+        ),
+    )
+    args = p.parse_args()
+    if args.label_balance != "none" and args.output is None:
+        p.error(
+            "--label-balance を指定する場合は、本番モデルの上書きを防ぐため "
+            "--output で候補モデルの保存先を指定してください"
+        )
+    return args
 
 
 def main() -> None:
@@ -215,8 +234,20 @@ def main() -> None:
     print(f"訓練: {len(x_train):,} / テスト: {len(x_test):,}")
 
     params = _PARAMS_BY_TRACK[track_type]
+    train_weights = _build_label_sample_weights(
+        y_train,
+        x_train,
+        track_type,
+        args.label_balance,
+    )
+    _print_label_balance(y_train, x_train, train_weights, track_type, args.label_balance)
 
-    lgb_train = lgb.Dataset(x_train, label=y_train, feature_name=FEATURE_NAMES)
+    lgb_train = lgb.Dataset(
+        x_train,
+        label=y_train,
+        weight=train_weights,
+        feature_name=FEATURE_NAMES,
+    )
     lgb_val = lgb.Dataset(x_test, label=y_test, reference=lgb_train)
 
     print("\nLightGBM 学習中…")
@@ -251,12 +282,16 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     model.save_model(str(output))
     print(f"\nモデルを保存しました: {output.resolve()}")
-    print(
-        "次のステップ: 芝・ダート両方の学習が完了したら\n"
-        "  git add models/rpci_lgbm_turf_v1.txt models/rpci_lgbm_dirt_v1.txt\n"
-        "  git commit -m 'feat: 芝/ダート別 LightGBM モデル追加'\n"
-        "  python -m scripts.backtest_forecast で精度を検証してください。"
-    )
+    if args.label_balance == "none":
+        print(
+            "次のステップ: 芝・ダート両方の学習が完了したら\n"
+            "  python -m scripts.backtest_forecast で精度を検証してください。"
+        )
+    else:
+        print(
+            "候補モデルです。本番モデルへ置換せず、backtest_forecast.py の\n"
+            "--turf-model-path / --dirt-model-path で独立検証してください。"
+        )
 
 
 def _print_label_recall(
@@ -288,6 +323,74 @@ def _print_label_recall(
                 print(
                     f"  {track_type}「{label}」: "
                     f"{sum(hits) / len(hits):.1%} ({sum(hits)}/{len(hits)})"
+                )
+
+
+def _label_group(
+    actual: float,
+    feature: Any,
+    configured_track_type: str,
+) -> tuple[str, PaceLabel]:
+    track_type = (
+        "ダート"
+        if configured_track_type == "dirt"
+        or (configured_track_type == "all" and float(feature[1]) == 1.0)
+        else "芝"
+    )
+    return track_type, classify_pace(float(actual), track_type)
+
+
+def _build_label_sample_weights(
+    actuals: Any,
+    features: Any,
+    configured_track_type: str,
+    profile: str,
+) -> np.ndarray:
+    """展開区分の頻度から学習用サンプル重みを生成する。"""
+    if profile == "none":
+        return np.ones(len(actuals), dtype=np.float64)
+    if profile not in {"sqrt-inverse", "inverse"}:
+        raise ValueError(f"未対応のラベル重みプロファイルです: {profile}")
+
+    groups = [
+        _label_group(float(actual), feature, configured_track_type)
+        for actual, feature in zip(actuals, features, strict=True)
+    ]
+    counts: dict[tuple[str, PaceLabel], int] = {}
+    for group in groups:
+        counts[group] = counts.get(group, 0) + 1
+
+    if profile == "sqrt-inverse":
+        raw = np.array(
+            [1.0 / math.sqrt(counts[group]) for group in groups],
+            dtype=np.float64,
+        )
+    else:
+        raw = np.array([1.0 / counts[group] for group in groups], dtype=np.float64)
+    return raw / float(raw.mean())
+
+
+def _print_label_balance(
+    actuals: Any,
+    features: Any,
+    weights: Any,
+    configured_track_type: str,
+    profile: str,
+) -> None:
+    """学習区分ごとの件数と適用重みを表示する。"""
+    grouped: dict[tuple[str, PaceLabel], list[float]] = {}
+    for actual, feature, weight in zip(actuals, features, weights, strict=True):
+        group = _label_group(float(actual), feature, configured_track_type)
+        grouped.setdefault(group, []).append(float(weight))
+
+    print(f"\n■ 学習ラベル重み: {profile}")
+    for track_type in ("芝", "ダート"):
+        for label in PaceLabel:
+            values = grouped.get((track_type, label), [])
+            if values:
+                print(
+                    f"  {track_type}「{label}」: "
+                    f"{len(values):,}件 / 重み {sum(values) / len(values):.3f}"
                 )
 
 
