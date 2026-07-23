@@ -1,5 +1,75 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 23:44 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `0ce72be`
+- 実装コミット: `4782895`
+- 目的: 暫定`PaiWeights`を本番変更せず、実DBで同一母集団比較できる基盤を追加する。
+
+### 完了した内容
+
+- `apps/api/src/pci/application/backtest.py`
+  - `PaiWeightProfile`、`PaiWeightMetrics`、`PaiWeightComparison`を追加した。
+  - 現行、`rpci-light/heavy`、`preference-compressed/expanded`の5候補を定義した。
+  - `ForecastBacktester`へ`PaceAdaptabilityScorer`注入点を追加した。
+  - 同一レース・同一馬を厳密照合し、全体・芝・ダート別のpoint-biserial相関と
+    最上位PAI帯リフト、現行差を集計する。
+  - `HorseSample.track_type`を追加し、JSON明細でもコース種別を保存する。
+- `apps/api/scripts/backtest_forecast.py`
+  - `--compare-pai-weights`を追加し、CLIと`--output` JSONへ比較結果を出力する。
+  - 現行レポートを再利用し、候補4件だけを追加実行する。本番値は自動変更しない。
+- `apps/api/tests/unit/application/test_backtest.py`
+  - 芝・ダート差分、対象馬不一致拒否、JSON、CLI表示を検証するテストを追加した。
+
+### 実DB診断と採用判断
+
+- 2025-07-01〜2025-12-31、30レース・424頭:
+  - `rpci-light`: 全体相関 +0.006、上位帯リフト +0.052。
+  - `preference-compressed`: 全体相関 +0.014、上位帯 +0.125。芝・ダートも両指標が悪化しなかった。
+- 2026-01-01〜2026-07-23、30レース・413頭:
+  - `rpci-light`: 全体相関 +0.003、上位帯 +0.083。芝相関は -0.001。
+  - `preference-compressed`: 全体相関 +0.018、上位帯 +0.040だが、
+    ダート上位帯リフトが -0.294。
+- 両期間・両コースで全指標を安定改善する候補がなく、2026年は現行PAI相関自体が負だった。
+  小標本で本番値を変えず、現行`PaiWeights`を維持する。
+
+### 未完了・既知事項
+
+- `ForecastRaceUseCase`は`HorsePaceProfile.distance_aptitude_m`と`weak_on_off_track`を
+  現在設定していない。したがって距離・馬場の`PaiWeights`は実予想で効果を持たず、今回の候補から除外した。
+- 距離適性・道悪弱点は過去走からlookaheadなしで構築する別タスク。仕様根拠なしに値を補わない。
+- 60レースは正式採用には小さい。比較基盤を使い、より大きな独立期間・開催条件で再検証する。
+
+### テスト結果
+
+- `python -m pytest tests/unit/application/test_backtest.py -q`: 38 passed
+- `python -m pytest -m "not integration" -q`: 536 passed、28 deselected
+- API全体Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 63 files passed
+- 実DBバックテストCLI: 2025年30件、2026年30件とも完走
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `apps/api/src/pci/application/backtest.py`
+3. `apps/api/scripts/backtest_forecast.py`
+4. `apps/api/src/pci/domain/pace/adaptability.py`
+5. `tasks/backlog.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests/unit/application/test_backtest.py -q
+python -m scripts.backtest_forecast --limit 200 --sample-every 3 `
+  --rpci-min 20 --rpci-max 90 --compare-pai-weights
+```
+
 ## 2026-07-23 23:29 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

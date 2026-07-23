@@ -1,5 +1,14 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-23 完了: PaiWeights候補の実DB比較基盤
+
+- [x] `--compare-pai-weights`を追加し、現行・RPCI差減点2候補・脚質好ペース幅2候補を比較可能にした。
+- [x] 同一レース・同一馬を検証し、全体・芝・ダート別のPAI相関と最上位帯リフトをCLI/JSONへ出力する。
+- [x] 2025年後半30件・424頭と2026年前半30件・413頭で実DB診断を行った。
+- [x] 全指標を両期間で安定改善する候補がなかったため、本番`PaiWeights`は現行値を維持した。
+- [x] 距離適性・道悪弱点が現行プロファイル生成へ未接続であることを別タスクへ分離した。
+- [x] 関連38 tests、API非統合536 tests、Ruff、mypy strictを完了した。
+
 ## 2026-07-23 完了: TestClientをhttpx2へ移行
 
 - [x] APIの開発用依存へ`httpx2>=2.7,<3`を追加し、Starlette TestClientの正式移行経路を有効化した。
@@ -102,7 +111,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-23（TestClientをhttpx2へ移行） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-23（PaiWeights候補の実DB比較基盤） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
@@ -588,7 +597,8 @@
 
 - [ ] **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・上がり3F妥当範囲・`RuleWeights`・`PaiWeights`・
   `FormationWeights`・`DistanceStyleWeights`・`StyleAdvantageWeights`・`AbilityWeights`）
-  - 状態: 🔄一部完了。`AbilityWeights`と`RuleWeights`の候補比較は完了し、いずれも現行値を維持。
+  - 状態: 🔄一部完了。`AbilityWeights`・`RuleWeights`・`PaiWeights`の候補比較は完了し、
+    いずれも現行値を維持。
   - 背景: `docs/SPEC.md §9` に記載の仮仕様。実データ検証後に確定する方針（独断で確定しない）。
     `FormationWeights`（脚質70%/近走序盤位置30%・4ゾーン境界）と`DistanceStyleWeights`
     （距離スケール・新しさ減衰・先行距離補正）は2026-07-12にCodexが追加した仮係数
