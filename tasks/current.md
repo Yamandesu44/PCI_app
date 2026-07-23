@@ -1,5 +1,12 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-23 完了: Alembic実行によるロガー状態漏れの解消
+
+- [x] `test_database_readiness.py`へ統合テストマーカーを追加し、通常テストへのDocker/Alembic混入を防止した。
+- [x] Alembicの`fileConfig`で`disable_existing_loggers=False`を指定し、同一プロセスの既存ロガーを保持する。
+- [x] マイグレーション後もアプリロガーが有効であることをPostgreSQL統合テストへ追加した。
+- [x] API非統合533 tests、PostgreSQL統合2 tests、Ruff、mypy strictを完了した。
+
 ## 2026-07-23 完了: RuleWeights候補の実DB比較基盤
 
 - [x] `--compare-rule-weights`を追加し、現行・脚質影響2候補・前付け実績混合2候補を同一レースで比較可能にした。
@@ -81,7 +88,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-23（RuleWeights候補の実DB比較基盤） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-23（Alembic実行によるロガー状態漏れの解消） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 

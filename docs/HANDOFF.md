@@ -1,6 +1,56 @@
 # HANDOFF — 現在の作業状態
 
-## 2026-07-23 23:30 JST OpenAI Codex 更新
+## 2026-07-23 22:46 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `401f450`
+- 実装コミット: `4a45799`
+- 目的: API全体テストで発見したログ検証の実行順依存を解消する。
+
+### 完了した内容
+
+- 原因は`tests/integration/test_database_readiness.py`の`integration`マーカー漏れだった。
+  `pytest -m "not integration"`でも同テストが実行され、Alembicの`fileConfig`が既存の
+  `pci.*`ロガーを無効化したため、後続3テストの`caplog`が空になっていた。
+- 同テストへモジュール単位の`pytest.mark.integration`を追加した。
+- `apps/api/alembic/env.py`で`disable_existing_loggers=False`を指定し、管理CLIやテストから
+  同一プロセスでマイグレーションを呼んでもアプリロガーを保持するようにした。
+- マイグレーション前から存在するロガーが実PostgreSQLへの適用後も有効であることを
+  `test_migration_keeps_existing_application_loggers_enabled`で固定した。
+
+### 未完了・既知事項
+
+- 今回の修正に未完了実装はない。
+- pytestキャッシュはワークスペース権限により作成できず警告が出るが、結果には影響しない。
+- Starlette/httpxとHTTP 422定数の既存非推奨警告は別タスク。
+
+### テスト結果
+
+- `python -m pytest -m "not integration" -q`: 533 passed、28 deselected
+- `python -m pytest tests/integration/test_database_readiness.py -q`: 2 passed
+- 変更対象Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 63 files passed
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `apps/api/alembic/env.py`
+3. `apps/api/tests/integration/test_database_readiness.py`
+4. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest -m "not integration" -q
+python -m pytest tests/integration/test_database_readiness.py -q
+```
+
+## 2026-07-23 22:42 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
 - 引き継ぎ先: Claude Code
