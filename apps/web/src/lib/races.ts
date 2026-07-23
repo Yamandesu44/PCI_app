@@ -77,6 +77,16 @@ export function raceClassLabel(race: Pick<RaceSummary, "grade" | "race_class">):
   return name || grade || "一般";
 }
 
+/** レース名が欠損・プレースホルダーなら、競馬場とR番号へフォールバックする。 */
+export function raceNameOrFallback(
+  race: Pick<RaceSummary, "race_key" | "jyo_cd" | "race_class">,
+): string {
+  return (
+    normalizeRaceClass(race.race_class) ??
+    `${jyoName(race.jyo_cd)} ${raceNumber(race.race_key)}`
+  );
+}
+
 function normalizeRaceClass(value: string | null | undefined): string | null {
   const name = value?.replace(/\s*特別登録$/, "").trim();
   if (!name) return null;

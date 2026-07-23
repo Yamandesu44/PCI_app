@@ -421,6 +421,19 @@ class ForecastMissOutput:
 
 
 @dataclass(frozen=True)
+class ForecastMissesOutput:
+    """不一致レース検索結果。"""
+
+    date_from: str
+    date_to: str
+    period_days: int
+    total_count: int
+    offset: int
+    limit: int
+    items: list[ForecastMissOutput] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ForecastPerformanceOutput:
     """直近期間の展開ラベル的中率サマリー。"""
 

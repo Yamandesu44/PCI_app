@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from pci.application.dto import (
     CommentOutput,
+    ForecastMissesOutput,
     ForecastOutput,
     ForecastPerformanceOutput,
     IngestStatusOutput,
@@ -541,6 +542,30 @@ class ForecastMissSchema(BaseModel):
     race_class: str | None = None
     predicted_label: str
     actual_label: str
+
+
+class ForecastMissesSchema(BaseModel):
+    """不一致レース検索結果。"""
+
+    date_from: str
+    date_to: str
+    period_days: int = Field(ge=1)
+    total_count: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    items: list[ForecastMissSchema] = []
+
+    @classmethod
+    def from_dto(cls, dto: ForecastMissesOutput) -> ForecastMissesSchema:
+        return cls(
+            date_from=dto.date_from,
+            date_to=dto.date_to,
+            period_days=dto.period_days,
+            total_count=dto.total_count,
+            offset=dto.offset,
+            limit=dto.limit,
+            items=[ForecastMissSchema(**vars(item)) for item in dto.items],
+        )
 
 
 class ForecastPerformanceSchema(BaseModel):

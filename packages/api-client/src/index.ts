@@ -37,6 +37,7 @@ export type ForecastPerformanceGroup =
 export type ForecastPerformanceTrendPoint =
   components["schemas"]["ForecastPerformanceTrendPointSchema"];
 export type ForecastMiss = components["schemas"]["ForecastMissSchema"];
+export type ForecastMisses = components["schemas"]["ForecastMissesSchema"];
 export type ForecastPaceMatrixCell =
   components["schemas"]["ForecastPaceMatrixCellSchema"];
 export type ForecastPaceMatrixRow =
@@ -64,6 +65,15 @@ export interface ApiClientOptions {
   fetch?: typeof fetch;
 }
 
+export interface ForecastMissQuery {
+  days?: ForecastPerformancePeriod;
+  trackType?: "芝" | "ダート";
+  predictedLabel?: "ハイ" | "平均" | "スロー";
+  actualLabel?: "ハイ" | "平均" | "スロー";
+  offset?: number;
+  limit?: number;
+}
+
 export interface ApiClient {
   listRaces(limit?: number, date?: string): Promise<RaceSummary[]>;
   listRaceBoard(date: string): Promise<RaceBoardItem[]>;
@@ -73,6 +83,7 @@ export interface ApiClient {
   getPaceAnalysis(raceKey: string): Promise<PaceAnalysis>;
   getIngestStatus(): Promise<IngestStatus>;
   getForecastPerformance(days?: ForecastPerformancePeriod): Promise<ForecastPerformance>;
+  getForecastMisses(query?: ForecastMissQuery): Promise<ForecastMisses>;
   getReadiness(): Promise<Readiness>;
 }
 
@@ -114,6 +125,21 @@ export function createClient(options: ApiClientOptions): ApiClient {
       const qs = params.toString();
       return getJson<ForecastPerformance>(
         `/api/v1/forecast-performance${qs ? `?${qs}` : ""}`,
+      );
+    },
+    getForecastMisses: (query) => {
+      const params = new URLSearchParams();
+      if (query?.days != null) params.set("days", String(query.days));
+      if (query?.trackType != null) params.set("track_type", query.trackType);
+      if (query?.predictedLabel != null) {
+        params.set("predicted_label", query.predictedLabel);
+      }
+      if (query?.actualLabel != null) params.set("actual_label", query.actualLabel);
+      if (query?.offset != null) params.set("offset", String(query.offset));
+      if (query?.limit != null) params.set("limit", String(query.limit));
+      const qs = params.toString();
+      return getJson<ForecastMisses>(
+        `/api/v1/forecast-performance/misses${qs ? `?${qs}` : ""}`,
       );
     },
     getReadiness: async () => {

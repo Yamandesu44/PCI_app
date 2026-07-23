@@ -18,6 +18,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
 
 from pci.application.forecast_performance_use_cases import (
+    GetForecastMissesUseCase,
     GetForecastPerformanceUseCase,
 )
 from pci.application.forecast_precompute_use_cases import PrecomputeUpcomingForecastsUseCase
@@ -220,4 +221,15 @@ def get_forecast_performance_use_case(
 
 ForecastPerformanceUseCaseDep = Annotated[
     GetForecastPerformanceUseCase, Depends(get_forecast_performance_use_case)
+]
+
+
+def get_forecast_misses_use_case(
+    mart_repo: MartRepositoryDep,
+) -> GetForecastMissesUseCase:
+    return GetForecastMissesUseCase(mart_repo)
+
+
+ForecastMissesUseCaseDep = Annotated[
+    GetForecastMissesUseCase, Depends(get_forecast_misses_use_case)
 ]

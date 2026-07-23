@@ -7,6 +7,7 @@ import datetime
 import pytest
 
 from pci.application.forecast_performance_use_cases import (
+    GetForecastMissesUseCase,
     GetForecastPerformanceUseCase,
 )
 from pci.domain.pace.mart_repository import PredictionEvaluationRecord
@@ -194,6 +195,77 @@ def test_recent_misses_are_limited_and_sorted_by_latest_race() -> None:
         "2026-07-17",
         "2026-07-16",
     ]
+
+
+def test_searches_misses_with_filters_and_pagination() -> None:
+    repo = FakeMartRepository()
+    repo.prediction_evaluations = [
+        _record(
+            "2026072005010101",
+            datetime.date(2026, 7, 20),
+            "芝",
+            "平均",
+            45.0,
+        ),
+        _record(
+            "2026071905010102",
+            datetime.date(2026, 7, 19),
+            "芝",
+            "スロー",
+            45.0,
+        ),
+        _record(
+            "2026071805010103",
+            datetime.date(2026, 7, 18),
+            "ダート",
+            "平均",
+            47.0,
+        ),
+        _record(
+            "2026071705010104",
+            datetime.date(2026, 7, 17),
+            "芝",
+            "スロー",
+            55.0,
+        ),
+    ]
+
+    output = GetForecastMissesUseCase(repo).execute(
+        period_days=30,
+        track_type="芝",
+        actual_label="ハイ",
+        offset=1,
+        limit=1,
+        now=NOW,
+    )
+
+    assert output.date_from == "2026-06-24"
+    assert output.date_to == "2026-07-23"
+    assert output.total_count == 2
+    assert output.offset == 1
+    assert output.limit == 1
+    assert [item.race_key for item in output.items] == ["2026071905010102"]
+    assert all("rpci" not in vars(item) for item in output.items)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"track_type": "障害"}, "コース種別"),
+        ({"predicted_label": "超ハイ"}, "展開区分"),
+        ({"offset": -1}, "offset"),
+        ({"limit": 101}, "limit"),
+    ],
+)
+def test_rejects_invalid_miss_search_conditions(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        GetForecastMissesUseCase(FakeMartRepository()).execute(
+            now=NOW,
+            **kwargs,  # type: ignore[arg-type]
+        )
 
 
 def test_selected_period_does_not_shorten_weekly_trend() -> None:

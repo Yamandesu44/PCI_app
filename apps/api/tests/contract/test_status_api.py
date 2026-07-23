@@ -144,3 +144,35 @@ def test_forecast_performance_rejects_unsupported_period(client: TestClient) -> 
     response = client.get("/api/v1/forecast-performance?days=60")
 
     assert response.status_code == 422
+
+
+def test_forecast_misses_contract_hides_internal_values(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/forecast-performance/misses"
+        "?days=30&track_type=%E8%8A%9D&predicted_label=%E5%B9%B3%E5%9D%87"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {
+        "date_from",
+        "date_to",
+        "period_days",
+        "total_count",
+        "offset",
+        "limit",
+        "items",
+    }
+    assert body["period_days"] == 30
+    assert body["total_count"] == 0
+    assert body["items"] == []
+    assert "rpci" not in response.text.lower()
+    assert "pci" not in response.text.lower()
+
+
+def test_forecast_misses_rejects_invalid_filter(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/forecast-performance/misses?actual_label=unknown"
+    )
+
+    assert response.status_code == 422

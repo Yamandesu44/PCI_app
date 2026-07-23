@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/forecast-performance/misses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Forecast Misses
+         * @description 不一致レースを期間・コース・展開区分で絞り込んで返す。
+         */
+        get: operations["get_forecast_misses_api_v1_forecast_performance_misses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingest-status": {
         parameters: {
             query?: never;
@@ -644,6 +664,29 @@ export interface components {
             race_key: string;
             /** Track Type */
             track_type: string;
+        };
+        /**
+         * ForecastMissesSchema
+         * @description 不一致レース検索結果。
+         */
+        ForecastMissesSchema: {
+            /** Date From */
+            date_from: string;
+            /** Date To */
+            date_to: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ForecastMissSchema"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Period Days */
+            period_days: number;
+            /** Total Count */
+            total_count: number;
         };
         /**
          * ForecastPaceMatrixCellSchema
@@ -1500,6 +1543,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForecastPerformanceSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_forecast_misses_api_v1_forecast_performance_misses_get: {
+        parameters: {
+            query?: {
+                days?: components["schemas"]["ForecastPerformancePeriod"];
+                track_type?: ("芝" | "ダート") | null;
+                predicted_label?: ("ハイ" | "平均" | "スロー") | null;
+                actual_label?: ("ハイ" | "平均" | "スロー") | null;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastMissesSchema"];
                 };
             };
             /** @description Validation Error */

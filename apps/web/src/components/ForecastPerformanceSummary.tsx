@@ -154,7 +154,10 @@ export function ForecastPerformanceSummary({
             ) : null}
           </div>
           <ForecastErrorPattern rows={performance.pace_matrix} />
-          <ForecastRecentMisses misses={performance.recent_misses} />
+          <ForecastRecentMisses
+            misses={performance.recent_misses}
+            periodDays={performance.period_days}
+          />
         </>
       ) : (
         <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">

@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 
 from pci.application.dto import (
+    ForecastMissesOutput,
     ForecastMissOutput,
     ForecastPaceMatrixCellOutput,
     ForecastPaceMatrixRowOutput,
@@ -39,6 +40,8 @@ _PACE_GROUPS = (
     ("average", "平均的な流れ", "平均"),
     ("slow", "落ち着いた流れ", "スロー"),
 )
+_TRACK_TYPES = frozenset({"芝", "ダート"})
+_PACE_LABELS = frozenset({"ハイ", "平均", "スロー"})
 
 
 class GetForecastPerformanceUseCase:
@@ -131,6 +134,62 @@ class GetForecastPerformanceUseCase:
             pace_matrix=pace_matrix,
             weekly_trend=weekly_trend,
             recent_misses=recent_misses,
+        )
+
+
+class GetForecastMissesUseCase:
+    """指定期間の不一致レースを、表示用条件で絞り込んで返す。"""
+
+    def __init__(self, repo: MartRepository) -> None:
+        self._repo = repo
+
+    def execute(
+        self,
+        *,
+        period_days: int = _DEFAULT_PERIOD_DAYS,
+        track_type: str | None = None,
+        predicted_label: str | None = None,
+        actual_label: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+        now: datetime.datetime | None = None,
+    ) -> ForecastMissesOutput:
+        if period_days not in _ALLOWED_PERIOD_DAYS:
+            msg = f"集計期間は {sorted(_ALLOWED_PERIOD_DAYS)} 日から選択してください"
+            raise ValueError(msg)
+        if track_type is not None and track_type not in _TRACK_TYPES:
+            raise ValueError("コース種別は芝またはダートを指定してください")
+        for label in (predicted_label, actual_label):
+            if label is not None and label not in _PACE_LABELS:
+                raise ValueError("展開区分はハイ・平均・スローから指定してください")
+        if offset < 0:
+            raise ValueError("offsetは0以上を指定してください")
+        if not 1 <= limit <= 100:
+            raise ValueError("limitは1以上100以下を指定してください")
+
+        current = now or datetime.datetime.now(datetime.UTC)
+        date_to = current.astimezone(_JRA_TIMEZONE).date()
+        date_from = date_to - datetime.timedelta(days=period_days - 1)
+        records = self._repo.find_prediction_evaluations(date_from, date_to)
+        misses = _build_misses(records)
+        filtered = [
+            miss
+            for miss in misses
+            if (track_type is None or miss.track_type == track_type)
+            and (
+                predicted_label is None
+                or miss.predicted_label == predicted_label
+            )
+            and (actual_label is None or miss.actual_label == actual_label)
+        ]
+        return ForecastMissesOutput(
+            date_from=date_from.isoformat(),
+            date_to=date_to.isoformat(),
+            period_days=period_days,
+            total_count=len(filtered),
+            offset=offset,
+            limit=limit,
+            items=filtered[offset : offset + limit],
         )
 
 
@@ -279,6 +338,13 @@ def _build_recent_misses(
     records: list[PredictionEvaluationRecord],
 ) -> list[ForecastMissOutput]:
     """直近の不一致レースを、内部RPCI値を除いた表示情報へ変換する。"""
+    return _build_misses(records)[:_RECENT_MISS_LIMIT]
+
+
+def _build_misses(
+    records: list[PredictionEvaluationRecord],
+) -> list[ForecastMissOutput]:
+    """不一致レースを新しい順の表示情報へ変換する。"""
     misses = [
         (record, str(classify_pace(record.actual_rpci, record.track_type)))
         for record in records
@@ -300,5 +366,5 @@ def _build_recent_misses(
             predicted_label=record.predicted_label,
             actual_label=actual_label,
         )
-        for record, actual_label in misses[:_RECENT_MISS_LIMIT]
+        for record, actual_label in misses
     ]

@@ -7,14 +7,20 @@
 from __future__ import annotations
 
 import enum
+from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from pci.presentation.dependencies import (
+    ForecastMissesUseCaseDep,
     ForecastPerformanceUseCaseDep,
     IngestStatusUseCaseDep,
 )
-from pci.presentation.schemas import ForecastPerformanceSchema, IngestStatusSchema
+from pci.presentation.schemas import (
+    ForecastMissesSchema,
+    ForecastPerformanceSchema,
+    IngestStatusSchema,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["status"])
 
@@ -40,3 +46,26 @@ def get_forecast_performance(
 ) -> ForecastPerformanceSchema:
     """指定期間の保存済み事前予想について、展開ラベル的中率を返す。"""
     return ForecastPerformanceSchema.from_dto(use_case.execute(period_days=int(days)))
+
+
+@router.get("/forecast-performance/misses", response_model=ForecastMissesSchema)
+def get_forecast_misses(
+    use_case: ForecastMissesUseCaseDep,
+    days: ForecastPerformancePeriod = ForecastPerformancePeriod.DAYS_90,
+    track_type: Literal["芝", "ダート"] | None = None,
+    predicted_label: Literal["ハイ", "平均", "スロー"] | None = None,
+    actual_label: Literal["ハイ", "平均", "スロー"] | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> ForecastMissesSchema:
+    """不一致レースを期間・コース・展開区分で絞り込んで返す。"""
+    return ForecastMissesSchema.from_dto(
+        use_case.execute(
+            period_days=int(days),
+            track_type=track_type,
+            predicted_label=predicted_label,
+            actual_label=actual_label,
+            offset=offset,
+            limit=limit,
+        )
+    )

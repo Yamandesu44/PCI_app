@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, CalendarDays, ChevronRight } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, ChevronRight } from "lucide-react";
 
 /** すべての画面で分析コンテキストと一覧への帰り道を保つ。 */
 export function AppHeader() {
@@ -17,6 +17,13 @@ export function AppHeader() {
         </Link>
 
         <nav className="flex items-center gap-2" aria-label="メインナビゲーション">
+          <Link
+            href="/forecast-review"
+            className="flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+          >
+            <BarChart3 className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">予想検証</span>
+          </Link>
           <Link
             href="/"
             className="flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"

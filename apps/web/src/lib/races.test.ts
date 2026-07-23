@@ -12,6 +12,7 @@ import {
   raceHref,
   raceDates,
   raceNumber,
+  raceNameOrFallback,
   raceNumberValue,
   raceTitle,
   statusLabel,
@@ -114,6 +115,12 @@ describe("raceCondition / raceClassLabel", () => {
     expect(raceClassLabel(makeRace({ grade: null, race_class: null }))).toBe("一般");
     expect(raceClassLabel(makeRace({ grade: null, race_class: "@" }))).toBe("一般");
     expect(raceClassLabel(makeRace({ grade: "@", race_class: null }))).toBe("一般");
+  });
+
+  it("有効なレース名を使い、プレースホルダーは開催情報へ置き換える", () => {
+    expect(raceNameOrFallback(makeRace({ race_class: "函館記念" }))).toBe("函館記念");
+    expect(raceNameOrFallback(makeRace({ race_class: "@縲縲" }))).toBe("東京 11R");
+    expect(raceNameOrFallback(makeRace({ race_class: null }))).toBe("東京 11R");
   });
 });
 

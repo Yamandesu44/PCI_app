@@ -511,6 +511,58 @@
         "title": "ForecastMissSchema",
         "type": "object"
       },
+      "ForecastMissesSchema": {
+        "description": "不一致レース検索結果。",
+        "properties": {
+          "date_from": {
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "title": "Date To",
+            "type": "string"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ForecastMissSchema"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "period_days": {
+            "minimum": 1.0,
+            "title": "Period Days",
+            "type": "integer"
+          },
+          "total_count": {
+            "minimum": 0.0,
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to",
+          "period_days",
+          "total_count",
+          "offset",
+          "limit"
+        ],
+        "title": "ForecastMissesSchema",
+        "type": "object"
+      },
       "ForecastPaceMatrixCellSchema": {
         "description": "予想展開に対する実績展開1区分の件数と割合。",
         "properties": {
@@ -2613,6 +2665,134 @@
           }
         },
         "summary": "Get Forecast Performance",
+        "tags": [
+          "status"
+        ]
+      }
+    },
+    "/api/v1/forecast-performance/misses": {
+      "get": {
+        "description": "不一致レースを期間・コース・展開区分で絞り込んで返す。",
+        "operationId": "get_forecast_misses_api_v1_forecast_performance_misses_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ForecastPerformancePeriod",
+              "default": 90
+            }
+          },
+          {
+            "in": "query",
+            "name": "track_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "芝",
+                    "ダート"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Track Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "predicted_label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ハイ",
+                    "平均",
+                    "スロー"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Predicted Label"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actual_label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ハイ",
+                    "平均",
+                    "スロー"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actual Label"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastMissesSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Forecast Misses",
         "tags": [
           "status"
         ]

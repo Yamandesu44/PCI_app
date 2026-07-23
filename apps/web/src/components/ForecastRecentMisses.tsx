@@ -1,21 +1,22 @@
 import Link from "next/link";
-import { ArrowRight, ChevronDown } from "lucide-react";
+import { ArrowRight, ChevronDown, ListFilter } from "lucide-react";
 import type { ForecastMiss } from "@pci/api-client";
 
-import { formatRaceDate, jyoName, raceNumber } from "@/lib/races";
-
-function raceLabel(miss: ForecastMiss): string {
-  const raceClass = miss.race_class?.trim();
-  return raceClass &&
-    !raceClass.startsWith("@") &&
-    !raceClass.startsWith("＠") &&
-    !["...", "…", "-", "－"].includes(raceClass)
-    ? raceClass
-    : `${jyoName(miss.jyo_cd)} ${raceNumber(miss.race_key)}`;
-}
+import {
+  formatRaceDate,
+  jyoName,
+  raceNameOrFallback,
+  raceNumber,
+} from "@/lib/races";
 
 /** 予想区分と実績区分が異なった直近レースを、回顧画面への導線付きで表示する。 */
-export function ForecastRecentMisses({ misses }: { misses: ForecastMiss[] }) {
+export function ForecastRecentMisses({
+  misses,
+  periodDays,
+}: {
+  misses: ForecastMiss[];
+  periodDays: number;
+}) {
   if (misses.length === 0) return null;
 
   return (
@@ -42,7 +43,7 @@ export function ForecastRecentMisses({ misses }: { misses: ForecastMiss[] }) {
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-900">
-                {raceLabel(miss)}
+                {raceNameOrFallback(miss)}
               </p>
               <p className="mt-0.5 text-xs text-slate-500">
                 {formatRaceDate(miss.race_date)}・{jyoName(miss.jyo_cd)}{" "}
@@ -60,6 +61,15 @@ export function ForecastRecentMisses({ misses }: { misses: ForecastMiss[] }) {
             />
           </Link>
         ))}
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Link
+          className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+          href={`/forecast-review?days=${periodDays}`}
+        >
+          <ListFilter className="h-4 w-4" aria-hidden />
+          すべての不一致を確認
+        </Link>
       </div>
     </details>
   );
