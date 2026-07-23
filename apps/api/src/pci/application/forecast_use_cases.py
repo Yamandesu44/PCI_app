@@ -53,7 +53,11 @@ from pci.domain.pace.running_style import (
     predict_running_style_for_distance,
 )
 from pci.domain.pace.scenario import build_pace_scenario
-from pci.domain.pace.style_advantage import StyleAdvantage, build_style_advantage
+from pci.domain.pace.style_advantage import (
+    StyleAdvantage,
+    StyleAdvantageReliability,
+    build_style_advantage,
+)
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.racing.repository import RaceRepository
@@ -153,6 +157,8 @@ class ForecastRaceUseCase:
             forecast.value,
             race.track_type,
             tuple(p.running_style for p in profiles),
+            venue_code=race.jyo_cd,
+            race_date=race.race_date,
         )
 
         name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)
@@ -367,6 +373,12 @@ def _to_comment_output(commentary: Commentary) -> CommentOutput:
 def _to_style_advantage_output(advantage: StyleAdvantage) -> StyleAdvantageOutput:
     return StyleAdvantageOutput(
         model_version=advantage.model_version,
+        reliability=(
+            "reference"
+            if advantage.reliability == StyleAdvantageReliability.REFERENCE
+            else "standard"
+        ),
+        reliability_reason=advantage.reliability_reason,
         entries=[
             StyleAdvantageEntryOutput(style=str(entry.style), score=entry.score)
             for entry in advantage.entries

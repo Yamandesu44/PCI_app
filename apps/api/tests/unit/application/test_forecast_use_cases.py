@@ -47,11 +47,13 @@ def _register_upcoming(
     distance_m: int = 1600,
     *,
     draw_confirmed: bool = True,
+    race_date: datetime.date = RACE_DATE,
+    jyo_cd: str = "05",
 ) -> None:
     info = RaceInfo(
         race_key=UPCOMING,
-        race_date=RACE_DATE,
-        jyo_cd="05",
+        race_date=race_date,
+        jyo_cd=jyo_cd,
         distance_m=distance_m,
         track_type="芝",
         field_size=n,
@@ -262,7 +264,8 @@ class TestForecastRaceUseCase:
             repo, forecaster=_FixedForecaster(55.0, PaceLabel.SLOW)
         ).execute(UPCOMING)
         assert slow_case.style_advantage is not None
-        assert slow_case.style_advantage.model_version == "style-advantage-v1"
+        assert slow_case.style_advantage.model_version == "style-advantage-v2"
+        assert slow_case.style_advantage.reliability == "standard"
         slow_scores = {entry.style: entry.score for entry in slow_case.style_advantage.entries}
         assert slow_scores["先行"] > 50 > slow_scores["差し"]
         assert slow_case.style_advantage.reasons
@@ -273,6 +276,21 @@ class TestForecastRaceUseCase:
         assert high_case.style_advantage is not None
         high_scores = {entry.style: entry.score for entry in high_case.style_advantage.entries}
         assert high_scores["差し"] > 50 > high_scores["先行"]
+
+    def test_kokura_turf_in_july_marks_style_advantage_as_reference(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(
+            repo,
+            n=4,
+            race_date=datetime.date(2026, 7, 19),
+            jyo_cd="10",
+        )
+
+        output = ForecastRaceUseCase(repo).execute(UPCOMING)
+
+        assert output.style_advantage is not None
+        assert output.style_advantage.reliability == "reference"
+        assert "小倉芝" in (output.style_advantage.reliability_reason or "")
 
     def test_formation_uses_horse_names_and_frame_numbers(self) -> None:
         repo = FakeRaceRepository()

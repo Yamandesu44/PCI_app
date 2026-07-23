@@ -508,6 +508,12 @@ export interface StyleAdvantageScore {
   verdict: string;
 }
 
+export interface StyleAdvantageReliabilityMeta {
+  isReference: boolean;
+  label: "通常" | "参考";
+  description: string | null;
+}
+
 const STYLE_DESCRIPTIONS: Record<string, string> = {
   逃げ: "前半から主導権を取る馬",
   先行: "好位で流れに乗る馬",
@@ -524,7 +530,7 @@ function styleVerdict(score: number): string {
 }
 
 /**
- * API の脚質別有利度（style-advantage-v1、50=互角）を表示用に変換する。
+ * API の脚質別有利度（style-advantage-v2、50=互角）を表示用に変換する。
  * 以前は web 側でその脚質の最大PAIを流用しており、スコアが高止まりして
  * 差が出なかった。算出はドメイン層（想定RPCIの中立点からの乖離）へ移した。
  */
@@ -536,6 +542,18 @@ export function styleAdvantageScores(advantage: StyleAdvantage): StyleAdvantageS
     description: STYLE_DESCRIPTIONS[entry.style] ?? "",
     verdict: styleVerdict(entry.score),
   }));
+}
+
+/** APIが判定した開催条件別の信頼度を、注意表示用の言葉へ変換する。 */
+export function styleAdvantageReliabilityMeta(
+  advantage: StyleAdvantage,
+): StyleAdvantageReliabilityMeta {
+  const isReference = advantage.reliability === "reference";
+  return {
+    isReference,
+    label: isReference ? "参考" : "通常",
+    description: isReference ? (advantage.reliability_reason ?? "開催条件別の検証では参考扱いです。") : null,
+  };
 }
 
 export type ForecastAccuracyTone = "hit" | "miss";

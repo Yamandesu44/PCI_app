@@ -40,7 +40,13 @@ INTEGRATED_ENTRY_KEYS = {
 
 COMMENT_KEYS = {"headline", "body", "model_version", "reasons"}
 
-STYLE_ADVANTAGE_KEYS = {"model_version", "entries", "reasons"}
+STYLE_ADVANTAGE_KEYS = {
+    "model_version",
+    "reliability",
+    "reliability_reason",
+    "entries",
+    "reasons",
+}
 STYLE_ADVANTAGE_ENTRY_KEYS = {"style", "score"}
 
 FORMATION_KEYS = {"model_version", "groups"}
@@ -245,7 +251,9 @@ class TestForecastEndpoint:
     def test_style_advantage_contract(self, client: TestClient) -> None:
         advantage = client.get(f"/api/v1/races/{UPCOMING_KEY}/forecast").json()["style_advantage"]
         assert set(advantage.keys()) == STYLE_ADVANTAGE_KEYS
-        assert advantage["model_version"] == "style-advantage-v1"
+        assert advantage["model_version"] == "style-advantage-v2"
+        assert advantage["reliability"] == "standard"
+        assert advantage["reliability_reason"] is None
         styles = [entry["style"] for entry in advantage["entries"]]
         assert styles == ["逃げ", "先行", "差し", "追込"]
         for entry in advantage["entries"]:

@@ -71,9 +71,11 @@ class StyleAdvantageEntrySchema(BaseModel):
 
 
 class StyleAdvantageSchema(BaseModel):
-    """脚質別の展開有利度（style-advantage-v1）。"""
+    """脚質別の展開有利度（style-advantage-v2）。"""
 
     model_version: str
+    reliability: Literal["standard", "reference"] = "standard"
+    reliability_reason: str | None = None
     entries: list[StyleAdvantageEntrySchema] = []
     reasons: list[ReasonSchema] = []
 
@@ -201,6 +203,8 @@ class ForecastSchema(BaseModel):
             style_advantage=(
                 StyleAdvantageSchema(
                     model_version=dto.style_advantage.model_version,
+                    reliability=dto.style_advantage.reliability,
+                    reliability_reason=dto.style_advantage.reliability_reason,
                     entries=[
                         StyleAdvantageEntrySchema(style=entry.style, score=entry.score)
                         for entry in dto.style_advantage.entries

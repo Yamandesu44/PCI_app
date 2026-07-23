@@ -18,6 +18,7 @@ import {
   sanitizeBeginnerComment,
   sortDiscountCandidates,
   sortByPai,
+  styleAdvantageReliabilityMeta,
   styleAdvantageScores,
 } from "./pace";
 
@@ -342,7 +343,9 @@ describe("forecastAccuracyMeta", () => {
 
 describe("styleAdvantageScores", () => {
   const advantage = {
-    model_version: "style-advantage-v1",
+    model_version: "style-advantage-v2",
+    reliability: "standard" as const,
+    reliability_reason: null,
     entries: [
       { style: "逃げ", score: 72.0 },
       { style: "先行", score: 62.0 },
@@ -367,5 +370,17 @@ describe("styleAdvantageScores", () => {
       entries: [{ style: "先行", score: 50.0 }],
     });
     expect(even[0].verdict).toBe("互角");
+  });
+
+  it("開催条件別の参考扱いと理由を表示用へ変換する", () => {
+    const meta = styleAdvantageReliabilityMeta({
+      ...advantage,
+      reliability: "reference",
+      reliability_reason: "小倉芝の夏開催では参考扱い",
+    });
+
+    expect(meta.isReference).toBe(true);
+    expect(meta.label).toBe("参考");
+    expect(meta.description).toContain("小倉芝");
   });
 });

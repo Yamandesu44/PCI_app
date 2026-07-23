@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   Activity,
+  AlertTriangle,
   ArrowLeft,
   BarChart3,
   Gauge,
@@ -30,6 +31,7 @@ import {
   sortDiscountCandidates,
   sortByPai,
   styleAdvantageScores,
+  styleAdvantageReliabilityMeta,
 } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 
@@ -94,6 +96,9 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
   const styleScores = forecast.style_advantage
     ? styleAdvantageScores(forecast.style_advantage)
     : [];
+  const styleReliability = forecast.style_advantage
+    ? styleAdvantageReliabilityMeta(forecast.style_advantage)
+    : null;
   const confidence = confidencePct(forecast.confidence);
   const confidenceMeta = confidenceInsight(forecast.confidence);
   const course = `${race.track_type}${race.distance_m}m`;
@@ -220,12 +225,23 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               展開分析
+              {styleReliability?.isReference ? (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                  参考
+                </span>
+              ) : null}
             </CardTitle>
             <CardDescription>
               脚質別に、今回の想定ペースがどれだけ向くかを示します（50=互角）。
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
+            {styleReliability?.isReference ? (
+              <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950 md:col-span-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <p className="m-0 text-sm leading-6">{styleReliability.description}</p>
+              </div>
+            ) : null}
             {styleScores.map((score) => (
               <div key={score.key} className="rounded-lg border border-border p-4">
                 <div className="flex items-center justify-between gap-3">

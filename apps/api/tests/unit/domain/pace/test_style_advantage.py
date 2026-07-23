@@ -1,6 +1,8 @@
-"""脚質別有利度（style-advantage-v1）のテスト。"""
+"""脚質別有利度（style-advantage-v2）のテスト。"""
 
 from __future__ import annotations
+
+import datetime
 
 import pytest
 from hypothesis import given
@@ -10,6 +12,7 @@ from pci.domain.pace.rpci_forecast import DEFAULT_WEIGHTS
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.pace.style_advantage import (
     MODEL_VERSION,
+    StyleAdvantageReliability,
     StyleAdvantageWeights,
     build_style_advantage,
     neutral_rpci,
@@ -85,6 +88,49 @@ class TestBuildStyleAdvantage:
         assert advantage.model_version == MODEL_VERSION
         assert advantage.reasons
         assert advantage.reasons[0].code == "pace_direction"
+
+    def test_kokura_turf_in_july_is_reference_only(self) -> None:
+        advantage = build_style_advantage(
+            53.0,
+            "芝",
+            (ESCAPE, STALKER),
+            venue_code="10",
+            race_date=datetime.date(2026, 7, 19),
+        )
+        standard = build_style_advantage(
+            53.0,
+            "芝",
+            (ESCAPE, STALKER),
+            venue_code="02",
+            race_date=datetime.date(2026, 7, 19),
+        )
+
+        assert advantage.reliability == StyleAdvantageReliability.REFERENCE
+        assert advantage.reliability_reason is not None
+        assert any(reason.code == "seasonal_venue_caution" for reason in advantage.reasons)
+        assert advantage.entries == standard.entries
+
+    @pytest.mark.parametrize(
+        ("track_type", "venue_code", "race_date"),
+        [
+            ("芝", "10", datetime.date(2026, 6, 30)),
+            ("ダート", "10", datetime.date(2026, 7, 19)),
+            ("芝", "02", datetime.date(2026, 7, 19)),
+        ],
+    )
+    def test_other_conditions_remain_standard(
+        self, track_type: str, venue_code: str, race_date: datetime.date
+    ) -> None:
+        advantage = build_style_advantage(
+            53.0,
+            track_type,
+            (),
+            venue_code=venue_code,
+            race_date=race_date,
+        )
+
+        assert advantage.reliability == StyleAdvantageReliability.STANDARD
+        assert advantage.reliability_reason is None
 
     @given(st.floats(min_value=35.0, max_value=65.0))
     def test_front_score_monotonic_in_rpci(self, rpci: float) -> None:

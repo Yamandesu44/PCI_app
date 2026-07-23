@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass, field
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -113,9 +114,11 @@ class StyleAdvantageEntryOutput:
 
 @dataclass
 class StyleAdvantageOutput:
-    """脚質別の展開有利度（style-advantage-v1）。"""
+    """脚質別の展開有利度（style-advantage-v2）。"""
 
     model_version: str
+    reliability: Literal["standard", "reference"] = "standard"
+    reliability_reason: str | None = None
     entries: list[StyleAdvantageEntryOutput] = field(default_factory=list)
     reasons: list[ReasonOutput] = field(default_factory=list)
 

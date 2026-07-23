@@ -9,10 +9,10 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新29回目・Codex が脚質別展開有利度の誤差要因を切り分け） |
+| 更新日時 | 2026-07-23（更新30回目・Codex が夏開催を複数年検証し小倉芝へ参考表示を追加） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（ペース/脚質の4パターン診断と競馬場フィルターを実装） |
+| 直前の担当AI | OpenAI Codex（7月小倉芝の脚質別有利度を参考表示へ変更） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
 | 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `66568ad`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
@@ -21,7 +21,20 @@
 
 ## 現在の作業目的
 
-**芝の脚質別展開有利度について、想定RPCIと脚質予測の誤差を同一母集団で切り分けた。**
+**夏開催の脚質別展開有利度を複数年で検証し、再現した条件だけ信頼度を抑制した。**
+
+2022〜2026年の7月1〜22日を函館・小倉の芝で診断した。函館の確定値同士の好走率差は
+年ごとに方向が変わった一方、小倉はデータのある2022・2024・2025・2026年すべてで負だった。
+このため`style-advantage-v2`へ`reliability`を追加し、7月小倉芝だけ`reference`を返す。
+Webは展開分析カードへ「参考」バッジと理由を表示する。係数・PAI・恩恵馬・統合順位は変更していない。
+
+実DBの`2026071910020811`で`reference`、函館の`2026071902011201`で`standard`を返すことを確認した。
+API関連75 passed、Ruff、API全体mypy strict、Web72 passed、api-client/Web typecheck、Web buildは成功。
+API非統合全体は490 passed / 3 failed / 22 deselected。失敗3件は既知の`caplog`順序依存で、
+対象3件だけの再実行は3 passed。ブラウザ自動確認はBrowser Pluginのkernel asset生成が
+OS error 3で失敗したため、API実データ確認とWeb buildで代替した。
+
+前タスクの4パターン診断結果は以下のとおり。
 
 `--diagnose-style-advantage`は予測/実績RPCI × 予測/確定脚質の4パターンを比較し、
 `--venue-code`で競馬場別に絞り込める。2025年後半・2026年前半は正方向だったが、2026年7月だけ逆転。
@@ -508,8 +521,9 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
   未反映（ユーザー保留）のみ。
 - **統合順位予想 Phase2・AbilityWeights比較CLI・実DB採用判断は完了**。残る検証は、
   実JV-Link COMにおけるGradeCD[615]および人気/賞金予約オフセットの確認（`tasks/backlog.md` B節）。
-- **脚質別展開有利度の期間分割と誤差要因の切り分けは完了**。残る課題は、2022〜2025年の
-  函館・小倉の同時期でも確定値同士の逆転が再現するか。`StyleAdvantageWeights`は未変更。
+- **脚質別展開有利度の複数年比較は完了**。小倉芝は7月だけ`reference`表示とした。
+  残る課題は、追加年・馬場状態・距離帯へ分解して原因を特定することと、福島の想定RPCI誤差の調査。
+  `StyleAdvantageWeights`は未変更。
 - **Windows実行機での実地確認が必要な残課題**（このクラウド環境からは検証不可）:
   `NOTIFY_WEBHOOK_URL` のWebhook通知が実際に届くか。`special-entries`呼び出しを追加した
   自動同期スクリプト自体がWindows実行機で問題なく動くかも未確認。
@@ -533,9 +547,9 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 0. **P2 実JV-Dataの人気/賞金予約オフセット検証**。Windows実行機のJV-Link COMが必要。
    `JV_SPEC_MAINTENANCE_GUIDE.md`の手順に従い、実レコードの位置を確認してから正式化する。
-1. **P2 函館・小倉の夏開催を2022〜2025年で再診断**。
-   `backtest_forecast.py --diagnose-style-advantage --venue-code 02/10`を各年7月へ実行し、
-   確定値同士の逆転が複数年で再現するか確認する。再現した場合だけ競馬場補正または信頼度抑制を設計する。
+1. **P2 7月小倉芝の逆転原因を追加標本で分解**。
+   `backtest_forecast.py --diagnose-style-advantage --venue-code 10`を追加年・馬場状態・距離帯へ分け、
+   馬場、距離構成、開催時期のどれが原因か確認する。原因を説明できるまで係数補正は行わない。
 2. **P2 暫定定数の検証と正式化**（`_NEIGHBOR_BLEED_RATIO`・`RuleWeights`・`PaiWeights`・
    `FormationWeights`・`DistanceStyleWeights`・`STALE_AFTER_DAYS`・
    `AbilityWeights`の成分重み以外）
@@ -552,7 +566,20 @@ persist backtest reports to JSON via --output` が同じ目的をより新しい
 
 ---
 
-## 変更対象ファイル（直近セッション・すべて push 済み。Codex は git log/diff で確認可能）
+## 変更対象ファイル（直近セッション）
+
+夏開催の脚質別展開有利度検証と参考表示:
+- API/domain: `application/dto.py`, `application/forecast_use_cases.py`,
+  `domain/pace/style_advantage.py`, `presentation/schemas.py`
+- API tests: `tests/unit/domain/pace/test_style_advantage.py`,
+  `tests/unit/application/test_forecast_use_cases.py`, `tests/contract/test_races_api.py`
+- Web: `apps/web/src/components/RaceForecastDashboard.tsx`, `apps/web/src/lib/pace.ts`,
+  `apps/web/src/lib/pace.test.ts`
+- generated: `packages/api-client/openapi.json`, `packages/api-client/src/schema.d.ts`
+- docs/tasks: `apps/api/README.md`, `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md`,
+  `tasks/current.md`, `tasks/backlog.md`
+
+それ以前の直近セッション:
 
 安全な手動再同期支援で変更したファイル:
 - API: `domain/racing/repository.py`, `application/dto.py`, `application/ingest_status_use_cases.py`,
@@ -641,7 +668,7 @@ style-advantage-v1 は `3d3131e`、Codex実装分 `2b083ba`/`c679e09`/`4d9e5b5` 
 - 🧪 `DistanceStyleWeights`（近走減衰・距離差・先行距離補正）。
   `running-style-v2-distance` として隔離済みで、隊列ゾーン一致率による再検証が必要。
 - 🧪 `StyleAdvantageWeights`（勾配4.0/pt・逃げ追込増幅1.2・逃げ競合減点6.0/頭）。
-  `style-advantage-v1` として隔離済み（`docs/SPEC.md §9`-11）。
+  `style-advantage-v2` として隔離済み。7月小倉芝の`reference`条件も追加標本で見直す。
 - 🧪 `STALE_AFTER_DAYS=4`（取り込み鮮度監視、`domain/ops/ingest_log.py`。本セッション追加）。
 - 🧪 想定RPCI 受入基準の未達に対する運用方針は暫定決定（追加投資しない、`docs/DECISIONS.md`）。
   見直し条件に該当したら再検討する前提。

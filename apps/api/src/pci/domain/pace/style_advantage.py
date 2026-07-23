@@ -1,4 +1,4 @@
-"""脚質別の展開有利度（style-advantage-v1）。
+"""脚質別の展開有利度（style-advantage-v2）。
 
 想定RPCIが中立点からどちらへ寄っているかを、脚質（逃/先/差/追）ごとの
 有利・不利スコアへ翻訳する。UIの「展開分析」カードの算出元。
@@ -19,18 +19,27 @@
 
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass
+from enum import StrEnum
 
 from pci.domain.pace.rpci_forecast import DEFAULT_WEIGHTS, RuleWeights
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "style-advantage-v1"
+MODEL_VERSION = "style-advantage-v2"
+
+
+class StyleAdvantageReliability(StrEnum):
+    """脚質別有利度を予想判断へ使う際の信頼度。"""
+
+    STANDARD = "standard"
+    REFERENCE = "reference"
 
 
 @dataclass(frozen=True)
 class StyleAdvantageWeights:
-    """style-advantage-v1 の仮係数。実データ検証後の調整を前提とする。"""
+    """style-advantage-v2 の仮係数。実データ検証後の調整を前提とする。"""
 
     # RPCIが中立から1ポイント離れるごとのスコア変化量
     slope_per_point: float = 4.0
@@ -69,6 +78,8 @@ class StyleAdvantage:
     """脚質別有利度の算出結果。"""
 
     model_version: str
+    reliability: StyleAdvantageReliability
+    reliability_reason: str | None
     entries: tuple[StyleAdvantageEntry, ...]
     reasons: tuple[Reason, ...]
 
@@ -85,6 +96,8 @@ def build_style_advantage(
     track_type: str,
     running_styles: tuple[RunningStyleLabel, ...],
     *,
+    venue_code: str | None = None,
+    race_date: datetime.date | None = None,
     weights: StyleAdvantageWeights | None = None,
     rule_weights: RuleWeights = DEFAULT_WEIGHTS,
 ) -> StyleAdvantage:
@@ -94,6 +107,8 @@ def build_style_advantage(
         predicted_rpci:  想定RPCI（rule-v4 / lgbm-* の出力値）
         track_type:      コース種別（芝/ダート/障害。障害は芝と同じ中立点）
         running_styles:  出走各馬の判定済み脚質（逃げ競合の検出に使用）
+        venue_code:      競馬場コード（開催条件別の信頼度判定に使用）
+        race_date:       開催日（季節別の信頼度判定に使用）
         weights:         仮係数。省略時は DEFAULT_STYLE_ADVANTAGE_WEIGHTS
         rule_weights:    展開3分類の閾値（classify_pace と共有し中立点を導出）
 
@@ -148,8 +163,24 @@ def build_style_advantage(
             )
         )
 
+    reliability = StyleAdvantageReliability.STANDARD
+    reliability_reason: str | None = None
+    if track_type == "芝" and venue_code == "10" and race_date is not None and race_date.month == 7:
+        reliability = StyleAdvantageReliability.REFERENCE
+        reliability_reason = (
+            "小倉芝の7月開催では過去複数年で脚質別有利度の方向が実績と逆転したため参考扱い"
+        )
+        reasons.append(
+            Reason(
+                code="seasonal_venue_caution",
+                description=reliability_reason,
+            )
+        )
+
     return StyleAdvantage(
         model_version=MODEL_VERSION,
+        reliability=reliability,
+        reliability_reason=reliability_reason,
         entries=entries,
         reasons=tuple(reasons),
     )

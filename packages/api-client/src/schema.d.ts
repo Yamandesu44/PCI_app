@@ -1047,7 +1047,7 @@ export interface components {
         };
         /**
          * StyleAdvantageSchema
-         * @description 脚質別の展開有利度（style-advantage-v1）。
+         * @description 脚質別の展開有利度（style-advantage-v2）。
          */
         StyleAdvantageSchema: {
             /**
@@ -1062,6 +1062,14 @@ export interface components {
              * @default []
              */
             reasons: components["schemas"]["ReasonSchema"][];
+            /**
+             * Reliability
+             * @default standard
+             * @enum {string}
+             */
+            reliability: "standard" | "reference";
+            /** Reliability Reason */
+            reliability_reason?: string | null;
         };
         /** TrainerBody */
         TrainerBody: {
