@@ -344,6 +344,33 @@
         "title": "ForecastPaceMatrixRowSchema",
         "type": "object"
       },
+      "ForecastPerformanceComparisonSchema": {
+        "description": "直前の同期間における展開ラベル的中率。",
+        "properties": {
+          "date_from": {
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "title": "Date To",
+            "type": "string"
+          },
+          "groups": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ForecastPerformanceGroupSchema"
+            },
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "ForecastPerformanceComparisonSchema",
+        "type": "object"
+      },
       "ForecastPerformanceGroupSchema": {
         "description": "コース種別ごとの展開ラベル的中率。",
         "properties": {
@@ -474,6 +501,9 @@
             "title": "Period Days",
             "type": "integer"
           },
+          "previous_period": {
+            "$ref": "#/components/schemas/ForecastPerformanceComparisonSchema"
+          },
           "sample_size": {
             "minimum": 0.0,
             "title": "Sample Size",
@@ -494,7 +524,8 @@
           "period_days",
           "eligible_race_count",
           "sample_size",
-          "hit_count"
+          "hit_count",
+          "previous_period"
         ],
         "title": "ForecastPerformanceSchema",
         "type": "object"

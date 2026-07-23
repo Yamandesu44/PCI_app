@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, Database } from "lucide-react";
+import { Activity, Database, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import type {
   ForecastPerformance,
   ForecastPerformancePeriod,
@@ -13,6 +13,15 @@ import { formatRaceDate } from "@/lib/races";
 
 function rateLabel(rate: number | null | undefined): string {
   return rate == null ? "集計前" : `${Math.round(rate * 100)}%`;
+}
+
+function rateDelta(
+  current: number | null | undefined,
+  previous: number | null | undefined,
+): number | null {
+  return current == null || previous == null
+    ? null
+    : Math.round((current - previous) * 100);
 }
 
 /** 保存済みの事前予想を、内部PCI/RPCI値を出さずに集計表示する。 */
@@ -49,7 +58,7 @@ export function ForecastPerformanceSummary({
             事前の展開想定と実際の流れ
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            保存済みの事前予想について、展開区分が一致した割合です。
+            保存済みの事前予想について、展開区分の一致率と直前の同期間との差です。
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 lg:items-end">
@@ -91,17 +100,45 @@ export function ForecastPerformanceSummary({
       {performance.sample_size > 0 ? (
         <>
           <dl className="mt-5 grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 pt-4">
-            {groups.map((group) => (
-              <div className="px-3 first:pl-0 sm:px-6 sm:first:pl-0" key={group.key}>
-                <dt className="text-xs font-medium text-slate-500">{group.label}</dt>
-                <dd className="mt-1 text-2xl font-bold tabular-nums text-slate-950">
-                  {rateLabel(group.hit_rate)}
-                </dd>
-                <dd className="mt-1 text-xs text-slate-500">
-                  {group.sample_size}レースを検証
-                </dd>
-              </div>
-            ))}
+            {groups.map((group) => {
+              const previous = performance.previous_period.groups.find(
+                (candidate) => candidate.key === group.key,
+              );
+              const delta = rateDelta(group.hit_rate, previous?.hit_rate);
+              const DeltaIcon = delta == null || delta === 0
+                ? Minus
+                : delta > 0
+                  ? TrendingUp
+                  : TrendingDown;
+              const deltaTone = delta == null || delta === 0
+                ? "text-slate-500"
+                : delta > 0
+                  ? "text-emerald-700"
+                  : "text-amber-700";
+
+              return (
+                <div className="px-3 first:pl-0 sm:px-6 sm:first:pl-0" key={group.key}>
+                  <dt className="text-xs font-medium text-slate-500">{group.label}</dt>
+                  <dd className="mt-1 text-2xl font-bold tabular-nums text-slate-950">
+                    {rateLabel(group.hit_rate)}
+                  </dd>
+                  <dd className="mt-1 text-xs text-slate-500">
+                    {group.sample_size}レースを検証
+                  </dd>
+                  <dd className={`mt-2 flex items-center gap-1 text-xs font-semibold ${deltaTone}`}>
+                    <DeltaIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {delta == null
+                      ? "前期比較なし"
+                      : `前期比 ${delta > 0 ? "+" : delta === 0 ? "±" : ""}${delta}pt`}
+                  </dd>
+                  {previous && previous.sample_size > 0 ? (
+                    <dd className="mt-0.5 text-[11px] text-slate-400">
+                      前期 {rateLabel(previous.hit_rate)} / {previous.sample_size}レース
+                    </dd>
+                  ) : null}
+                </div>
+              );
+            })}
           </dl>
           <div
             className={

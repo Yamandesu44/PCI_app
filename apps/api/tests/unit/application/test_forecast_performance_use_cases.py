@@ -80,6 +80,16 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
         ("turf", 2, 0.5),
         ("dirt", 1, 1.0),
     ]
+    assert output.previous_period.date_from == "2026-01-25"
+    assert output.previous_period.date_to == "2026-04-24"
+    assert [
+        (group.key, group.sample_size, group.hit_rate)
+        for group in output.previous_period.groups
+    ] == [
+        ("overall", 1, 1.0),
+        ("turf", 1, 1.0),
+        ("dirt", 0, None),
+    ]
     assert len(output.weekly_trend) == 8
     assert output.weekly_trend[-1].date_from == "2026-07-13"
     assert output.weekly_trend[-1].date_to == "2026-07-19"
@@ -130,6 +140,10 @@ def test_empty_period_returns_null_rate() -> None:
     assert output.hit_count == 0
     assert output.hit_rate is None
     assert all(group.hit_rate is None for group in output.groups)
+    assert all(
+        group.hit_rate is None
+        for group in output.previous_period.groups
+    )
     assert all(group.hit_rate is None for group in output.confidence_groups)
     assert all(row.sample_size == 0 for row in output.pace_matrix)
     assert all(
@@ -165,6 +179,7 @@ def test_selected_period_does_not_shorten_weekly_trend() -> None:
     assert output.date_from == "2026-06-24"
     assert output.period_days == 30
     assert output.sample_size == 1
+    assert output.previous_period.groups[0].sample_size == 1
     assert sum(point.sample_size for point in output.weekly_trend) == 2
 
 

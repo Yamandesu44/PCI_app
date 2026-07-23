@@ -357,6 +357,15 @@ class ForecastPerformanceGroupOutput:
 
 
 @dataclass(frozen=True)
+class ForecastPerformanceComparisonOutput:
+    """直前の同期間における予想精度。"""
+
+    date_from: str
+    date_to: str
+    groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ForecastPerformanceTrendPointOutput:
     """完了した1週間の予想精度。内部実数値は含めない。"""
 
@@ -399,6 +408,7 @@ class ForecastPerformanceOutput:
     coverage_rate: float | None
     hit_count: int
     hit_rate: float | None
+    previous_period: ForecastPerformanceComparisonOutput
     groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
     confidence_groups: list[ForecastPerformanceGroupOutput] = field(
         default_factory=list

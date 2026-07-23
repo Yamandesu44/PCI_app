@@ -486,6 +486,14 @@ class ForecastPerformanceTrendPointSchema(BaseModel):
     hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
+class ForecastPerformanceComparisonSchema(BaseModel):
+    """直前の同期間における展開ラベル的中率。"""
+
+    date_from: str
+    date_to: str
+    groups: list[ForecastPerformanceGroupSchema] = []
+
+
 class ForecastPaceMatrixCellSchema(BaseModel):
     """予想展開に対する実績展開1区分の件数と割合。"""
 
@@ -515,6 +523,7 @@ class ForecastPerformanceSchema(BaseModel):
     coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     hit_count: int = Field(ge=0)
     hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    previous_period: ForecastPerformanceComparisonSchema
     groups: list[ForecastPerformanceGroupSchema] = []
     confidence_groups: list[ForecastPerformanceGroupSchema] = []
     pace_matrix: list[ForecastPaceMatrixRowSchema] = []
@@ -537,6 +546,14 @@ class ForecastPerformanceSchema(BaseModel):
                 ForecastPerformanceGroupSchema(**vars(group))
                 for group in dto.groups
             ],
+            previous_period=ForecastPerformanceComparisonSchema(
+                date_from=dto.previous_period.date_from,
+                date_to=dto.previous_period.date_to,
+                groups=[
+                    ForecastPerformanceGroupSchema(**vars(group))
+                    for group in dto.previous_period.groups
+                ],
+            ),
             confidence_groups=[
                 ForecastPerformanceGroupSchema(**vars(group))
                 for group in dto.confidence_groups

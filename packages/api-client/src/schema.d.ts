@@ -538,6 +538,21 @@ export interface components {
             sample_size: number;
         };
         /**
+         * ForecastPerformanceComparisonSchema
+         * @description 直前の同期間における展開ラベル的中率。
+         */
+        ForecastPerformanceComparisonSchema: {
+            /** Date From */
+            date_from: string;
+            /** Date To */
+            date_to: string;
+            /**
+             * Groups
+             * @default []
+             */
+            groups: components["schemas"]["ForecastPerformanceGroupSchema"][];
+        };
+        /**
          * ForecastPerformanceGroupSchema
          * @description コース種別ごとの展開ラベル的中率。
          */
@@ -593,6 +608,7 @@ export interface components {
             pace_matrix: components["schemas"]["ForecastPaceMatrixRowSchema"][];
             /** Period Days */
             period_days: number;
+            previous_period: components["schemas"]["ForecastPerformanceComparisonSchema"];
             /** Sample Size */
             sample_size: number;
             /**

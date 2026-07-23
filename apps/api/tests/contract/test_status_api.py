@@ -71,6 +71,7 @@ def test_forecast_performance_contract_hides_internal_values(
         "hit_count",
         "hit_rate",
         "groups",
+        "previous_period",
         "confidence_groups",
         "pace_matrix",
         "weekly_trend",
@@ -81,6 +82,16 @@ def test_forecast_performance_contract_hides_internal_values(
     assert body["coverage_rate"] is None
     assert body["hit_rate"] is None
     assert [group["key"] for group in body["groups"]] == [
+        "overall",
+        "turf",
+        "dirt",
+    ]
+    assert set(body["previous_period"]) == {
+        "date_from",
+        "date_to",
+        "groups",
+    }
+    assert [group["key"] for group in body["previous_period"]["groups"]] == [
         "overall",
         "turf",
         "dirt",

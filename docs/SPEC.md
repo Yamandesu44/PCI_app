@@ -178,6 +178,8 @@
   「変動注意（50%未満）」ごとの一致率・的中数・母数を返す。
   `pace_matrix`は「速い・平均・落ち着く」の予想3区分を行、実績3区分を列とし、
   各セルの件数と予想区分内割合を返す。Webでは既定で閉じた詳細検証として表示する。
+  `previous_period`は選択期間の直前にある同じ日数について、全体・芝・ダートの一致率・的中数・
+  母数を返す。現在期間と比較期間は重複させず、比較元0件の場合は一致率をnullとする。
 - ✅ 内部取り込み
   `POST /internal/ingest/{horses,jockeys,trainers,entries,results,race-metadata,log}`,
   `POST /internal/ingest/forecasts/precompute`,

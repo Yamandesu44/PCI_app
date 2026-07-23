@@ -7,6 +7,7 @@ import datetime
 from pci.application.dto import (
     ForecastPaceMatrixCellOutput,
     ForecastPaceMatrixRowOutput,
+    ForecastPerformanceComparisonOutput,
     ForecastPerformanceGroupOutput,
     ForecastPerformanceOutput,
     ForecastPerformanceTrendPointOutput,
@@ -57,13 +58,22 @@ class GetForecastPerformanceUseCase:
         current = now or datetime.datetime.now(datetime.UTC)
         date_to = current.astimezone(_JRA_TIMEZONE).date()
         date_from = date_to - datetime.timedelta(days=period_days - 1)
+        previous_date_to = date_from - datetime.timedelta(days=1)
+        previous_date_from = previous_date_to - datetime.timedelta(
+            days=period_days - 1
+        )
         trend_date_from = _weekly_trend_date_from(date_to)
         records = self._repo.find_prediction_evaluations(
-            min(date_from, trend_date_from),
+            min(previous_date_from, trend_date_from),
             date_to,
         )
         period_records = [
             record for record in records if date_from <= record.race_date <= date_to
+        ]
+        previous_records = [
+            record
+            for record in records
+            if previous_date_from <= record.race_date <= previous_date_to
         ]
         eligible_race_count = self._repo.count_prediction_evaluation_candidates(
             date_from,
@@ -71,6 +81,15 @@ class GetForecastPerformanceUseCase:
         )
         groups = [
             _summarize(period_records, key=key, label=label, track_type=track_type)
+            for key, label, track_type in _GROUPS
+        ]
+        previous_groups = [
+            _summarize(
+                previous_records,
+                key=key,
+                label=label,
+                track_type=track_type,
+            )
             for key, label, track_type in _GROUPS
         ]
         confidence_groups = [
@@ -100,6 +119,11 @@ class GetForecastPerformanceUseCase:
             hit_count=overall.hit_count,
             hit_rate=overall.hit_rate,
             groups=groups,
+            previous_period=ForecastPerformanceComparisonOutput(
+                date_from=previous_date_from.isoformat(),
+                date_to=previous_date_to.isoformat(),
+                groups=previous_groups,
+            ),
             confidence_groups=confidence_groups,
             pace_matrix=pace_matrix,
             weekly_trend=weekly_trend,
