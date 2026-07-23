@@ -269,10 +269,11 @@ class SqlAlchemyRaceRepository:
             (entry.horse_no, entry.frame_no, entry.ketto_num)
             for entry in entries
         ]
+        # 馬ID・人気・賞金は再取り込み時期で変わり得るため、
+        # 馬番に対応する中核成績だけで実結果の衝突を判定する。
         result_values = [
             (
                 entry.horse_no,
-                entry.ketto_num,
                 entry.finish_pos,
                 entry.race_time_s,
                 entry.agari_3f_s,
@@ -280,8 +281,6 @@ class SqlAlchemyRaceRepository:
                 entry.corner_2,
                 entry.corner_3,
                 entry.corner_4,
-                entry.popularity,
-                entry.prize_money,
             )
             for entry in finished
         ]
