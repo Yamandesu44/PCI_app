@@ -10,7 +10,7 @@ import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pci.application.dto import EntryInput, RaceInfo, ResultInput
 from pci.application.ingest_use_cases import (
@@ -55,6 +55,8 @@ AuthDep = Annotated[None, Depends(_verify_token)]
 
 class MartVersionAuditSchema(BaseModel):
     """予想martのモデル世代別行数。"""
+
+    model_config = ConfigDict(from_attributes=True)
 
     model_version: str
     row_count: int

@@ -13,6 +13,7 @@ from pci.application.forecast_precompute_use_cases import ForecastPrecomputeOutp
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
+from pci.domain.racing.repository import MartVersionAudit
 from pci.domain.shared.race_key import RaceKey
 from pci.presentation.app import create_app
 from pci.presentation.dependencies import (
@@ -20,6 +21,7 @@ from pci.presentation.dependencies import (
     get_race_repository,
     get_session,
 )
+from pci.presentation.routers.ingest import MartVersionAuditSchema
 from tests.unit.application.fake_repository import FakeRaceRepository
 
 RACE_KEY = "2026062005010101"
@@ -148,6 +150,12 @@ def test_duplicate_race_audit_rejects_reversed_date_range(client: TestClient) ->
     )
 
     assert response.status_code == 422
+
+
+def test_mart_version_audit_schema_accepts_domain_dataclass() -> None:
+    schema = MartVersionAuditSchema.model_validate(MartVersionAudit("rule-v4", 1))
+
+    assert schema.model_dump() == {"model_version": "rule-v4", "row_count": 1}
 
 
 def _save_duplicate_result(
