@@ -1,5 +1,57 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 23:29 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `3120976`
+- 実装コミット: `1b580c6`
+- 目的: Starlette TestClientの`httpx`非推奨警告を正式な移行経路で解消する。
+
+### 完了した内容
+
+- ローカルのStarlette 1.3.1実装を確認し、`httpx2`が存在すれば自動的に優先されることを確認した。
+- `apps/api/pyproject.toml`の`dev`へ`httpx2>=2.7,<3`を追加した。
+- テストコードの`fastapi.testclient.TestClient`利用は変更していない。Starlette側の選択機構を使う。
+- アプリ本体のGemini RESTクライアントは従来どおり`httpx`を使い、実行時依存と挙動を変更していない。
+- 開発環境では`httpx2 2.9.0`を導入し、`pip check`で依存競合がないことを確認した。
+
+### 未完了・既知事項
+
+- 今回の移行に未完了実装はない。
+- `.pytest_cache`書込み警告はCodexワークスペース権限由来で、通常クローンの問題ではない。
+- 起動用クローンの既存仮想環境でテストする場合は、`pip install -e ".[dev]"`を一度実行して
+  `httpx2`を導入する必要がある。APIサーバーの通常起動だけなら不要。
+
+### テスト結果
+
+- `python -m pytest tests/contract -q`: 90 passed
+- `python -m pytest -m "not integration" -q`: 533 passed、28 deselected、1 warning
+- `python -m pytest tests/integration/test_api_integration.py -q`: 6 passed
+- API全体Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 63 files passed
+- `python -m pip check`: no broken requirements
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `apps/api/pyproject.toml`
+3. `apps/api/tests/contract/conftest.py`
+4. `apps/api/tests/integration/test_api_integration.py`
+5. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+python -m pip install -e ".[dev]"
+$env:PYTHONPATH='src'
+python -m pytest -m "not integration" -q
+python -m pytest tests/integration/test_api_integration.py -q
+```
+
 ## 2026-07-23 22:53 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
@@ -20,8 +72,7 @@
 
 ### 未完了・既知事項
 
-- FastAPI 0.138.0 / Starlette 1.3.1のTestClientが出す`httpx2`移行警告は外部依存由来。
-  依存更新とテストクライアント移行の影響調査を伴うため、今回の保守変更には含めない。
+- FastAPI 0.138.0 / Starlette 1.3.1のTestClient警告は、この次の更新で`httpx2`を導入して解消済み。
 - `.pytest_cache`の書込み警告はCodexワークスペース権限由来。通常クローンでの動作不良ではない。
 - 設計判断の変更はないため、今回`docs/DECISIONS.md`への追記は行っていない。
 
@@ -74,7 +125,7 @@ python -m pytest tests/integration/test_database_readiness.py -q
 
 - 今回の修正に未完了実装はない。
 - pytestキャッシュはワークスペース権限により作成できず警告が出るが、結果には影響しない。
-- Starlette/httpxの既存非推奨警告は別タスク。HTTP 422定数は次の更新で解消済み。
+- Starlette/httpxとHTTP 422定数の非推奨警告は、後続更新で解消済み。
 
 ### テスト結果
 

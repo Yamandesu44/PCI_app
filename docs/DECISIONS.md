@@ -781,3 +781,15 @@
 - **テスト分類**: PostgreSQLコンテナとマイグレーションを使うreadinessテストは
   `pytest.mark.integration`を必須とし、`-m "not integration"`から除外する。
 - **検証**: 非統合533件が全件成功し、PostgreSQL統合2件でDB readinessとロガー保持を確認した。
+
+## ADR-2026-07-23: httpx2はTestClient専用の開発依存として導入する
+
+- **背景**: Starlette 1.3.1は従来の`httpx`による`TestClient`を非推奨とし、`httpx2`が
+  インストール済みなら同じ`TestClient` APIの内部実装として優先する。
+- **採用案**: `httpx2>=2.7,<3`を`dev`依存へ追加する。既存テストコードは変更せず、
+  Starletteの自動選択を利用する。
+- **境界**: Gemini REST通信などアプリ本体は従来の`httpx`を維持する。今回`httpx2`を
+  実行時依存へ移したり、本番HTTPクライアントを同時変更したりしない。
+- **検証**: API契約90件、非統合533件、PostgreSQL API統合6件が成功し、`pip check`も成功した。
+- **見直し条件**: Starletteが旧`httpx`対応を削除した場合も開発依存を維持する。アプリ本体を
+  `httpx2`へ移行する場合は、Geminiのタイムアウト・例外型・モック契約を別タスクで検証する。

@@ -1,11 +1,18 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-23 完了: TestClientをhttpx2へ移行
+
+- [x] APIの開発用依存へ`httpx2>=2.7,<3`を追加し、Starlette TestClientの正式移行経路を有効化した。
+- [x] Gemini通信などアプリ本体は従来の`httpx`を維持し、変更範囲をテスト環境へ限定した。
+- [x] API契約90 tests、非統合533 tests、PostgreSQL API統合6 tests、Ruff、mypy strictを完了した。
+- [x] TestClient非推奨警告を解消し、残る警告をCodexワークスペースのpytestキャッシュ権限だけにした。
+
 ## 2026-07-23 完了: 自コード由来の非推奨警告を解消
 
 - [x] FastAPIルーターのHTTP 422定数を`HTTP_422_UNPROCESSABLE_CONTENT`へ更新した。
 - [x] Alembicへ`path_separator = os`を追加し、旧区切り動作の非推奨警告を解消した。
 - [x] API非統合533 tests、ingest契約42 tests、PostgreSQL統合2 tests、Ruff、mypy strictを完了した。
-- [x] 全体警告を5件から2件へ削減した。残りは外部TestClient移行通知とワークスペース権限警告。
+- [x] 全体警告を5件から2件へ削減した。TestClient通知は次のタスクで解消済み。
 
 ## 2026-07-23 完了: Alembic実行によるロガー状態漏れの解消
 
@@ -95,7 +102,7 @@
 > 状態: ⬜未着手 / 🔄進行中 / ✅完了 / ⏸保留。優先度: P0(必須) / P1(高) / P2(中) / P3(低)。
 > 単なる改善案・未着手の候補は `tasks/backlog.md` に置く。
 
-最終更新: 2026-07-23（自コード由来の非推奨警告を解消） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
+最終更新: 2026-07-23（TestClientをhttpx2へ移行） / 担当: OpenAI Codex / ブランチ `claude/sweet-einstein-ilnaov`
 
 詳しい状態は `docs/HANDOFF.md` を参照（このファイルはタスクの一覧管理に専念する）。
 
