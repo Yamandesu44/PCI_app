@@ -115,3 +115,16 @@ def test_forecast_performance_contract_hides_internal_values(
 def test_openapi_exposes_forecast_performance(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
     assert "/api/v1/forecast-performance" in schema["paths"]
+
+
+def test_forecast_performance_accepts_supported_period(client: TestClient) -> None:
+    response = client.get("/api/v1/forecast-performance?days=30")
+
+    assert response.status_code == 200
+    assert response.json()["period_days"] == 30
+
+
+def test_forecast_performance_rejects_unsupported_period(client: TestClient) -> None:
+    response = client.get("/api/v1/forecast-performance?days=60")
+
+    assert response.status_code == 422

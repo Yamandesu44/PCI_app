@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Get Forecast Performance
-         * @description 直近90日の保存済み事前予想について、展開ラベル的中率を返す。
+         * @description 指定期間の保存済み事前予想について、展開ラベル的中率を返す。
          */
         get: operations["get_forecast_performance_api_v1_forecast_performance_get"];
         put?: never;
@@ -553,6 +553,12 @@ export interface components {
             /** Sample Size */
             sample_size: number;
         };
+        /**
+         * ForecastPerformancePeriod
+         * @description 画面で選択できる予想検証期間。
+         * @enum {integer}
+         */
+        ForecastPerformancePeriod: 30 | 90 | 180;
         /**
          * ForecastPerformanceSchema
          * @description 直近期間の予想精度サマリー。PCI/RPCI実数値は公開しない。
@@ -1291,7 +1297,9 @@ export type $defs = Record<string, never>;
 export interface operations {
     get_forecast_performance_api_v1_forecast_performance_get: {
         parameters: {
-            query?: never;
+            query?: {
+                days?: components["schemas"]["ForecastPerformancePeriod"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1305,6 +1313,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForecastPerformanceSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

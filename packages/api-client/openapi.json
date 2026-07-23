@@ -388,6 +388,16 @@
         "title": "ForecastPerformanceGroupSchema",
         "type": "object"
       },
+      "ForecastPerformancePeriod": {
+        "description": "画面で選択できる予想検証期間。",
+        "enum": [
+          30,
+          90,
+          180
+        ],
+        "title": "ForecastPerformancePeriod",
+        "type": "integer"
+      },
       "ForecastPerformanceSchema": {
         "description": "直近期間の予想精度サマリー。PCI/RPCI実数値は公開しない。",
         "properties": {
@@ -2241,8 +2251,19 @@
   "paths": {
     "/api/v1/forecast-performance": {
       "get": {
-        "description": "直近90日の保存済み事前予想について、展開ラベル的中率を返す。",
+        "description": "指定期間の保存済み事前予想について、展開ラベル的中率を返す。",
         "operationId": "get_forecast_performance_api_v1_forecast_performance_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ForecastPerformancePeriod",
+              "default": 90
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2253,6 +2274,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Get Forecast Performance",

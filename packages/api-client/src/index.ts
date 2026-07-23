@@ -30,6 +30,8 @@ export type IntegratedEntry = components["schemas"]["IntegratedEntrySchema"];
 export type IngestStatus = components["schemas"]["IngestStatusSchema"];
 export type IngestFailure = components["schemas"]["IngestFailureSchema"];
 export type ForecastPerformance = components["schemas"]["ForecastPerformanceSchema"];
+export type ForecastPerformancePeriod =
+  components["schemas"]["ForecastPerformancePeriod"];
 export type ForecastPerformanceGroup =
   components["schemas"]["ForecastPerformanceGroupSchema"];
 export type ForecastPerformanceTrendPoint =
@@ -69,7 +71,7 @@ export interface ApiClient {
   getRaceDetail(raceKey: string): Promise<RaceDetail>;
   getPaceAnalysis(raceKey: string): Promise<PaceAnalysis>;
   getIngestStatus(): Promise<IngestStatus>;
-  getForecastPerformance(): Promise<ForecastPerformance>;
+  getForecastPerformance(days?: ForecastPerformancePeriod): Promise<ForecastPerformance>;
   getReadiness(): Promise<Readiness>;
 }
 
@@ -105,8 +107,14 @@ export function createClient(options: ApiClientOptions): ApiClient {
     getPaceAnalysis: (raceKey) =>
       getJson<PaceAnalysis>(`/api/v1/races/${encodeURIComponent(raceKey)}/pace-analysis`),
     getIngestStatus: () => getJson<IngestStatus>("/api/v1/ingest-status"),
-    getForecastPerformance: () =>
-      getJson<ForecastPerformance>("/api/v1/forecast-performance"),
+    getForecastPerformance: (days) => {
+      const params = new URLSearchParams();
+      if (days != null) params.set("days", String(days));
+      const qs = params.toString();
+      return getJson<ForecastPerformance>(
+        `/api/v1/forecast-performance${qs ? `?${qs}` : ""}`,
+      );
+    },
     getReadiness: async () => {
       const path = "/ready";
       const res = await doFetch(`${base}${path}`);

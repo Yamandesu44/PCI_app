@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import datetime
 
+import pytest
+
 from pci.application.forecast_performance_use_cases import (
     GetForecastPerformanceUseCase,
 )
@@ -137,3 +139,38 @@ def test_empty_period_returns_null_rate() -> None:
     )
     assert len(output.weekly_trend) == 8
     assert all(point.hit_rate is None for point in output.weekly_trend)
+
+
+def test_selected_period_does_not_shorten_weekly_trend() -> None:
+    repo = FakeMartRepository()
+    repo.prediction_evaluations = [
+        _record(
+            "2026071805010101",
+            datetime.date(2026, 7, 18),
+            "芝",
+            "スロー",
+            55.0,
+        ),
+        _record(
+            "2026062005010102",
+            datetime.date(2026, 6, 20),
+            "芝",
+            "平均",
+            45.0,
+        ),
+    ]
+
+    output = GetForecastPerformanceUseCase(repo).execute(period_days=30, now=NOW)
+
+    assert output.date_from == "2026-06-24"
+    assert output.period_days == 30
+    assert output.sample_size == 1
+    assert sum(point.sample_size for point in output.weekly_trend) == 2
+
+
+def test_rejects_unsupported_period() -> None:
+    with pytest.raises(ValueError, match="集計期間"):
+        GetForecastPerformanceUseCase(FakeMartRepository()).execute(
+            period_days=60,
+            now=NOW,
+        )

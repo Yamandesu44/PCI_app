@@ -166,12 +166,14 @@
   `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`,
   `/api/v1/forecast-performance`, `/health`, `/ready`。
   `/health`はプロセス生存確認、`/ready`はDB接続とORM必須列を含む利用可能性確認とする。
-- ✅ `GET /api/v1/forecast-performance`はJST基準の直近90日、確定済みJRA平地について、
+- ✅ `GET /api/v1/forecast-performance`はJST基準の直近30日・90日・180日（`days`、既定90日）、
+  確定済みJRA平地について、
   レース日以前に生成された最新の保存済み予想と実際の展開区分を比較する。全体・芝・ダートの
   一致率、的中数、母数、対象期間だけを公開し、PCI/RPCIの内部実数値は返さない。
   `eligible_race_count`は同じ期間・対象条件で実績展開を判定できる全レース数、
   `coverage_rate`は`sample_size / eligible_race_count`とする。対象0件の場合はnullを返す。
-  `weekly_trend`は進行中の週を除き、直近8完了週を月曜から日曜の固定区間で返す。
+  `weekly_trend`は期間指定にかかわらず、進行中の週を除く直近8完了週を月曜から日曜の
+  固定区間で返す。
   `confidence_groups`は既存UIと同じ境界で「読みやすい（70%以上）」「標準（50%以上70%未満）」
   「変動注意（50%未満）」ごとの一致率・的中数・母数を返す。
   `pace_matrix`は「速い・平均・落ち着く」の予想3区分を行、実績3区分を列とし、

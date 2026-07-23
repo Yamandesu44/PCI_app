@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import type { ForecastPerformancePeriod } from "@pci/api-client";
 
 interface Props {
   /** YYYY-MM-DD 形式の開催日リスト */
   dates: string[];
   selectedDate: string | null;
+  performanceDays: ForecastPerformancePeriod;
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
@@ -37,7 +39,7 @@ function calendarDays(year: number, month: number): (Date | null)[] {
   return cells;
 }
 
-export function RaceDateCalendar({ dates, selectedDate }: Props) {
+export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props) {
   const dateSet = new Set(dates);
   const today = todayKey();
 
@@ -123,7 +125,7 @@ export function RaceDateCalendar({ dates, selectedDate }: Props) {
             <div key={key} className="flex flex-col items-center py-0.5">
               {hasRace ? (
                 <Link
-                  href={`/?date=${key}`}
+                  href={`/?date=${key}&performance_days=${performanceDays}`}
                   className={[
                     "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition",
                     isSelected

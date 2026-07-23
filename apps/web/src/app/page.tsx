@@ -36,6 +36,7 @@ import {
 } from "@/lib/races";
 import {
   type ForecastPerformance,
+  type ForecastPerformancePeriod,
   type IngestStatus,
   type RaceBoardForecast,
   type RaceBoardItem,
@@ -62,7 +63,7 @@ interface RaceDateItemGroup {
 }
 
 interface HomePageProps {
-  searchParams?: Promise<{ date?: string }>;
+  searchParams?: Promise<{ date?: string; performance_days?: string }>;
 }
 
 async function loadRaces(
@@ -105,12 +106,19 @@ async function loadIngestStatus(): Promise<IngestStatus | null> {
   }
 }
 
-async function loadForecastPerformance(): Promise<ForecastPerformance | null> {
+async function loadForecastPerformance(
+  days: ForecastPerformancePeriod,
+): Promise<ForecastPerformance | null> {
   try {
-    return await api.getForecastPerformance();
+    return await api.getForecastPerformance(days);
   } catch {
     return null;
   }
+}
+
+function parsePerformanceDays(value: string | undefined): ForecastPerformancePeriod {
+  if (value === "30" || value === "180") return Number(value) as ForecastPerformancePeriod;
+  return 90;
 }
 
 function raceActionLabel(race: RaceSummary): string {
@@ -365,6 +373,7 @@ function RaceGroupedSection({
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
+  const performanceDays = parsePerformanceDays(params?.performance_days);
   const weekend = weekendRange();
   const today = todayKey();
 
@@ -372,7 +381,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const [allDates, ingestStatus, forecastPerformance] = await Promise.all([
     loadAllRaceDates(),
     loadIngestStatus(),
-    loadForecastPerformance(),
+    loadForecastPerformance(performanceDays),
   ]);
   const selectedDate = selectRaceDate(allDates, params?.date, weekend);
 
@@ -467,12 +476,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       {forecastPerformance ? (
-        <ForecastPerformanceSummary performance={forecastPerformance} />
+        <ForecastPerformanceSummary
+          performance={forecastPerformance}
+          selectedDate={selectedDate}
+        />
       ) : null}
 
       <div className="grid items-start gap-7 lg:grid-cols-[272px_minmax(0,1fr)]">
         <aside className="lg:sticky lg:top-24">
-          <RaceDateCalendar dates={dates} selectedDate={selectedDate} />
+          <RaceDateCalendar
+            dates={dates}
+            selectedDate={selectedDate}
+            performanceDays={performanceDays}
+          />
         </aside>
         <div className="min-w-0 space-y-9">
         <RaceGroupedSection

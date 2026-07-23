@@ -9,22 +9,31 @@
 
 | 項目 | 値 |
 |---|---|
-| 更新日時 | 2026-07-23（更新38回目・Codex が事前予想の検証カバー率を実装） |
+| 更新日時 | 2026-07-23（更新39回目・Codex が予想検証の期間切り替えを実装） |
 | 作業担当AI | OpenAI Codex |
 | 引き継ぎ先 | Claude Code |
-| 直前の担当AI | OpenAI Codex（予想評価の母集団カバー率を表示可能にした） |
+| 直前の担当AI | OpenAI Codex（予想検証を30日・90日・180日で比較可能にした） |
 | ブランチ | `claude/sweet-einstein-ilnaov` |
-| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `beaf64e`） |
+| 最新コミット | `HEAD`（本セッションのコミット。作業開始時は `22f1809`） |
 | 作業ツリー | 本セッションのコミット・push後にクリーン化する前提 |
 
 ---
 
 ## 現在の作業目的
 
-**展開予想の一致率が、確定した評価対象レースの何割を照合した結果なのかを
-同じ画面で確認できるようにした。**
+**展開予想の検証期間を30日・90日・180日で切り替え、短期変化と長期安定性を
+同じ画面で比較できるようにした。**
 
-`MartRepository.find_prediction_evaluations()`は、JST基準の直近90日にある確定済みJRA平地から、
+`GET /api/v1/forecast-performance`は`days=30|90|180`を受け付け、未指定時は90日を使う。
+一致率、芝・ダート、信頼度別集計、混同行列、検証カバー率は選択期間で再集計する。
+`weekly_trend`だけは期間に連動させず、比較軸を揃えるため常に直近8完了週を返す。
+application層は30日選択時も8週分を取得し、期間集計用レコードと週次用レコードを分離する。
+
+Webトップの`ForecastPerformanceSummary`へ30日・90日・180日のセグメントを追加した。
+`performance_days`と`date`をURLへ保持し、期間と開催日のどちらを先に変更しても他方の選択を失わない。
+不正な`performance_days`はWebで90日に戻し、APIの不正な`days`は422となる。
+
+`MartRepository.find_prediction_evaluations()`は、JST基準の指定期間にある確定済みJRA平地から、
 レース日以前に生成された最新の予想を1件だけ選ぶ。application層で確定RPCIを展開区分へ変換し、
 全体・芝・ダートの一致率、的中数、母数を集計する。公開
 `GET /api/v1/forecast-performance`と`ForecastPerformanceSummary`は期間と集計結果だけを扱い、
@@ -42,7 +51,7 @@ PCI/RPCIの内部実数値をAPI・画面へ露出しない。`weekly_trend`は�
 native `details`で既定は閉じ、一致セルを緑、不一致セルを黄で表示する。モバイルは
 最小幅430pxの表を横スクロールし、文字や数値を縮めすぎない。
 
-`MartRepository.count_prediction_evaluation_candidates()`は、直近90日の確定済みJRA平地かつ
+`MartRepository.count_prediction_evaluation_candidates()`は、指定期間の確定済みJRA平地かつ
 `rpci_actual`を持つレースを、予想martの有無と独立に集計する。APIは`eligible_race_count`と
 `coverage_rate = sample_size / eligible_race_count`を返し、対象0件ならnullとする。
 `ForecastEvaluationCoverage`は照合済み件数／対象総数を進捗バーで表示し、全件なら緑、
@@ -52,10 +61,10 @@ native `details`で既定は閉じ、一致セルを緑、不一致セルを黄�
 `ForecastPerformanceTrendLazy`から`next/dynamic`で遅延読み込みする。直接importした試作では
 一覧のFirst Load JSが214KBまで増えたが、遅延化後は110KBへ戻った。
 
-今回の検証は新規単体・契約7 passed、PostgreSQL統合1 passed、Web 74 passed。
+今回の検証は対象単体・契約11 passed、OpenAPIスナップショット2 passed、Web 74 passed。
 API Ruff、API全体63ファイルのmypy strict、OpenAPI生成、api-client/Web typecheck、
-Web production buildは成功。API非統合全体は504 passed / 3 failed / 24 deselected。
-失敗3件は既知の全体実行時`caplog`捕捉問題で、今回の変更対象ではない。Web workspaceには
+Web production buildは成功し、一覧のFirst Load JSは110KBを維持した。今回はRepositoryを
+変更していないためPostgreSQL統合テストとAPI非統合全体は再実行していない。Web workspaceには
 lintスクリプトがないため実行不可（Next buildもlintをskipする）。グローバルPythonには
 `lint_imports`が未導入のためimport境界チェックも実行不可だが、application/domainの依存方向は
 既存構成に従っている。
@@ -66,6 +75,7 @@ lintスクリプトがないため実行不可（Next buildもlintをskipする�
 
 Claude Codeが最初に確認するファイル:
 `apps/api/src/pci/application/forecast_performance_use_cases.py`,
+`apps/api/src/pci/presentation/routers/status.py`,
 `apps/api/src/pci/infrastructure/repositories/mart_repository.py`,
 `apps/web/src/components/ForecastConfidenceCalibration.tsx`,
 `apps/web/src/components/ForecastEvaluationCoverage.tsx`,
@@ -73,6 +83,7 @@ Claude Codeが最初に確認するファイル:
 `apps/web/src/components/ForecastPerformanceTrend.tsx`,
 `apps/web/src/components/ForecastPerformanceTrendLazy.tsx`,
 `apps/web/src/components/ForecastPerformanceSummary.tsx`,
+`apps/web/src/components/RaceDateCalendar.tsx`,
 `docs/DECISIONS.md`。
 最初に実行するコマンド:
 `git status --short --branch`、

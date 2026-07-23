@@ -1,5 +1,9 @@
+import Link from "next/link";
 import { Activity, Database } from "lucide-react";
-import type { ForecastPerformance } from "@pci/api-client";
+import type {
+  ForecastPerformance,
+  ForecastPerformancePeriod,
+} from "@pci/api-client";
 
 import { ForecastConfidenceCalibration } from "@/components/ForecastConfidenceCalibration";
 import { ForecastErrorPattern } from "@/components/ForecastErrorPattern";
@@ -14,8 +18,10 @@ function rateLabel(rate: number | null | undefined): string {
 /** 保存済みの事前予想を、内部PCI/RPCI値を出さずに集計表示する。 */
 export function ForecastPerformanceSummary({
   performance,
+  selectedDate,
 }: {
   performance: ForecastPerformance;
+  selectedDate: string | null;
 }) {
   const groups = performance.groups.filter((group) =>
     ["overall", "turf", "dirt"].includes(group.key),
@@ -23,6 +29,13 @@ export function ForecastPerformanceSummary({
   const hasWeeklyTrend = performance.weekly_trend.some(
     (point) => point.sample_size > 0,
   );
+  const periods: ForecastPerformancePeriod[] = [30, 90, 180];
+
+  function periodHref(days: ForecastPerformancePeriod): string {
+    const params = new URLSearchParams({ performance_days: String(days) });
+    if (selectedDate != null) params.set("date", selectedDate);
+    return `/?${params.toString()}`;
+  }
 
   return (
     <section className="mb-8 border-y border-slate-200 bg-white py-5">
@@ -39,9 +52,34 @@ export function ForecastPerformanceSummary({
             保存済みの事前予想について、展開区分が一致した割合です。
           </p>
         </div>
-        <p className="text-xs text-slate-500">
-          {formatRaceDate(performance.date_from)} - {formatRaceDate(performance.date_to)}
-        </p>
+        <div className="flex flex-col items-start gap-2 lg:items-end">
+          <nav
+            className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5"
+            aria-label="予想検証の集計期間"
+          >
+            {periods.map((days) => {
+              const isSelected = performance.period_days === days;
+              return (
+                <Link
+                  key={days}
+                  href={periodHref(days)}
+                  aria-current={isSelected ? "page" : undefined}
+                  className={[
+                    "rounded px-3 py-1.5 text-xs font-semibold transition",
+                    isSelected
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-white hover:text-slate-950",
+                  ].join(" ")}
+                >
+                  {days}日
+                </Link>
+              );
+            })}
+          </nav>
+          <p className="text-xs text-slate-500">
+            {formatRaceDate(performance.date_from)} - {formatRaceDate(performance.date_to)}
+          </p>
+        </div>
       </div>
 
       <ForecastEvaluationCoverage
