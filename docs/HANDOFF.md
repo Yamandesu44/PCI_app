@@ -1,5 +1,33 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-23 21:33 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 実装最新コミット: `fd8592b`
+- 目的: 予想martを持つ最後の重複1組を、安全な代替確認後に統合する。
+
+### 完了した内容
+
+- 重複監査へ`predicted_pace`/`pace_fit`のモデル世代別行数を追加した。
+- 正規側に同一展開モデルがあり、各PAI世代が正規出走頭数分そろう場合だけ旧martを代替済みと判定する。
+- 2026-02-01東京9Rを再同期・統合し、旧キー`2026020105010109`を削除した。
+- 実DB検証: 重複0組。正規キー`2026020105010209`は12頭、展開予想1件、PAI 12件を維持。
+
+### テスト結果
+
+- API対象・PostgreSQL統合43 passed
+- worker mart判定7 passed
+- API/worker Ruff、API mypy strict、worker変更対象mypy strict成功
+- api-client typecheck成功
+- APIレスポンス変換回帰42 passed
+
+### 未完了
+
+- 重複レース統合タスクに未完了事項はない。
+- 次の優先候補は`tasks/backlog.md`の未完了P2/P1から選定する。
+
 ## 2026-07-23 20:58 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

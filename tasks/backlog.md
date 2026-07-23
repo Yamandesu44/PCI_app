@@ -75,13 +75,12 @@
   `COMMENT_GENERATOR_MODE=rule`を既定とし、APIキーが残っていても外部通信しない。
   Geminiは`gemini`モードとAPIキーの二段階オプトインに限定する。
 - [ ] **P2 実JV-Dataの人気/賞金予約オフセット検証**（jvlink実COM用）。現状はmykeibadb合成専用。
-- [ ] **P1 重複レースキーを安全に正規キーへ統合する**。
+- [x] ~~**P1 重複レースキーを安全に正規キーへ統合する**~~ → **2026-07-23完了**。
   - [x] dry-run監査を実装し、実DB直近1年の450組すべてでmykeibadbの正規キーを一意に特定した。
     中核成績は全組一致し、旧キー側の予想martは0件。ただし出走馬構成は全組で不一致。
   - [x] 449組は正規キーへ再同期し、署名・頭数・確定頭数・martゼロを再検証して旧キーを削除した。
-  - [ ] 残る2026-02-01東京9Rの1組について、旧・正規双方の`rule-v4`/`pai-v1`を
-    モデル世代・生成日時・正規出走馬との対応で比較し、旧martを破棄可能か判断する。
-  - [ ] 残存1組の処理後に重複組数0件と予想mart件数の期待差を検証する。
+  - [x] 2026-02-01東京9Rは正規側の`rule-v4`と全12頭分`pai-v1`による完全代替を確認した。
+  - [x] 残存1組を統合し、重複0件と正規側mart 1件＋12件の維持を確認した。
   `result_conflict`・`canonical_incomplete`・`source_unresolved`は今後発生しても自動統合しない。
 - [ ] 🧪 暫定定数の検証と正式化: `_NEIGHBOR_BLEED_RATIO`(affinity)・上がり3F 妥当範囲(se_parser)・
   `RuleWeights`(rule-v4)・`PaiWeights`(pai-v1)・`FormationWeights`(formation-v1)・
