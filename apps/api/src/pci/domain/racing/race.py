@@ -35,3 +35,5 @@ class Race:
     race_class: str | None = None
     rpci_actual: float | None = None  # 実績RPCI（確定後）
     pci3_actual: float | None = None  # PCI3（確定後）
+    race_s3f: float | None = None  # 前半3F。RPCI履歴特徴量用の内部値
+    race_l3f: float | None = None  # 後半3F。RPCI履歴特徴量用の内部値

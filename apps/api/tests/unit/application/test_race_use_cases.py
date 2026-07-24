@@ -196,7 +196,12 @@ class TestRegisterRaceEntriesUseCase:
     def test_same_final_snapshot_preserves_recorded_result(self) -> None:
         repo = self._make_repo()
         RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
-        RecordRaceResultUseCase(repo).execute(RACE_KEY, RESULTS)
+        RecordRaceResultUseCase(repo).execute(
+            RACE_KEY,
+            RESULTS,
+            race_s3f=35.2,
+            race_l3f=35.8,
+        )
 
         RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
 
@@ -204,6 +209,8 @@ class TestRegisterRaceEntriesUseCase:
         horse = repo.find_entries(RaceKey(RACE_KEY))[0]
         assert race is not None and race.status == RaceStatus.RESULT
         assert race.rpci_actual is not None
+        assert race.race_s3f == 35.2
+        assert race.race_l3f == 35.8
         assert horse.finish_pos == 1
         assert horse.pci_actual is not None
 
@@ -212,7 +219,12 @@ class TestUpdateRaceMetadataUseCase:
     def test_updates_only_metadata_and_preserves_result(self) -> None:
         repo = FakeRaceRepository()
         RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
-        RecordRaceResultUseCase(repo).execute(RACE_KEY, RESULTS)
+        RecordRaceResultUseCase(repo).execute(
+            RACE_KEY,
+            RESULTS,
+            race_s3f=35.2,
+            race_l3f=35.8,
+        )
         before = repo.find_by_key(RaceKey(RACE_KEY))
         assert before is not None
 
@@ -232,6 +244,8 @@ class TestUpdateRaceMetadataUseCase:
         assert after.status == RaceStatus.RESULT
         assert after.rpci_actual == before.rpci_actual
         assert after.pci3_actual == before.pci3_actual
+        assert after.race_s3f == before.race_s3f
+        assert after.race_l3f == before.race_l3f
         assert len(repo.find_entries(RaceKey(RACE_KEY))) == 3
 
     def test_legacy_key_is_matched_by_date_place_and_race_no(self) -> None:
@@ -392,6 +406,24 @@ class TestRecordRaceResultUseCase:
         # S3/L3 由来: (35/36)*100-50 ≈ 47.2 がそのまま rpci になる
         assert output.rpci is not None
         assert output.rpci == pytest.approx(35.0 / 36.0 * 100 - 50, abs=0.15)
+        race = repo.find_by_key(RaceKey(RACE_KEY))
+        assert race is not None
+        assert race.race_s3f == 35.0
+        assert race.race_l3f == 36.0
+
+    def test_partial_lap_reingest_preserves_existing_side(self) -> None:
+        """再同期で片側だけ届いても、保存済みラップを消さずRPCIを再計算する。"""
+        repo = self._setup_repo()
+        use_case = RecordRaceResultUseCase(repo)
+        use_case.execute(RACE_KEY, RESULTS, race_s3f=35.0, race_l3f=36.0)
+
+        output = use_case.execute(RACE_KEY, RESULTS, race_l3f=37.0)
+
+        race = repo.find_by_key(RaceKey(RACE_KEY))
+        assert race is not None
+        assert race.race_s3f == 35.0
+        assert race.race_l3f == 37.0
+        assert output.rpci == pytest.approx(35.0 / 37.0 * 100 - 50, abs=0.15)
 
     def test_running_style_skipped_for_empty_ketto_num(self) -> None:
         """ketto_num="" の馬（出走表未登録）は脚質判定をスキップし None になる。"""

@@ -77,6 +77,16 @@ class RegisterRaceEntriesUseCase:
                 if preserve_result and existing_race is not None
                 else None
             ),
+            race_s3f=(
+                existing_race.race_s3f
+                if preserve_result and existing_race is not None
+                else None
+            ),
+            race_l3f=(
+                existing_race.race_l3f
+                if preserve_result and existing_race is not None
+                else None
+            ),
         )
         self._repo.save_race(race)
 
@@ -158,6 +168,8 @@ class UpdateRaceMetadataUseCase:
                     race_class=race.race_class,
                     rpci_actual=race.rpci_actual,
                     pci3_actual=race.pci3_actual,
+                    race_s3f=race.race_s3f,
+                    race_l3f=race.race_l3f,
                 )
             )
         return True
@@ -329,11 +341,13 @@ class RecordRaceResultUseCase:
         # TARGET 準拠 RPCI: RA の S3(前半3F)/L3(後半3F) 比から算出。
         # RPCI = S3/L3 × 100 − 50（距離非依存の前後ペース指数）。
         # S3/L3 どちらか未取得時は全馬 PCI 平均にフォールバックする。
+        stored_s3f = race_s3f if race_s3f is not None else race.race_s3f
+        stored_l3f = race_l3f if race_l3f is not None else race.race_l3f
         race_rpci: float | None = None
-        if race_s3f is not None and race_l3f is not None:
+        if stored_s3f is not None and stored_l3f is not None:
             race_rpci = calculate_rpci_from_lap(
-                Furlong3Time(race_s3f),
-                Furlong3Time(race_l3f),
+                Furlong3Time(stored_s3f),
+                Furlong3Time(stored_l3f),
             )
 
         rpci_result = aggregate_rpci(pci_values, finish_positions, race_rpci=race_rpci)
@@ -383,6 +397,8 @@ class RecordRaceResultUseCase:
                 race_class=race.race_class,
                 rpci_actual=rpci_result.rpci,
                 pci3_actual=rpci_result.pci3,
+                race_s3f=stored_s3f,
+                race_l3f=stored_l3f,
             )
         )
 

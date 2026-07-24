@@ -66,6 +66,8 @@ class RaceModel(Base):
     race_class: Mapped[str | None] = mapped_column(String(100))
     rpci_actual: Mapped[float | None] = mapped_column(Float)
     pci3_actual: Mapped[float | None] = mapped_column(Float)
+    race_s3f: Mapped[float | None] = mapped_column(Float)
+    race_l3f: Mapped[float | None] = mapped_column(Float)
 
     # 親子関係を明示し、flush 時に races → race_entries の INSERT 順序を保証する
     # （未設定だと UoW が FK 依存を解決できず FK 違反になる）。

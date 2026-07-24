@@ -62,6 +62,8 @@ RESULTS_PAYLOAD = {
     "race_key": RACE_KEY,
     "track_condition": "良",
     "grade": "G3",
+    "race_s3f": 35.2,
+    "race_l3f": 35.8,
     "results": [
         {"horse_no": 1, "finish_pos": 1, "race_time_s": 94.4, "agari_3f_s": 34.0, "corner_4": 2,
          "body_weight": 486.0},
@@ -402,6 +404,8 @@ class TestIngestResults:
         race = fake_repo.find_by_key(RaceKey(RACE_KEY))
         entries = fake_repo.find_entries(RaceKey(RACE_KEY))
         assert race is not None and race.grade == "G3"
+        assert race.race_s3f == 35.2
+        assert race.race_l3f == 35.8
         assert next(e for e in entries if e.horse_no == 1).weight == 486.0
 
     def test_unknown_race_key_returns_500_or_4xx(self, client: TestClient) -> None:
@@ -439,6 +443,8 @@ class TestIngestRaceMetadata:
         assert race.weather == "雨"
         assert race.status.value == "result"
         assert race.rpci_actual is not None
+        assert race.race_s3f == 35.2
+        assert race.race_l3f == 35.8
 
     def test_skips_unknown_race(self, client: TestClient) -> None:
         resp = client.post(

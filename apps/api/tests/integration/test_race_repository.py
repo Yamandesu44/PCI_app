@@ -86,6 +86,8 @@ class TestSaveAndFindRace:
             status=RaceStatus.RESULT,
             rpci_actual=51.2,
             pci3_actual=52.0,
+            race_s3f=35.1,
+            race_l3f=35.8,
         )
         repo.save_race(updated)
         db_session.flush()
@@ -94,6 +96,8 @@ class TestSaveAndFindRace:
         assert found is not None
         assert found.status == RaceStatus.RESULT
         assert found.rpci_actual == pytest.approx(51.2)
+        assert found.race_s3f == pytest.approx(35.1)
+        assert found.race_l3f == pytest.approx(35.8)
 
 
 @pytest.mark.integration

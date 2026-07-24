@@ -425,6 +425,8 @@ class SqlAlchemyRaceRepository:
             race_class=m.race_class,
             rpci_actual=m.rpci_actual,
             pci3_actual=m.pci3_actual,
+            race_s3f=m.race_s3f,
+            race_l3f=m.race_l3f,
         )
 
     def _from_race(self, r: Race) -> RaceModel:
@@ -442,6 +444,8 @@ class SqlAlchemyRaceRepository:
             race_class=r.race_class,
             rpci_actual=r.rpci_actual,
             pci3_actual=r.pci3_actual,
+            race_s3f=r.race_s3f,
+            race_l3f=r.race_l3f,
         )
 
     def _to_entry(self, m: RaceEntryModel) -> RaceEntry:
