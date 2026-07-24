@@ -27,6 +27,9 @@
 .PARAMETER ChunkDays
     Split long date ranges into chunks of this many days (default: 0 = disabled).
 
+.PARAMETER TestNotification
+    Send one harmless test notification and exit without running ingestion.
+
 .EXAMPLE
     .\run_batch.ps1 -Step entries
     .\run_batch.ps1 -Step results -Date 20260628
@@ -34,12 +37,13 @@
     .\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723 -ChunkDays 7
 #>
 param(
-    [Parameter(Mandatory)][string]$Step,
+    [string]$Step = "",
     [string]$Mode = "jvlink",
     [string]$Date = (Get-Date -Format "yyyyMMdd"),
     [string]$DateTo = "",
     [int]$ChunkDays = 0,
-    [int]$MaxRetries = 3
+    [int]$MaxRetries = 3,
+    [switch]$TestNotification
 )
 
 Set-StrictMode -Version Latest
@@ -52,6 +56,9 @@ $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $OutputEncoding = $Utf8NoBom
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
+
+if ($TestNotification -and -not $Step) { $Step = "webhook-test" }
+if (-not $Step) { throw "-Step is required." }
 
 # --- Path resolution ---
 $WorkerDir = Split-Path $PSScriptRoot -Parent
@@ -84,12 +91,48 @@ function Write-Log {
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
 }
 
+function Send-WebhookNotification {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    try {
+        # Windows PowerShell 5.1でもSlack等が要求するTLS 1.2を明示する。
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $body = @{ text = $Message } | ConvertTo-Json -Compress
+        Invoke-RestMethod -Uri $Url -Method Post -Body $body `
+            -ContentType "application/json" -TimeoutSec 10 | Out-Null
+        Write-Log "webhook notification sent"
+        return $true
+    } catch {
+        # Webhook URLには認証情報が含まれるため、例外内に含まれてもログへ残さない。
+        $safeError = $_.Exception.Message.Replace($Url, "<redacted>")
+        Write-Log "failed to send webhook notification: $safeError"
+        return $false
+    }
+}
+
 $rangeLabel = if ($DateTo) { "$Date to $DateTo" } else { $Date }
 Write-Log "=== run_batch.ps1 start: step=$Step mode=$Mode date=$rangeLabel ==="
+
+$webhookUrl = [System.Environment]::GetEnvironmentVariable("NOTIFY_WEBHOOK_URL", "Process")
+if ($TestNotification) {
+    if (-not $webhookUrl) {
+        Write-Log "ERROR: NOTIFY_WEBHOOK_URL is not set."
+        exit 1
+    }
+    $testMessage = ":white_check_mark: *PCI App notification test*`nWindows ingestion worker is connected."
+    if (Send-WebhookNotification -Url $webhookUrl -Message $testMessage) { exit 0 }
+    exit 1
+}
 
 $batchArgs = @("-m", "ingestion.batch", "--mode", $Mode, "--step", $Step, "--date", $Date)
 if ($DateTo) { $batchArgs += @("--date-to", $DateTo) }
 if ($ChunkDays -gt 0) { $batchArgs += @("--chunk-days", $ChunkDays) }
+
+# 再試行中の重複通知を避け、最終失敗時の通知はこのラッパーが1回だけ送る。
+$env:INGEST_NOTIFICATION_OWNER = "wrapper"
 
 $attempt = 0
 $success = $false
@@ -133,17 +176,9 @@ if (-not $success) {
     $errMsg = "$Step batch failed after $MaxRetries attempts (date=$Date)"
     Write-Log "ERROR: $errMsg"
 
-    # Slack-compatible webhook notification
-    $webhookUrl = [System.Environment]::GetEnvironmentVariable("NOTIFY_WEBHOOK_URL", "Process")
     if ($webhookUrl) {
-        try {
-            $body = @{ text = ":x: *ingestion-worker failed*`n- step: ``$Step```n- date: ``$Date```n- see log: $LogFile" } |
-                ConvertTo-Json -Compress
-            Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType "application/json" | Out-Null
-            Write-Log "failure notification sent"
-        } catch {
-            Write-Log "failed to send notification: $_"
-        }
+        $failureMessage = ":x: *ingestion-worker failed*`n- step: ``$Step```n- date: ``$Date```n- see log: $LogFile"
+        Send-WebhookNotification -Url $webhookUrl -Message $failureMessage | Out-Null
     }
 
     exit 1

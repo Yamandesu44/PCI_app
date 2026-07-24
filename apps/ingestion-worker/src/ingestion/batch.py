@@ -22,6 +22,7 @@ import logging
 import os
 import sys
 
+import httpx
 from dotenv import load_dotenv
 
 from ingestion.client.base import JvLinkClient, RaceMetadataProvider
@@ -51,22 +52,33 @@ _MASTER_FLUSH_SIZE = 1000
 
 def _notify_failure(step: str, date_from: str, error: str) -> None:
     """NOTIFY_WEBHOOK_URL が設定されていれば Slack 互換 Webhook に失敗通知を送る。"""
+    if os.environ.get("INGEST_NOTIFICATION_OWNER") == "wrapper":
+        _log.info("失敗通知は再試行を管理するラッパーへ委譲しました")
+        return
+
     url = os.environ.get("NOTIFY_WEBHOOK_URL", "")
     if not url:
         return
-    try:
-        import httpx
 
+    httpx_logger = logging.getLogger("httpx")
+    previous_level = httpx_logger.level
+    try:
         msg = (
             f":x: *ingestion-worker 失敗*\n"
             f"• step: `{step}`\n"
             f"• 日付: `{date_from}`\n"
             f"• エラー: ```{error[:500]}```"
         )
-        httpx.post(url, json={"text": msg}, timeout=10.0)
+        # Webhook URLには認証情報が含まれるため、HTTPリクエストURLをINFOログへ出さない。
+        httpx_logger.setLevel(logging.WARNING)
+        response = httpx.post(url, json={"text": msg}, timeout=10.0)
+        response.raise_for_status()
         _log.info("失敗通知を送信しました")
     except Exception as exc:
-        _log.warning("失敗通知の送信に失敗しました: %s", exc)
+        safe_error = str(exc).replace(url, "<redacted>")
+        _log.warning("失敗通知の送信に失敗しました: %s", safe_error)
+    finally:
+        httpx_logger.setLevel(previous_level)
 
 
 def _setup_logging() -> None:
