@@ -1,5 +1,81 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 09:26 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `ee9492d`
+- 実装コミット: `7480178`
+- 目的: 予測時点で利用できるレース構成・距離・競馬場特徴量をRPCI候補へ追加し、v1互換を維持して比較する。
+
+### 完了した内容
+
+- `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+  - 既存8特徴量を`FEATURE_NAMES`として維持し、27特徴量の`FEATURE_NAMES_V2`を追加した。
+  - v2は出走頭数、逃げ比率、逃げ・先行頭数、自在比率、2頭目以降の逃げ競合比率、
+    距離4帯、JRA10場one-hotを含む。
+  - モデルの`num_feature()`からv1/v2を選択し、芝v2・ダートv1のような混在も扱える。
+  - 8/27以外の特徴量数はロード時に拒否し、誤ったベクトルで予測しない。
+  - v2モデルは`lgbm-v2-features`、`lgbm-turf-v2-features`、
+    `lgbm-dirt-v2-features`として結果へ記録する。
+- `apps/api/scripts/train_rpci_lgbm.py`
+  - SQLへv2特徴量を追加し、`--feature-set v1|v2`で学習列を選択可能にした。
+  - v2では`--output`を必須とし、追跡中の本番v1モデルを誤上書きできない。
+- 単体テストでv2の値・順序・距離帯・one-hot・モデル自動判別・未知スキーマ拒否・
+  世代記録・保存先必須を検証した。
+
+### 実DB診断と採用判断
+
+- 芝v2（独立200レース）:
+  - MAE`4.397`（現行`5.625`）だが、展開一致率`56.5%`（現行`63.5%`）。
+  - ハイ`59.4%`、平均`36.7%`、スロー`60.8%`。平均は現行`23.3%`から改善したが、
+    ハイと総合一致率が悪化した。
+  - PAI相関`+0.017`（現行`-0.028`）、最上位帯リフト`1.26x`（現行`0.90x`）へ改善した。
+- ダートv2（独立200レース）:
+  - MAE`2.617`（現行`5.401`）、展開一致率`63.5%`（現行`35.5%`）。
+  - 平均`59.6%`、スロー`71.0%`だが、ハイ再現率は`0%`（現行`100%`）。
+  - PAI相関`-0.010`、最上位帯リフト`1.19x`。
+- 順位系指標と大半の回帰・分類指標には改善があるが、芝の総合悪化とダートのハイ欠落を許容できないため、
+  候補モデル2件は不採用・削除した。本番v1モデルは変更していない。
+
+### 未完了・未確定仕様・既知事項
+
+- v2特徴量基盤は候補比較用として利用可能だが、本番v2モデルは存在しない。
+- ダートのハイは頻度補正と静的なレース構成特徴量の双方で期間外再現率0%だった。
+  次は各馬の過去走から、予想時点より前の前半ラップ傾向や先行争いの質を集約する必要がある。
+- ラップ特徴量はlookaheadを避け、対象レースより前の履歴だけから生成する。
+  当該レースの確定ラップを入力へ使ってはならない。
+- `ruff check src tests scripts`の既存`seed_dev.py`10件と、Codex領域のpytestキャッシュ警告は継続。
+
+### テスト結果
+
+- 対象: 49 passed
+- `python -m pytest -m "not integration" -q`: 563 passed、28 deselected
+- 変更対象Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 64 files passed
+- Web変更なしのためWeb typecheck/buildは未実行
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+2. `apps/api/scripts/train_rpci_lgbm.py`
+3. `apps/api/tests/unit/infrastructure/pace/test_lgbm_forecaster.py`
+4. `docs/DECISIONS.md`
+5. `tasks/backlog.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests\unit\infrastructure\pace\test_lgbm_forecaster.py `
+  tests\unit\test_train_rpci_lgbm.py -q
+python -m scripts.train_rpci_lgbm --track-type turf --feature-set v2 `
+  --output models\rpci_lgbm_turf_v2_candidate.txt
+```
+
 ## 2026-07-24 01:39 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
