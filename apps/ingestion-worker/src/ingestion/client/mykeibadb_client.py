@@ -686,8 +686,8 @@ def _build_ra_record(row: dict[str, Any]) -> str:
     _put_cp932(buf, 623, condition_name, 60)
     _put_cp932(buf, 697, f"{(_int_or_none(_pick(row, _DISTANCE_COLUMNS)) or 0):04d}")
     _put_cp932(buf, 705, _track_code(_pick(row, _TRACK_COLUMNS)))
-    _put_tenths(buf, 969, _float_or_none(_pick(row, _RACE_S3F_COLUMNS)))
-    _put_tenths(buf, 975, _float_or_none(_pick(row, _RACE_L3F_COLUMNS)))
+    _put_tenths(buf, 969, _race_lap_seconds(_pick(row, _RACE_S3F_COLUMNS)))
+    _put_tenths(buf, 975, _race_lap_seconds(_pick(row, _RACE_L3F_COLUMNS)))
     return buf.decode("cp932")
 
 
@@ -867,6 +867,16 @@ def _put_tenths(buf: bytearray, offset: int, value: float | None) -> None:
     if value is None:
         return
     _put_cp932(buf, offset, f"{round(value * 10):03d}"[-3:])
+
+
+def _race_lap_seconds(value: Any) -> float | None:
+    """wmykeibadb の3F値を秒単位へ正規化する。"""
+    seconds = _float_or_none(value)
+    if seconds is None:
+        return None
+    if seconds >= 100:
+        seconds /= 10.0
+    return seconds if 25.0 <= seconds <= 50.0 else None
 
 
 def _put_corner(buf: bytearray, offset: int, value: int | None) -> None:

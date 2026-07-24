@@ -236,8 +236,8 @@ def test_iter_ra_records_accepts_wmykeibadb_race_shosai_columns() -> None:
                 "TENKO_CODE": "3",
                 "SHIBA_BABAJOTAI_CODE": "2",
                 "DIRT_BABAJOTAI_CODE": "1",
-                "ZENHAN_3F": 35.2,
-                "KOHAN_3F": 35.8,
+                "ZENHAN_3F": 352,
+                "KOHAN_3F": 358,
             }
         ]
 
@@ -249,6 +249,8 @@ def test_iter_ra_records_accepts_wmykeibadb_race_shosai_columns() -> None:
     assert parsed.race_key == "2026062105030411"
     assert parsed.distance_m == 1600
     assert parsed.grade == "G1"
+    assert parsed.race_s3f == 35.2
+    assert parsed.race_l3f == 35.8
     metadata = client.race_metadata(parsed.race_key)
     assert metadata is not None
     assert metadata.track_condition == "稍重"
