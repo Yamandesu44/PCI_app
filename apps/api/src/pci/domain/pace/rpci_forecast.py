@@ -75,6 +75,9 @@ class RaceContext:
     venue_code: str | None = None  # 競馬場コード (jyo_cd "01"〜"10")。LightGBM 特徴量。
     # rule-v2: 逃げ・先行候補の実績ペース傾向。空なら頭数ベース（rule-v1相当）。
     front_pace_samples: tuple[FrontRunnerPaceSample, ...] = ()
+    # ML v3候補: 全出走馬の過去走から、前で運んだときのペース傾向を集約する。
+    # 当該レースの脚質・結果は使わず、予想日より前の履歴だけで構築する。
+    field_front_pace_samples: tuple[FrontRunnerPaceSample, ...] = ()
 
 
 @dataclass(frozen=True)

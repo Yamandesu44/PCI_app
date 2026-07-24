@@ -105,6 +105,7 @@ class ForecastRaceUseCase:
 
         profiles: list[HorsePaceProfile] = []
         front_pace_samples: list[FrontRunnerPaceSample] = []
+        field_front_pace_samples: list[FrontRunnerPaceSample] = []
         formation_inputs: list[FormationHorseInput] = []
         history_by_horse_no: dict[int, tuple[tuple[RaceEntry, Race], ...]] = {}
         for e in entries:
@@ -138,6 +139,9 @@ class ForecastRaceUseCase:
             sample = self._build_front_pace_sample(e.horse_no, style, history)
             if sample is not None:
                 front_pace_samples.append(sample)
+            field_sample = self._build_field_front_pace_sample(e.horse_no, style, history)
+            if field_sample is not None:
+                field_front_pace_samples.append(field_sample)
 
         context = RaceContext(
             distance_m=race.distance_m,
@@ -146,6 +150,7 @@ class ForecastRaceUseCase:
             track_condition=race.track_condition,
             venue_code=race.jyo_cd,
             front_pace_samples=tuple(front_pace_samples),
+            field_front_pace_samples=tuple(field_front_pace_samples),
         )
         forecast = self._forecaster.forecast(context)
 
@@ -299,6 +304,17 @@ class ForecastRaceUseCase:
         None を返し、想定RPCI 予測は頭数ベース（rule-v1 相当）にフォールバックする。
         """
         if not history or style not in _FRONT_STYLES:
+            return None
+        return self._build_field_front_pace_sample(horse_no, style, history)
+
+    def _build_field_front_pace_sample(
+        self,
+        horse_no: int,
+        style: RunningStyleLabel,
+        history: tuple[tuple[RaceEntry, Race], ...],
+    ) -> FrontRunnerPaceSample | None:
+        """全出走馬について、過去に前で運んだときのペース傾向を集計する。"""
+        if not history:
             return None
         paces: list[float] = []
         for entry, past_race in history[:10]:

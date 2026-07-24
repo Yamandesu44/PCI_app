@@ -11,6 +11,7 @@ from pci.application.dto import EntryInput, RaceInfo
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
 from pci.domain.pace.rpci_forecast import PaceLabel, RaceContext, RpciForecast
+from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.racing.master import Horse
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -201,6 +202,16 @@ class _FixedForecaster:
 
     def forecast(self, context: RaceContext) -> RpciForecast:
         return self._forecast
+
+
+class _CapturingForecaster(_FixedForecaster):
+    def __init__(self) -> None:
+        super().__init__(50.0, PaceLabel.AVERAGE)
+        self.context: RaceContext | None = None
+
+    def forecast(self, context: RaceContext) -> RpciForecast:
+        self.context = context
+        return super().forecast(context)
 
 
 class TestForecastRaceUseCase:
@@ -430,6 +441,29 @@ class TestForecastRaceUseCase:
             _seed_history(repo, f"202010000{i}", corner4=12, pci_actual=44.0, count=5)
         output = ForecastRaceUseCase(repo).execute(UPCOMING)
         assert not any(r.code == "front_pace_evidence" for r in output.forecast_reasons)
+
+    def test_field_front_pace_evidence_uses_past_history_for_all_styles(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=1)
+        _seed_history(
+            repo,
+            "2020100001",
+            corner4=12,
+            corner1=1,
+            pci_actual=44.0,
+            count=3,
+        )
+        forecaster = _CapturingForecaster()
+
+        ForecastRaceUseCase(repo, forecaster=forecaster).execute(UPCOMING)
+
+        assert forecaster.context is not None
+        assert forecaster.context.running_styles == (RunningStyleLabel.CLOSER,)
+        assert forecaster.context.front_pace_samples == ()
+        assert len(forecaster.context.field_front_pace_samples) == 1
+        sample = forecaster.context.field_front_pace_samples[0]
+        assert sample.avg_pci == 44.0
+        assert sample.sample_size == 3
 
     def test_no_history_defaults_to_flexible(self) -> None:
         """履歴がない馬は自在扱いでもエラーにならない。"""

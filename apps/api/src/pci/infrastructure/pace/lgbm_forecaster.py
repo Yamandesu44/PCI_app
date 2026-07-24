@@ -29,6 +29,9 @@ MODEL_VERSION_DIRT = "lgbm-dirt-v1"  # ダート専用モデル
 MODEL_VERSION_V2 = "lgbm-v2-features"
 MODEL_VERSION_TURF_V2 = "lgbm-turf-v2-features"
 MODEL_VERSION_DIRT_V2 = "lgbm-dirt-v2-features"
+MODEL_VERSION_V3 = "lgbm-v3-history"
+MODEL_VERSION_TURF_V3 = "lgbm-turf-v3-history"
+MODEL_VERSION_DIRT_V3 = "lgbm-dirt-v3-history"
 
 # Path(__file__) = src/pci/infrastructure/pace/lgbm_forecaster.py
 # .parent × 5   = apps/api/
@@ -60,6 +63,15 @@ FEATURE_NAMES_V2 = FEATURE_NAMES + [
     "distance_middle",     # 1801〜2200m
     "distance_long",       # 2201m以上
     *(f"venue_{code:02d}" for code in range(1, 11)),
+]
+
+FEATURE_NAMES_V3 = FEATURE_NAMES_V2 + [
+    "history_front_horses",   # 前付け履歴を持つ馬の頭数
+    "history_front_samples",  # 前付け履歴の総レース数
+    "history_front_avg_pci",  # 馬単位で平均した前付け時PCI
+    "history_front_min_pci",  # 最も速い流れを作った馬の平均PCI
+    "history_front_spread",   # 馬ごとの平均PCIの幅
+    "history_front_coverage", # 全出走馬に対する履歴保有率
 ]
 
 _FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
@@ -151,7 +163,12 @@ class LightGBMRpciForecaster:
         return _make_forecast(
             self._predict,
             context,
-            _version_for_feature_names(feature_names, MODEL_VERSION, MODEL_VERSION_V2),
+            _version_for_feature_names(
+                feature_names,
+                MODEL_VERSION,
+                MODEL_VERSION_V2,
+                MODEL_VERSION_V3,
+            ),
             feature_names,
         )
 
@@ -185,6 +202,7 @@ class SplitLightGBMRpciForecaster:
                     feature_names,
                     MODEL_VERSION_DIRT,
                     MODEL_VERSION_DIRT_V2,
+                    MODEL_VERSION_DIRT_V3,
                 ),
                 feature_names,
             )
@@ -196,6 +214,7 @@ class SplitLightGBMRpciForecaster:
                 feature_names,
                 MODEL_VERSION_TURF,
                 MODEL_VERSION_TURF_V2,
+                MODEL_VERSION_TURF_V3,
             ),
             feature_names,
         )
@@ -208,9 +227,12 @@ def _feature_names_for_booster(booster: Any) -> list[str]:
         return FEATURE_NAMES
     if feature_count == len(FEATURE_NAMES_V2):
         return FEATURE_NAMES_V2
+    if feature_count == len(FEATURE_NAMES_V3):
+        return FEATURE_NAMES_V3
     raise ValueError(
         f"未対応のRPCIモデル特徴量数です: {feature_count} "
-        f"（対応: {len(FEATURE_NAMES)}, {len(FEATURE_NAMES_V2)}）"
+        f"（対応: {len(FEATURE_NAMES)}, {len(FEATURE_NAMES_V2)}, "
+        f"{len(FEATURE_NAMES_V3)}）"
     )
 
 
@@ -218,9 +240,14 @@ def _version_for_feature_names(
     feature_names: list[str],
     v1_version: str,
     v2_version: str,
+    v3_version: str,
 ) -> str:
     """特徴量世代に対応するモデルバージョンを返す。"""
-    return v2_version if feature_names == FEATURE_NAMES_V2 else v1_version
+    if feature_names == FEATURE_NAMES_V3:
+        return v3_version
+    if feature_names == FEATURE_NAMES_V2:
+        return v2_version
+    return v1_version
 
 
 def load_best_forecaster(
@@ -297,12 +324,12 @@ def build_features(
     ]
     if feature_names == FEATURE_NAMES:
         return base
-    if feature_names != FEATURE_NAMES_V2:
+    if feature_names != FEATURE_NAMES_V2 and feature_names != FEATURE_NAMES_V3:
         raise ValueError(f"未対応のRPCI特徴量定義です: {len(feature_names)}")
 
     distance = context.distance_m
     venue_one_hot = [1.0 if jyo_cd == code else 0.0 for code in range(1, 11)]
-    return base + [
+    v2 = base + [
         float(n),
         float(escape) / n,
         float(front),
@@ -313,4 +340,22 @@ def build_features(
         1.0 if 1800 < distance <= 2200 else 0.0,
         1.0 if distance > 2200 else 0.0,
         *venue_one_hot,
+    ]
+    if feature_names == FEATURE_NAMES_V2:
+        return v2
+
+    history = [sample for sample in context.field_front_pace_samples if sample.sample_size > 0]
+    history_horses = len(history)
+    history_samples = sum(sample.sample_size for sample in history)
+    history_paces = [sample.avg_pci for sample in history]
+    history_avg = sum(history_paces) / history_horses if history_horses else 0.0
+    history_min = min(history_paces, default=0.0)
+    history_spread = max(history_paces, default=0.0) - history_min
+    return v2 + [
+        float(history_horses),
+        float(history_samples),
+        float(history_avg),
+        float(history_min),
+        float(history_spread),
+        float(history_horses) / n,
     ]

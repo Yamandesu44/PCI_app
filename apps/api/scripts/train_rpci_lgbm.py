@@ -48,7 +48,11 @@ from sqlalchemy import text
 from pci.config.settings import get_settings
 from pci.domain.pace.rpci_forecast import PaceLabel, classify_pace
 from pci.infrastructure.database.session import build_engine, build_session_maker
-from pci.infrastructure.pace.lgbm_forecaster import FEATURE_NAMES, FEATURE_NAMES_V2
+from pci.infrastructure.pace.lgbm_forecaster import (
+    FEATURE_NAMES,
+    FEATURE_NAMES_V2,
+    FEATURE_NAMES_V3,
+)
 
 # ── DB クエリ（FEATURE_NAMES と同じ順序で SELECT する）────────────────────
 # :track_filter は "" (全件) or "AND r.track_type = '芝'" / "AND r.track_type = 'ダート'"
@@ -104,9 +108,11 @@ _QUERY_TEMPLATE = """\
         CASE WHEN r.jyo_cd = '08' THEN 1.0 ELSE 0.0 END                 AS venue_08,
         CASE WHEN r.jyo_cd = '09' THEN 1.0 ELSE 0.0 END                 AS venue_09,
         CASE WHEN r.jyo_cd = '10' THEN 1.0 ELSE 0.0 END                 AS venue_10,
+        {history_features}
         r.rpci_actual                                                   AS target
     FROM races r
     JOIN race_entries e ON e.race_key = r.race_key
+    {history_join}
     WHERE r.status = 'result'
       AND r.rpci_actual IS NOT NULL
       AND r.rpci_actual BETWEEN :lo AND :hi
@@ -117,6 +123,51 @@ _QUERY_TEMPLATE = """\
     HAVING COUNT(e.horse_no) > 0
     ORDER BY r.race_date DESC, r.race_key DESC
     LIMIT :lim
+"""
+
+_EMPTY_HISTORY_FEATURES = """\
+        0.0 AS history_front_horses,
+        0.0 AS history_front_samples,
+        0.0 AS history_front_avg_pci,
+        0.0 AS history_front_min_pci,
+        0.0 AS history_front_spread,
+        0.0 AS history_front_coverage,
+"""
+
+_HISTORY_FEATURES = """\
+        COUNT(*) FILTER (WHERE hist.sample_size > 0)                    AS history_front_horses,
+        COALESCE(SUM(hist.sample_size), 0)                              AS history_front_samples,
+        COALESCE(AVG(hist.avg_pci) FILTER (WHERE hist.sample_size > 0), 0.0)
+                                                                        AS history_front_avg_pci,
+        COALESCE(MIN(hist.avg_pci) FILTER (WHERE hist.sample_size > 0), 0.0)
+                                                                        AS history_front_min_pci,
+        COALESCE(
+            MAX(hist.avg_pci) FILTER (WHERE hist.sample_size > 0)
+          - MIN(hist.avg_pci) FILTER (WHERE hist.sample_size > 0),
+            0.0
+        )                                                               AS history_front_spread,
+        COUNT(*) FILTER (WHERE hist.sample_size > 0)::float
+            / NULLIF(COUNT(e.horse_no), 0)                              AS history_front_coverage,
+"""
+
+_HISTORY_JOIN = """\
+    LEFT JOIN LATERAL (
+        SELECT
+            AVG(prior.pace) AS avg_pci,
+            COUNT(*)       AS sample_size
+        FROM (
+            SELECT COALESCE(pe.pci_actual, pr.rpci_actual) AS pace
+            FROM race_entries pe
+            JOIN races pr ON pr.race_key = pe.race_key
+            WHERE pe.ketto_num = e.ketto_num
+              AND pr.status = 'result'
+              AND pr.race_date < r.race_date
+              AND COALESCE(pe.corner_1, pe.corner_4) <= 2
+              AND COALESCE(pe.pci_actual, pr.rpci_actual) IS NOT NULL
+            ORDER BY pr.race_date DESC, pr.race_key DESC
+            LIMIT 10
+        ) prior
+    ) hist ON TRUE
 """
 
 _TRACK_FILTER: dict[str, str] = {
@@ -206,9 +257,9 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--feature-set",
-        choices=["v1", "v2"],
+        choices=["v1", "v2", "v3"],
         default="v1",
-        help="特徴量定義。v2は頭数・逃げ競合・距離帯・競馬場one-hotを追加（default: v1）",
+        help="特徴量定義。v3は対象日より前の前付けペース履歴も追加（default: v1）",
     )
     args = p.parse_args()
     if (args.label_balance != "none" or args.feature_set != "v1") and args.output is None:
@@ -238,7 +289,16 @@ def main() -> None:
     session = build_session_maker(engine)()
 
     track_filter = _TRACK_FILTER[track_type]
-    query_sql = text(_QUERY_TEMPLATE.format(track_filter=track_filter))
+    uses_history = args.feature_set == "v3"
+    query_sql = text(
+        _QUERY_TEMPLATE.format(
+            track_filter=track_filter,
+            history_features=(
+                _HISTORY_FEATURES if uses_history else _EMPTY_HISTORY_FEATURES
+            ),
+            history_join=_HISTORY_JOIN if uses_history else "",
+        )
+    )
 
     print("DB からデータ取得中…")
     rows = list(
@@ -255,7 +315,11 @@ def main() -> None:
 
     print(f"取得: {len(rows):,} レース")
 
-    feature_names = FEATURE_NAMES if args.feature_set == "v1" else FEATURE_NAMES_V2
+    feature_names = {
+        "v1": FEATURE_NAMES,
+        "v2": FEATURE_NAMES_V2,
+        "v3": FEATURE_NAMES_V3,
+    }[args.feature_set]
     feature_count = len(feature_names)
 
     # 特徴量と目的変数を numpy 配列に変換（LightGBM 4.x は ndarray 必須）

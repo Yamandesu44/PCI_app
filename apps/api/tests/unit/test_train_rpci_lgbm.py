@@ -5,6 +5,8 @@ import sys
 import numpy as np
 import pytest
 from scripts.train_rpci_lgbm import (
+    _HISTORY_FEATURES,
+    _HISTORY_JOIN,
     _QUERY_TEMPLATE,
     _build_label_sample_weights,
     _parse_args,
@@ -32,6 +34,13 @@ def test_training_query_contains_v2_features() -> None:
     assert "AS escape_competition" in _QUERY_TEMPLATE
     assert "AS distance_middle" in _QUERY_TEMPLATE
     assert "AS venue_10" in _QUERY_TEMPLATE
+
+
+def test_v3_history_query_uses_only_prior_races() -> None:
+    assert "pr.race_date < r.race_date" in _HISTORY_JOIN
+    assert "LIMIT 10" in _HISTORY_JOIN
+    assert "COALESCE(pe.corner_1, pe.corner_4) <= 2" in _HISTORY_JOIN
+    assert "AS history_front_coverage" in _HISTORY_FEATURES
 
 
 def test_label_recall_uses_track_specific_thresholds(
@@ -142,6 +151,22 @@ def test_v2_feature_set_requires_explicit_output(
         sys,
         "argv",
         ["train_rpci_lgbm", "--track-type", "turf", "--feature-set", "v2"],
+    )
+
+    with pytest.raises(SystemExit):
+        _parse_args()
+
+    assert "本番モデルの上書きを防ぐため" in capsys.readouterr().err
+
+
+def test_v3_feature_set_requires_explicit_output(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["train_rpci_lgbm", "--track-type", "dirt", "--feature-set", "v3"],
     )
 
     with pytest.raises(SystemExit):

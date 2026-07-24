@@ -7,16 +7,19 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pci.domain.pace.rpci_forecast import PaceLabel, RaceContext
+from pci.domain.pace.rpci_forecast import FrontRunnerPaceSample, PaceLabel, RaceContext
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.infrastructure.pace.lgbm_forecaster import (
     FEATURE_NAMES,
     FEATURE_NAMES_V2,
+    FEATURE_NAMES_V3,
     MODEL_VERSION,
     MODEL_VERSION_DIRT,
     MODEL_VERSION_DIRT_V2,
+    MODEL_VERSION_DIRT_V3,
     MODEL_VERSION_TURF,
     MODEL_VERSION_TURF_V2,
+    MODEL_VERSION_TURF_V3,
     LightGBMRpciForecaster,
     SplitLightGBMRpciForecaster,
     _feature_names_for_booster,
@@ -37,6 +40,7 @@ def _ctx(
     track_type: str = "芝",
     venue_code: str | None = "05",
     cond: str | None = None,
+    field_front_pace_samples: tuple[FrontRunnerPaceSample, ...] = (),
 ) -> RaceContext:
     return RaceContext(
         distance_m=distance_m,
@@ -44,6 +48,7 @@ def _ctx(
         running_styles=styles,
         track_condition=cond,
         venue_code=venue_code,
+        field_front_pace_samples=field_front_pace_samples,
     )
 
 
@@ -109,11 +114,28 @@ class TestBuildFeatures:
         with pytest.raises(ValueError, match="未対応のRPCI特徴量定義"):
             build_features(_ctx((FRONT,) * 10), ["unknown"])
 
+    def test_v3_history_features_use_past_front_pace_samples(self) -> None:
+        samples = (
+            FrontRunnerPaceSample(1, ESCAPE, 42.0, 3),
+            FrontRunnerPaceSample(2, STALKER, 48.0, 2),
+        )
+
+        feats = build_features(
+            _ctx((FRONT,) * 4, field_front_pace_samples=samples),
+            FEATURE_NAMES_V3,
+        )
+
+        assert len(feats) == len(FEATURE_NAMES_V3)
+        assert feats[27:] == pytest.approx([2.0, 5.0, 45.0, 42.0, 6.0, 0.5])
+
 
 class TestFeatureSchemaSelection:
     """モデル内の特徴量数から互換スキーマを選択する。"""
 
-    @pytest.mark.parametrize("feature_names", [FEATURE_NAMES, FEATURE_NAMES_V2])
+    @pytest.mark.parametrize(
+        "feature_names",
+        [FEATURE_NAMES, FEATURE_NAMES_V2, FEATURE_NAMES_V3],
+    )
     def test_supported_feature_counts(self, feature_names: list[str]) -> None:
         booster = MagicMock()
         booster.num_feature.return_value = len(feature_names)
@@ -133,6 +155,7 @@ class TestFeatureSchemaSelection:
                 FEATURE_NAMES_V2,
                 MODEL_VERSION_TURF,
                 MODEL_VERSION_TURF_V2,
+                MODEL_VERSION_TURF_V3,
             )
             == MODEL_VERSION_TURF_V2
         )
@@ -280,6 +303,17 @@ class TestSplitLightGBMRpciForecaster:
 
         assert turf.model_version == MODEL_VERSION_TURF_V2
         assert dirt.model_version == MODEL_VERSION_DIRT_V2
+
+    def test_v3_models_report_v3_versions(self) -> None:
+        forecaster = self._make_split_forecaster()
+        forecaster._turf_feature_names = FEATURE_NAMES_V3  # type: ignore[attr-defined]
+        forecaster._dirt_feature_names = FEATURE_NAMES_V3  # type: ignore[attr-defined]
+
+        turf = forecaster.forecast(_ctx((FRONT,) * 10, track_type="芝"))
+        dirt = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+
+        assert turf.model_version == MODEL_VERSION_TURF_V3
+        assert dirt.model_version == MODEL_VERSION_DIRT_V3
 
     def test_empty_field_raises(self) -> None:
         forecaster = self._make_split_forecaster()
