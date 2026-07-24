@@ -1,5 +1,112 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 15:04 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `2b68d31`
+- 実装コミット: `13bc114`、`bd4d6c6`
+- 目的: S3/L3履歴を使うRPCI v4を実装し、学習期間外のレースで本番v1と比較して採否を決める。
+
+### 完了した内容
+
+- `apps/api/src/pci/domain/pace/rpci_forecast.py`
+  - 1頭分の過去レース前後半3F差を表す`HistoricalLapSample`を追加した。
+  - `RaceContext`へ`historical_lap_samples`を追加した。
+- `apps/api/src/pci/application/forecast_use_cases.py`
+  - 対象日より前の各馬最大10走から、両方の3F値がある過去走だけを集約する。
+  - 学習SQLと同じく`後半3F－前半3F`の馬単位平均と標本数を構築する。
+- `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+  - v3の33特徴量へ、履歴保有馬数・標本数・平均差・最小差・幅・カバー率を追加した。
+  - 39特徴量をv4として自動判別し、芝・ダートで異なるモデル世代を利用できる。
+  - 既定ダートモデルを`rpci_lgbm_dirt_v4.txt`へ切り替えた。芝はv1を維持する。
+- `apps/api/scripts/train_rpci_lgbm.py`
+  - `--feature-set v4`とS3/L3履歴のLATERAL JOINを追加した。
+  - `--before-date`を追加し、最終評価期間を学習から完全に除外できるようにした。
+- `apps/api/models/rpci_lgbm_dirt_v4.txt`
+  - 2026-06-01より前の直近2,000件を使用し、古いラップ欠損期間の希釈を抑えて学習した。
+  - 既存`rpci_lgbm_dirt_v1.txt`はロールバック用として保持した。
+
+### 独立評価結果
+
+学習は`race_date < 2026-06-01`、最終評価は`2026-06-01`以降に完全分離した。
+
+| 対象 | モデル | 件数 | MAE | 展開一致 | ハイ再現 | 平均再現 | スロー再現 | 最上位帯 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 芝 | v1 | 200 | 4.834 | 62.5% | 79.6% | 6.7% | 59.7% | 0.99x |
+| 芝 | v4 | 200 | 2.914 | 56.0% | 57.4% | 33.3% | 64.5% | 1.23x |
+| ダート | v1 | 197 | 12.810 | 11.2% | 0.0% | 56.4% | 0.0% | 1.01x |
+| ダート | v4 | 197 | 4.750 | 72.6% | 90.6% | 79.5% | 30.8% | 1.19x |
+
+- 芝v4はMAEとPAI順位指標が改善したが、展開一致率とハイ再現率が悪化したため不採用。
+- ダートv4は主要指標がすべて改善したため採用。
+
+### 未完了・作業が止まっている箇所
+
+- ダートv4の評価期間は197件で、期間外の継続監視は未実施。
+- ダートv4のRPCIバイアスは`+2.619`残る。
+- 再学習に必要な新規レース件数、許容悪化幅、モデル降格基準は未確定。
+- 芝v4候補は不採用とし、候補モデルファイルを削除した。
+
+### 次に実施する具体的な手順
+
+1. `apps/api/scripts/backtest_forecast.py`で新規確定ダートレースを期間指定し、
+   `lgbm-dirt-v4-lap-history`の展開一致率・3区分再現率・バイアスを継続記録する。
+2. 独立評価が最低300件へ増えた時点で、今回と同じv1/v4比較を再実行する。
+3. `tasks/backlog.md`の「ダートRPCI v4の期間外監視と再学習条件の確定」で、
+   許容悪化幅と再学習件数を実測から決める。根拠なしの固定閾値は設定しない。
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 最大10走、6集約特徴量、学習上限2,000件は候補比較で採用した暫定設計。
+- 距離差・競馬場差による履歴絞り込みは根拠未確定のため実装していない。
+- 区間ラップは距離帯で欠損率が偏るためv4へ含めていない。
+- UI・公開Race DTOへS3/L3、PCI、RPCIの実数値は追加していない。
+- `import-linter`はグローバルPythonに`lint_imports`がなく実行できなかった。
+- Codex領域ではpytestキャッシュ作成警告が1件出る。
+
+### テスト実行コマンドと結果
+
+```powershell
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest -m "not integration" -q
+# 577 passed, 28 deselected
+python -m mypy src --strict --python-version 3.12
+# Success: 64 source files
+python -m ruff check src\pci\domain\pace\rpci_forecast.py `
+  src\pci\application\forecast_use_cases.py `
+  src\pci\infrastructure\pace\lgbm_forecaster.py `
+  scripts\train_rpci_lgbm.py `
+  tests\unit\infrastructure\pace\test_lgbm_forecaster.py `
+  tests\unit\test_train_rpci_lgbm.py `
+  tests\unit\application\test_forecast_use_cases.py
+# All checks passed
+python -m scripts.backtest_forecast --track-type ダート --limit 1
+# model_version=lgbm-dirt-v4-lap-history、ロード・予測成功
+```
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `docs/DECISIONS.md`の「RPCI v4はダート専用モデルだけを採用する」ADR
+3. `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+4. `apps/api/scripts/train_rpci_lgbm.py`
+5. `apps/api/src/pci/application/forecast_use_cases.py`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests\unit\infrastructure\pace\test_lgbm_forecaster.py `
+  tests\unit\test_train_rpci_lgbm.py `
+  tests\unit\application\test_forecast_use_cases.py -q
+python -m scripts.backtest_forecast --track-type ダート --limit 1
+```
+
 ## 2026-07-24 13:25 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
