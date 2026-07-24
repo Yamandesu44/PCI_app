@@ -1,5 +1,104 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 10:19 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `7457330`
+- 実装コミット: `e302fd0`
+- 目的: RPCI v4候補へラップ履歴を追加する前に、mykeibadb実データの欠損率を距離帯別に診断する。
+
+### 完了した内容
+
+- `apps/ingestion-worker/src/ingestion/diagnose_lap_coverage.py`
+  - `race_shosai`の確定レコードだけを読み、JRA平地以外を除外する。
+  - 同一レースキーの複数行は、S3/L3と区間ラップの情報量が多い行だけを採用する。
+  - 芝・ダートと4距離帯に分け、S3、L3、S3+L3、区間ラップ一部、区間ラップ完全の件数・割合を出力する。
+  - `--min-races`と`--min-coverage`を可変の診断条件とし、`--output`では集計JSONだけを保存する。
+  - 生ラップ値、レース識別情報、認証情報はJSONへ含めない。
+- `apps/ingestion-worker/tests/test_diagnose_lap_coverage.py`
+  - 芝ダート・距離帯集計、確定前・障害除外、重複排除、1/10秒変換、異常値除外、入力検証を確認した。
+
+### 実mykeibadb診断結果
+
+実行期間は`2025-07-24→2026-07-23`、判定条件は最低200レース・カバー率80%。
+
+| 馬場 | 距離帯 | 件数 | S3+L3 | 区間ラップ完全 | 診断 |
+|---|---:|---:|---:|---:|---|
+| ダート | 1399m以下 | 422 | 100.0% | 86.3% | 区間利用可 |
+| ダート | 1400-1799m | 600 | 100.0% | 66.7% | 3Fペアのみ |
+| ダート | 1800-2199m | 597 | 100.0% | 86.8% | 区間利用可 |
+| ダート | 2200m以上 | 19 | 100.0% | 89.5% | 標本不足 |
+| 芝 | 1399m以下 | 313 | 100.0% | 99.7% | 区間利用可 |
+| 芝 | 1400-1799m | 511 | 100.0% | 95.9% | 区間利用可 |
+| 芝 | 1800-2199m | 671 | 100.0% | 100.0% | 区間利用可 |
+| 芝 | 2200m以上 | 196 | 100.0% | 93.4% | 最低件数に4件不足 |
+
+- 確定前行1,381件、JRA平地外・解析不能121件を除外し、重複行は0件だった。
+- S3+L3は主要距離帯ですべて100%のため、v4候補の入力として利用可能。
+- 区間ラップはダート1400-1799mで欠損が多く、初期v4の必須特徴量にはしない。
+
+### 未完了・作業が止まっている箇所
+
+- API側`races`は`rpci_actual`だけを保存し、取り込み時に受け取る`race_s3f`・`race_l3f`を保持していない。
+- このままではmykeibadbの利用可能な3F履歴を学習・オンライン予測で同じ条件から再生成できない。
+- v4実装前に、`Race`・`RaceModel`・Repository・ingest resultsへS3/L3を追加し、
+  Alembic migrationと直近1年のresults再同期を行う必要がある。
+
+### 次に実施する具体的な手順
+
+1. `apps/api/src/pci/domain/racing/race.py`と
+   `apps/api/src/pci/infrastructure/database/models.py`へ内部用`race_s3f`・`race_l3f`を追加する。
+2. Alembic migrationを追加し、`race_repository.py`の保存・復元と
+   `RecordRaceResultsUseCase.execute()`の更新経路をテストする。
+3. ingest契約テストでS3/L3の保存を確認し、画面・公開Race DTOには追加しない。
+4. mykeibadbの直近1年を`--step results`で再同期し、非NULL率を診断する。
+5. `train_rpci_lgbm.py`へ対象日より前のS3/L3履歴特徴量をv4として追加し、独立200レースで比較する。
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 最低200レース・カバー率80%は診断用の可変条件であり、正式なモデル採用基準ではない。
+- 距離帯4区分は既存RPCI v2特徴量と揃えた診断単位であり、最適化済みではない。
+- 区間完全性は`ceil(distance_m / 200)`個の連続ラップが揃うことを暫定定義としている。
+- 全体Ruffは既存`windows_client.py`・`locate_corners.py`など14件、
+  全体mypyは既存`windows_client.py`・`mykeibadb_client.py`20件で失敗する。
+- Codex領域ではpytestキャッシュ作成警告が1件出る。
+
+### テスト実行コマンドと結果
+
+```powershell
+cd apps\ingestion-worker
+$env:PYTHONPATH='src'
+python -m pytest -q
+# 237 passed
+python -m ruff check src\ingestion\diagnose_lap_coverage.py `
+  tests\test_diagnose_lap_coverage.py
+# passed
+python -m mypy src\ingestion\diagnose_lap_coverage.py --strict
+# passed
+python -m ingestion.diagnose_lap_coverage --date 20250724 --date-to 20260723 `
+  --min-races 200 --min-coverage 0.8
+```
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/ingestion-worker/src/ingestion/diagnose_lap_coverage.py`
+2. `apps/ingestion-worker/tests/test_diagnose_lap_coverage.py`
+3. `apps/api/src/pci/domain/racing/race.py`
+4. `apps/api/src/pci/application/race_use_cases.py`
+5. `apps/api/src/pci/infrastructure/repositories/race_repository.py`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\ingestion-worker
+$env:PYTHONPATH='src'
+python -m pytest tests\test_diagnose_lap_coverage.py -q
+python -m ingestion.diagnose_lap_coverage --date 20250724 --date-to 20260723
+```
+
 ## 2026-07-24 10:15 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
