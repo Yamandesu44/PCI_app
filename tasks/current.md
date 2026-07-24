@@ -1,5 +1,12 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-25 完了: Windows全同期にAPI・DB事前確認を追加
+
+- [x] 全同期開始時に`API_BASE_URL/ready`を確認し、FastAPIとPostgreSQLが利用可能な場合だけ続行する。
+- [x] 利用不能時は`mykeibadb.exe`起動前に終了コード1で停止し、具体的な復旧手順を表示する。
+- [x] データ更新を伴わない`-PreflightOnly`を追加した。
+- [x] 正常系、接続不能系、PowerShell構文解析を確認した。
+
 ## 2026-07-25 完了: Windowsでの予想事前生成500を修正
 
 - [x] 同期時の出馬表500はAPI停止ではなく、Docker Desktop停止によりPostgreSQLへ接続できなかったことを特定した。

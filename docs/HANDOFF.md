@@ -1,5 +1,53 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 02:20 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `15bd5fb`
+- 実装コミット: `896e21c`
+- 目的: API・PostgreSQL停止中の全同期による連続500と部分実行を、処理開始前に防止する。
+
+### 完了内容
+
+- `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`
+  - `API_BASE_URL/ready`を同期開始前に確認する`Test-IngestApiReadiness`を追加した。
+  - `status=ready`かつ`database=ok`の場合だけmykeibadb.exeと取り込み処理を開始する。
+  - 利用不能時はmykeibadb.exe起動前に終了コード1で停止し、Docker Desktop、DBコンテナ、
+    Alembic、FastAPIの復旧手順をログへ表示する。
+  - データ更新を行わない`-PreflightOnly`を追加した。
+- `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`、`README.md`、`docs/SPEC.md`、
+  `docs/DECISIONS.md`、`tasks/current.md`、`tasks/backlog.md`へ運用・設計判断を反映した。
+
+### テスト結果
+
+```text
+PowerShell AST parse: 成功
+-PreflightOnly（API・DB正常）: exit 0、mykeibadb.exe未起動
+-PreflightOnly（API_BASE_URL=http://127.0.0.1:65534）:
+  exit 1、復旧手順を表示、mykeibadb.exe未起動
+```
+
+### 未完了・既知事項
+
+- 前タスクのJST固定オフセット回帰テスト、Ruff、修正後の実環境予想生成は未実行のまま。
+- 同期ログの文字化けと失敗通知時のSSL証明書エラーは別の既知運用課題。
+- 事前確認はインフラを自動起動せず、復旧操作は運用者が行う。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`
+2. `tasks/current.md`
+3. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
+powershell -ExecutionPolicy Bypass -File .\scripts\run_mykeibadb_full_sync.ps1 -PreflightOnly
+```
+
 ## 2026-07-25 01:45 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

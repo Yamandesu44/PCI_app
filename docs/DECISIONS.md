@@ -1002,3 +1002,14 @@
   同じ`datetime.timezone(datetime.timedelta(hours=9), name="JST")`を使用する。
 - **理由**: OSのタイムゾーンデータや任意依存パッケージに左右されず、JRA開催日の境界を一貫して扱える。
 - **対象外**: 海外競馬の現地時刻や過去のタイムゾーン規則を扱う用途へ、この固定オフセットを流用しない。
+
+## ADR-2026-07-25: Windows全同期はAPI readiness確認後に開始する
+
+- **背景**: Docker Desktop停止中に全同期を開始すると、`/internal/ingest/entries`が連続して500となり、
+  mykeibadb更新後にPostgreSQLへの反映だけが失敗する部分実行状態になった。
+- **判断**: `run_mykeibadb_full_sync.ps1`の冒頭で`API_BASE_URL/ready`を確認し、
+  `status=ready`かつ`database=ok`の場合だけ`mykeibadb.exe`と取り込み処理を開始する。
+- **失敗時**: データを変更せず終了コード1で停止し、Docker Desktop、DBコンテナ、Alembic、
+  FastAPI再起動の順に復旧手順を表示する。自動起動や自動migrationは行わない。
+- **運用確認**: `-PreflightOnly`はreadiness確認後に終了し、mykeibadb.exeや取り込み処理を起動しない。
+- **理由**: 大量の500と不完全な同期を事前に防ぎ、インフラ復旧を運用者の明示的判断に残すため。

@@ -190,6 +190,10 @@ pytest tests/
 
 mykeibadbモードでは、`--step all` と `scripts/run_mykeibadb_full_sync.ps1` がコース種別・馬場状態・天候の補完も実行します。過去データだけを再補完する場合は次を実行します。
 
+`run_mykeibadb_full_sync.ps1`は処理開始時に`API_BASE_URL/ready`を確認します。APIまたはPostgreSQLが
+利用できない場合は、`mykeibadb.exe`と取り込み処理を開始せず終了します。接続確認だけを行う場合は
+`powershell -ExecutionPolicy Bypass -File scripts\run_mykeibadb_full_sync.ps1 -PreflightOnly`を使用します。
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723 -ChunkDays 7 -MaxRetries 1
 ```

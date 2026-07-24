@@ -32,6 +32,15 @@ cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
 .\scripts\sync_mykeibadb.bat
 ```
 
+同期開始時にFastAPIの`/ready`を確認し、APIまたはPostgreSQLが利用できない場合は
+`mykeibadb.exe`を起動する前に処理を中止する。データを変更せず、接続確認だけ行う場合は次を実行する。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_mykeibadb_full_sync.ps1 -PreflightOnly
+```
+
+失敗時はログにDocker Desktop、DBコンテナ、Alembic、FastAPIの確認手順が表示される。
+
 これで以下が順番に実行される。
 
 1. `mykeibadb.exe` 実行（JV-Link → ローカルMySQL、最大10分待機）
