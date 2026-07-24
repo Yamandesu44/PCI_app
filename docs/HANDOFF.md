@@ -1,5 +1,88 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 10:15 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `68a4e78`
+- 実装コミット: `6993999`
+- 目的: 予測時点より前の各馬の前付けペース履歴をRPCI v3候補へ追加し、独立期間で採否を判断する。
+
+### 完了した内容
+
+- `apps/api/src/pci/application/forecast_use_cases.py`
+  - 全出走馬について、過去最大10走から1角2番手以内（1角欠損時は4角）で運んだ走りを抽出する。
+  - PCIを優先し、欠損時は同レースRPCIを使って馬単位の平均と標本数を生成する。
+  - 既存rule-v2用の`front_pace_samples`とは分離し、新しい`field_front_pace_samples`だけへ格納する。
+- `apps/api/src/pci/domain/pace/rpci_forecast.py`
+  - `RaceContext.field_front_pace_samples`を追加した。既定値は空で、既存呼び出しと互換である。
+- `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+  - v2の27特徴量へ、履歴保有馬数・標本数・平均PCI・最小PCI・馬間の幅・カバー率を加えた
+    33特徴量の`FEATURE_NAMES_V3`を追加した。
+  - 特徴量数からv1/v2/v3を自動判別し、芝・ダートそれぞれのv3モデル世代を記録する。
+- `apps/api/scripts/train_rpci_lgbm.py`
+  - `--feature-set v3`を追加した。明示的な`--output`がない場合は本番モデル保護のため終了する。
+  - LATERAL JOINで各出走馬の対象日より前の前付け履歴を最大10走集約する。
+  - `pr.race_date < r.race_date`を必須条件とし、対象レースと未来レースを学習特徴量へ含めない。
+- 単体テストで全脚質からの履歴抽出、既存rule-v2との分離、v3特徴量値・世代判定、
+  学習SQLの時点条件と保存先必須を検証した。
+
+### 実DB診断と採用判断
+
+- 芝v3（独立200レース）:
+  - MAE`4.298`（現行`5.625`）、展開一致率`58.5%`（現行`63.5%`）。
+  - ハイ`58.3%`、平均`40.0%`、スロー`66.2%`。
+  - PAI相関`-0.001`、最上位帯リフト`1.12x`。
+- ダートv3（独立200レース）:
+  - MAE`2.609`（現行`5.401`）、展開一致率`65.0%`（現行`35.5%`）。
+  - ハイ`0%`、平均`58.5%`、スロー`75.0%`。
+  - PAI相関`+0.006`、最上位帯リフト`1.19x`。
+- 回帰誤差、平均・スロー、順位系指標には改善があるが、芝の総合一致率とハイ再現率が悪化し、
+  ダートのハイを一度も再現できないため不採用とした。候補モデル3件は削除し、本番v1モデルを維持した。
+
+### 未完了・作業が止まっている箇所
+
+- v3の学習・推論基盤は完成したが、本番v3モデルは存在しない。
+- ダートのハイ再現率0%が継続している。単純な前付けPCI集約だけでは展開の上側を説明できない。
+- 次回は`train_rpci_lgbm.py`へ前半3F・区間ラップの履歴を追加する前に、
+  mykeibadb由来のラップ欠損率と距離別の利用可能件数を診断する。
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 1角2番手以内、最大10走は候補比較用の暫定定義であり、最適化済みではない。
+- PCI欠損時のRPCI代替も暫定仕様。馬固有値とレース全体値の混在影響を次回診断する。
+- v3特徴量は内部計算専用で、PCI/RPCI実数値を画面へ表示しない。
+- `ruff check src tests scripts`の既存`scripts/seed_dev.py`10件と、Codex領域のpytestキャッシュ警告は継続。
+
+### テスト結果
+
+- 対象: 83 passed
+- `python -m pytest -m "not integration" -q`: 569 passed、28 deselected
+- 変更対象Ruff: passed
+- `python -m mypy src --strict --python-version 3.12`: 64 files passed
+- Web変更なしのためWeb typecheck/buildは未実行
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/application/forecast_use_cases.py`の`_build_field_front_pace_sample`
+2. `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`の`FEATURE_NAMES_V3`と`build_features`
+3. `apps/api/scripts/train_rpci_lgbm.py`の`_HISTORY_JOIN`
+4. `apps/api/tests/unit/test_train_rpci_lgbm.py`
+5. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests\unit\application\test_forecast_use_cases.py `
+  tests\unit\infrastructure\pace\test_lgbm_forecaster.py `
+  tests\unit\test_train_rpci_lgbm.py -q
+python -m scripts.backtest_forecast --track-type dirt --limit 200 --rpci-min 20 --rpci-max 90
+```
+
 ## 2026-07-24 09:26 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
