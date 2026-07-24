@@ -1,5 +1,87 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 16:10 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `1ffd457`
+- 目的: ダートRPCI v4の期間外品質を定期判定し、再学習レビュー条件を機械化する。
+
+### 完了した内容
+
+- `apps/api/src/pci/application/rpci_monitoring.py`
+  - `no_data`、`accumulating`、`healthy`、`retraining_review`、`model_mismatch`を判定する。
+  - 100レース・ハイ20レース未満では結論を出さない。
+  - MAE、展開一致率、ハイ再現率、絶対バイアスの4条件を判定する。
+- `apps/api/scripts/backtest_forecast.py`
+  - `--monitor-dirt-v4`、`--fail-on-monitoring-review`を追加した。
+  - 監視時はダート、全件サンプリング、本番モデル、2026-07-25以降を安全な既定値とする。
+  - 通常のバックテストJSONへ`rpci_monitoring`を追加する。
+- `apps/api/alembic/versions/006_expand_mart_model_version.py`
+  - v4モデル名24文字を保存できるよう、martの`model_version`を20文字から64文字へ拡張した。
+- 実DB再現
+  - 2026-06-01以降197件はMAE4.750、一致率72.6%、ハイ90.6%、絶対バイアス2.619で`healthy`。
+  - 採用後の2026-07-25以降は現時点で0件のため`no_data`。
+
+### 監視条件
+
+| 条件 | 値 | 根拠 |
+|---|---:|---|
+| 判定開始 | 全体100件かつハイ20件 | 少数標本での再学習判断を避ける |
+| MAE | 5.94以下 | 採用時4.750から25%まで |
+| 展開一致率 | 60%以上 | 既存受入基準 |
+| ハイ再現率 | 60%以上 | 重要区分の最低受入基準 |
+| 絶対バイアス | 4.62以下 | 採用時2.619から約2.0まで |
+
+### 未完了・次に実施する具体的な手順
+
+1. API起動前に`cd apps/api && python -m alembic upgrade head`を実行し、migration 006を適用する。
+2. 2026-07-25以降の確定ダートが100件かつハイ20件へ到達したら、次を実行する。
+   `python -m scripts.backtest_forecast --monitor-dirt-v4 --limit 200 --output
+   results/dirt-v4-monitor.json --fail-on-monitoring-review`
+3. `retraining_review`なら、同一対象期間で現行v4と再学習候補を比較する。本番ファイルを直接上書きしない。
+4. 初回結果を`tasks/current.md`と本ファイルへ追記する。
+
+### 仮実装・暫定値・既知事項
+
+- 100件、ハイ20件、25%のMAE余地、バイアス約2.0の余地は初回運用基準。初回レビュー後に再検証する。
+- 条件未達は再学習候補の比較開始を意味し、自動採用・自動ロールバックはしない。
+- 採用後の確定レースがまだないため、本番期間での判定結果は未取得。
+- Codex領域ではpytestキャッシュ作成警告が出るが、テスト結果には影響しない。
+
+### テスト結果
+
+```text
+pytest tests/unit/application/test_rpci_monitoring.py tests/unit/test_backtest_forecast_cli.py -q
+11 passed
+pytest -m "not integration" -q
+588 passed, 29 deselected
+pytest tests/integration/test_mart_repository.py -q
+4 passed
+mypy src --strict --python-version 3.12
+Success: 65 source files
+ruff check src tests scripts/backtest_forecast.py
+All checks passed
+```
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/application/rpci_monitoring.py`
+2. `apps/api/scripts/backtest_forecast.py`
+3. `apps/api/alembic/versions/006_expand_mart_model_version.py`
+4. `docs/DECISIONS.md`末尾の監視ADR
+5. `tasks/backlog.md`の「ダートRPCI v4の初回期間外レビュー」
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+python -m alembic upgrade head
+python -m scripts.backtest_forecast --monitor-dirt-v4 --limit 200
+```
+
 ## 2026-07-24 15:04 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
