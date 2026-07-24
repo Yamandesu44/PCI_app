@@ -1,5 +1,14 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-24 完了: レース前後半3Fの内部永続化
+
+- [x] `races`へ内部分析用の`race_s3f`・`race_l3f`を追加し、公開Race DTOや画面には露出させない構成にした。
+- [x] Alembic migration `005`、Repository保存・復元、結果取り込み、再取り込み時の値保持を実装した。
+- [x] wmykeibadbの3F列が1/10秒整数である場合に二重変換される不具合を修正し、秒形式との両方を正規化した。
+- [x] 実行用DBをmigration `005`へ更新し、mykeibadb直近1年のresultsを再同期した。
+- [x] API非統合570 tests、API統合19 tests、ingestion-worker全237 tests、変更対象Ruff、API mypy strictを完了した。
+- [x] ingestion-worker全体Ruff/mypyの既存エラーは今回の対象外として記録した。
+
 ## 2026-07-24 完了: mykeibadbラップ利用率診断
 
 - [x] 確定済みJRA平地をレースキーで重複排除し、芝・ダート・距離帯別にラップ保有率を集計するCLIを追加した。

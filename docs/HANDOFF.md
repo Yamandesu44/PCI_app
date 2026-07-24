@@ -1,5 +1,106 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 13:25 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `772dd9b`
+- 実装コミット: `30a59e8`、`18df8a6`
+- 目的: RPCI v4候補で利用するレース前半3F・後半3Fを内部永続化し、直近1年をバックフィルする。
+
+### 完了した内容
+
+- `apps/api/alembic/versions/005_add_race_lap_times.py`
+  - `races.race_s3f`・`races.race_l3f`をnullable列として追加した。
+- `apps/api/src/pci/domain/racing/race.py`、
+  `apps/api/src/pci/infrastructure/database/models.py`、
+  `apps/api/src/pci/infrastructure/repositories/race_repository.py`
+  - 内部3F値をドメイン・DB・Repositoryで往復できるようにした。
+- `apps/api/src/pci/application/race_use_cases.py`
+  - 結果取り込みで入力された3F値を保存し、片側欠損や出走表・メタデータの再取り込みで
+    既存値を消さないようにした。
+  - 保存済み値と今回値を統合してからRPCIを再計算する。
+- `apps/ingestion-worker/src/ingestion/client/mykeibadb_client.py`
+  - wmykeibadbの`352`形式を35.2秒へ正規化してからJV固定長へ書く。
+  - 秒形式も受け付け、25.0〜50.0秒外は異常値として除外する。
+- 実行用`C:\Users\yuuta\PCI_app`を`18df8a6`へfast-forwardし、DBをAlembic `005`へ更新した。
+- `2025-07-24→2026-07-23`を`--step results --chunk-days 365`で再同期した。
+  3,329レース成功、0レース失敗。再同期対象3,329件すべてでS3/L3を保存した。
+- DB期間全体は確定済みJRA平地3,332件中3,329件（99.9%）でS3/L3両方を保持する。
+  ダートは1,638/1,638件、芝は1,691/1,694件。
+
+### 未完了・作業が止まっている箇所
+
+- RPCI v4の学習特徴量とオンライン予測特徴量は未実装。
+- S3/L3未保存の芝3件は今回のmykeibadb再同期集合に存在しない既存レコード。
+  レースキーは`2026042609011001`、`2026050308011101`、`2026051005011101`。
+  削除や補完はデータ来歴を確認するまで行っていない。
+- 区間ラップはDBへ永続化しておらず、v4初期候補でも必須にしない。
+
+### 次に実施する具体的な手順
+
+1. `apps/api/scripts/train_rpci_lgbm.py`のv3特徴量定義を維持したまま、
+   対象レース日より前の`races.race_s3f`・`race_l3f`履歴集約をv4候補として追加する。
+2. `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`へ同じ時点条件の
+   オンライン特徴量を追加し、特徴量数によるv1/v2/v3/v4判別テストを更新する。
+3. `apps/api/scripts/backtest_forecast.py`で芝・ダート各200レースを本番v1と比較し、
+   MAEだけでなく展開一致率・ハイ再現率・最上位帯リフトを評価する。
+4. 未保存3レースは`reconcile_duplicate_races`・mykeibadb `race_shosai`を照合し、
+   正規レースでないと確認できた場合だけ別タスクで整理する。
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- S3/L3の25.0〜50.0秒は既存RA parserと揃えた物理妥当範囲であり、モデル採用閾値ではない。
+- v4で使う履歴件数、集約統計、距離差許容、欠損時の特徴量は未確定。
+- v4候補は独立比較前に本番モデルへ採用しない。
+- ingestion-worker全体Ruffは既存14件、全体mypy strictは既存20件で失敗する。
+  今回変更した2ファイルのRuffは成功している。
+- Codex領域ではpytestキャッシュ作成警告が1件出る。
+- 実行用リポジトリの既存未追跡
+  `apps/ingestion-worker/.env]`と`apps/ingestion-worker/result_run.txt`には触れていない。
+
+### テスト実行コマンドと結果
+
+```powershell
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest -m "not integration" -q
+# 570 passed, 28 deselected
+python -m pytest tests\integration\test_race_repository.py `
+  tests\integration\test_database_readiness.py -q
+# 19 passed
+python -m mypy src --strict
+# Success: 64 source files
+
+cd ..\ingestion-worker
+$env:PYTHONPATH='src'
+python -m pytest -q
+# 237 passed
+python -m ruff check src\ingestion\client\mykeibadb_client.py `
+  tests\test_mykeibadb_client.py
+# All checks passed
+```
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `docs/DECISIONS.md`の「S3/L3は内部分析値として永続化」ADR
+3. `apps/api/src/pci/application/race_use_cases.py`
+4. `apps/api/scripts/train_rpci_lgbm.py`
+5. `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+python -m pytest tests\unit\application\test_race_use_cases.py `
+  tests\contract\test_ingest_api.py -q
+python -m alembic heads
+```
+
 ## 2026-07-24 10:19 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
