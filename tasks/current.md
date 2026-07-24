@@ -1,5 +1,14 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-24 完了: readinessの文字列列長互換性検査
+
+- [x] ORM必須テーブル・列の存在確認に加え、長さ付き文字列列の実DB長を検査するようにした。
+- [x] 実DBがORMの必要長より短い場合は`schema_outdated`を返し、既存のmigration復旧案内へ接続した。
+- [x] `TEXT`など長さ無制限の文字列型は互換として扱い、不要な不一致判定を避けた。
+- [x] migration 006未適用相当の`predicted_pace.model_version VARCHAR(20)`を単体・PostgreSQL統合で検出した。
+- [x] 既存の`/ready`レスポンスとWebエラー表示の契約は変更せず、後方互換を維持した。
+- [x] 関連9 tests、PostgreSQL統合3 tests、Ruff、mypy strictを完了した。
+
 ## 2026-07-24 完了: ダートRPCI v4期間外監視・再学習レビュー条件
 
 - [x] 採用後のダート確定レースを対象にする`--monitor-dirt-v4`をバックテストCLIへ追加した。

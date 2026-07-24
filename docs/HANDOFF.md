@@ -1,5 +1,58 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-24 16:50 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `a9f1712`
+- 目的: migration 006未適用でも従来のreadinessが正常判定する欠落を解消する。
+
+### 完了した内容
+
+- `apps/api/src/pci/infrastructure/database/readiness.py`
+  - ORM必須テーブル・列の存在に加え、長さ付き文字列列の実DB容量を検査する。
+  - 実DB長がORMの必要長より短い場合は`schema_outdated`を返す。
+  - 長さ無制限の`TEXT`は互換として扱う。
+- migration 006未適用相当の`predicted_pace.model_version VARCHAR(20)`を検出できる。
+- `/ready`、OpenAPI、Webの復旧表示は既存契約を維持し、追加の公開項目はない。
+
+### 未完了・既知事項
+
+- 文字列長以外の型精度、nullable、index、constraintの完全比較は対象外。
+- migration 006は実行用DBへ適用済みであり、現在の`/ready`は正常になる想定。
+- ダートRPCI v4の初回期間外レビューは引き続きデータ蓄積待ち。
+
+### テスト結果
+
+```text
+pytest tests/unit/infrastructure/database/test_readiness.py tests/contract/test_health_api.py -q
+9 passed
+pytest tests/integration/test_database_readiness.py -q
+3 passed
+mypy src --strict --python-version 3.12
+Success: 65 source files
+ruff check src/pci/infrastructure/database/readiness.py
+All checks passed
+```
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/infrastructure/database/readiness.py`
+2. `apps/api/tests/unit/infrastructure/database/test_readiness.py`
+3. `apps/api/tests/integration/test_database_readiness.py`
+4. `docs/DECISIONS.md`末尾のreadiness ADR
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+python -m alembic current
+python -m pytest tests\unit\infrastructure\database\test_readiness.py `
+  tests\contract\test_health_api.py -q
+```
+
 ## 2026-07-24 16:10 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

@@ -968,3 +968,16 @@
   `predicted_pace.model_version`と`pace_fit.model_version`を`VARCHAR(64)`へ拡張する。
 - **初期確認**: 2026-06-01以降197件では4条件を満たし`healthy`。採用後期間は現時点で0件のため
   `no_data`であり、初回の実運用判定は未実施。
+
+## ADR-2026-07-24: readinessは長さ付き文字列列の容量不足も検出する
+
+- **背景**: migration 006はmartの`model_version`を20文字から64文字へ拡張する。旧DBにも列自体は
+  存在するため、従来のテーブル・列名検査だけでは`ready`となり、24文字のv4モデル名保存時に
+  初めてDBエラーになる。
+- **判断**: ORM側が長さ付き`String`を要求する全列について、反射した実DBの長さが必要長以上かを
+  検査する。短ければ`schema_outdated`とし、既存の`alembic upgrade head`案内を再利用する。
+- **互換性**: `TEXT`など長さ無制限の型は互換とする。数値精度やnullableなどは今回の対象外とし、
+  根拠のない完全スキーマ比較へ拡張しない。
+- **API/UI**: `/ready`のレスポンス契約とWebの500診断経路は変更しない。
+- **検証**: migration headでは`ready`、PostgreSQL上で`model_version`を`VARCHAR(20)`へ戻した場合は
+  `schema_outdated`となることを統合テストで確認した。

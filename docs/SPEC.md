@@ -172,7 +172,9 @@
 - ✅ `GET /api/v1/races`（一覧・limit/date）, `/races/dates`, `/races/{key}`,
   `/races/{key}/forecast`, `/races/{key}/pace-analysis`, `/api/v1/ingest-status`,
   `/api/v1/forecast-performance`, `/health`, `/ready`。
-  `/health`はプロセス生存確認、`/ready`はDB接続とORM必須列を含む利用可能性確認とする。
+  `/health`はプロセス生存確認、`/ready`はDB接続とORM必須テーブル・列を含む利用可能性確認とする。
+  長さ付き文字列列は存在だけでなく実DB長がORMの必要長以上かを検査し、不足時は
+  `schema_outdated`と`alembic upgrade head`の復旧案内を返す。
 - ✅ `GET /api/v1/forecast-performance`はJST基準の直近30日・90日・180日（`days`、既定90日）、
   確定済みJRA平地について、
   レース日以前に生成された最新の保存済み予想と実際の展開区分を比較する。全体・芝・ダートの
