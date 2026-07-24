@@ -1,5 +1,53 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 01:45 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `d39cb7e`
+- 実装コミット: `2044e7b`
+- 目的: mykeibadb同期とWebで発生したAPI 500の原因を切り分け、最新データを再同期する。
+
+### 原因と復旧
+
+1. Docker Desktopが停止し、PostgreSQL `localhost:5432`が接続拒否していた。
+   `/health`はプロセス死活だけのため200、`/ready`はDB接続不能だった。
+2. Docker Desktopと`db`コンテナを起動し、Alembic headを確認した。
+3. 同期再実行で出馬表144レース、馬場情報72件、確定成績69レース、特別登録は成功した。
+   問題として報告された`2026071802011101`も出馬表8頭・結果ともAPI 200で登録できた。
+4. 最後の予想事前生成だけ、Windowsに`tzdata`がなく
+   `ZoneInfoNotFoundError: No time zone found with key Asia/Tokyo`で失敗した。
+
+### 変更内容
+
+- `apps/api/src/pci/application/forecast_precompute_use_cases.py`
+  - `ZoneInfo("Asia/Tokyo")`を、既存機能と同じUTC+9のJST固定オフセットへ変更した。
+- `apps/api/tests/unit/application/test_forecast_precompute_use_cases.py`
+  - JSTオフセットが9時間であることを固定する回帰テストを追加した。
+
+### 未完了・既知事項
+
+- Codexのコマンド実行承認利用上限により、追加した単体テスト・Ruffと、修正後の予想事前生成は未実行。
+- 同期ログの文字化けと、失敗通知時のSSL証明書エラーは今回の500原因ではなく、別の既知運用課題。
+- APIコードを反映した後はAPIプロセスの再起動が必要。
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+cd apps\api
+$env:PYTHONPATH="src"
+python -m pytest tests\unit\application\test_forecast_precompute_use_cases.py -q
+python -m ruff check src\pci\application\forecast_precompute_use_cases.py `
+  tests\unit\application\test_forecast_precompute_use_cases.py
+python -m mypy src --strict --python-version 3.12
+
+cd ..\ingestion-worker
+python -m ingestion.batch --mode mykeibadb --date 20260715 --date-to 20260808 --step forecasts
+```
+
+予想生成後に`http://localhost:8000/ready`とWebトップを確認する。
+
 ## 2026-07-25 01:29 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
