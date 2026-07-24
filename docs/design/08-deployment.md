@@ -1,5 +1,9 @@
 # 08. デプロイ構成
 
+> **現状の注意:** 以下は構成候補であり、そのまま一般公開できる完成済み手順ではない。
+> Web/APIの一般ユーザー認証は未実装。少人数ロケテストは
+> [`../LOCATION_TEST.md`](../LOCATION_TEST.md)の開始条件とアクセス制限を満たしてから行う。
+
 ## アーキテクチャ
 
 ```
@@ -126,6 +130,9 @@ alembic upgrade head && uvicorn pci.presentation.app:app --host 0.0.0.0 --port $
 - [ ] `DATABASE_URL` にパスワードがハードコードされていない
 - [ ] `ANTHROPIC_API_KEY`（将来追加時）を環境変数で管理し、コードに含めない
 - [ ] 公開するのは独自指標・分析結果（PAI/PCI/コメント等）のみ
+- [ ] WebとAPIの両方を招待者だけに制限している
+- [ ] `/internal/ingest/*`の`INGEST_TOKEN`を本番で必須にしている
+- [ ] FastAPIの管理用・内部用経路を無制限にインターネット公開していない
 
 ---
 

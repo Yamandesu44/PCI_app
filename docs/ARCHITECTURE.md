@@ -3,7 +3,7 @@
 > 本ファイルは現在のコードを調査して整理したもの。**推測を含む箇所には「（推測）」を明記**する。
 > 確定した設計判断の背景は `docs/adr/` を参照。
 
-最終調査: 2026-07-12 / 対象コミット `3d3131e` 以降 / ブランチ `claude/sweet-einstein-ilnaov`
+最終調査: 2026-07-25 / 対象コミット `15f9d88` / ブランチ `claude/sweet-einstein-ilnaov`
 
 ---
 
@@ -65,10 +65,10 @@ scripts/             export_openapi.py, backtest_forecast.py
 ### apps/web（Next.js 15 / React 19 / Tailwind）
 ```
 src/
-  app/               App Router。page.tsx（レース一覧）、races/[raceKey]/forecast, /pace-analysis
+  app/               App Router。レース一覧、予想検証、races/[raceKey]/forecast, /pace-analysis
   components/        RaceForecastDashboard, RaceHero, PaceHeadline, HorseFitTable,
                      PaceAnalysisTable, PaceProfileChart, CommentCard, ReasonList,
-                     RaceDateCalendar, FormationView, IngestStatusBanner,
+                     RaceDateCalendar, FormationView, IntegratedRankingView, IngestStatusBanner,
                      ui/（accordion/card/progress）
   lib/               api.ts（API 呼び出し）, pace.ts（★ペース表現の翻訳層）,
                      ingestStatus.ts（取り込み鮮度の翻訳層）,
@@ -121,6 +121,10 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 
 ### 表示
 - web が API から DTO を取得し、`lib/pace.ts` 等で実数値を言葉・バー・色に翻訳して表示。
+- 展開予想の冒頭は、想定展開、`integrated-v1`の総合上位3頭、注意馬、展開信頼度を
+  同一サマリーへ集約する。展開適性単独の順位を「中心候補」として扱わない。
+- 統合順位は上位5頭を初期表示し、6位以下を折りたたむ。詳細情報は後段へ置き、
+  最初の画面で判断材料を読み取れる情報階層を優先する。
 
 ### 取り込み鮮度・データ完全性監視
 - `GET /api/v1/ingest-status` → `GetIngestStatusUseCase` が `ingest_log` の直近20件から
@@ -185,3 +189,5 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 - Windows PowerShell 5.1 は BOM 無し UTF-8 を ANSI(CP932) で誤読するため、
   自動実行スクリプトは**純 ASCII**で書く（日本語コメント混入で過去にクラッシュ）。
 - 開発は `fixtures/` で JV-Link/Windows なしに domain/application/API を進められる。
+- 公開Web/APIには一般ユーザー認証がない。少人数ロケテストでも、アクセス制限のない
+  インターネット公開は禁止し、`docs/LOCATION_TEST.md`の開始条件を満たしてから公開する。

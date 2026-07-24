@@ -12,7 +12,7 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 
 ## 現在のステータス
 
-**MVP 実装中（fixtures ベースで価値検証）。**
+**個人利用MVPは稼働中。少人数ロケテストへ向けて予想検証データを蓄積中。**
 
 | 領域 | 状態 |
 |---|---|
@@ -21,8 +21,11 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 | DB（core / mart）+ Alembic + Repository | ✅ 実装済み（mart 永続化込み） |
 | FastAPI（`/forecast`・レース詳細） | ✅ 実装済み |
 | 型共有（`packages/api-client`） | ✅ OpenAPI → TypeScript 生成 |
-| フロントエンド（`apps/web` / Next.js） | ✅ 展開予想ページ（`vercel.json` 配備設定済み） |
-| ingestion-worker（JV-Link 実データ） | ⏳ fixtures のみ（Windows 実装は後続） |
+| フロントエンド（`apps/web` / Next.js） | ✅ レース一覧・展開予想・確定後分析・予想検証 |
+| ingestion-worker（mykeibadb / JV-Link） | ✅ Windows自動同期・鮮度/完全性監視・失敗通知 |
+| 実データ | ✅ mykeibadb（MySQL）からPostgreSQLへ同期 |
+| 予想精度の期間外検証 | ⏳ 2026-07-25以降の事前予想を蓄積中 |
+| 少人数ロケテスト | ⏳ 公開条件と運用手順を整備済み。アクセス制限の方式決定後に開始 |
 
 ローカル起動: API は [`apps/api/README.md`](./apps/api/README.md)、Web は [`apps/web/README.md`](./apps/web/README.md) を参照。
 
@@ -33,6 +36,9 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 | 種別 | 場所 |
 |---|---|
 | プロジェクト指針（必読） | [`CLAUDE.md`](./CLAUDE.md) |
+| 現在の引き継ぎ | [`docs/HANDOFF.md`](./docs/HANDOFF.md) |
+| 現行仕様 | [`docs/SPEC.md`](./docs/SPEC.md) |
+| ロケテスト手順 | [`docs/LOCATION_TEST.md`](./docs/LOCATION_TEST.md) |
 | ユビキタス言語 | [`docs/domain/ubiquitous-language.md`](./docs/domain/ubiquitous-language.md) |
 | 設計書 | [`docs/design/`](./docs/design/) |
 | ADR（意思決定記録） | [`docs/adr/`](./docs/adr/) |
@@ -73,11 +79,12 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 
 ---
 
-## MVP スコープ（確定前提）
+## 現行スコープ
 
 - 対象: **JRA 中央競馬のみ**、過去5年分
 - 更新: **日次バッチ**（前日夜〜当日朝）、リアルタイム速報は対象外
-- 公開範囲: **個人利用・検証用途**。生データ非配布、独自指標（PCI/RPCI/PAI/AIコメント）のみ
-- 認証・課金: MVP では非対応（将来追加可能な構成）
+- 公開範囲: 現在は**個人利用・検証用途**。次段階は招待した少人数だけのロケテスト
+- データ表示: 生データやPCI/RPCI等の内部実数値を前面に出さず、独自の言葉・段階評価へ翻訳
+- 認証・課金: 未実装。外部公開前にアクセス制限方式を決める。課金は対象外
 
 詳細: [`docs/design/01-requirements.md`](./docs/design/01-requirements.md)

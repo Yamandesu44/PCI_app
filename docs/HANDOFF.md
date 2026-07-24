@@ -1,5 +1,79 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 02:34 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `3dd8335`
+- 実装コミット: `d2e9258`, `15f9d88`
+- 目的: 推奨順に品質・UI・資料を改善し、少人数ロケテストへ進むための条件を整える。
+
+### 完了内容
+
+- 実DBでダートRPCI v4監視を実行した。2026-07-25以降の確定ダートは0件で`no_data`。
+- 90日予想検証は対象787レース、保存済み事前予想0件、カバー率0%。係数は変更せず蓄積を続ける。
+- ingestion-workerの既存Ruff/mypy違反を解消した。
+  - `client/windows_client.py`
+  - `client/mykeibadb_client.py`
+  - `locate_corners.py`
+  - `tests/test_locate_corners.py`
+- `forecastDecisionChecklist()`へ`integratedRanking`を渡し、冒頭の候補を展開適性単独1位から
+  統合順位上位3頭へ変更した。注意馬と「予想精度は検証データを蓄積中」も追加した。
+- `IntegratedRankingView`は上位5頭を初期表示し、6位以下を`details`へ格納した。
+- 1440×900と390×844で実画面を確認し、横スクロールなし、文字の重なりなしを確認した。
+- README、ARCHITECTURE、SPEC、DECISIONS、currentを現状へ更新した。
+- `docs/LOCATION_TEST.md`へ開始条件、点検手順、感想項目、停止条件を追加した。
+
+### 仮実装・暫定値・未確定仕様
+
+- 想定RPCI/PAI等の係数と閾値は引き続き仮仕様。照合0件のため今回変更していない。
+- ロケテストのアクセス制限方式と公開基盤は未確定。認証なしの外部公開は禁止。
+- ロケテストは照合30件未満でもUI確認に限定して実施可能だが、予想精度の評価には使わない。
+
+### 未完了・既知事項
+
+- 事前予想照合が30件に到達した時点で、全体・芝・ダートの初回不一致レビューを行う。
+- ダート確定100件かつ実績ハイ20件で`--monitor-dirt-v4 --fail-on-monitoring-review`を再実行する。
+- 修正前ログにWebhook URLが残った可能性があるため、Slack側でWebhookを再発行する。
+- 公開前にWeb/API両方のアクセス制限方式を決定・実装し、開始前点検を実施する。
+
+### テスト結果
+
+```text
+ingestion-worker:
+  python -m ruff check src tests: passed
+  python -m mypy src --strict --python-version 3.12: 24 files passed
+  python -m pytest -q: 239 passed, 1 sandbox cache warning
+
+web:
+  npm.cmd test --workspace=@pci/web: 83 passed
+  npm.cmd run typecheck --workspace=@pci/web: passed
+  npm.cmd run build --workspace=@pci/web: passed
+
+実画面:
+  1440x900: horizontal overflow なし
+  390x844: horizontal overflow なし
+```
+
+### Claude Codeが最初に確認するファイル
+
+1. `docs/LOCATION_TEST.md`
+2. `apps/web/src/lib/pace.ts`の`forecastDecisionChecklist`
+3. `apps/web/src/components/IntegratedRankingView.tsx`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+git pull origin claude/sweet-einstein-ilnaov
+cd apps\web
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run build
+```
+
 ## 2026-07-25 02:40 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

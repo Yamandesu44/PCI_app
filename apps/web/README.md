@@ -30,7 +30,8 @@ npm run test       # vitest（純粋プレゼンテーションロジック）
 | ルート | 内容 |
 |---|---|
 | `/` | トップ（出走前=展開予想 / 確定後=ペース分析への導線） |
-| `/races/{raceKey}/forecast` | 展開予想（想定ペース・展開を作る馬・展開が向く馬の PAI・やさしい解説コメント・根拠） |
+| `/forecast-review` | 保存済みの事前予想と実際の展開を比較する検証画面 |
+| `/races/{raceKey}/forecast` | 展開予想（想定展開・統合上位・注意馬・隊列・やさしい解説・根拠） |
 | `/races/{raceKey}/pace-analysis` | 確定後ペース分析（各馬PCI・実績RPCI・PCI3、★=PCI3寄与馬・回顧コメント） |
 
 未登録レース・出走馬未確定（forecast）／未確定レース（pace-analysis）は 404（`not-found.tsx`）。
@@ -50,3 +51,6 @@ Vercel プロジェクト設定で必要な環境変数:
 | `API_BASE_URL` | FastAPI バックエンドの URL（例: `https://pci-api.railway.app`）|
 
 詳細: [`docs/design/08-deployment.md`](../../docs/design/08-deployment.md)
+
+少人数ロケテストでも、WebとAPIをアクセス制限なしで公開しないこと。開始条件と点検手順は
+[`docs/LOCATION_TEST.md`](../../docs/LOCATION_TEST.md)を参照。
