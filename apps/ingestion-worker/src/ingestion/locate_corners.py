@@ -61,7 +61,11 @@ def show_horse_info(raw: bytes) -> None:
     finish_pos = _bs(raw, 334, 336)
     agari_raw = _bs(raw, 390, 393)
     agari_str = f"{int(agari_raw)/10:.1f}s" if agari_raw.isdigit() else agari_raw
-    print(f"\n【馬情報】 DataKubun={data_kubun} 開催日={kai_date} 場CD={jyo_cd} R={race_no} 馬番={horse_no} KettoNum={ketto_num} 着順={finish_pos} 上り3F={agari_str}")
+    print(
+        f"\n【馬情報】 DataKubun={data_kubun} 開催日={kai_date} 場CD={jyo_cd} "
+        f"R={race_no} 馬番={horse_no} KettoNum={ketto_num} "
+        f"着順={finish_pos} 上り3F={agari_str}"
+    )
     print("\n--- バイトルーラー [330:410] (コーナー探索対象域) ---")
     for pos in range(330, min(410, len(raw)), 10):
         chunk = raw[pos:pos + 10]
@@ -73,10 +77,13 @@ def show_hypothesis(raw: bytes) -> None:
     """現在のコーナー候補オフセット [_CORNER_HYPOTHESIS_START] の内容を表示する。"""
     print(f"\n--- SE レコード長: {len(raw)} bytes (期待値: 553) ---")
     if len(raw) < _CORNER_HYPOTHESIS_START + 8:
-        print(f"  (警告: レコードが短すぎます)")
+        print("  (警告: レコードが短すぎます)")
         return
 
-    print(f"\n【候補】コーナー通過順位 @ [{_CORNER_HYPOTHESIS_START}:{_CORNER_HYPOTHESIS_START + 8}]:")
+    print(
+        f"\n【候補】コーナー通過順位 @ "
+        f"[{_CORNER_HYPOTHESIS_START}:{_CORNER_HYPOTHESIS_START + 8}]:"
+    )
     for i, name in enumerate(["corner_1", "corner_2", "corner_3", "corner_4"]):
         s = _CORNER_HYPOTHESIS_START + i * 2
         e = s + 2
@@ -102,7 +109,10 @@ def scan_candidate_windows(raw: bytes, scan_start: int = 300) -> None:
     valid_positions リスト経由ではなく直接オフセットを総当たりすることで、
     隣接バイトに別の有効値があっても誤検知しない。
     """
-    print(f"\n--- 全スキャン: 有効コーナー値（1-18）の 2byte ウィンドウ [{scan_start}:{len(raw)}] ---")
+    print(
+        f"\n--- 全スキャン: 有効コーナー値（1-18）の 2byte ウィンドウ "
+        f"[{scan_start}:{len(raw)}] ---"
+    )
     print("  連続4箇所の候補（コーナー1〜4 として妥当な連続）:")
     found_any = False
     for start in range(scan_start, len(raw) - 7):
@@ -253,7 +263,10 @@ def main() -> None:
                     )
                 else:
                     best = min(candidates)
-                    print(f"\n→ 仮説と異なります。実オフセット = {best} を jv_spec.SE_FIELDS に設定してください。")
+                    print(
+                        f"\n→ 仮説と異なります。実オフセット = {best} を "
+                        "jv_spec.SE_FIELDS に設定してください。"
+                    )
             else:
                 print("\n  ゼロ埋め・スペース埋めいずれでもパターンが見つかりませんでした。")
                 print("  → 全スキャンで候補を探します:")
@@ -268,13 +281,13 @@ def main() -> None:
     # ----- 複数ファイル交差検証モード -----
     print(f"\n=== 複数馬交差検証（{len(paths)} 馬） ===")
     if corners is None:
-        for i, (p, raw) in enumerate(zip(paths, raws)):
+        for p, raw in zip(paths, raws, strict=True):
             print(f"\n--- {p.name} ---")
             scan_candidate_windows(raw)
         return
 
     candidate_sets: list[set[int]] = []
-    for p, raw in zip(paths, raws):
+    for p, raw in zip(paths, raws, strict=True):
         c = set(search_corners(raw, corners))
         candidate_sets.append(c)
         print(f"  {p.name}: 候補 = {sorted(c)}")

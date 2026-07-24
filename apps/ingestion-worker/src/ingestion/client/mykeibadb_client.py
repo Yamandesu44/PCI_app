@@ -169,14 +169,18 @@ class MyKeibaDbClient:
 
         horse_no_by_race: dict[str, int] = {}
         for row in entries:
-            race = by_key.get(_race_key_from_row(row)) or by_loose_key.get(_loose_race_key(row))
-            if race is None:
+            matching_race = by_key.get(_race_key_from_row(row)) or by_loose_key.get(
+                _loose_race_key(row)
+            )
+            if matching_race is None:
                 continue
-            horse_no_by_race[race.race_key] = horse_no_by_race.get(race.race_key, 0) + 1
+            horse_no_by_race[matching_race.race_key] = (
+                horse_no_by_race.get(matching_race.race_key, 0) + 1
+            )
             horse_no = _int_or_none(_pick(row, _ENTRY_HORSE_NO_COLUMNS)) or horse_no_by_race[
-                race.race_key
+                matching_race.race_key
             ]
-            race.entries.append(_entry_from_row(row, horse_no))
+            matching_race.entries.append(_entry_from_row(row, horse_no))
 
         return [race for race in by_key.values() if race.entries]
 
@@ -266,8 +270,8 @@ class MyKeibaDbClient:
 
     def _connect(self) -> Any:
         try:
-            import pymysql
-            from pymysql.cursors import SSDictCursor
+            import pymysql  # type: ignore[import-untyped]
+            from pymysql.cursors import SSDictCursor  # type: ignore[import-untyped]
         except ImportError as exc:
             raise RuntimeError(
                 "mykeibadb モードには PyMySQL が必要です。"
@@ -388,7 +392,7 @@ _RACE_DATE_COLUMNS = (
     "kaisai_gappi",
     "kaisai_nengappi",
 )
-_RACE_YEAR_COLUMNS = ("year", "nen", "kaisai_nen", "開催年")
+_RACE_YEAR_COLUMNS: tuple[str, ...] = ("year", "nen", "kaisai_nen", "開催年")
 _JYO_COLUMNS = (
     "KEIBAJO_CODE",
     "jyo_cd",
@@ -400,11 +404,24 @@ _JYO_COLUMNS = (
     "場所",
 )
 _JYO_NAME_COLUMNS = ("jyo_name", "keibajo_name", "競馬場", "場所名")
-_KAiji_COLUMNS = ("kaiji", "回次", "開催回")
-_NICHiji_COLUMNS = ("nichiji", "日次", "開催日次")
-_RACE_NO_COLUMNS = ("race_no", "race_bango", "race_num", "race_number", "レース番号", "r")
-_DISTANCE_COLUMNS = ("distance_m", "kyori", "kyori_m", "距離")
-_TRACK_COLUMNS = ("track_type", "track_code", "track_cd", "トラックコード", "芝ダ")
+_KAiji_COLUMNS: tuple[str, ...] = ("kaiji", "回次", "開催回")
+_NICHiji_COLUMNS: tuple[str, ...] = ("nichiji", "日次", "開催日次")
+_RACE_NO_COLUMNS: tuple[str, ...] = (
+    "race_no",
+    "race_bango",
+    "race_num",
+    "race_number",
+    "レース番号",
+    "r",
+)
+_DISTANCE_COLUMNS: tuple[str, ...] = ("distance_m", "kyori", "kyori_m", "距離")
+_TRACK_COLUMNS: tuple[str, ...] = (
+    "track_type",
+    "track_code",
+    "track_cd",
+    "トラックコード",
+    "芝ダ",
+)
 _RACE_NAME_COLUMNS = (
     "KYOSOMEI_HONDAI",
     "KYOSOMEI_RYAKUSHO_10",
@@ -416,7 +433,7 @@ _RACE_NAME_COLUMNS = (
     "競走名",
     "名称",
 )
-_GRADE_COLUMNS = ("grade", "grade_code", "グレード", "重賞区分")
+_GRADE_COLUMNS: tuple[str, ...] = ("grade", "grade_code", "グレード", "重賞区分")
 _CONDITION_NAME_COLUMNS = (
     "KYOSO_JOKEN_MEISHO",
     "condition_name",
@@ -427,9 +444,21 @@ _CONDITION_NAME_COLUMNS = (
     "クラス",
 )
 _RAW_RECORD_COLUMNS = ("raw_record", "jv_record", "record", "line", "data", "レコード", "固定長")
-_DATA_KUBUN_COLUMNS = ("data_kubun", "datakubun", "データ区分")
-_RACE_S3F_COLUMNS = ("race_s3f", "haron_s3", "harontimes3", "前半3f", "前3f")
-_RACE_L3F_COLUMNS = ("race_l3f", "haron_l3", "harontimel3", "後半3f", "後3f")
+_DATA_KUBUN_COLUMNS: tuple[str, ...] = ("data_kubun", "datakubun", "データ区分")
+_RACE_S3F_COLUMNS: tuple[str, ...] = (
+    "race_s3f",
+    "haron_s3",
+    "harontimes3",
+    "前半3f",
+    "前3f",
+)
+_RACE_L3F_COLUMNS: tuple[str, ...] = (
+    "race_l3f",
+    "haron_l3",
+    "harontimel3",
+    "後半3f",
+    "後3f",
+)
 _WEATHER_COLUMNS = ("TENKO_CODE", "tenko_code", "weather", "天候コード", "天候")
 _TURF_CONDITION_COLUMNS = (
     "SHIBA_BABAJOTAI_CODE",
@@ -540,6 +569,7 @@ def _race_from_row(row: dict[str, Any]) -> RaceEntriesRecord:
 
 def _race_metadata_from_row(row: dict[str, Any]) -> RaceMetadataRecord:
     track_type = _track_type(_pick(row, _TRACK_COLUMNS))
+    condition_columns: tuple[str, ...]
     if track_type == "芝":
         condition_columns = _TURF_CONDITION_COLUMNS
     elif track_type == "ダート":
@@ -901,9 +931,9 @@ def _race_time_to_mssf(value: Any) -> str | None:
     if not s:
         return None
     if ":" in s:
-        minute, rest = s.split(":", 1)
+        minute_text, rest = s.split(":", 1)
         sec = float(rest)
-        return f"{int(minute)}{int(sec):02d}{round((sec - int(sec)) * 10)}"
+        return f"{int(minute_text)}{int(sec):02d}{round((sec - int(sec)) * 10)}"
     digits = "".join(ch for ch in s if ch.isdigit())
     # SOHA_TIME(char4)は MSSf 形式（分1+秒2+1/10秒1）。小数を含まない4桁はそのまま返す。
     # "0594"(0:59.4)のように分が0でも MSSf として扱う（>=1000 判定では取りこぼすため）。
@@ -912,10 +942,10 @@ def _race_time_to_mssf(value: Any) -> str | None:
     seconds = _float_or_none(value)
     if seconds is None:
         return None
-    minute = int(seconds // 60)
+    minute_value = int(seconds // 60)
     sec = int(seconds % 60)
     tenth = round((seconds - int(seconds)) * 10)
-    return f"{minute}{sec:02d}{tenth}"
+    return f"{minute_value}{sec:02d}{tenth}"
 
 
 def _pick(row: dict[str, Any], candidates: tuple[str, ...]) -> Any:

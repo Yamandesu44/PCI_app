@@ -17,10 +17,7 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Generator, Iterator
-from typing import Any, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass  # 型チェック時のみ参照（実行時は import しない）
+from typing import Any
 
 # JVOpen / JVRead の負値エラーコードと意味（診断メッセージ用）。
 # 出典: JRA-VAN DataLab JV-Link SDK リファレンス。
@@ -101,10 +98,11 @@ class WindowsJvLinkClient:
     def _open_com(self) -> None:
         """JV-Link COM オブジェクトを初期化する。"""
         try:
-            import win32com.client  # type: ignore[import-not-found]
+            import win32com.client  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
-                "pywin32 がインストールされていません。`pip install pci-ingestion-worker[win]` を実行してください。"
+                "pywin32 がインストールされていません。"
+                "`pip install pci-ingestion-worker[win]` を実行してください。"
             ) from exc
 
         try:
@@ -114,7 +112,7 @@ class WindowsJvLinkClient:
         # JV-Link 4.9.x のタイプライブラリには Long 型パラメータのデフォルト値が
         # 空文字列で定義されているバグがある。win32com の _ApplyTypes_ / InvokeTypes が
         # int('') を呼び出してクラッシュするため、生の IDispatch を直接使う。
-        self._dispatch = jv._oleobj_  # type: ignore[attr-defined]
+        self._dispatch = jv._oleobj_
 
         # JVInit(SoftwareCode As String) As Long
         dispid = self._dispatch.GetIDsOfNames("JVInit")
@@ -233,8 +231,8 @@ class WindowsJvLinkClient:
                     (_VT_I4, 0),
                     (
                         (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FIN | _PARAMFLAG_FOUT, None),  # Buff
-                        (_VT_BYREF | _VT_I4, _PARAMFLAG_FIN, None),                       # Size (in)
-                        (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FOUT, None),                    # FileName (out)
+                        (_VT_BYREF | _VT_I4, _PARAMFLAG_FIN, None),  # Size (in)
+                        (_VT_BYREF | _VT_BSTR, _PARAMFLAG_FOUT, None),  # FileName (out)
                     ),
                     " " * buf_size, buf_size, "",
                 )
@@ -299,9 +297,7 @@ def _record_in_date_range(record: str, date_from: str, date_to: str) -> bool:
         return True
     if date_from and race_date < date_from:
         return False
-    if date_to and race_date > date_to:
-        return False
-    return True
+    return not (date_to and race_date > date_to)
 
 
 def _dispatch_error_message(exc: Exception) -> str:

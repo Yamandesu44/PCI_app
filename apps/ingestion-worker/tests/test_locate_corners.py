@@ -7,7 +7,6 @@ from ingestion.locate_corners import (
     search_corners,
     verify_corners,
 )
-from ingestion.parser.common import to_cp932
 
 
 def _make_se_record(
