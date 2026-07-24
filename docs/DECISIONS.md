@@ -1013,3 +1013,14 @@
   FastAPI再起動の順に復旧手順を表示する。自動起動や自動migrationは行わない。
 - **運用確認**: `-PreflightOnly`はreadiness確認後に終了し、mykeibadb.exeや取り込み処理を起動しない。
 - **理由**: 大量の500と不完全な同期を事前に防ぎ、インフラ復旧を運用者の明示的判断に残すため。
+
+## ADR-2026-07-25: Windows取り込みログはUTF-8へ統一する
+
+- **背景**: Pythonのloggingがstderrへ出した日本語をWindows PowerShell 5.1のパイプラインで受け、
+  `Tee-Object`の既定エンコーディングで保存したため、コンソールとログの進捗・エラーが文字化けした。
+- **判断**: `run_batch.ps1`でコンソール入出力、`$OutputEncoding`、`PYTHONIOENCODING`、
+  `PYTHONUTF8`をUTF-8へ統一する。外部プロセス出力は行単位で表示し、`Add-Content -Encoding UTF8`で
+  同じ内容を保存する。`sync_mykeibadb.bat`もコードページ65001とPython環境変数を設定する。
+- **互換性**: バッチの引数、再試行、終了コード、Webhook、取り込み順序は変更しない。
+- **検証**: Windows PowerShell 5.1の`run_batch.ps1`経由で予想72件を生成し、
+  コンソールと保存ログの両方で日本語をUTF-8として読めることを確認した。

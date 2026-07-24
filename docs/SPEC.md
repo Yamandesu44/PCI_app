@@ -235,6 +235,8 @@
 - ✅ Windows全同期の開始前に`API_BASE_URL/ready`でFastAPIとPostgreSQLを確認する。
   利用不能時は`mykeibadb.exe`起動前に中止し、`-PreflightOnly`でデータ更新を伴わない単独確認を行える
   （2026-07-25）。
+- ✅ Windows同期のコンソール、Python標準出力、保存ログをUTF-8へ統一し、日本語の進捗・エラーを
+  文字化けさせず確認できる（2026-07-25）。
 - 🔎 JV-Data バイトオフセットは実データ校正済みだが、JV-Link バージョン差で要再確認。（jv_spec.py, se_parser.py）
   具体的には、UM/KS/CH（master_parsers.py）は Ver.3.0.0→Ver.4.9 の実データ差分を確認・反映済みだが、
   RA/SE（jv_spec.py）は README.md/common.py が「Ver.3.0準拠」と書いたまま未確認（§9-8）。

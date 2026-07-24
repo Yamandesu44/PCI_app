@@ -51,6 +51,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_mykeibadb_full_sync.ps1 -
 5. `batch.py --step forecasts`（今日以降の出走前レース予想を事前生成）
 
 ログは `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log` に出力される。
+Windowsのコンソール、Python標準出力、保存ログはUTF-8へ統一されている。
+日本語が文字化けする場合は、最新の`sync_mykeibadb.bat`または`run_batch.ps1`経由で実行する。
 
 ### 1.1 Webトップに成績未取込警告が出た場合
 

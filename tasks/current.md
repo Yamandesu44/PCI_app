@@ -1,5 +1,12 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-25 完了: Windows取り込みログの文字化けを解消
+
+- [x] Windows PowerShell、Python、保存ログの文字コードをUTF-8へ統一した。
+- [x] `Tee-Object`の既定エンコーディングに依存せず、表示とUTF-8追記を明示的に分離した。
+- [x] `sync_mykeibadb.bat`でもコードページ65001とPython UTF-8モードを設定した。
+- [x] 実環境の`run_batch.ps1`で予想72件を生成し、コンソールと保存ログの日本語を確認した。
+
 ## 2026-07-25 完了: Windows全同期にAPI・DB事前確認を追加
 
 - [x] 全同期開始時に`API_BASE_URL/ready`を確認し、FastAPIとPostgreSQLが利用可能な場合だけ続行する。
@@ -15,7 +22,7 @@
 - [x] 予想事前生成500はWindows環境の`tzdata`欠損による`ZoneInfoNotFoundError`と特定した。
 - [x] 予想事前生成の日付判定を、既存機能と同じ外部データ不要のJST固定オフセットへ統一した。
 - [x] JSTオフセットの回帰テストを追加した。
-- [ ] Codexの実行承認利用上限により、追加テストの実行と修正後の実環境予想生成は未確認。
+- [x] 回帰テスト4件、対象Ruff、mypy strict、実環境の予想72件生成を完了した。
 
 ## 2026-07-25 完了: 取り込み警告の詳細表示を集約
 

@@ -1,5 +1,57 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 02:30 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `0e88e5c`
+- 実装コミット: `20daa55`
+- 目的: JST修正の未実施検証を完了し、Windows取り込みログの日本語文字化けを解消する。
+
+### 完了内容
+
+- JST固定オフセットの回帰テスト4件、対象Ruff、API全体のmypy strictを完了した。
+- 実環境で2026-07-25〜08-08の予想事前生成を実行し、対象72・生成72・スキップ0、API 200を確認した。
+- `apps/ingestion-worker/scripts/run_batch.ps1`
+  - コンソール入出力、PowerShell外部出力、Python標準入出力をUTF-8へ統一した。
+  - `Tee-Object`を廃止し、外部出力を画面表示しながらUTF-8でログへ追記するようにした。
+- `apps/ingestion-worker/scripts/sync_mykeibadb.bat`
+  - コードページ65001、`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`を設定した。
+- Windows PowerShell 5.1のラッパー経由で予想72件を再生成し、コンソールと
+  `logs/20260725-forecasts.log`の日本語が正しく読めることを確認した。
+
+### テスト結果
+
+```text
+pytest tests/unit/application/test_forecast_precompute_use_cases.py -q: 4 passed
+ruff check forecast_precompute_use_cases.py + test: passed
+mypy src --strict --python-version 3.12: 65 files passed
+PowerShell AST parse: passed
+run_batch.ps1 -Step forecasts: 対象72 / 生成72 / スキップ0、exit 0
+保存ログUTF-8読取: passed
+```
+
+### 未完了・既知事項
+
+- ダートRPCI v4初回期間外レビューは、2026-07-25以降の確定ダート100件かつハイ20件到達待ち。
+- 失敗通知時のSSL証明書エラーは別の既知運用課題。
+- 既存の古い文字化け済みログは変換せず、修正後に生成・追記するログからUTF-8を保証する。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/ingestion-worker/scripts/run_batch.ps1`
+2. `apps/ingestion-worker/scripts/sync_mykeibadb.bat`
+3. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
+powershell -ExecutionPolicy Bypass -File scripts\run_batch.ps1 `
+  -Step forecasts -Mode mykeibadb -Date 20260725 -DateTo 20260808 -MaxRetries 1
+```
+
 ## 2026-07-25 02:20 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
