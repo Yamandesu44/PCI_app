@@ -24,6 +24,39 @@ from pci.infrastructure.repositories.race_repository import SqlAlchemyRaceReposi
 pytestmark = pytest.mark.integration
 
 
+def test_long_model_version_round_trips(db_session: Session) -> None:
+    race_key = "2026072505010101"
+    model_version = "lgbm-dirt-v4-lap-history"
+    db_session.add(
+        RaceModel(
+            race_key=race_key,
+            race_date=datetime.date(2026, 7, 25),
+            jyo_cd="05",
+            distance_m=1800,
+            track_type="ダート",
+            field_size=12,
+            status="entries",
+        )
+    )
+    db_session.flush()
+    db_session.add(
+        PredictedPaceModel(
+            race_key=race_key,
+            model_version=model_version,
+            predicted_rpci=43.0,
+            pace_label="平均",
+            confidence=0.72,
+            factors=[],
+        )
+    )
+    db_session.flush()
+
+    predicted = SqlAlchemyMartRepository(db_session).find_predicted_pace(race_key)
+
+    assert predicted is not None
+    assert predicted.model_version == model_version
+
+
 def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) -> None:
     race_key = "2026072205010101"
     old_generated_at = datetime.datetime(2026, 7, 21, 10, 0, tzinfo=datetime.UTC)

@@ -131,7 +131,7 @@ class PredictedPaceModel(Base):
     race_key: Mapped[str] = mapped_column(
         String(16), ForeignKey("races.race_key"), primary_key=True
     )
-    model_version: Mapped[str] = mapped_column(String(20), primary_key=True)
+    model_version: Mapped[str] = mapped_column(String(64), primary_key=True)
     predicted_rpci: Mapped[float] = mapped_column(Float, nullable=False)
     pace_label: Mapped[str] = mapped_column(String(10), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
@@ -153,7 +153,7 @@ class PaceFitModel(Base):
         String(16), ForeignKey("races.race_key"), primary_key=True
     )
     horse_no: Mapped[int] = mapped_column(Integer, primary_key=True)
-    model_version: Mapped[str] = mapped_column(String(20), primary_key=True)
+    model_version: Mapped[str] = mapped_column(String(64), primary_key=True)
     pai: Mapped[float] = mapped_column(Float, nullable=False)
     fit_label: Mapped[str] = mapped_column(String(10), nullable=False)
     reasons: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
