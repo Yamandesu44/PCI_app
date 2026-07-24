@@ -42,13 +42,21 @@
 .PARAMETER DaysForward
     End of the query window, days after today (default 14).
 
+.PARAMETER PreflightOnly
+    Check whether the API and PostgreSQL are ready, then exit without
+    running mykeibadb.exe or any ingestion steps.
+
 .EXAMPLE
     .\run_mykeibadb_full_sync.ps1
+
+.EXAMPLE
+    .\run_mykeibadb_full_sync.ps1 -PreflightOnly
 #>
 param(
     [int]$TimeoutSeconds = 600,
     [int]$DaysBack = 10,
-    [int]$DaysForward = 14
+    [int]$DaysForward = 14,
+    [switch]$PreflightOnly
 )
 
 Set-StrictMode -Version Latest
@@ -68,6 +76,36 @@ function Write-Log {
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
 }
 
+function Test-IngestApiReadiness {
+    param(
+        [Parameter(Mandatory)][string]$BaseUrl,
+        [int]$TimeoutSeconds = 15
+    )
+
+    $readyUrl = "$($BaseUrl.TrimEnd('/'))/ready"
+    Write-Log "Preflight: checking API and PostgreSQL readiness: $readyUrl"
+
+    try {
+        $response = Invoke-RestMethod -Uri $readyUrl -Method Get -TimeoutSec $TimeoutSeconds
+        if ($response.status -eq "ready" -and $response.database -eq "ok") {
+            Write-Log "Preflight OK: API and PostgreSQL are ready."
+            return $true
+        }
+
+        Write-Log "ERROR: readiness check returned status=$($response.status) database=$($response.database)"
+        if ($response.message) { Write-Log "Detail: $($response.message)" }
+        if ($response.action) { Write-Log "Action: $($response.action)" }
+    } catch {
+        Write-Log "ERROR: API or PostgreSQL is not ready: $($_.Exception.Message)"
+    }
+
+    Write-Log "Fix 1: start Docker Desktop."
+    Write-Log "Fix 2: from the repository root, run: docker compose up -d db"
+    Write-Log "Fix 3: from apps\api, run: .venv\Scripts\python.exe -m alembic upgrade head"
+    Write-Log "Fix 4: restart FastAPI, then confirm: http://localhost:8000/ready"
+    return $false
+}
+
 # --- Load .env (expands MYKEIBADB_EXE_PATH etc. into process env vars) ---
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
@@ -80,8 +118,20 @@ if (Test-Path $EnvFile) {
 }
 
 $MykeibadbExe = [System.Environment]::GetEnvironmentVariable("MYKEIBADB_EXE_PATH", "Process")
+$ApiBaseUrl = [System.Environment]::GetEnvironmentVariable("API_BASE_URL", "Process")
+if (-not $ApiBaseUrl) { $ApiBaseUrl = "http://localhost:8000" }
 
 Write-Log "=== run_mykeibadb_full_sync.ps1 start ==="
+
+if (-not (Test-IngestApiReadiness -BaseUrl $ApiBaseUrl)) {
+    Write-Log "Sync aborted before mykeibadb.exe was started."
+    exit 1
+}
+
+if ($PreflightOnly) {
+    Write-Log "Preflight-only check completed."
+    exit 0
+}
 
 if (-not $MykeibadbExe -or -not (Test-Path $MykeibadbExe)) {
     Write-Log "ERROR: MYKEIBADB_EXE_PATH is not set, or mykeibadb.exe was not found: $MykeibadbExe"
