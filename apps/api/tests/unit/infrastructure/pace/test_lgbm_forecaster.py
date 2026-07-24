@@ -11,11 +11,16 @@ from pci.domain.pace.rpci_forecast import PaceLabel, RaceContext
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.infrastructure.pace.lgbm_forecaster import (
     FEATURE_NAMES,
+    FEATURE_NAMES_V2,
     MODEL_VERSION,
     MODEL_VERSION_DIRT,
+    MODEL_VERSION_DIRT_V2,
     MODEL_VERSION_TURF,
+    MODEL_VERSION_TURF_V2,
     LightGBMRpciForecaster,
     SplitLightGBMRpciForecaster,
+    _feature_names_for_booster,
+    _version_for_feature_names,
     build_features,
     load_best_forecaster,
 )
@@ -78,6 +83,59 @@ class TestBuildFeatures:
         assert feats[4] == pytest.approx(1.0)  # front_ratio
         assert feats[5] == pytest.approx(0.0)  # closer_ratio
         assert feats[6] == pytest.approx(-1.0)  # style_balance
+
+    def test_v2_feature_count_matches_names(self) -> None:
+        ctx = _ctx((ESCAPE,) * 2 + (FRONT,) * 3 + (STALKER,) * 4 + (RunningStyleLabel.FLEXIBLE,))
+
+        feats = build_features(ctx, FEATURE_NAMES_V2)
+
+        assert len(feats) == len(FEATURE_NAMES_V2)
+        assert feats[8] == 10.0  # field_size
+        assert feats[9] == pytest.approx(0.2)  # escape_ratio
+        assert feats[10] == 5.0  # front_count
+        assert feats[11] == pytest.approx(0.1)  # flexible_ratio
+        assert feats[12] == pytest.approx(0.1)  # escape_competition
+
+    def test_v2_distance_band_and_venue_one_hot(self) -> None:
+        feats = build_features(
+            _ctx((FRONT,) * 10, distance_m=1600, venue_code="05"),
+            FEATURE_NAMES_V2,
+        )
+
+        assert feats[13:17] == [0.0, 1.0, 0.0, 0.0]
+        assert feats[17:27] == [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    def test_unknown_feature_definition_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="未対応のRPCI特徴量定義"):
+            build_features(_ctx((FRONT,) * 10), ["unknown"])
+
+
+class TestFeatureSchemaSelection:
+    """モデル内の特徴量数から互換スキーマを選択する。"""
+
+    @pytest.mark.parametrize("feature_names", [FEATURE_NAMES, FEATURE_NAMES_V2])
+    def test_supported_feature_counts(self, feature_names: list[str]) -> None:
+        booster = MagicMock()
+        booster.num_feature.return_value = len(feature_names)
+
+        assert _feature_names_for_booster(booster) == feature_names
+
+    def test_unknown_feature_count_is_rejected(self) -> None:
+        booster = MagicMock()
+        booster.num_feature.return_value = 99
+
+        with pytest.raises(ValueError, match="未対応のRPCIモデル特徴量数"):
+            _feature_names_for_booster(booster)
+
+    def test_v2_feature_schema_uses_v2_model_version(self) -> None:
+        assert (
+            _version_for_feature_names(
+                FEATURE_NAMES_V2,
+                MODEL_VERSION_TURF,
+                MODEL_VERSION_TURF_V2,
+            )
+            == MODEL_VERSION_TURF_V2
+        )
 
 
 def _mock_predict(value: float):  # type: ignore[return]
@@ -212,6 +270,17 @@ class TestSplitLightGBMRpciForecaster:
         result = forecaster.forecast(_ctx((ESCAPE,) * 10, track_type="ダート"))
         assert result.label == PaceLabel.HIGH
 
+    def test_v2_models_report_v2_versions(self) -> None:
+        forecaster = self._make_split_forecaster()
+        forecaster._turf_feature_names = FEATURE_NAMES_V2  # type: ignore[attr-defined]
+        forecaster._dirt_feature_names = FEATURE_NAMES_V2  # type: ignore[attr-defined]
+
+        turf = forecaster.forecast(_ctx((FRONT,) * 10, track_type="芝"))
+        dirt = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+
+        assert turf.model_version == MODEL_VERSION_TURF_V2
+        assert dirt.model_version == MODEL_VERSION_DIRT_V2
+
     def test_empty_field_raises(self) -> None:
         forecaster = self._make_split_forecaster()
         with pytest.raises(ValueError, match="脚質情報がありません"):
@@ -243,6 +312,7 @@ class TestLoadBestForecaster:
 
         mock_booster = MagicMock()
         mock_booster.predict.return_value = [52.0]
+        mock_booster.num_feature.return_value = len(FEATURE_NAMES)
 
         with patch(
             "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
@@ -262,6 +332,7 @@ class TestLoadBestForecaster:
 
         mock_booster = MagicMock()
         mock_booster.predict.return_value = [50.0]
+        mock_booster.num_feature.return_value = len(FEATURE_NAMES)
 
         with patch(
             "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
@@ -297,6 +368,7 @@ class TestLoadBestForecaster:
                 raise RuntimeError("corrupt turf model")
             m = MagicMock()
             m.predict.return_value = [50.0]
+            m.num_feature.return_value = len(FEATURE_NAMES)
             return m
 
         with patch(

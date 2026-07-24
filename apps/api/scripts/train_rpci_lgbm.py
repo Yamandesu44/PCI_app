@@ -20,7 +20,11 @@
     python -m scripts.train_rpci_lgbm --track-type dirt --label-balance sqrt-inverse \
         --output models/rpci_lgbm_dirt_balanced_candidate.txt
 
-特徴量 (FEATURE_NAMES 参照, lgbm_forecaster.py と一致):
+    # 頭数・逃げ競合・距離帯・競馬場を追加したv2特徴量候補
+    python -m scripts.train_rpci_lgbm --track-type turf --feature-set v2 \
+        --output models/rpci_lgbm_turf_v2_candidate.txt
+
+特徴量 (FEATURE_NAMES / FEATURE_NAMES_V2 参照, lgbm_forecaster.py と一致):
     distance_m, is_dirt, jyo_cd, escape_count,
     front_ratio, closer_ratio, style_balance, track_cond
 
@@ -44,7 +48,7 @@ from sqlalchemy import text
 from pci.config.settings import get_settings
 from pci.domain.pace.rpci_forecast import PaceLabel, classify_pace
 from pci.infrastructure.database.session import build_engine, build_session_maker
-from pci.infrastructure.pace.lgbm_forecaster import FEATURE_NAMES
+from pci.infrastructure.pace.lgbm_forecaster import FEATURE_NAMES, FEATURE_NAMES_V2
 
 # ── DB クエリ（FEATURE_NAMES と同じ順序で SELECT する）────────────────────
 # :track_filter は "" (全件) or "AND r.track_type = '芝'" / "AND r.track_type = 'ダート'"
@@ -73,6 +77,33 @@ _QUERY_TEMPLATE = """\
             WHEN '不良' THEN 3
             ELSE 0
         END                                                             AS track_cond,
+        COUNT(e.horse_no)                                                AS field_size,
+        SUM(CASE WHEN e.running_style = '逃げ' THEN 1 ELSE 0 END)::float
+            / NULLIF(COUNT(e.horse_no), 0)                              AS escape_ratio,
+        SUM(CASE WHEN e.running_style IN ('逃げ','先行') THEN 1 ELSE 0 END)
+                                                                        AS front_count,
+        SUM(CASE WHEN e.running_style = '自在' THEN 1 ELSE 0 END)::float
+            / NULLIF(COUNT(e.horse_no), 0)                              AS flexible_ratio,
+        GREATEST(
+            SUM(CASE WHEN e.running_style = '逃げ' THEN 1 ELSE 0 END) - 1,
+            0
+        )::float / NULLIF(COUNT(e.horse_no), 0)                         AS escape_competition,
+        CASE WHEN r.distance_m <= 1400 THEN 1.0 ELSE 0.0 END            AS distance_short,
+        CASE WHEN r.distance_m > 1400 AND r.distance_m <= 1800
+             THEN 1.0 ELSE 0.0 END                                     AS distance_mile,
+        CASE WHEN r.distance_m > 1800 AND r.distance_m <= 2200
+             THEN 1.0 ELSE 0.0 END                                     AS distance_middle,
+        CASE WHEN r.distance_m > 2200 THEN 1.0 ELSE 0.0 END             AS distance_long,
+        CASE WHEN r.jyo_cd = '01' THEN 1.0 ELSE 0.0 END                 AS venue_01,
+        CASE WHEN r.jyo_cd = '02' THEN 1.0 ELSE 0.0 END                 AS venue_02,
+        CASE WHEN r.jyo_cd = '03' THEN 1.0 ELSE 0.0 END                 AS venue_03,
+        CASE WHEN r.jyo_cd = '04' THEN 1.0 ELSE 0.0 END                 AS venue_04,
+        CASE WHEN r.jyo_cd = '05' THEN 1.0 ELSE 0.0 END                 AS venue_05,
+        CASE WHEN r.jyo_cd = '06' THEN 1.0 ELSE 0.0 END                 AS venue_06,
+        CASE WHEN r.jyo_cd = '07' THEN 1.0 ELSE 0.0 END                 AS venue_07,
+        CASE WHEN r.jyo_cd = '08' THEN 1.0 ELSE 0.0 END                 AS venue_08,
+        CASE WHEN r.jyo_cd = '09' THEN 1.0 ELSE 0.0 END                 AS venue_09,
+        CASE WHEN r.jyo_cd = '10' THEN 1.0 ELSE 0.0 END                 AS venue_10,
         r.rpci_actual                                                   AS target
     FROM races r
     JOIN race_entries e ON e.race_key = r.race_key
@@ -173,10 +204,16 @@ def _parse_args() -> argparse.Namespace:
             "区分ごとの総重みを均等化する（default: none）"
         ),
     )
+    p.add_argument(
+        "--feature-set",
+        choices=["v1", "v2"],
+        default="v1",
+        help="特徴量定義。v2は頭数・逃げ競合・距離帯・競馬場one-hotを追加（default: v1）",
+    )
     args = p.parse_args()
-    if args.label_balance != "none" and args.output is None:
+    if (args.label_balance != "none" or args.feature_set != "v1") and args.output is None:
         p.error(
-            "--label-balance を指定する場合は、本番モデルの上書きを防ぐため "
+            "検証用の学習設定を指定する場合は、本番モデルの上書きを防ぐため "
             "--output で候補モデルの保存先を指定してください"
         )
     return args
@@ -218,9 +255,15 @@ def main() -> None:
 
     print(f"取得: {len(rows):,} レース")
 
+    feature_names = FEATURE_NAMES if args.feature_set == "v1" else FEATURE_NAMES_V2
+    feature_count = len(feature_names)
+
     # 特徴量と目的変数を numpy 配列に変換（LightGBM 4.x は ndarray 必須）
     x_np = np.array(
-        [[float(v) if v is not None else 0.0 for v in row[:-1]] for row in rows],
+        [
+            [float(v) if v is not None else 0.0 for v in row[:feature_count]]
+            for row in rows
+        ],
         dtype=np.float64,
     )
     y_np = np.array([float(row[-1]) for row in rows], dtype=np.float64)
@@ -246,7 +289,7 @@ def main() -> None:
         x_train,
         label=y_train,
         weight=train_weights,
-        feature_name=FEATURE_NAMES,
+        feature_name=feature_names,
     )
     lgb_val = lgb.Dataset(x_test, label=y_test, reference=lgb_train)
 
@@ -275,7 +318,7 @@ def main() -> None:
 
     print("\n■ 特徴量重要度 (gain)")
     imp = model.feature_importance(importance_type="gain")
-    for name, score in sorted(zip(FEATURE_NAMES, imp, strict=True), key=lambda x: -x[1]):
+    for name, score in sorted(zip(feature_names, imp, strict=True), key=lambda x: -x[1]):
         print(f"  {name:20s}: {score:10.1f}")
 
     # ── モデル保存 ───────────────────────────────────────────────────

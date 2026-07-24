@@ -27,6 +27,13 @@ def test_training_query_selects_latest_races_for_temporal_split() -> None:
     assert "ORDER BY r.race_date DESC, r.race_key DESC" in _QUERY_TEMPLATE
 
 
+def test_training_query_contains_v2_features() -> None:
+    assert "AS field_size" in _QUERY_TEMPLATE
+    assert "AS escape_competition" in _QUERY_TEMPLATE
+    assert "AS distance_middle" in _QUERY_TEMPLATE
+    assert "AS venue_10" in _QUERY_TEMPLATE
+
+
 def test_label_recall_uses_track_specific_thresholds(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -119,6 +126,22 @@ def test_balanced_training_requires_explicit_output(
         sys,
         "argv",
         ["train_rpci_lgbm", "--track-type", "dirt", "--label-balance", "inverse"],
+    )
+
+    with pytest.raises(SystemExit):
+        _parse_args()
+
+    assert "本番モデルの上書きを防ぐため" in capsys.readouterr().err
+
+
+def test_v2_feature_set_requires_explicit_output(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["train_rpci_lgbm", "--track-type", "turf", "--feature-set", "v2"],
     )
 
     with pytest.raises(SystemExit):

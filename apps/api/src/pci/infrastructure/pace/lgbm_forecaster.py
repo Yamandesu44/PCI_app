@@ -26,6 +26,9 @@ from pci.domain.shared.reason import Reason
 MODEL_VERSION = "lgbm-v1"          # 統合モデル（後方互換）
 MODEL_VERSION_TURF = "lgbm-turf-v1"  # 芝専用モデル
 MODEL_VERSION_DIRT = "lgbm-dirt-v1"  # ダート専用モデル
+MODEL_VERSION_V2 = "lgbm-v2-features"
+MODEL_VERSION_TURF_V2 = "lgbm-turf-v2-features"
+MODEL_VERSION_DIRT_V2 = "lgbm-dirt-v2-features"
 
 # Path(__file__) = src/pci/infrastructure/pace/lgbm_forecaster.py
 # .parent × 5   = apps/api/
@@ -44,6 +47,19 @@ FEATURE_NAMES = [
     "closer_ratio",  # 差追比率 (STALKER+CLOSER) / n
     "style_balance", # 差追比率 - 逃先行比率
     "track_cond",    # 馬場状態（良=0, 稍重=1, 重=2, 不良=3）
+]
+
+FEATURE_NAMES_V2 = FEATURE_NAMES + [
+    "field_size",          # 出走頭数
+    "escape_ratio",        # 逃げ馬比率
+    "front_count",         # 逃げ・先行馬頭数
+    "flexible_ratio",      # 自在馬比率
+    "escape_competition",  # 2頭目以降の逃げ競合比率
+    "distance_short",      # 1400m以下
+    "distance_mile",       # 1401〜1800m
+    "distance_middle",     # 1801〜2200m
+    "distance_long",       # 2201m以上
+    *(f"venue_{code:02d}" for code in range(1, 11)),
 ]
 
 _FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
@@ -76,6 +92,7 @@ def _make_forecast(
     predict_fn: Any,
     context: RaceContext,
     version: str,
+    feature_names: list[str] = FEATURE_NAMES,
 ) -> RpciForecast:
     """特徴量ベクトルを渡して予測値・ラベル・reasons を組み立てる共通処理。"""
     styles = context.running_styles
@@ -83,7 +100,7 @@ def _make_forecast(
     if n == 0:
         raise ValueError("出走馬の脚質情報がありません。想定 RPCI を予測できません。")
 
-    features = build_features(context)
+    features = build_features(context, feature_names)
     raw = float(predict_fn([features])[0])
     rpci = round(min(max(raw, _RPCI_MIN), _RPCI_MAX), 1)
     label = classify_pace(rpci, context.track_type)
@@ -127,9 +144,16 @@ class LightGBMRpciForecaster:
     def __init__(self, model_path: str | Path) -> None:
         booster = _load_lgb_booster(model_path)
         self._predict = booster.predict
+        self._feature_names = _feature_names_for_booster(booster)
 
     def forecast(self, context: RaceContext) -> RpciForecast:
-        return _make_forecast(self._predict, context, MODEL_VERSION)
+        feature_names = getattr(self, "_feature_names", FEATURE_NAMES)
+        return _make_forecast(
+            self._predict,
+            context,
+            _version_for_feature_names(feature_names, MODEL_VERSION, MODEL_VERSION_V2),
+            feature_names,
+        )
 
 
 class SplitLightGBMRpciForecaster:
@@ -148,11 +172,55 @@ class SplitLightGBMRpciForecaster:
         dirt_booster = _load_lgb_booster(dirt_model_path)
         self._turf_predict = turf_booster.predict
         self._dirt_predict = dirt_booster.predict
+        self._turf_feature_names = _feature_names_for_booster(turf_booster)
+        self._dirt_feature_names = _feature_names_for_booster(dirt_booster)
 
     def forecast(self, context: RaceContext) -> RpciForecast:
         if context.track_type == "ダート":
-            return _make_forecast(self._dirt_predict, context, MODEL_VERSION_DIRT)
-        return _make_forecast(self._turf_predict, context, MODEL_VERSION_TURF)
+            feature_names = getattr(self, "_dirt_feature_names", FEATURE_NAMES)
+            return _make_forecast(
+                self._dirt_predict,
+                context,
+                _version_for_feature_names(
+                    feature_names,
+                    MODEL_VERSION_DIRT,
+                    MODEL_VERSION_DIRT_V2,
+                ),
+                feature_names,
+            )
+        feature_names = getattr(self, "_turf_feature_names", FEATURE_NAMES)
+        return _make_forecast(
+            self._turf_predict,
+            context,
+            _version_for_feature_names(
+                feature_names,
+                MODEL_VERSION_TURF,
+                MODEL_VERSION_TURF_V2,
+            ),
+            feature_names,
+        )
+
+
+def _feature_names_for_booster(booster: Any) -> list[str]:
+    """モデルの特徴量数から互換性のある特徴量定義を選択する。"""
+    feature_count = int(booster.num_feature())
+    if feature_count == len(FEATURE_NAMES):
+        return FEATURE_NAMES
+    if feature_count == len(FEATURE_NAMES_V2):
+        return FEATURE_NAMES_V2
+    raise ValueError(
+        f"未対応のRPCIモデル特徴量数です: {feature_count} "
+        f"（対応: {len(FEATURE_NAMES)}, {len(FEATURE_NAMES_V2)}）"
+    )
+
+
+def _version_for_feature_names(
+    feature_names: list[str],
+    v1_version: str,
+    v2_version: str,
+) -> str:
+    """特徴量世代に対応するモデルバージョンを返す。"""
+    return v2_version if feature_names == FEATURE_NAMES_V2 else v1_version
 
 
 def load_best_forecaster(
@@ -195,8 +263,11 @@ def load_best_forecaster(
     return RuleBasedRpciForecaster()
 
 
-def build_features(context: RaceContext) -> list[float]:
-    """RaceContext を FEATURE_NAMES 順の特徴量リストへ変換する。
+def build_features(
+    context: RaceContext,
+    feature_names: list[str] = FEATURE_NAMES,
+) -> list[float]:
+    """RaceContext を指定した特徴量定義順のリストへ変換する。
 
     学習スクリプト（train_rpci_lgbm.py）と同じ特徴量・同じ順序を維持すること。
     """
@@ -205,6 +276,7 @@ def build_features(context: RaceContext) -> list[float]:
     escape = sum(1 for s in styles if s == RunningStyleLabel.ESCAPE)
     front = sum(1 for s in styles if s in _FRONT_STYLES)
     closer = sum(1 for s in styles if s in _CLOSER_STYLES)
+    flexible = sum(1 for s in styles if s == RunningStyleLabel.FLEXIBLE)
 
     try:
         jyo_cd = int(context.venue_code) if context.venue_code else 0
@@ -213,7 +285,7 @@ def build_features(context: RaceContext) -> list[float]:
 
     track_cond = _CONDITION_ORD.get(context.track_condition or "良", 0)
 
-    return [
+    base = [
         float(context.distance_m),
         1.0 if context.track_type == "ダート" else 0.0,
         float(jyo_cd),
@@ -222,4 +294,23 @@ def build_features(context: RaceContext) -> list[float]:
         float(closer) / n,
         float(closer - front) / n,
         float(track_cond),
+    ]
+    if feature_names == FEATURE_NAMES:
+        return base
+    if feature_names != FEATURE_NAMES_V2:
+        raise ValueError(f"未対応のRPCI特徴量定義です: {len(feature_names)}")
+
+    distance = context.distance_m
+    venue_one_hot = [1.0 if jyo_cd == code else 0.0 for code in range(1, 11)]
+    return base + [
+        float(n),
+        float(escape) / n,
+        float(front),
+        float(flexible) / n,
+        float(max(escape - 1, 0)) / n,
+        1.0 if distance <= 1400 else 0.0,
+        1.0 if 1400 < distance <= 1800 else 0.0,
+        1.0 if 1800 < distance <= 2200 else 0.0,
+        1.0 if distance > 2200 else 0.0,
+        *venue_one_hot,
     ]
