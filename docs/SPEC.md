@@ -225,6 +225,8 @@
 - 🟡 **上がり3F 妥当範囲チェック**（25.0〜55.0秒）で外れ値レコードを除外（本セッションで追加、
   外部データの異常値が PCI を破壊するのを防ぐ）。範囲値は 🧪暫定。（se_parser.py）
 - 🟡 バッチ実行ログを `ingest_log` に記録、失敗時 Webhook 通知（本セッション周辺で追加）。
+- ✅ WindowsラッパーのWebhook通知は全リトライ失敗後の1回に集約し、URLをログへ出さない。
+  `run_batch.ps1 -TestNotification`で取り込みを伴わない到達確認を行える（2026-07-25）。
 - ✅ Task Scheduler 自動化: 金・土 10:00 / 日 18:00 に `sync_mykeibadb.bat`。（scripts/, MANUAL_SYNC_GUIDE.md）
   **2026-07-13修正**: `run_mykeibadb_full_sync.ps1` が `--step special-entries`（重賞等の来週分
   advance entry、別mykeibadbテーブル）を呼んでおらず自動実行から常に漏れていたバグを発見・修正
@@ -295,8 +297,8 @@
 - ✅ **API/UI 認証**: `/api/v1/ingest-status` は公開GET（`/internal/ingest/*` の
   X-Ingest-Token 保護とは別。MVPは個人利用のため運用者自身への表示という前提。
   多人数公開時は表示要否を再検討（§9-6 の認証・公開範囲の議論と合わせて）。
-- 🔎 Webhook通知（`NOTIFY_WEBHOOK_URL`）自体が実際に届くかは、Windows実行機での
-  実地確認が必要（このクラウド環境から検証不可）。
+- ✅ Webhook通知（`NOTIFY_WEBHOOK_URL`）はWindows実行機からSlackへテスト送信し、
+  到達経路とURL非出力を確認済み。（run_batch.ps1、2026-07-25）
 
 ---
 

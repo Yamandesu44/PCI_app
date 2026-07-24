@@ -54,6 +54,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_mykeibadb_full_sync.ps1 -
 Windowsのコンソール、Python標準出力、保存ログはUTF-8へ統一されている。
 日本語が文字化けする場合は、最新の`sync_mykeibadb.bat`または`run_batch.ps1`経由で実行する。
 
+Webhookの設定と到達だけを確認する場合は、取り込みを実行せず次のコマンドを使用する。
+
+```powershell
+.\scripts\run_batch.ps1 -TestNotification
+```
+
+通常同期では、各リトライ中の重複通知を抑え、全リトライ失敗後に1回だけ通知する。
+Webhook URLは認証情報を含むため、コンソールや保存ログへ出力しない。
+
 ### 1.1 Webトップに成績未取込警告が出た場合
 
 警告内の「再同期コマンド」を開くと、DB内の最古の未取込日まで遡る`DaysBack`付きコマンドを

@@ -1,5 +1,61 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 02:40 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `c8468f8`
+- 実装コミット: `d383b9b`
+- 目的: WindowsのWebhook通知を重複なく安全に送り、実環境で到達確認する。
+
+### 完了内容
+
+- `apps/ingestion-worker/src/ingestion/batch.py`
+  - `INGEST_NOTIFICATION_OWNER=wrapper`時はPython側通知をラッパーへ委譲する。
+  - 通知中のhttpx INFOログを抑え、例外中のWebhook URLを`<redacted>`へ置換する。
+  - `raise_for_status()`でHTTPエラーを通知成功として扱わない。
+- `apps/ingestion-worker/scripts/run_batch.ps1`
+  - 全リトライ失敗後に1回だけ通知する。
+  - TLS 1.2と通常の証明書検証を維持し、例外中のURLを秘匿する。
+  - 取り込みを伴わない`-TestNotification`を追加した。
+- `apps/ingestion-worker/tests/test_batch_notifications.py`
+  - ラッパー配下の重複通知抑止、URL秘匿、httpxログレベル復元を固定した。
+- Windows実行機からSlackへのテスト通知に成功し、専用ログにURLがないことを確認した。
+
+### テスト結果
+
+```text
+pytest tests/test_batch_notifications.py -q: 2 passed
+対象Ruff: passed
+PowerShell AST parse: passed
+run_batch.ps1 -TestNotification: exit 0、送信成功
+webhook-testログのURL検索: 0件
+```
+
+全worker Ruffは今回無関係の`windows_client.py`・`locate_corners.py`等14件で失敗した。
+全worker mypy strictも既存の型スタブ不足・`mykeibadb_client.py`等20件で失敗した。
+今回変更ファイルのRuffと通知テストは成功している。
+
+### 未完了・既知事項
+
+- 修正前の古いローカルログにWebhook URLが記録されているため、Slack側でWebhookを再発行し、
+  `apps/ingestion-worker/.env`のURLを更新する。旧ログやURLをリポジトリへコミットしない。
+- ダートRPCI v4初回期間外レビューは標本条件到達待ち。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/ingestion-worker/scripts/run_batch.ps1`
+2. `apps/ingestion-worker/src/ingestion/batch.py`
+3. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
+.\scripts\run_batch.ps1 -TestNotification
+```
+
 ## 2026-07-25 02:30 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

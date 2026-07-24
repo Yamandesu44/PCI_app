@@ -194,6 +194,8 @@ mykeibadbモードでは、`--step all` と `scripts/run_mykeibadb_full_sync.ps1
 利用できない場合は、`mykeibadb.exe`と取り込み処理を開始せず終了します。接続確認だけを行う場合は
 `powershell -ExecutionPolicy Bypass -File scripts\run_mykeibadb_full_sync.ps1 -PreflightOnly`を使用します。
 `sync_mykeibadb.bat`と`run_batch.ps1`はWindowsコンソール、Python出力、保存ログをUTF-8へ統一します。
+Webhookだけを確認する場合は`.\scripts\run_batch.ps1 -TestNotification`を使用します。
+ラッパー実行時の失敗通知は全リトライ失敗後の1回に集約され、Webhook URLはログへ出しません。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723 -ChunkDays 7 -MaxRetries 1

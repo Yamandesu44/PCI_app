@@ -1,5 +1,13 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-25 完了: Webhook通知を安全に集約しWindowsで実地確認
+
+- [x] ラッパー配下のPython通知を抑え、全リトライ失敗後の1回だけ通知するようにした。
+- [x] httpxのリクエストログと例外から、認証情報を含むWebhook URLを秘匿した。
+- [x] HTTPエラーを通知成功として扱わず、TLS 1.2と通常の証明書検証を維持した。
+- [x] 取り込みを伴わない`run_batch.ps1 -TestNotification`を追加した。
+- [x] Windows実行機からSlackへのテスト通知と、ログへのURL非出力を確認した。
+
 ## 2026-07-25 完了: Windows取り込みログの文字化けを解消
 
 - [x] Windows PowerShell、Python、保存ログの文字コードをUTF-8へ統一した。
@@ -747,9 +755,8 @@
     無く検証できない点に注意。
   - ブロック要因: 対象定数ごとの評価指標・受入条件は未確定。独断で正式化しない。
 
-- [ ] **P2 Webhook通知のWindows実地確認**
-  - 状態: ⏸通知先設定待ち
-  - 完了条件: `NOTIFY_WEBHOOK_URL`を設定し、失敗通知の到達をWindows実行機で確認する。
+- [x] **P2 Webhook通知のWindows実地確認**
+  - 2026-07-25、`run_batch.ps1 -TestNotification`でSlackへの送信成功とURL非出力を確認した。
 
 ---
 

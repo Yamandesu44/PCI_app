@@ -1024,3 +1024,14 @@
 - **互換性**: バッチの引数、再試行、終了コード、Webhook、取り込み順序は変更しない。
 - **検証**: Windows PowerShell 5.1の`run_batch.ps1`経由で予想72件を生成し、
   コンソールと保存ログの両方で日本語をUTF-8として読めることを確認した。
+
+## ADR-2026-07-25: Webhook通知は最終失敗時の1回に集約しURLを秘匿する
+
+- **背景**: `run_batch.ps1`の各Python実行とラッパー最終処理が同じ失敗を通知し、3回再試行では
+  最大4件届いていた。またhttpxのINFOログが認証情報を含むWebhook URL全体を保存していた。
+- **判断**: ラッパー配下では`INGEST_NOTIFICATION_OWNER=wrapper`を設定し、Python側の通知を抑止する。
+  全リトライ失敗後にPowerShellから1回だけ通知する。Pythonを直接実行した場合の通知は維持する。
+- **秘匿**: Python通知中はhttpxのINFOログを抑え、Python・PowerShellの例外にURLが含まれる場合は
+  `<redacted>`へ置換する。HTTPエラーも成功扱いにせず検出する。証明書検証は無効化しない。
+- **運用**: `run_batch.ps1 -TestNotification`は取り込みを行わず、設定済み通知先へテストを1件送る。
+- **検証**: Windows実行機からSlackへテスト通知が成功し、専用ログにURLがないことを確認した。
