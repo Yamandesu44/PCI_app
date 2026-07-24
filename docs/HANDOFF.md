@@ -1,5 +1,69 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 01:29 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `2619925`
+- 実装コミット: `418771a`
+- 目的: 取り込み警告がレース一覧を初期画面下方へ押し下げる問題を解消し、復旧情報を失わずコンパクトにする。
+
+### 完了した内容
+
+- `apps/web/src/components/IngestStatusBanner.tsx`
+  - 失敗、成績未取込、馬場情報未反映、重複、再同期、馬場補完の個別`details`を廃止した。
+  - 警告の見出しと要点を常時表示し、全詳細を「詳細と復旧手順」1つへ集約して既定で閉じた。
+  - 件数、代表対象、レースリンク、失敗内容、コピー可能な復旧コマンドはすべて維持した。
+  - 開閉状態を示すChevronとキーボードフォーカス表示を追加した。
+- `apps/web/src/components/IngestStatusBanner.test.tsx`
+  - 警告時の開閉領域が1つで閉状態、正常時は存在しないことを静的描画で検証した。
+- `apps/web/vitest.config.ts`
+  - TSXテスト、React automatic JSX、`@`エイリアスを有効化した。
+
+### 未完了・作業が止まっている箇所
+
+- 実装上の未完了はない。
+- Codex実行環境のブラウザ接続が`EPERM: operation not permitted, lstat 'C:\Users\yuuta\AppData'`
+  で初期化できず、デスクトップ・モバイルの自動スクリーンショット検証のみ未実施。
+- 仮実装・暫定値・API契約・DB変更はない。
+
+### テスト結果
+
+```text
+npm.cmd test --workspace=@pci/web
+7 files / 83 tests passed
+
+npm.cmd exec tsc --workspace=@pci/web -- --noEmit
+成功
+
+npm.cmd run build --workspace=@pci/web
+Next.js 15.5.19 production build 成功
+
+git diff --check
+エラーなし（WindowsのLF→CRLF予告のみ）
+```
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/IngestStatusBanner.tsx`
+2. `apps/web/src/components/IngestStatusBanner.test.tsx`
+3. `apps/web/vitest.config.ts`
+4. `docs/DECISIONS.md`末尾の取り込み警告ADR
+5. `tasks/current.md`先頭
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+npm.cmd test --workspace=@pci/web
+npm.cmd exec tsc --workspace=@pci/web -- --noEmit
+npm.cmd run dev --workspace=@pci/web
+```
+
+ブラウザで警告のあるトップ画面をデスクトップとモバイル幅で開き、初期状態がコンパクトであること、
+「詳細と復旧手順」の展開後に全カテゴリとコマンドが表示されることを確認する。
+
 ## 2026-07-24 16:50 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
