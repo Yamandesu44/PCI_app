@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
-from zoneinfo import ZoneInfo
 
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.domain.racing.race import RaceStatus
 from pci.domain.racing.repository import RaceRepository
 from pci.domain.shared.race_key import RaceKey
+
+_JRA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=9), name="JST")
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ class PrecomputeUpcomingForecastsUseCase:
         if date_from > date_to:
             raise ValueError("開始日は終了日以前にしてください。")
 
-        current_date = today or datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date()
+        current_date = today or datetime.datetime.now(_JRA_TIMEZONE).date()
         current = max(date_from, current_date)
         if current > date_to:
             return ForecastPrecomputeOutput(scanned=0, generated=0, skipped=0)

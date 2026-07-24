@@ -5,12 +5,19 @@ from __future__ import annotations
 import datetime
 from unittest.mock import Mock
 
-from pci.application.forecast_precompute_use_cases import PrecomputeUpcomingForecastsUseCase
+from pci.application.forecast_precompute_use_cases import (
+    _JRA_TIMEZONE,
+    PrecomputeUpcomingForecastsUseCase,
+)
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
 from tests.unit.application.fake_repository import FakeRaceRepository
+
+
+def test_jra_timezone_does_not_require_external_timezone_data() -> None:
+    assert _JRA_TIMEZONE.utcoffset(None) == datetime.timedelta(hours=9)
 
 
 def _save_race(
