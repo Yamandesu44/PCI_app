@@ -278,7 +278,7 @@ def _seed_confirmed(s: Session) -> tuple[float | None, float | None]:
     pci_values: list[float] = []
     finish_positions: list[int] = []
 
-    for ketto, horse_no, frame_no, finish_pos, rt_s, a3f_s, c1, c2, c3, c4, rs in _CONFIRMED_RESULTS:
+    for _, _, _, finish_pos, rt_s, a3f_s, *_ in _CONFIRMED_RESULTS:
         pci = _pci(rt_s, a3f_s, _CONFIRMED_DISTANCE_M)
         pci_values.append(pci)
         finish_positions.append(finish_pos)
@@ -304,7 +304,19 @@ def _seed_confirmed(s: Session) -> tuple[float | None, float | None]:
     # 親レースを先に確定させ、直後の race_entries 登録で FK 違反にならないようにする。
     s.flush()
 
-    for ketto, horse_no, frame_no, finish_pos, rt_s, a3f_s, c1, c2, c3, c4, rs in _CONFIRMED_RESULTS:
+    for (
+        ketto,
+        horse_no,
+        frame_no,
+        finish_pos,
+        rt_s,
+        a3f_s,
+        c1,
+        c2,
+        c3,
+        c4,
+        rs,
+    ) in _CONFIRMED_RESULTS:
         pci = _pci(rt_s, a3f_s, _CONFIRMED_DISTANCE_M)
         s.merge(
             RaceEntryModel(

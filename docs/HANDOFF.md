@@ -18,6 +18,7 @@
   - `client/mykeibadb_client.py`
   - `locate_corners.py`
   - `tests/test_locate_corners.py`
+- API全体Ruffを妨げていた`apps/api/scripts/seed_dev.py`の未使用アンパックと長い行を修正した。
 - `forecastDecisionChecklist()`へ`integratedRanking`を渡し、冒頭の候補を展開適性単独1位から
   統合順位上位3頭へ変更した。注意馬と「予想精度は検証データを蓄積中」も追加した。
 - `IntegratedRankingView`は上位5頭を初期表示し、6位以下を`details`へ格納した。
@@ -50,6 +51,12 @@ web:
   npm.cmd test --workspace=@pci/web: 83 passed
   npm.cmd run typecheck --workspace=@pci/web: passed
   npm.cmd run build --workspace=@pci/web: passed
+
+api:
+  python -m pytest -m "not integration" -q: 591 passed, 30 deselected
+  python -m ruff check src tests scripts: passed
+  python -m mypy src --strict --python-version 3.12: 65 files passed
+  import-linter: 2 contracts kept, 0 broken
 
 実画面:
   1440x900: horizontal overflow なし
