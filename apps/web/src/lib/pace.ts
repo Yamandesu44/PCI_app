@@ -5,7 +5,12 @@
  * 体現する層。専門用語（RPCI・PAI）を非専門家向けの言葉・色・並びへ変換する。
  * 副作用なし・決定的なので vitest で単体テストする。
  */
-import type { ForecastAccuracy, HorseFit, StyleAdvantage } from "@pci/api-client";
+import type {
+  ForecastAccuracy,
+  HorseFit,
+  IntegratedRanking,
+  StyleAdvantage,
+} from "@pci/api-client";
 
 export type PaceTone = "high" | "average" | "slow";
 
@@ -431,15 +436,29 @@ export function forecastDecisionChecklist({
   predictedRpci,
   confidence,
   horses,
+  integratedRanking,
 }: {
   predictedRpci: number | null | undefined;
   confidence: number;
   horses: HorseFit[];
+  integratedRanking?: IntegratedRanking | null;
 }): ForecastDecisionChecklistItem[] {
   const speed = paceSpeedFromIndex(predictedRpci);
   const confidenceMeta = confidenceInsight(confidence);
-  const topHorse = sortByPai(horses)[0];
-  const topRecommendation = topHorse ? benefitRecommendation(topHorse, 0) : null;
+  const integratedTop = [...(integratedRanking?.entries ?? [])]
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 3);
+  const fallbackTop = sortByPai(horses).slice(0, 3);
+  const topNames =
+    integratedTop.length > 0
+      ? integratedTop.map((entry) => entry.horse_name ?? horseNumberLabel(entry))
+      : fallbackTop.map(horseName);
+  const attentionHorse = sortDiscountCandidates(horses).find(
+    (horse) => horse.fit_label === "不利" || horse.pai < 60,
+  );
+  const attentionRecommendation = attentionHorse
+    ? discountRecommendation(attentionHorse)
+    : null;
 
   return [
     {
@@ -448,17 +467,24 @@ export function forecastDecisionChecklist({
       detail: speed.bettingHint,
     },
     {
-      label: "中心候補",
-      value: topHorse ? `${horseName(topHorse)} / ${topRecommendation?.label}` : "判断材料が不足",
+      label: "総合上位3頭",
+      value: topNames.length > 0 ? topNames.join(" / ") : "判断材料が不足",
       detail:
-        topHorse && topRecommendation
-          ? topRecommendation.reason
-          : "出走馬データがそろうと、展開が向きそうな馬を表示します。",
+        topNames.length > 0
+          ? "近走内容と今回の展開適性を合わせた上位候補です。"
+          : "出走馬データがそろうと、総合上位候補を表示します。",
     },
     {
-      label: "検討方針",
-      value: confidenceMeta.label,
-      detail: confidenceMeta.bettingHint,
+      label: "注意馬",
+      value: attentionHorse ? horseName(attentionHorse) : "大きな割引材料なし",
+      detail:
+        attentionRecommendation?.reason ??
+        "今回の展開だけで大きく評価を下げる馬は見当たりません。",
+    },
+    {
+      label: "展開信頼度",
+      value: `${confidenceMeta.label} ・ ${Math.round(confidence * 100)}%`,
+      detail: `${confidenceMeta.bettingHint} 予想精度は検証データを蓄積中です。`,
     },
   ];
 }

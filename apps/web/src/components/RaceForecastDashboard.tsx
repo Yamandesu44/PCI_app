@@ -107,6 +107,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
     predictedRpci: forecast.predicted_rpci,
     confidence: forecast.confidence,
     horses,
+    integratedRanking: forecast.integrated_ranking,
   });
 
   return (
@@ -176,11 +177,11 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
             今回の検討サマリー
           </h2>
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid overflow-hidden rounded-lg border border-slate-200 bg-slate-200 gap-px shadow-sm md:grid-cols-2 xl:grid-cols-4">
           {decisionChecklist.map((item) => (
-            <div key={item.label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div key={item.label} className="min-w-0 bg-white p-4">
               <p className="m-0 text-xs font-semibold text-slate-500">{item.label}</p>
-              <p className="m-0 mt-2 text-lg font-semibold tracking-normal text-slate-950">
+              <p className="m-0 mt-2 break-words text-base font-semibold tracking-normal text-slate-950">
                 {item.value}
               </p>
               <p className="m-0 mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>

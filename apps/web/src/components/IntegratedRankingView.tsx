@@ -45,12 +45,59 @@ function Tag({ label, chip }: { label: string; chip: string }) {
   );
 }
 
+function RankingRows({ entries }: { entries: IntegratedEntry[] }) {
+  return (
+    <ol className="m-0 grid list-none gap-2 p-0">
+      {entries.map((entry) => {
+        const category = CATEGORY_TAG[entry.mark] ?? null;
+        const ability = abilityTag(entry.ability_tier);
+        const fit = fitTag(entry.fit_label);
+        const rowClass = category?.row ?? "border-slate-200 bg-white";
+        return (
+          <li
+            key={entry.horse_no}
+            className={`flex items-start gap-3 rounded-lg border p-3 shadow-sm ${rowClass}`}
+          >
+            <span className="flex shrink-0 flex-col items-center justify-center">
+              <span className="text-xl font-bold leading-none text-slate-900">{entry.rank}</span>
+              <span className="mt-0.5 text-[10px] font-medium text-slate-400">位</span>
+            </span>
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded border text-xs font-bold ${FRAME_CLASS[entry.frame_no] ?? FRAME_CLASS[1]}`}
+              aria-label={entry.frame_no > 0 ? `${entry.frame_no}枠` : "枠順未確定"}
+            >
+              {entry.horse_no}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="m-0 truncate text-sm font-semibold text-slate-950">
+                  {entryName(entry)}
+                </p>
+                {category ? <Tag label={category.label} chip={category.chip} /> : null}
+                {ability ? <Tag label={ability.label} chip={ability.chip} /> : null}
+                {fit ? <Tag label={fit.label} chip={fit.chip} /> : null}
+              </div>
+              {entry.reasons[0] ? (
+                <p className="m-0 mt-1 text-xs leading-5 text-slate-600">
+                  {entry.reasons[0].description}
+                </p>
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /**
  * 統合順位予想（展開×能力）。総合順位を主役に、分類は◎○▲△の印ではなく言葉タグで表す。
  */
 export function IntegratedRankingView({ ranking }: { ranking: IntegratedRanking }) {
-  const entries = ranking.entries ?? [];
+  const entries = [...(ranking.entries ?? [])].sort((a, b) => a.rank - b.rank);
   if (entries.length === 0) return null;
+  const primaryEntries = entries.slice(0, 5);
+  const remainingEntries = entries.slice(5);
 
   return (
     <section aria-labelledby="integrated-heading">
@@ -73,46 +120,17 @@ export function IntegratedRankingView({ ranking }: { ranking: IntegratedRanking 
         </div>
       </div>
 
-      <ol className="m-0 grid list-none gap-2 p-0">
-        {entries.map((entry) => {
-          const category = CATEGORY_TAG[entry.mark] ?? null;
-          const ability = abilityTag(entry.ability_tier);
-          const fit = fitTag(entry.fit_label);
-          const rowClass = category?.row ?? "border-slate-200 bg-white";
-          return (
-            <li
-              key={entry.horse_no}
-              className={`flex items-start gap-3 rounded-lg border p-3 shadow-sm ${rowClass}`}
-            >
-              <span className="flex shrink-0 flex-col items-center justify-center">
-                <span className="text-xl font-bold leading-none text-slate-900">{entry.rank}</span>
-                <span className="mt-0.5 text-[10px] font-medium text-slate-400">位</span>
-              </span>
-              <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded border text-xs font-bold ${FRAME_CLASS[entry.frame_no] ?? FRAME_CLASS[1]}`}
-                aria-label={entry.frame_no > 0 ? `${entry.frame_no}枠` : "枠順未確定"}
-              >
-                {entry.horse_no}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="m-0 truncate text-sm font-semibold text-slate-950">
-                    {entryName(entry)}
-                  </p>
-                  {category ? <Tag label={category.label} chip={category.chip} /> : null}
-                  {ability ? <Tag label={ability.label} chip={ability.chip} /> : null}
-                  {fit ? <Tag label={fit.label} chip={fit.chip} /> : null}
-                </div>
-                {entry.reasons[0] ? (
-                  <p className="m-0 mt-1 text-xs leading-5 text-slate-600">
-                    {entry.reasons[0].description}
-                  </p>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+      <RankingRows entries={primaryEntries} />
+      {remainingEntries.length > 0 ? (
+        <details className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+            6位以下を表示（{remainingEntries.length}頭）
+          </summary>
+          <div className="mt-3">
+            <RankingRows entries={remainingEntries} />
+          </div>
+        </details>
+      ) : null}
       <p className="m-0 mt-3 text-xs leading-5 text-slate-400">
         ※ 地力は近走の着順内容から推定した相対評価です。「穴（妙味）」は地力中位でも展開が向けば上位進出の
         余地がある馬、「人気でも注意」は地力上位でも今回の流れが向きにくい馬です。

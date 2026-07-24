@@ -252,7 +252,7 @@ describe("sortDiscountCandidates", () => {
 });
 
 describe("forecastDecisionChecklist", () => {
-  it("展開・中心候補・検討方針の3項目を作る", () => {
+  it("展開・総合上位・注意馬・信頼度の4項目を作る", () => {
     const checklist = forecastDecisionChecklist({
       predictedRpci: 48,
       confidence: 0.72,
@@ -268,15 +268,43 @@ describe("forecastDecisionChecklist", () => {
         },
         { horse_no: 2, frame_no: 2, running_style: "差し", pai: 70, fit_label: "合致", reasons: [] },
       ],
+      integratedRanking: {
+        model_version: "integrated-v1",
+        reasons: [],
+        entries: [
+          {
+            rank: 1,
+            horse_no: 2,
+            frame_no: 2,
+            horse_name: "総合一位",
+            mark: "本命",
+            ability_tier: "上位",
+            fit_label: "合致",
+            reasons: [],
+          },
+          {
+            rank: 2,
+            horse_no: 1,
+            frame_no: 1,
+            horse_name: "テストホース",
+            mark: "対抗",
+            ability_tier: "上位",
+            fit_label: "合致",
+            reasons: [],
+          },
+        ],
+      },
     });
 
-    expect(checklist).toHaveLength(3);
+    expect(checklist).toHaveLength(4);
     expect(checklist[0]).toMatchObject({ label: "展開", value: "やや速い流れ" });
-    expect(checklist[1]?.value).toContain("テストホース");
-    expect(checklist[2]).toMatchObject({ label: "検討方針", value: "読みやすい" });
+    expect(checklist[1]).toMatchObject({ label: "総合上位3頭" });
+    expect(checklist[1]?.value).toBe("総合一位 / テストホース");
+    expect(checklist[2]).toMatchObject({ label: "注意馬", value: "大きな割引材料なし" });
+    expect(checklist[3]).toMatchObject({ label: "展開信頼度", value: "読みやすい ・ 72%" });
   });
 
-  it("馬データがない場合は中心候補を不足扱いにする", () => {
+  it("馬データがない場合は総合上位を不足扱いにする", () => {
     const checklist = forecastDecisionChecklist({
       predictedRpci: null,
       confidence: 0.4,
@@ -285,7 +313,8 @@ describe("forecastDecisionChecklist", () => {
 
     expect(checklist[0]?.value).toBe("判断材料が不足");
     expect(checklist[1]?.value).toBe("判断材料が不足");
-    expect(checklist[2]?.value).toBe("変動注意");
+    expect(checklist[2]?.value).toBe("大きな割引材料なし");
+    expect(checklist[3]?.value).toBe("変動注意 ・ 40%");
   });
 });
 
