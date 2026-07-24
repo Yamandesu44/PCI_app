@@ -32,13 +32,16 @@ MODEL_VERSION_DIRT_V2 = "lgbm-dirt-v2-features"
 MODEL_VERSION_V3 = "lgbm-v3-history"
 MODEL_VERSION_TURF_V3 = "lgbm-turf-v3-history"
 MODEL_VERSION_DIRT_V3 = "lgbm-dirt-v3-history"
+MODEL_VERSION_V4 = "lgbm-v4-lap-history"
+MODEL_VERSION_TURF_V4 = "lgbm-turf-v4-lap-history"
+MODEL_VERSION_DIRT_V4 = "lgbm-dirt-v4-lap-history"
 
 # Path(__file__) = src/pci/infrastructure/pace/lgbm_forecaster.py
 # .parent × 5   = apps/api/
 _MODELS_DIR = Path(__file__).parent.parent.parent.parent.parent / "models"
 _DEFAULT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_v1.txt"
 _DEFAULT_TURF_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_turf_v1.txt"
-_DEFAULT_DIRT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_dirt_v1.txt"
+_DEFAULT_DIRT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_dirt_v4.txt"
 
 # 特徴量名（学習スクリプトと inference で順序を完全に一致させること）
 FEATURE_NAMES = [
@@ -72,6 +75,15 @@ FEATURE_NAMES_V3 = FEATURE_NAMES_V2 + [
     "history_front_min_pci",  # 最も速い流れを作った馬の平均PCI
     "history_front_spread",   # 馬ごとの平均PCIの幅
     "history_front_coverage", # 全出走馬に対する履歴保有率
+]
+
+FEATURE_NAMES_V4 = FEATURE_NAMES_V3 + [
+    "history_lap_horses",    # 前後半3F履歴を持つ馬の頭数
+    "history_lap_samples",   # 前後半3F履歴の総レース数
+    "history_lap_avg_delta", # 馬単位で平均した後半3F－前半3F
+    "history_lap_min_delta", # 最も前傾傾向が強い馬の平均差
+    "history_lap_spread",    # 馬ごとの平均差の幅
+    "history_lap_coverage",  # 全出走馬に対する履歴保有率
 ]
 
 _FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
@@ -168,6 +180,7 @@ class LightGBMRpciForecaster:
                 MODEL_VERSION,
                 MODEL_VERSION_V2,
                 MODEL_VERSION_V3,
+                MODEL_VERSION_V4,
             ),
             feature_names,
         )
@@ -203,6 +216,7 @@ class SplitLightGBMRpciForecaster:
                     MODEL_VERSION_DIRT,
                     MODEL_VERSION_DIRT_V2,
                     MODEL_VERSION_DIRT_V3,
+                    MODEL_VERSION_DIRT_V4,
                 ),
                 feature_names,
             )
@@ -215,6 +229,7 @@ class SplitLightGBMRpciForecaster:
                 MODEL_VERSION_TURF,
                 MODEL_VERSION_TURF_V2,
                 MODEL_VERSION_TURF_V3,
+                MODEL_VERSION_TURF_V4,
             ),
             feature_names,
         )
@@ -229,10 +244,12 @@ def _feature_names_for_booster(booster: Any) -> list[str]:
         return FEATURE_NAMES_V2
     if feature_count == len(FEATURE_NAMES_V3):
         return FEATURE_NAMES_V3
+    if feature_count == len(FEATURE_NAMES_V4):
+        return FEATURE_NAMES_V4
     raise ValueError(
         f"未対応のRPCIモデル特徴量数です: {feature_count} "
         f"（対応: {len(FEATURE_NAMES)}, {len(FEATURE_NAMES_V2)}, "
-        f"{len(FEATURE_NAMES_V3)}）"
+        f"{len(FEATURE_NAMES_V3)}, {len(FEATURE_NAMES_V4)}）"
     )
 
 
@@ -241,8 +258,11 @@ def _version_for_feature_names(
     v1_version: str,
     v2_version: str,
     v3_version: str,
+    v4_version: str,
 ) -> str:
     """特徴量世代に対応するモデルバージョンを返す。"""
+    if feature_names == FEATURE_NAMES_V4:
+        return v4_version
     if feature_names == FEATURE_NAMES_V3:
         return v3_version
     if feature_names == FEATURE_NAMES_V2:
@@ -324,7 +344,7 @@ def build_features(
     ]
     if feature_names == FEATURE_NAMES:
         return base
-    if feature_names != FEATURE_NAMES_V2 and feature_names != FEATURE_NAMES_V3:
+    if feature_names not in (FEATURE_NAMES_V2, FEATURE_NAMES_V3, FEATURE_NAMES_V4):
         raise ValueError(f"未対応のRPCI特徴量定義です: {len(feature_names)}")
 
     distance = context.distance_m
@@ -351,11 +371,31 @@ def build_features(
     history_avg = sum(history_paces) / history_horses if history_horses else 0.0
     history_min = min(history_paces, default=0.0)
     history_spread = max(history_paces, default=0.0) - history_min
-    return v2 + [
+    v3 = v2 + [
         float(history_horses),
         float(history_samples),
         float(history_avg),
         float(history_min),
         float(history_spread),
         float(history_horses) / n,
+    ]
+    if feature_names == FEATURE_NAMES_V3:
+        return v3
+
+    lap_history = [
+        sample for sample in context.historical_lap_samples if sample.sample_size > 0
+    ]
+    lap_horses = len(lap_history)
+    lap_samples = sum(sample.sample_size for sample in lap_history)
+    lap_deltas = [sample.avg_lap_delta for sample in lap_history]
+    lap_avg = sum(lap_deltas) / lap_horses if lap_horses else 0.0
+    lap_min = min(lap_deltas, default=0.0)
+    lap_spread = max(lap_deltas, default=0.0) - lap_min
+    return v3 + [
+        float(lap_horses),
+        float(lap_samples),
+        float(lap_avg),
+        float(lap_min),
+        float(lap_spread),
+        float(lap_horses) / n,
     ]

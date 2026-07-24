@@ -65,6 +65,15 @@ class FrontRunnerPaceSample:
 
 
 @dataclass(frozen=True)
+class HistoricalLapSample:
+    """1頭分の過去レース前後半3F差の傾向。"""
+
+    horse_no: int
+    avg_lap_delta: float
+    sample_size: int
+
+
+@dataclass(frozen=True)
 class RaceContext:
     """想定RPCI 予測の入力コンテキスト。"""
 
@@ -78,6 +87,8 @@ class RaceContext:
     # ML v3候補: 全出走馬の過去走から、前で運んだときのペース傾向を集約する。
     # 当該レースの脚質・結果は使わず、予想日より前の履歴だけで構築する。
     field_front_pace_samples: tuple[FrontRunnerPaceSample, ...] = ()
+    # ML v4候補: 対象日より前の各馬最大10走から前後半3F差を集約する。
+    historical_lap_samples: tuple[HistoricalLapSample, ...] = ()
 
 
 @dataclass(frozen=True)

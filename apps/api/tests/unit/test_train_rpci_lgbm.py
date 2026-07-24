@@ -7,6 +7,8 @@ import pytest
 from scripts.train_rpci_lgbm import (
     _HISTORY_FEATURES,
     _HISTORY_JOIN,
+    _LAP_FEATURES,
+    _LAP_JOIN,
     _QUERY_TEMPLATE,
     _build_label_sample_weights,
     _parse_args,
@@ -29,6 +31,10 @@ def test_training_query_selects_latest_races_for_temporal_split() -> None:
     assert "ORDER BY r.race_date DESC, r.race_key DESC" in _QUERY_TEMPLATE
 
 
+def test_training_query_supports_independent_period_cutoff() -> None:
+    assert "{date_filter}" in _QUERY_TEMPLATE
+
+
 def test_training_query_contains_v2_features() -> None:
     assert "AS field_size" in _QUERY_TEMPLATE
     assert "AS escape_competition" in _QUERY_TEMPLATE
@@ -41,6 +47,14 @@ def test_v3_history_query_uses_only_prior_races() -> None:
     assert "LIMIT 10" in _HISTORY_JOIN
     assert "COALESCE(pe.corner_1, pe.corner_4) <= 2" in _HISTORY_JOIN
     assert "AS history_front_coverage" in _HISTORY_FEATURES
+
+
+def test_v4_lap_query_uses_only_prior_races_and_last_ten_runs() -> None:
+    assert "pr.race_date < r.race_date" in _LAP_JOIN
+    assert "pr.race_l3f - pr.race_s3f AS lap_delta" in _LAP_JOIN
+    assert "LIMIT 10" in _LAP_JOIN
+    assert "COUNT(prior.lap_delta) AS sample_size" in _LAP_JOIN
+    assert "AS history_lap_coverage" in _LAP_FEATURES
 
 
 def test_label_recall_uses_track_specific_thresholds(
@@ -167,6 +181,22 @@ def test_v3_feature_set_requires_explicit_output(
         sys,
         "argv",
         ["train_rpci_lgbm", "--track-type", "dirt", "--feature-set", "v3"],
+    )
+
+    with pytest.raises(SystemExit):
+        _parse_args()
+
+    assert "本番モデルの上書きを防ぐため" in capsys.readouterr().err
+
+
+def test_v4_feature_set_requires_explicit_output(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["train_rpci_lgbm", "--track-type", "dirt", "--feature-set", "v4"],
     )
 
     with pytest.raises(SystemExit):

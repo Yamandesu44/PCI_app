@@ -86,6 +86,8 @@ def _seed_history(
     grade: str | None = None,
     corner1: int | None = None,
     pci_actual: float | None = None,
+    race_s3f: float | None = None,
+    race_l3f: float | None = None,
 ) -> None:
     """指定馬に、確定済みの過去走（4角通過順位 corner4）を count 走分与える。"""
     # FakeRepository は (race_key, horse_no) でエントリを保持するため、複数馬を
@@ -105,6 +107,8 @@ def _seed_history(
                 status=RaceStatus.RESULT,
                 grade=grade,
                 rpci_actual=rpci_actual,
+                race_s3f=race_s3f,
+                race_l3f=race_l3f,
             )
         )
         repo.save_entry(
@@ -463,6 +467,28 @@ class TestForecastRaceUseCase:
         assert len(forecaster.context.field_front_pace_samples) == 1
         sample = forecaster.context.field_front_pace_samples[0]
         assert sample.avg_pci == 44.0
+        assert sample.sample_size == 3
+
+    def test_historical_lap_evidence_uses_only_past_races_with_both_laps(self) -> None:
+        repo = FakeRaceRepository()
+        _register_upcoming(repo, n=1)
+        _seed_history(
+            repo,
+            "2020100001",
+            corner4=5,
+            count=3,
+            race_s3f=35.0,
+            race_l3f=37.0,
+        )
+        forecaster = _CapturingForecaster()
+
+        ForecastRaceUseCase(repo, forecaster=forecaster).execute(UPCOMING)
+
+        assert forecaster.context is not None
+        assert len(forecaster.context.historical_lap_samples) == 1
+        sample = forecaster.context.historical_lap_samples[0]
+        assert sample.horse_no == 1
+        assert sample.avg_lap_delta == 2.0
         assert sample.sample_size == 3
 
     def test_no_history_defaults_to_flexible(self) -> None:

@@ -34,6 +34,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import math
 import sys
 from pathlib import Path
@@ -52,6 +53,7 @@ from pci.infrastructure.pace.lgbm_forecaster import (
     FEATURE_NAMES,
     FEATURE_NAMES_V2,
     FEATURE_NAMES_V3,
+    FEATURE_NAMES_V4,
 )
 
 # ── DB クエリ（FEATURE_NAMES と同じ順序で SELECT する）────────────────────
@@ -109,15 +111,18 @@ _QUERY_TEMPLATE = """\
         CASE WHEN r.jyo_cd = '09' THEN 1.0 ELSE 0.0 END                 AS venue_09,
         CASE WHEN r.jyo_cd = '10' THEN 1.0 ELSE 0.0 END                 AS venue_10,
         {history_features}
+        {lap_features}
         r.rpci_actual                                                   AS target
     FROM races r
     JOIN race_entries e ON e.race_key = r.race_key
     {history_join}
+    {lap_join}
     WHERE r.status = 'result'
       AND r.rpci_actual IS NOT NULL
       AND r.rpci_actual BETWEEN :lo AND :hi
       AND e.running_style IS NOT NULL
       {track_filter}
+      {date_filter}
     GROUP BY r.race_key,
              r.distance_m, r.track_type, r.jyo_cd, r.track_condition, r.rpci_actual
     HAVING COUNT(e.horse_no) > 0
@@ -168,6 +173,53 @@ _HISTORY_JOIN = """\
             LIMIT 10
         ) prior
     ) hist ON TRUE
+"""
+
+_EMPTY_LAP_FEATURES = """\
+        0.0 AS history_lap_horses,
+        0.0 AS history_lap_samples,
+        0.0 AS history_lap_avg_delta,
+        0.0 AS history_lap_min_delta,
+        0.0 AS history_lap_spread,
+        0.0 AS history_lap_coverage,
+"""
+
+_LAP_FEATURES = """\
+        COUNT(*) FILTER (WHERE lap_hist.sample_size > 0)                AS history_lap_horses,
+        COALESCE(SUM(lap_hist.sample_size), 0)                          AS history_lap_samples,
+        COALESCE(
+            AVG(lap_hist.avg_lap_delta) FILTER (WHERE lap_hist.sample_size > 0),
+            0.0
+        )                                                               AS history_lap_avg_delta,
+        COALESCE(
+            MIN(lap_hist.avg_lap_delta) FILTER (WHERE lap_hist.sample_size > 0),
+            0.0
+        )                                                               AS history_lap_min_delta,
+        COALESCE(
+            MAX(lap_hist.avg_lap_delta) FILTER (WHERE lap_hist.sample_size > 0)
+          - MIN(lap_hist.avg_lap_delta) FILTER (WHERE lap_hist.sample_size > 0),
+            0.0
+        )                                                               AS history_lap_spread,
+        COUNT(*) FILTER (WHERE lap_hist.sample_size > 0)::float
+            / NULLIF(COUNT(e.horse_no), 0)                              AS history_lap_coverage,
+"""
+
+_LAP_JOIN = """\
+    LEFT JOIN LATERAL (
+        SELECT
+            AVG(prior.lap_delta) AS avg_lap_delta,
+            COUNT(prior.lap_delta) AS sample_size
+        FROM (
+            SELECT pr.race_l3f - pr.race_s3f AS lap_delta
+            FROM race_entries pe
+            JOIN races pr ON pr.race_key = pe.race_key
+            WHERE pe.ketto_num = e.ketto_num
+              AND pr.status = 'result'
+              AND pr.race_date < r.race_date
+            ORDER BY pr.race_date DESC, pr.race_key DESC
+            LIMIT 10
+        ) prior
+    ) lap_hist ON TRUE
 """
 
 _TRACK_FILTER: dict[str, str] = {
@@ -238,6 +290,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--limit", type=int, default=20000, help="学習データの上限件数（default: 20000）"
     )
+    p.add_argument(
+        "--before-date",
+        type=datetime.date.fromisoformat,
+        default=None,
+        help="この日より前のレースだけで学習する YYYY-MM-DD（独立評価期間の分離用）",
+    )
     p.add_argument("--rpci-min", type=float, default=20.0, help="target の下限フィルター")
     p.add_argument("--rpci-max", type=float, default=90.0, help="target の上限フィルター")
     p.add_argument(
@@ -257,9 +315,9 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--feature-set",
-        choices=["v1", "v2", "v3"],
+        choices=["v1", "v2", "v3", "v4"],
         default="v1",
-        help="特徴量定義。v3は対象日より前の前付けペース履歴も追加（default: v1）",
+        help="特徴量定義。v4は対象日より前の前付けペース・前後半3F履歴も追加（default: v1）",
     )
     args = p.parse_args()
     if (args.label_balance != "none" or args.feature_set != "v1") and args.output is None:
@@ -289,23 +347,33 @@ def main() -> None:
     session = build_session_maker(engine)()
 
     track_filter = _TRACK_FILTER[track_type]
-    uses_history = args.feature_set == "v3"
+    date_filter = "AND r.race_date < :before_date" if args.before_date else ""
+    uses_history = args.feature_set in {"v3", "v4"}
+    uses_lap_history = args.feature_set == "v4"
     query_sql = text(
         _QUERY_TEMPLATE.format(
             track_filter=track_filter,
+            date_filter=date_filter,
             history_features=(
                 _HISTORY_FEATURES if uses_history else _EMPTY_HISTORY_FEATURES
             ),
             history_join=_HISTORY_JOIN if uses_history else "",
+            lap_features=(
+                _LAP_FEATURES if uses_lap_history else _EMPTY_LAP_FEATURES
+            ),
+            lap_join=_LAP_JOIN if uses_lap_history else "",
         )
     )
 
     print("DB からデータ取得中…")
-    rows = list(
-        session.execute(
-            query_sql, {"lo": args.rpci_min, "hi": args.rpci_max, "lim": args.limit}
-        ).fetchall()
-    )
+    query_params: dict[str, object] = {
+        "lo": args.rpci_min,
+        "hi": args.rpci_max,
+        "lim": args.limit,
+    }
+    if args.before_date is not None:
+        query_params["before_date"] = args.before_date
+    rows = list(session.execute(query_sql, query_params).fetchall())
     if not rows:
         print("学習データが見つかりません。DB の状態を確認してください。")
         return
@@ -319,6 +387,7 @@ def main() -> None:
         "v1": FEATURE_NAMES,
         "v2": FEATURE_NAMES_V2,
         "v3": FEATURE_NAMES_V3,
+        "v4": FEATURE_NAMES_V4,
     }[args.feature_set]
     feature_count = len(feature_names)
 

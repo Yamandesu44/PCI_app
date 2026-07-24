@@ -48,6 +48,7 @@ from pci.domain.pace.integrated_ranking import IntegratedRanking, build_integrat
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import (
     FrontRunnerPaceSample,
+    HistoricalLapSample,
     RaceContext,
     RpciForecaster,
     RuleBasedRpciForecaster,
@@ -106,6 +107,7 @@ class ForecastRaceUseCase:
         profiles: list[HorsePaceProfile] = []
         front_pace_samples: list[FrontRunnerPaceSample] = []
         field_front_pace_samples: list[FrontRunnerPaceSample] = []
+        historical_lap_samples: list[HistoricalLapSample] = []
         formation_inputs: list[FormationHorseInput] = []
         history_by_horse_no: dict[int, tuple[tuple[RaceEntry, Race], ...]] = {}
         for e in entries:
@@ -142,6 +144,9 @@ class ForecastRaceUseCase:
             field_sample = self._build_field_front_pace_sample(e.horse_no, style, history)
             if field_sample is not None:
                 field_front_pace_samples.append(field_sample)
+            lap_sample = self._build_historical_lap_sample(e.horse_no, history)
+            if lap_sample is not None:
+                historical_lap_samples.append(lap_sample)
 
         context = RaceContext(
             distance_m=race.distance_m,
@@ -151,6 +156,7 @@ class ForecastRaceUseCase:
             venue_code=race.jyo_cd,
             front_pace_samples=tuple(front_pace_samples),
             field_front_pace_samples=tuple(field_front_pace_samples),
+            historical_lap_samples=tuple(historical_lap_samples),
         )
         forecast = self._forecaster.forecast(context)
 
@@ -332,6 +338,25 @@ class ForecastRaceUseCase:
             style=style,
             avg_pci=round(sum(paces) / len(paces), 1),
             sample_size=len(paces),
+        )
+
+    def _build_historical_lap_sample(
+        self,
+        horse_no: int,
+        history: tuple[tuple[RaceEntry, Race], ...],
+    ) -> HistoricalLapSample | None:
+        """対象日より前の最大10走から、1頭分の前後半3F差を集約する。"""
+        lap_deltas = [
+            past_race.race_l3f - past_race.race_s3f
+            for _, past_race in history[:10]
+            if past_race.race_s3f is not None and past_race.race_l3f is not None
+        ]
+        if not lap_deltas:
+            return None
+        return HistoricalLapSample(
+            horse_no=horse_no,
+            avg_lap_delta=sum(lap_deltas) / len(lap_deltas),
+            sample_size=len(lap_deltas),
         )
 
     def _build_affinity_profile(
