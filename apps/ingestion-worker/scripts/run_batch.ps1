@@ -45,6 +45,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Windows PowerShell 5.1でもPythonの日本語ログを同じUTF-8として扱う。
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $Utf8NoBom
+[Console]::OutputEncoding = $Utf8NoBom
+$OutputEncoding = $Utf8NoBom
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+
 # --- Path resolution ---
 $WorkerDir = Split-Path $PSScriptRoot -Parent
 $LogDir    = Join-Path $WorkerDir "logs"
@@ -91,15 +99,16 @@ while ($attempt -lt $MaxRetries -and -not $success) {
     Write-Log "attempt $attempt/$MaxRetries"
 
     try {
-        # Python's logging module writes to stderr by default. With 2>&1
-        # merging stderr into the pipeline, $ErrorActionPreference=Stop
-        # would otherwise treat every log line as a terminating error
-        # before the process ever gets a chance to exit normally.
-        # Relax it to Continue just for this native call, then restore it.
+        # Pythonのloggingは既定でstderrへ出すため、この呼び出し中だけ
+        # PowerShellが通常ログを終了エラーとして扱わないようにする。
         $prevEAP = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
         try {
-            & $Python @batchArgs 2>&1 | Tee-Object -FilePath $LogFile -Append
+            & $Python @batchArgs 2>&1 | ForEach-Object {
+                $line = $_.ToString()
+                Write-Host $line
+                Add-Content -Path $LogFile -Value $line -Encoding UTF8
+            }
         } finally {
             $ErrorActionPreference = $prevEAP
         }

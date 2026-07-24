@@ -1,4 +1,8 @@
 @echo off
+REM 日本語ログをコマンドプロンプトとPythonでUTF-8へ統一する。
+chcp 65001 >nul
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 REM mykeibadb sync - run from Windows Task Scheduler Fri/Sat 10:00, Sun 18:00.
 REM Task name: PCI_Sync_Mykeibadb
 REM
