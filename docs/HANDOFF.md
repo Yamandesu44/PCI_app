@@ -1,5 +1,73 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 14:25 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `2df91a3`
+- 目的: スマホの隊列予想を短くし、全馬の配置を一度に把握できるようにする。
+
+### 完了内容
+
+- `MobileFormationBoard`を追加し、先頭・好位・中団・後方を4列で同時表示するようにした。
+- 各馬は枠色付き馬番と省略可能な馬名だけの48pxチップへ圧縮した。
+- 初期状態では各馬の理由文を表示せず、選択した1頭だけ脚質、信頼度、配置理由を
+  ボード下へ展開する。
+- 同じ馬を再度選ぶと詳細を閉じ、別の馬を選ぶと詳細を1件だけ切り替える。
+- 768px以上は従来の馬名、脚質、信頼度、理由を含む4列カードを維持した。
+- 390px相当の新潟11R・18頭で、ボード高454px、隊列パネル高514px、
+  ページ高990px、ページ横はみ出しなしを確認した。
+- ノーブルラホーヤを選択し、詳細1件、選択状態1件、理由表示を確認した。
+
+### 変更ファイル
+
+1. `apps/web/src/components/FormationView.tsx`
+2. `apps/web/src/components/FormationView.test.tsx`
+3. `tasks/current.md`
+4. `docs/DECISIONS.md`
+5. `docs/HANDOFF.md`
+
+### テスト結果
+
+```text
+Web: 105 passed
+Web typecheck: passed
+Web production build: passed
+Web lint: package.jsonにlintスクリプトがないため実行不可
+390px相当: visible horses 18 / board height 454 / panel height 514 / page height 990
+馬選択後: visible detail 1 / aria-pressed 1 / scrollWidth 375
+1440px相当: visible mobile boards 0 / desktop formation 1 / desktop reason visible
+```
+
+### 未完了・次の具体的作業
+
+- 次のスマホ優先改善は、トップのレース一覧を競馬場タブとコンパクトな1R〜12R行へ再構成する。
+- 実装時は`apps/web/src/app/page.tsx`と一覧コンポーネントを確認し、PCの開催場横並びを維持する。
+- ロケテスト公開へ反映する際は実行用クローンでpull後、Quick Tunnelを再起動する。
+
+### 仮実装・暫定値・未確定仕様
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- 馬チップは48px基準。長い馬名は省略し、選択後の詳細で全文を表示する。
+- 初期選択馬は設けない。自動的に特定馬を強調する要件は未確定。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/FormationView.tsx`
+2. `apps/web/src/components/FormationView.test.tsx`
+3. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
 ## 2026-07-25 14:14 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
