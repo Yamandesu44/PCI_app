@@ -1,5 +1,78 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 00:50 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `f65c6bf`
+- 最新コミット: 本節と同じコミット（`git log -1 --oneline`で確認）
+- 目的: スマホのレース一覧を競馬場タブと短いレース行へ再構成し、開催日の縦スクロールを短縮する。
+
+### 完了内容
+
+- `MobileRaceGroupedSection`を追加し、768px未満では開催日ごとに競馬場タブを表示するようにした。
+- 選択中の競馬場だけを表示し、札幌・新潟・中京などを44px以上のタブで切り替えられる。
+- 各レースをレース番号、レース名、芝・ダートと距離、頭数、初心者向け展開ラベル中心の
+  コンパクト行へ変更した。
+- 注目・妙味ラベルは一覧に残し、候補馬や推奨理由などはレース詳細画面へ集約した。
+- 768px以上は従来の3開催場横並びと詳細カードを維持した。
+- 390px相当の7月25日で3競馬場の切替、選択中の新潟12R、横はみ出しなしを確認した。
+
+### 変更ファイル
+
+1. `apps/web/src/components/MobileRaceGroupedSection.tsx`
+2. `apps/web/src/components/MobileRaceGroupedSection.test.tsx`
+3. `apps/web/src/app/page.tsx`
+4. `tasks/current.md`
+5. `docs/DECISIONS.md`
+6. `docs/HANDOFF.md`
+
+### テスト結果
+
+```text
+Web: 107 passed
+Web typecheck: passed
+Web production build: passed
+Web lint: package.jsonにlintスクリプトがないため実行不可
+390px相当: venue tabs 3 / selected venue 新潟 / visible rows 12 / horizontal overflowなし
+1440px相当: visible mobile lists 0 / desktop race links visible / horizontal overflowなし
+```
+
+### 未完了・次の具体的作業
+
+- 次のスマホ優先改善は、トップの4統計カードと`ForecastPerformanceSummary`を圧縮し、
+  開催日カレンダーとレース一覧へより早く到達できるようにする。
+- 実装時は`apps/web/src/app/page.tsx`の`StatTile`と
+  `apps/web/src/components/ForecastPerformanceSummary.tsx`を確認する。
+- 390px相当で初期表示から最初のレース一覧までの距離、横はみ出し、PC表示の維持を検証する。
+
+### 仮実装・暫定値・未確定仕様
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- タブの初期選択はAPIの開催場順の先頭。利用者ごとの選択記憶は未実装。
+- モバイル行は最小64px。候補馬と推奨理由を一覧へ再掲する要件は未確定。
+
+### 既知の不具合
+
+- `apps/web/package.json`にlintスクリプトがなく、Web lintは単独実行できない。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/MobileRaceGroupedSection.tsx`
+2. `apps/web/src/components/MobileRaceGroupedSection.test.tsx`
+3. `apps/web/src/app/page.tsx`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
 ## 2026-07-25 14:25 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

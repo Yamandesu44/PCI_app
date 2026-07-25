@@ -11,6 +11,11 @@ import {
 } from "lucide-react";
 import { ForecastPerformanceSummary } from "@/components/ForecastPerformanceSummary";
 import { IngestStatusBanner } from "@/components/IngestStatusBanner";
+import {
+  MobileRaceGroupedSection,
+  type RaceDateItemGroup,
+  type RaceListItem,
+} from "@/components/MobileRaceGroupedSection";
 import { RaceDateCalendar } from "@/components/RaceDateCalendar";
 
 import { api } from "@/lib/api";
@@ -45,22 +50,6 @@ import {
 
 // レース一覧は実行時にバックエンドへ問い合わせる（ビルド時フェッチを避ける）。
 export const dynamic = "force-dynamic";
-
-interface RaceListItem {
-  race: RaceSummary;
-  forecast: RaceBoardForecast | null;
-}
-
-interface RaceVenueItemGroup {
-  jyoCd: string;
-  venueName: string;
-  items: RaceListItem[];
-}
-
-interface RaceDateItemGroup {
-  raceDate: string;
-  venues: RaceVenueItemGroup[];
-}
 
 interface HomePageProps {
   searchParams?: Promise<{ date?: string; performance_days?: string }>;
@@ -329,43 +318,50 @@ function RaceGroupedSection({
           表示できるレースがありません。
         </p>
       ) : (
-        <div className="space-y-4">
-          {dateGroups.map((dateGroup) => (
-            <section
-              key={dateGroup.raceDate}
-              className="border-t border-slate-300 pt-4"
-            >
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="m-0 text-base font-semibold tracking-normal text-slate-950">
-                  {formatRaceDate(dateGroup.raceDate)}
-                </h3>
-                <span className="text-xs font-semibold text-slate-500">
-                  {dateGroup.venues.reduce((sum, venue) => sum + venue.items.length, 0)}R
-                </span>
-              </div>
+        <>
+          <MobileRaceGroupedSection
+            sectionId={id}
+            dateGroups={dateGroups}
+            featured={featured}
+          />
+          <div className="hidden space-y-4 md:block">
+            {dateGroups.map((dateGroup) => (
+              <section
+                key={dateGroup.raceDate}
+                className="border-t border-slate-300 pt-4"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="m-0 text-base font-semibold tracking-normal text-slate-950">
+                    {formatRaceDate(dateGroup.raceDate)}
+                  </h3>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {dateGroup.venues.reduce((sum, venue) => sum + venue.items.length, 0)}R
+                  </span>
+                </div>
 
-              <div className="grid gap-3 lg:grid-cols-3">
-                {dateGroup.venues.map((venueGroup) => (
-                  <div key={venueGroup.jyoCd} className="min-w-0">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <h4 className="m-0 text-sm font-semibold text-slate-900">
-                        {venueGroup.venueName}
-                      </h4>
-                      <span className="text-xs font-medium text-slate-500">
-                        {venueGroup.items.length}件
-                      </span>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {dateGroup.venues.map((venueGroup) => (
+                    <div key={venueGroup.jyoCd} className="min-w-0">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <h4 className="m-0 text-sm font-semibold text-slate-900">
+                          {venueGroup.venueName}
+                        </h4>
+                        <span className="text-xs font-medium text-slate-500">
+                          {venueGroup.items.length}件
+                        </span>
+                      </div>
+                      <div className="grid gap-2">
+                        {venueGroup.items.map((item) => (
+                          <RaceCompactRow key={item.race.race_key} item={item} featured={featured} />
+                        ))}
+                      </div>
                     </div>
-                    <div className="grid gap-2">
-                      {venueGroup.items.map((item) => (
-                        <RaceCompactRow key={item.race.race_key} item={item} featured={featured} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </>
       )}
     </section>
   );
