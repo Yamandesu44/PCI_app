@@ -1,5 +1,97 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 11:53 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `e643ede`
+- 運用検証記録コミット: `b76737c`
+- 競合修正コミット: `395645d`
+- 目的: Windows実行機でQuick Tunnelの実公開を検証し、代表3レースを確認する。
+
+### 完了内容
+
+- Cloudflare公式Windows版`cloudflared 2026.7.3`を
+  `C:\Users\yuuta\AppData\Local\cloudflared\cloudflared.exe`へ導入した。
+  Authenticode署名は`Valid`を確認した。
+- Git管理外の`apps/web/.env.location-test.local`を作成し、共有ユーザー名と
+  32文字の暗号学的ランダムパスワードを設定した。FastAPIは公開Bearer認証未設定のため
+  `API_ACCESS_TOKEN`は空のまま。
+- Quick Tunnel実URLで未認証401、共有認証200、Next.jsからFastAPIへの疎通を確認した。
+- 実公開URLの認証済みページで次の3レースがHTTP 200となり、期待マーカーを確認した。
+  - `2026072504020111`: 新潟11R、芝1000m、18頭
+  - `2026072504020110`: 新潟10R、ダート1800m、15頭
+  - `2026072504020107`: 新潟7R、新潟日報賞、芝1400m、18頭、枠順確定後
+- 同じNext.js本番プロセスをローカルブラウザで開き、トップ、3代表レース、
+  隊列予想を確認した。組み込みブラウザはTryCloudflareドメインを
+  `ERR_BLOCKED_BY_CLIENT`で遮断したため、公開経路はHTTP検証、表示はlocalhostで分離確認した。
+- 検証中に通常の`next dev`とロケテスト用`next build/start`が同じ`.next`を共有し、
+  `lucide-react`のvendor chunkが欠損する競合を発見した。
+  `NEXT_DIST_DIR=.next-location-test`をロケテスト時だけ設定して分離した。
+- 競合修正後、開発サーバーを3000番で起動したまま、分離ビルド、3100番の本番起動、
+  Quick Tunnel実URLの代表3レースを再確認した。
+- 一時公開は停止済み。3100番の待受とロケテスト用cloudflaredプロセスがないことを確認した。
+- 最初の検証に使った共有パスワードは破棄し、未使用の新しい32文字値へ交換した。
+
+### 変更ファイル
+
+1. `apps/web/next.config.mjs`
+2. `apps/web/tsconfig.json`
+3. `apps/web/.gitignore`
+4. `apps/web/scripts/run_location_test_tunnel.ps1`
+5. `README.md`
+6. `docs/LOCATION_TEST.md`
+7. `docs/DECISIONS.md`
+8. `tasks/current.md`
+
+### テスト結果
+
+```text
+cloudflared Authenticode: Valid
+cloudflared version: 2026.7.3
+Quick Tunnel自動検証: 未認証401 / 共有認証200 / API疎通 passed
+実公開URLの代表3ページ: HTTP 200、期待マーカー 5 / 5 / 7 passed
+Web: 95 passed
+Web typecheck: passed
+通常.next production build: passed
+.next-location-test production build: passed
+分離後next start 127.0.0.1:3110: HTTP 200、レースボード表示 passed
+PowerShell 5.1 AST parse: passed
+git diff --check: passed
+```
+
+### 未完了・次の具体的作業
+
+- 招待開始時だけ`run_location_test_tunnel.ps1 -SkipBuild`を起動し、表示された新しいURLを共有する。
+  今回の検証URLは停止済みで再利用できない。
+- 参加者へはTryCloudflare URL、`BETA_ACCESS_USER`、`BETA_ACCESS_PASSWORD`だけを個別共有する。
+  パスワードは`apps/web/.env.location-test.local`で確認し、チャットやGitへ記録しない。
+- 開催2週後、`docs/LOCATION_TEST.md`の5項目、誤データ件数、API 500件数を集計する。
+- 事前予想照合30件、ダート確定100件かつ実績ハイ20件は条件到達待ち。
+- 修正前ログに残った可能性があるSlack Webhook再発行は、ユーザーのSlack操作待ち。
+
+### 仮実装・暫定値・未確定仕様
+
+- Quick Tunnelは3〜5人・開催2週分のテスト専用。URL固定、SLA、常時稼働は保証しない。
+- 正式公開時のWeb/API/PostgreSQL基盤と個別ユーザー認証は未確定。
+- ロケテスト専用ビルド名`.next-location-test`は運用競合回避の内部名で、公開契約ではない。
+
+### Claude Codeが最初に確認するファイル
+
+1. `docs/LOCATION_TEST.md`
+2. `apps/web/scripts/run_location_test_tunnel.ps1`
+3. `apps/web/next.config.mjs`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+git pull origin claude/sweet-einstein-ilnaov
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\web\scripts\run_location_test_tunnel.ps1 -CloudflaredPath "C:\Users\yuuta\AppData\Local\cloudflared\cloudflared.exe" -SkipBuild
+```
+
 ## 2026-07-25 11:24 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
