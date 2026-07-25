@@ -13,6 +13,7 @@ import {
 import { HorseFitTable } from "@/components/HorseFitTable";
 import { FormationView } from "@/components/FormationView";
 import { IntegratedRankingView } from "@/components/IntegratedRankingView";
+import { MobileRaceForecastDashboard } from "@/components/MobileRaceForecastDashboard";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { PaceProfileChart } from "@/components/PaceProfileChart";
 import { ReasonList } from "@/components/ReasonList";
@@ -111,7 +112,9 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
   });
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-7 px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
+    <>
+      <MobileRaceForecastDashboard race={race} forecast={forecast} />
+      <main className="mx-auto hidden w-full max-w-7xl flex-col gap-7 px-4 py-6 md:flex md:px-6 lg:px-8 lg:py-9">
       <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
         <Link
           href="/"
@@ -465,6 +468,7 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
           </Accordion>
         </CardContent>
       </Card>
-    </main>
+      </main>
+    </>
   );
 }

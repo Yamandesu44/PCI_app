@@ -48,11 +48,11 @@ export function FormationView({ formation }: { formation: Formation }) {
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="grid md:grid-cols-4">
+        <div className="flex snap-x snap-mandatory overflow-x-auto md:grid md:grid-cols-4 md:overflow-visible">
           {formation.groups.map((group, groupIndex) => (
             <div
               key={group.key}
-              className="min-w-0 border-b border-slate-200 p-4 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0"
+              className="w-[78vw] shrink-0 snap-start border-r border-slate-200 p-4 last:border-r-0 md:w-auto md:min-w-0"
             >
               <div className="mb-3 flex h-8 items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
