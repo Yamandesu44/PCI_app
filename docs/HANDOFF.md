@@ -1,5 +1,63 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 11:04 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `5c86eda`
+- 実装コミット: `23b62ea`
+- 目的: 実行環境制約で残っていた取り込み警告UIのブラウザ検証を完了する。
+
+### 完了内容
+
+- 実APIを中継し、`ingest-status`だけ警告状態へ置き換える一時環境で
+  `IngestStatusBanner`の閉じた初期表示と展開後を確認した。
+- 1440x900と390x844でページ全体の横スクロールがないことを確認した。
+- 展開後に失敗詳細、成績未取込対象、復旧コマンドが表示されることを確認した。
+- モバイルで英字エラー文が1文字だけ残る折り返しを`break-all`から`break-words`へ修正した。
+- ブラウザコンソールエラー0件を確認し、テスト用Web/API中継を停止した。
+- 実DB、既存のlocalhost:3000、FastAPIのlocalhost:8000には変更を加えていない。
+
+### テスト結果
+
+```text
+Web: 95 passed
+Web typecheck: passed
+Web production build: passed（Middleware 34.9 kB）
+ブラウザ 1440x900: 初期表示・展開後とも横はみ出しなし
+ブラウザ 390x844: 初期表示・展開後とも横はみ出しなし
+ブラウザコンソール: error 0件
+```
+
+テスト追加直後は、エラー詳細を持たないfixtureへ折り返しクラスを期待したため1件失敗した。
+`recent_failures`を含むfixtureへ修正後、Web全95件が成功している。
+
+### 未完了・次の具体的作業
+
+- 公開基盤と実URLを決め、`docs/LOCATION_TEST.md`の認証変数を設定する。
+- 公開環境で`npm.cmd run location-test:preflight`を実行する。
+- CLI合格後、芝短距離、ダート中距離、枠順確定後の多頭数レースを各1件目視確認する。
+- 事前予想照合30件、ダート確定100件かつ実績ハイ20件は条件到達待ち。
+- Slack Webhook再発行はユーザーのSlack操作が必要。
+
+### Claude Codeが最初に確認するファイル
+
+1. `docs/LOCATION_TEST.md`
+2. `tasks/current.md`
+3. `apps/web/src/components/IngestStatusBanner.tsx`
+4. `apps/web/src/components/IngestStatusBanner.test.tsx`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+git pull origin claude/sweet-einstein-ilnaov
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
 ## 2026-07-25 10:51 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
