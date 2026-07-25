@@ -45,6 +45,7 @@ Cloudflare Quick TunnelでBasic認証付きNext.jsだけを一時公開する。
 - インターネットへ公開するのはNext.jsだけ。FastAPIとPostgreSQLのポートは開放しない
 - Quick Tunnelは開発・テスト専用で、URLは起動ごとに変わり、SLAはない
 - Windows実行機、Docker DB、FastAPI、起動用PowerShellをテスト中は稼働させる
+- 通常の開発用Next.jsを3000番で起動したままでもよい。ロケテスト用ビルドは別領域を使う
 - URLは招待者へ個別に伝え、SNSや検索可能な場所へ掲載しない
 - 正式公開や継続運用では、Vercel等のWeb、管理されたAPI、PostgreSQLへ移行する
 

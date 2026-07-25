@@ -1104,5 +1104,8 @@
   一般公開、URL固定、常時稼働、正式なユーザー認証が必要になった時点で利用を終了する。
 - **将来**: 継続提供へ進む場合は、Vercel等のWeb、管理されたFastAPI、
   PostgreSQLへ移行し、既存の`location-test:preflight`で公開Web/API契約を検証する。
+- **ビルド分離**: 通常の`next dev`とロケテスト用`next build/start`は同じ`.next`を共有しない。
+  ロケテスト起動時だけ`NEXT_DIST_DIR=.next-location-test`を設定し、開発サーバーのHMRによる
+  本番vendor chunkの破損を防ぐ。
 - **運用境界**: `cloudflared`のインストールと利用開始は実行機の利用者が行う。
   リポジトリはインストーラーや利用条件への同意を自動化しない。

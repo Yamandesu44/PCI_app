@@ -253,6 +253,8 @@ try {
     $username = Get-RequiredEnv -Name "BETA_ACCESS_USER"
     $password = Get-RequiredEnv -Name "BETA_ACCESS_PASSWORD"
     $apiAccessToken = [Environment]::GetEnvironmentVariable("API_ACCESS_TOKEN", "Process")
+    $locationDistDir = ".next-location-test"
+    [Environment]::SetEnvironmentVariable("NEXT_DIST_DIR", $locationDistDir, "Process")
 
     if ($password.Length -lt 16) {
         throw "BETA_ACCESS_PASSWORDは16文字以上にしてください。"
@@ -302,7 +304,7 @@ try {
         } finally {
             Pop-Location
         }
-    } elseif (-not (Test-Path -LiteralPath (Join-Path $WebDir ".next\BUILD_ID"))) {
+    } elseif (-not (Test-Path -LiteralPath (Join-Path $WebDir "$locationDistDir\BUILD_ID"))) {
         throw "本番ビルドがありません。-SkipBuildを外して実行してください。"
     }
     Write-Host "PASS Next.js本番ビルド"
