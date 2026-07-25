@@ -2,7 +2,10 @@ import type { Forecast, RaceDetail } from "@pci/api-client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { MobileRaceForecastDashboard } from "./MobileRaceForecastDashboard";
+import {
+  MobileExpandableHorseRow,
+  MobileRaceForecastDashboard,
+} from "./MobileRaceForecastDashboard";
 
 const race = {
   race_key: "2026072504020111",
@@ -52,5 +55,27 @@ describe("MobileRaceForecastDashboard", () => {
     expect(markup.match(/data-mobile-benefit/g)).toHaveLength(3);
     expect(markup).not.toContain("テスト馬4");
     expect(markup).not.toContain("判断根拠データ");
+  });
+
+  it("注目馬の理由を初期状態で閉じたコンパクト行にする", () => {
+    const horse = forecast.horses?.[0];
+    expect(horse).toBeDefined();
+
+    const markup = renderToStaticMarkup(
+      <MobileExpandableHorseRow
+        horse={horse!}
+        rank={1}
+        label="軸候補"
+        reason="今回の流れが向きそうです。"
+        tone="benefit"
+      />,
+    );
+
+    expect(markup).toContain("<details");
+    expect(markup).not.toContain("<details open");
+    expect(markup).toContain("<summary");
+    expect(markup).toContain("今回の評価理由");
+    expect(markup).toContain("今回の流れが向きそうです。");
+    expect(markup).toContain("data-mobile-expandable-horse");
   });
 });

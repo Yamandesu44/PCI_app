@@ -1,5 +1,67 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 13:50 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `cefdba9`
+- 目的: スマホの注目馬タブを短くし、必要な馬の評価理由だけ確認できるようにする。
+
+### 完了内容
+
+- `MobileExpandableHorseRow`を追加し、展開恩恵馬TOP5と評価を下げたい馬を同じ行UIへ統一した。
+- 閉じた状態では馬名、馬番または登録順、脚質、適性評価、役割ラベルだけを表示する。
+- 行をタップすると「今回の評価理由」を展開し、他の馬は閉じたまま維持する。
+- ネイティブ`details`を使い、JavaScript状態を増やさずキーボード操作と意味構造を保った。
+- 390x844実画面で8行、初期open 0件、注目馬パネル高660px、1頭展開後open 1件、
+  ページ幅375pxのまま横はみ出しなしを確認した。
+
+### 変更ファイル
+
+1. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+2. `apps/web/src/components/MobileRaceForecastDashboard.test.tsx`
+3. `tasks/current.md`
+4. `docs/DECISIONS.md`
+5. `docs/HANDOFF.md`
+
+### テスト結果
+
+```text
+Web: 97 passed
+Web typecheck: passed
+Web production build: passed
+390x844注目馬: 8行 / 初期open 0 / panel height 660 / scrollWidth 375
+1頭展開: open 1 / 理由表示あり / scrollWidth 375
+```
+
+### 未完了・次の具体的作業
+
+- 次のスマホ優先改善は、同一開催の前後レースへ移動するナビゲーション。
+- レースキーを文字列から推測せず、トップのレースボードデータまたは軽量APIから
+  同一開催・同日・同競馬場の正規キーを取得する設計が必要。
+- ロケテスト公開へ反映する際は実行用クローンでpull後、Quick Tunnelを再起動する。
+
+### 仮実装・暫定値・未確定仕様
+
+- 複数行を同時に開ける。1行だけに制限する必要性はロケテスト結果を見て判断する。
+- コンパクト行の基準高は64px。端末の文字サイズ設定によっては自動的に高くなる。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+2. `apps/web/src/components/MobileRaceForecastDashboard.test.tsx`
+3. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
 ## 2026-07-25 13:40 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
