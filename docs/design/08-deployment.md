@@ -156,3 +156,8 @@ API_BASE_URL=http://127.0.0.1:8000 npm run dev
 
 # 3. http://localhost:3000 で動作確認
 ```
+
+公開環境へのデプロイ後は、リポジトリルートで`npm run location-test:preflight`を実行する。
+必要な環境変数と合格条件は[`../LOCATION_TEST.md`](../LOCATION_TEST.md)の「開始前点検」を正とする。
+この点検は認証、readiness、レース一覧API、WebからAPIへの疎通を確認するが、
+レース内容の正確性は代表3レースの目視確認で補完する。

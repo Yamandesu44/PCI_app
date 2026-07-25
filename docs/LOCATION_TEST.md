@@ -83,6 +83,35 @@ npm.cmd run build
 - FastAPIの`/api/v1/races`がトークンなし401、正しいBearerトークンで200
 - Webからレース一覧を開き、サーバー間トークン付きでデータを取得できる
 
+公開環境の起動後は、上記4項目をルートの自動点検CLIで確認する。
+秘密値はコマンド引数に渡さず、実行するターミナルの環境変数へ設定する。
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+set LOCATION_TEST_WEB_URL=https://<WebのURL>
+set LOCATION_TEST_API_URL=https://<FastAPIのURL>
+set BETA_ACCESS_USER=<共有ユーザー名>
+set BETA_ACCESS_PASSWORD=<共有パスワード>
+set API_ACCESS_TOKEN=<FastAPIのPUBLIC_API_TOKENと同じ値>
+npm.cmd run location-test:preflight
+```
+
+`PASS`が5件表示され、最後に「HTTP点検に合格しました」と出ればHTTP点検は完了。
+CLIは次を自動判定する。
+
+1. Webの未認証アクセスがBasic認証要求付き401になる
+2. APIの`/ready`が`status=ready`かつ`database=ok`になる
+3. レース一覧APIの未認証アクセスがBearer認証要求付き401になる
+4. 正しいBearerトークンでレース一覧APIが取得できる
+5. 正しい共有認証でトップ画面を開け、レースボードにAPIエラー表示がない
+
+公開URLはHTTPS必須とし、`localhost`とループバックアドレスだけHTTPを許可する。
+共有パスワードは16文字以上、APIトークンは32文字以上を必須とし、秘密値の使い回しを拒否する。
+点検後は同じターミナルを閉じるか、設定した秘密値を環境変数から削除する。
+
+このCLIはレース内容の正確性までは判定しない。HTTP点検合格後も、芝短距離、ダート中距離、
+枠順確定後の多頭数レースを各1件開き、レース名、距離、頭数、出走馬を目視確認する。
+
 ## 5. 参加者に確認すること
 
 各開催日の利用後、次の5項目を1〜5段階と自由記述で集める。

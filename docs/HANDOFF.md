@@ -1,5 +1,64 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 10:51 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `cbce875`
+- 実装コミット: `26c151d`
+- 目的: 公開基盤決定後に実行するロケテスト開始前HTTP点検を自動化する。
+
+### 完了内容
+
+- `scripts/location-test-preflight.mjs`
+  - 秘密値を環境変数から読み、Web未認証401、API readiness、API未認証401、
+    認証済みレース一覧、認証済みWeb表示を終了コードで判定する。
+  - 公開HTTP、短い秘密値、秘密値の使い回し、Basic/Bearer要求ヘッダー欠落、
+    トップ画面上のAPIエラー表示を不合格にする。
+  - URL、判定名、HTTP状態以外に共有パスワードやAPIトークンを出力しない。
+- `scripts/location-test-preflight.test.mjs`
+  - Node標準HTTPサーバーで正常系、readiness異常、Web APIエラー表示を再現する。
+  - 設定検証を含む8 testsを追加した。
+- ルート`package.json`へ`location-test:preflight`と`test:location-test-preflight`を追加した。
+- `docs/LOCATION_TEST.md`へ実行環境変数、合格条件、CLIでは代替できない代表3レースの
+  目視確認を記録した。
+
+### テスト結果
+
+```text
+公開前点検CLI: 8 passed
+Web: 95 passed
+Web typecheck: passed
+api-client typecheck: passed
+API公開認証契約: 5 passed
+Web production build: passed（Middleware 34.9 kB）
+```
+
+### 未完了・作業が止まっている箇所
+
+- 公開基盤と実URLは未決定のため、公開環境に対するCLI実行は未実施。
+- 公開後は`docs/LOCATION_TEST.md`に従い、認証変数を設定して
+  `npm.cmd run location-test:preflight`を実行する。
+- CLI合格後、芝短距離、ダート中距離、枠順確定後の多頭数レースを各1件目視確認する。
+- 事前予想照合30件、ダート確定100件かつ実績ハイ20件は条件到達待ち。
+- Slack Webhook再発行はユーザーのSlack操作が必要。
+
+### Claude Codeが最初に確認するファイル
+
+1. `docs/LOCATION_TEST.md`
+2. `scripts/location-test-preflight.mjs`
+3. `scripts/location-test-preflight.test.mjs`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+git pull origin claude/sweet-einstein-ilnaov
+npm.cmd run test:location-test-preflight
+```
+
 ## 2026-07-25 10:35 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
