@@ -1,7 +1,7 @@
 # 08. デプロイ構成
 
 > **現状の注意:** 以下は構成候補であり、そのまま一般公開できる完成済み手順ではない。
-> Web/APIの一般ユーザー認証は未実装。少人数ロケテストは
+> 個別ユーザー認証は未実装。少人数用の共有認証を有効にし、
 > [`../LOCATION_TEST.md`](../LOCATION_TEST.md)の開始条件とアクセス制限を満たしてから行う。
 
 ## アーキテクチャ
@@ -39,6 +39,9 @@
 | キー | 値 | スコープ |
 |---|---|---|
 | `API_BASE_URL` | FastAPI バックエンドの URL（例: `https://pci-api.railway.app`）| Production / Preview |
+| `API_ACCESS_TOKEN` | FastAPIの`PUBLIC_API_TOKEN`と同じサーバー間トークン | Production / Preview |
+| `BETA_ACCESS_USER` | 少人数テスト用の共有ユーザー名 | Production / Preview |
+| `BETA_ACCESS_PASSWORD` | 少人数テスト用の長い共有パスワード | Production / Preview |
 
 5. **Deploy** ボタンを押す
 
@@ -94,6 +97,8 @@ Railway はコンテナベースで Python 対応が容易なため推奨。
 | キー | 値 | 設定先 |
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://<user>:<pass>@<host>:5432/<db>` | Railway → Variables |
+| `PUBLIC_API_TOKEN` | Webの`API_ACCESS_TOKEN`と同じサーバー間トークン | Railway → Variables |
+| `INGEST_TOKEN` | Windows取り込み専用の別トークン | Railway → Variables |
 
 ### マイグレーション
 
@@ -131,6 +136,7 @@ alembic upgrade head && uvicorn pci.presentation.app:app --host 0.0.0.0 --port $
 - [ ] `ANTHROPIC_API_KEY`（将来追加時）を環境変数で管理し、コードに含めない
 - [ ] 公開するのは独自指標・分析結果（PAI/PCI/コメント等）のみ
 - [ ] WebとAPIの両方を招待者だけに制限している
+- [ ] Webの共有認証とAPIのBearer認証をHTTPレベルで確認した
 - [ ] `/internal/ingest/*`の`INGEST_TOKEN`を本番で必須にしている
 - [ ] FastAPIの管理用・内部用経路を無制限にインターネット公開していない
 

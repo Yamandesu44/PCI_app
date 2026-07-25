@@ -1,5 +1,79 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 10:35 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `ed5d0ee`
+- 目的: 条件待ちタスクを飛ばし、次に実行可能な少人数ロケテスト用アクセス制限を実装する。
+
+### 完了内容
+
+- `apps/web/src/middleware.ts`
+  - `BETA_ACCESS_USER`・`BETA_ACCESS_PASSWORD`設定時に全画面を共有Basic認証で保護する。
+  - 片方だけ設定された場合は503、両方未設定ならローカル開発を維持する。
+- `apps/web/src/lib/betaAccess.ts`
+  - UTF-8資格情報、パスワード中のコロン、不正Base64を扱い、比較値をログへ出さない。
+- `apps/api/src/pci/presentation/app.py`
+  - `PUBLIC_API_TOKEN`設定時に`/api/v1/*`へBearer認証を要求する。
+  - `/health`・`/ready`と`/internal/ingest/*`は対象外とし、既存認証を分離する。
+- `packages/api-client/src/index.ts`へ固定ヘッダー指定を追加し、Next.jsの
+  `API_ACCESS_TOKEN`をFastAPIへ送る。
+- `.env.example`、README、ARCHITECTURE、SPEC、DECISIONS、LOCATION_TEST、currentを更新した。
+
+### HTTP実地確認
+
+```text
+Web（BETA_ACCESS_*設定、localhost:3001）:
+  未認証 401 / 誤資格情報 401 / 正しい資格情報 200
+
+API（PUBLIC_API_TOKEN設定、127.0.0.1:8001）:
+  /ready 200 / 未認証 401 / 誤トークン 401 / 正しいトークン 200
+
+Web→API（API_ACCESS_TOKEN設定、localhost:3002）:
+  レース日、検証成績、取り込み状態、レースボードのAPI呼び出しがすべて200
+```
+
+### テスト結果
+
+```text
+API非統合: 596 passed, 30 deselected
+API Ruff（src/tests）: passed
+API mypy strict: 65 files passed
+公開API認証契約: 5 passed
+Web: 95 passed
+Web typecheck: passed
+api-client typecheck: passed
+Web production build: passed（Middleware 34.9 kB）
+```
+
+### 未完了・既知事項
+
+- 公開基盤は未決定。Vercel等のWeb環境とFastAPI環境へ4つの認証変数を設定し、
+  `docs/LOCATION_TEST.md`の開始前点検を行う必要がある。
+- 共有Basic認証は個別アカウント管理ではない。参加者変更・テスト終了時は共有パスワードを更新する。
+- 予想照合30件、ダート100件かつハイ20件は引き続き条件到達待ち。
+- Slack Webhook再発行はユーザーのSlack操作が必要で未完了。
+
+### Claude Codeが最初に確認するファイル
+
+1. `docs/LOCATION_TEST.md`
+2. `apps/web/src/middleware.ts`
+3. `apps/api/src/pci/presentation/app.py`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+git pull origin claude/sweet-einstein-ilnaov
+cd apps\web
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run build
+```
+
 ## 2026-07-25 02:34 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

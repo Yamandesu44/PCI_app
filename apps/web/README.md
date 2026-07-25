@@ -24,6 +24,7 @@ npm run test       # vitest（純粋プレゼンテーションロジック）
 ```
 
 表示には FastAPI バックエンドの起動が必要（`API_BASE_URL`）。
+ローカル開発では認証環境変数を設定しない。
 
 ## 主要ルート
 
@@ -49,6 +50,9 @@ Vercel プロジェクト設定で必要な環境変数:
 | キー | 説明 |
 |---|---|
 | `API_BASE_URL` | FastAPI バックエンドの URL（例: `https://pci-api.railway.app`）|
+| `API_ACCESS_TOKEN` | FastAPIの`PUBLIC_API_TOKEN`と同じサーバー間トークン |
+| `BETA_ACCESS_USER` | 少人数テスト用の共有ユーザー名 |
+| `BETA_ACCESS_PASSWORD` | 少人数テスト用の長い共有パスワード |
 
 詳細: [`docs/design/08-deployment.md`](../../docs/design/08-deployment.md)
 

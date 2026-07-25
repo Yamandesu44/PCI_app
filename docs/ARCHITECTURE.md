@@ -23,8 +23,9 @@
         │  REST (/api/v1/*)  + OpenAPI
 [packages/api-client]  OpenAPI → TypeScript 型・クライアント
         ▲
-        │  import
+        │  import + API_ACCESS_TOKEN
 [apps/web]  Next.js 15 App Router → Vercel（配備設定 vercel.json）
+    BETA_ACCESS_USER / BETA_ACCESS_PASSWORD（少人数テスト時のみ）
 ```
 
 モノレポは npm workspaces（`packages/*`, `apps/web`）。Python 側（api / ingestion-worker）は
@@ -126,6 +127,15 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 - 統合順位は上位5頭を初期表示し、6位以下を折りたたむ。詳細情報は後段へ置き、
   最初の画面で判断材料を読み取れる情報階層を優先する。
 
+### 少人数ロケテスト認証
+- Next.js middlewareは`BETA_ACCESS_USER`と`BETA_ACCESS_PASSWORD`の両方が設定された場合だけ、
+  全画面を共有Basic認証で保護する。片方だけなら503で閉じ、両方未設定ならローカル開発を維持する。
+- FastAPIは`PUBLIC_API_TOKEN`設定時に`/api/v1/*`へBearer認証を要求する。
+  Next.jsの`API_ACCESS_TOKEN`から同じ値をサーバー間ヘッダーとして送る。
+- `/health`と`/ready`は監視用に公開を維持する。`/internal/ingest/*`は既存の`INGEST_TOKEN`で
+  独立して保護し、公開参照APIのトークンを流用しない。
+- 共有認証は個別アカウント管理の代替ではなく、招待3〜5人の期間限定テスト専用とする。
+
 ### 取り込み鮮度・データ完全性監視
 - `GET /api/v1/ingest-status` → `GetIngestStatusUseCase` が `ingest_log` の直近20件から
   鮮度を判定し、`races`の最古未取込日から安全な再同期遡及日数も算出する。
@@ -189,5 +199,5 @@ OpenAPI（`openapi.json`）から TypeScript 型を生成。web が唯一の API
 - Windows PowerShell 5.1 は BOM 無し UTF-8 を ANSI(CP932) で誤読するため、
   自動実行スクリプトは**純 ASCII**で書く（日本語コメント混入で過去にクラッシュ）。
 - 開発は `fixtures/` で JV-Link/Windows なしに domain/application/API を進められる。
-- 公開Web/APIには一般ユーザー認証がない。少人数ロケテストでも、アクセス制限のない
-  インターネット公開は禁止し、`docs/LOCATION_TEST.md`の開始条件を満たしてから公開する。
+- 個別ユーザー認証・権限管理はない。少人数用共有認証を設定しないインターネット公開は禁止し、
+  `docs/LOCATION_TEST.md`の開始条件を満たしてから公開する。

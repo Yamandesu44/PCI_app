@@ -25,7 +25,7 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 | ingestion-worker（mykeibadb / JV-Link） | ✅ Windows自動同期・鮮度/完全性監視・失敗通知 |
 | 実データ | ✅ mykeibadb（MySQL）からPostgreSQLへ同期 |
 | 予想精度の期間外検証 | ⏳ 2026-07-25以降の事前予想を蓄積中 |
-| 少人数ロケテスト | ⏳ 公開条件と運用手順を整備済み。アクセス制限の方式決定後に開始 |
+| 少人数ロケテスト | ⏳ Web共有認証・APIトークン実装済み。公開基盤への設定と開始前点検が必要 |
 
 ローカル起動: API は [`apps/api/README.md`](./apps/api/README.md)、Web は [`apps/web/README.md`](./apps/web/README.md) を参照。
 
@@ -85,6 +85,6 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 - 更新: **日次バッチ**（前日夜〜当日朝）、リアルタイム速報は対象外
 - 公開範囲: 現在は**個人利用・検証用途**。次段階は招待した少人数だけのロケテスト
 - データ表示: 生データやPCI/RPCI等の内部実数値を前面に出さず、独自の言葉・段階評価へ翻訳
-- 認証・課金: 未実装。外部公開前にアクセス制限方式を決める。課金は対象外
+- 認証・課金: 少人数テスト用の共有認証のみ実装。個別アカウント・権限・課金は対象外
 
 詳細: [`docs/design/01-requirements.md`](./docs/design/01-requirements.md)

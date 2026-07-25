@@ -34,6 +34,15 @@ uvicorn pci.presentation.app:app --reload
 `forecast` / `pace-analysis` は指標を自然文へ翻訳した `comment`（model_version=comment-v2・
 ADR-0008）を含み、生成根拠を `reasons` で説明する。
 
+### 少人数ロケテスト用API認証
+
+`PUBLIC_API_TOKEN`を設定すると、`/api/v1/*`は
+`Authorization: Bearer <token>`を要求する。Next.js側の`API_ACCESS_TOKEN`へ同じ値を設定する。
+未設定時はローカル開発用に従来どおり無認証となる。
+
+`/health`・`/ready`は監視用に対象外とする。`/internal/ingest/*`は別の`INGEST_TOKEN`で保護し、
+同じトークンを使い回さない。
+
 ### Gemini 展開コメント（任意）
 
 既定の`COMMENT_GENERATOR_MODE=rule`では、APIキーが環境に残っていても外部APIを呼ばず、
