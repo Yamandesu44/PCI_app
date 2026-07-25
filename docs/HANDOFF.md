@@ -1,5 +1,123 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 01:31 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `b6c9c06`
+- 最新コミット: 本節と同じコミット（`git log -1 --oneline`で確認）
+- 今回の作業目的: 新規実装を開始せず、直前のスマホUI改善とGit状態を再検証し、
+  Claude Codeが資料と実コードだけから安全に再開できる状態へ整理する。
+
+### 完了した内容
+
+- 引き継ぎ整理開始時にworking treeがクリーンで、未追跡・ステージ済み・未コミット変更が
+  ないことを確認した。
+- 最新機能コミット`94a6f0e feat(web): compact mobile race calendar`を自己レビューした。
+- `RaceDateCalendar.tsx`、`RaceDateCalendar.test.tsx`、`page.tsx`に
+  `console.log`、`debugger`、TODO、FIXME、一時コードがないことを確認した。
+- Web全テスト、型チェック、本番ビルドを再実行した。
+- Web lintを実行し、`apps/web/package.json`に`lint`スクリプトがないため
+  lint処理を開始できないことを確認した。
+- 前回の実機確認用Cloudflare Quick Tunnelを停止した。
+- 新しい仕様・設計判断はないため、`docs/DECISIONS.md`と`docs/SPEC.md`は変更していない。
+
+### 未完了の内容
+
+- P1「取り込み警告のモバイル要約化」は未着手。
+- 390pxの主要導線通し確認、320px・375px・430px確認、iOS Safari・Android Chrome実端末確認は未実施。
+- 日付ストリップのDOM削減は、実端末で性能問題を確認した場合だけ着手する条件付きタスク。
+
+### 作業が止まっている箇所
+
+- `apps/web/src/components/IngestStatusBanner.tsx`の`IngestStatusBanner`を読み終えた段階。
+- 現状は警告詳細全体が1つの`details`へ格納済みだが、モバイルでは見出し、
+  `meta.detail`、余白が常時表示される。モバイル用の短い要約表示は未実装。
+- 要約で常時表示する「最優先状態」の選定順は未確定。
+  `ingestStatusMeta()`の既存優先順位から一意に判断できない場合は独断で決めない。
+
+### 次に実施する具体的な手順
+
+1. `apps/web/src/lib/ingestStatus.ts`の`ingestStatusMeta()`を確認し、既存のheadline、
+   detail、tone、件数の生成順を把握する。
+2. `apps/web/src/components/IngestStatusBanner.tsx`の`IngestStatusBanner`へ
+   768px未満専用の要約を追加する。件数・状態は常時表示し、対象レース一覧と
+   `IngestRecoveryCommand`は既存の`details`内に維持する。768px以上は現行表示を変えない。
+3. `apps/web/src/components/IngestStatusBanner.test.tsx`の
+   「警告の詳細と復旧手順を1つの折りたたみにまとめる」と
+   「正常時は不要な詳細開閉を表示しない」を維持し、モバイル要約と
+   PC表示維持のテストを追加する。その後、Web全テスト、型チェック、本番ビルドと
+   390pxブラウザ確認を行う。
+
+### 対象ファイル
+
+1. `apps/web/src/components/IngestStatusBanner.tsx`
+2. `apps/web/src/components/IngestStatusBanner.test.tsx`
+3. `apps/web/src/lib/ingestStatus.ts`
+4. `tasks/current.md`
+5. `docs/HANDOFF.md`
+6. 設計判断が生じた場合のみ`docs/DECISIONS.md`
+
+### 仮実装・暫定値
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- 日付ストリップは56px幅のセルで、期間内の全開催日をDOMへ保持する。
+- 警告詳細は現行どおり初期状態を閉じ、開閉状態を利用者ごとに保存しない。
+
+### 未確定仕様
+
+- モバイル警告で複数異常が同時発生した場合の「最優先状態」の選定順。
+- 警告要約へ表示する件数を合計件数にするか、異常種別ごとの件数にするか。
+- 320px・375px・430pxおよび実端末で許容するバナー初期高さ。
+
+### 既知の不具合
+
+- `apps/web/package.json`に`lint`スクリプトとESLint依存がなく、Web lintを実行できない。
+- Next.jsビルドも`Skipping linting`となり、lintの代替にはならない。
+- Codexの制限付きサンドボックスではVitest/esbuildが親ディレクトリを走査して
+  `Access is denied`になる場合がある。通常のローカル権限では111件すべて成功する。
+- Cloudflare Quick Tunnelは停止済み。次回の実機確認では
+  `apps/web/scripts/run_location_test_tunnel.ps1`を再実行し、新しいURLを取得する必要がある。
+
+### テスト実行コマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run lint --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
+### テスト結果
+
+```text
+Web test: 16 files / 111 tests passed
+Web typecheck: passed
+Web lint: 実行不可（Missing script: "lint"）
+Web production build: passed
+Next.js build: compiled successfully / type validation passed / 3 static pages generated
+```
+
+### Claude Codeが最初に確認するファイル
+
+1. `docs/HANDOFF.md`
+2. `tasks/current.md`
+3. `apps/web/src/components/IngestStatusBanner.tsx`
+4. `apps/web/src/components/IngestStatusBanner.test.tsx`
+5. `apps/web/src/lib/ingestStatus.ts`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+git pull --ff-only origin claude/sweet-einstein-ilnaov
+git status --short
+git log -1 --oneline
+npm.cmd test --workspace=@pci/web
+```
+
 ## 2026-07-26 01:27 JST Codex向け引き継ぎ整理
 
 - 引き継ぎ整理担当: OpenAI Codex
