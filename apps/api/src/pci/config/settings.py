@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = DEFAULT_GEMINI_MODEL
     ingest_token: str | None = None  # Bearer token for /internal/ingest/* endpoints
+    public_api_token: str | None = None  # Bearer token for /api/v1/* endpoints
 
 
 @lru_cache

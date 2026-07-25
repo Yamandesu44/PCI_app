@@ -9,5 +9,9 @@ const baseUrl =
   process.env.API_BASE_URL ??
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   "http://127.0.0.1:8000";
+const apiAccessToken = process.env.API_ACCESS_TOKEN?.trim();
 
-export const api = createClient({ baseUrl });
+export const api = createClient({
+  baseUrl,
+  headers: apiAccessToken ? { Authorization: `Bearer ${apiAccessToken}` } : undefined,
+});

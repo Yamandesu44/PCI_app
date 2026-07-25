@@ -63,6 +63,8 @@ export interface ApiClientOptions {
   baseUrl: string;
   /** テストや SSR でのフェッチ差し替え用。省略時はグローバル fetch。 */
   fetch?: typeof fetch;
+  /** サーバー間認証など、すべてのリクエストへ付与する固定ヘッダー。 */
+  headers?: HeadersInit;
 }
 
 export interface ForecastMissQuery {
@@ -90,9 +92,12 @@ export interface ApiClient {
 export function createClient(options: ApiClientOptions): ApiClient {
   const doFetch = options.fetch ?? globalThis.fetch;
   const base = options.baseUrl.replace(/\/+$/, "");
+  const requestInit: RequestInit | undefined = options.headers
+    ? { headers: options.headers }
+    : undefined;
 
   async function getJson<T>(path: string): Promise<T> {
-    const res = await doFetch(`${base}${path}`);
+    const res = await doFetch(`${base}${path}`, requestInit);
     if (!res.ok) {
       throw new ApiError(res.status, `GET ${path} failed with ${res.status}`);
     }
@@ -144,7 +149,7 @@ export function createClient(options: ApiClientOptions): ApiClient {
     },
     getReadiness: async () => {
       const path = "/ready";
-      const res = await doFetch(`${base}${path}`);
+      const res = await doFetch(`${base}${path}`, requestInit);
       if (res.status !== 200 && res.status !== 503) {
         throw new ApiError(res.status, `GET ${path} failed with ${res.status}`);
       }
