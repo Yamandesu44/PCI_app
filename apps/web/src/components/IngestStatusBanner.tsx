@@ -72,7 +72,7 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                         <li key={i} className="rounded border border-slate-200 bg-white p-2 text-xs">
                           <span className="font-semibold text-slate-800">{failure.label}</span>
                           <span className="ml-2 text-slate-500">{failure.timestamp}</span>
-                          <p className="m-0 mt-1 break-all font-mono text-[11px] text-slate-500">
+                          <p className="m-0 mt-1 break-words font-mono text-[11px] text-slate-500">
                             {failure.detail}
                           </p>
                         </li>

@@ -34,6 +34,17 @@ describe("IngestStatusBanner", () => {
     const markup = renderToStaticMarkup(
       <IngestStatusBanner
         status={status({
+          last_attempt_failed: true,
+          recent_failures: [
+            {
+              batch_date: "2026-07-23",
+              step: "results",
+              mode: "mykeibadb",
+              started_at: "2026-07-23T18:30:00+09:00",
+              error_summary:
+                "Ingest API エラー 500 /internal/ingest/results: Internal Server Error",
+            },
+          ],
           has_incomplete_races: true,
           incomplete_race_count: 1,
           incomplete_races: [
@@ -54,6 +65,8 @@ describe("IngestStatusBanner", () => {
     expect(markup).toContain("詳細と復旧手順");
     expect(markup).toContain("成績未取込の対象");
     expect(markup).toContain("再同期コマンド");
+    expect(markup).toContain("break-words");
+    expect(markup).not.toContain("break-all");
   });
 
   it("正常時は不要な詳細開閉を表示しない", () => {
