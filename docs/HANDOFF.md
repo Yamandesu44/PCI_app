@@ -1,5 +1,79 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 01:05 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `4e06580`
+- 最新コミット: 本節と同じコミット（`git log -1 --oneline`で確認）
+- 目的: スマホのレースボード上部を圧縮し、開催日とレース一覧へ早く到達できるようにする。
+
+### 完了内容
+
+- 4統計カードをスマホでは高さ74pxの4列サマリーへ統合した。
+- 同じ件数を重複表示していたスマホのレース一覧フィルターを非表示にした。
+- `ForecastPerformanceSummary`をスマホでは初期高さ66pxの`details`サマリーに変更した。
+- 閉じた状態でも対象期間、全体一致状況、検証件数、カバー率を確認できる。
+- 展開後は30・90・180日切替、カバー率、全体・芝・ダート集計、
+  信頼度別集計、推移、不一致傾向、直近不一致を従来どおり確認できる。
+- 768px以上は従来の4カードと予想検証の連続表示を維持した。
+
+### 変更ファイル
+
+1. `apps/web/src/app/page.tsx`
+2. `apps/web/src/components/ForecastPerformanceSummary.tsx`
+3. `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+4. `tasks/current.md`
+5. `docs/DECISIONS.md`
+6. `docs/HANDOFF.md`
+
+### テスト結果
+
+```text
+Web: 109 passed
+Web typecheck: passed
+Web production build: passed
+Web lint: package.jsonにlintスクリプトがないため実行不可
+390px相当: stats height 74 / closed performance height 66 / first race list top 1112
+詳細展開後: performance height 337 / period nav 1 / coverage progress 1
+1440px相当: mobile summary 0 / desktop filters and performance visible / horizontal overflowなし
+```
+
+### 未完了・次の具体的作業
+
+- 次のスマホ優先改善は、月間開催日カレンダーを横スクロールの日付ストリップへ圧縮する。
+- `apps/web/src/components/RaceDateCalendar.tsx`にモバイル表示を追加し、
+  選択日を中央へ寄せ、開催日のみを前後へ移動できるようにする。
+- PCの月間カレンダーは維持し、390px相当で選択日、前後開催日、横はみ出し、
+  最初のレース一覧位置を検証する。
+
+### 仮実装・暫定値・未確定仕様
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- 予想検証は初期状態を閉じる。利用者ごとの開閉状態は保存しない。
+- 統計ラベルは「今週末・出走前・確定後・開催場」の4項目で固定する。
+
+### 既知の不具合
+
+- `apps/web/package.json`にlintスクリプトがなく、Web lintは単独実行できない。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/ForecastPerformanceSummary.tsx`
+2. `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+3. `apps/web/src/app/page.tsx`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
 ## 2026-07-26 00:50 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

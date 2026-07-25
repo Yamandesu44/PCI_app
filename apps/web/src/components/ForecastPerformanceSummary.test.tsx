@@ -1,0 +1,59 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import type { ForecastPerformance } from "@pci/api-client";
+
+import { ForecastPerformanceSummary } from "./ForecastPerformanceSummary";
+
+const performance = {
+  period_days: 90,
+  date_from: "2026-04-28",
+  date_to: "2026-07-26",
+  eligible_race_count: 120,
+  sample_size: 48,
+  coverage_rate: 0.4,
+  groups: [
+    { key: "overall", label: "全体", hit_rate: 0.625, sample_size: 48 },
+    { key: "turf", label: "芝", hit_rate: 0.6, sample_size: 30 },
+    { key: "dirt", label: "ダート", hit_rate: 0.667, sample_size: 18 },
+  ],
+  previous_period: { groups: [] },
+  weekly_trend: [],
+  confidence_groups: [],
+  pace_matrix: [],
+  recent_misses: [],
+} as unknown as ForecastPerformance;
+
+describe("ForecastPerformanceSummary", () => {
+  it("スマホでは閉じたサマリーから検証状況を把握できる", () => {
+    const markup = renderToStaticMarkup(
+      <ForecastPerformanceSummary
+        performance={performance}
+        selectedDate="2026-07-25"
+      />,
+    );
+
+    expect(markup).toContain("data-mobile-performance-summary");
+    expect(markup).toContain("<summary");
+    expect(markup).not.toContain("<details open");
+    expect(markup).toContain("展開一致 63%");
+    expect(markup).toContain("検証 48件");
+    expect(markup).toContain("カバー 40%");
+  });
+
+  it("期間切替と詳細指標を折りたたみ内にも維持する", () => {
+    const markup = renderToStaticMarkup(
+      <ForecastPerformanceSummary
+        performance={performance}
+        selectedDate="2026-07-25"
+      />,
+    );
+
+    expect(markup).toContain(
+      'href="/?performance_days=30&amp;date=2026-07-25"',
+    );
+    expect(markup).toContain("事前予想の検証カバー率");
+    expect(markup).toContain("全体");
+    expect(markup).not.toContain("RPCI");
+  });
+});

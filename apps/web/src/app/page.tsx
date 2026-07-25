@@ -437,7 +437,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               開催日と競馬場から、展開予想と確定後の振り返りへ移動できます。
             </p>
           </div>
-          <nav className="inline-flex w-fit max-w-full flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-sm" aria-label="レース一覧フィルター">
+          <nav className="hidden w-fit max-w-full flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-sm md:inline-flex" aria-label="レース一覧フィルター">
             <a className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" href="#weekend">
               今週末 {weekendItems.length}
             </a>
@@ -464,7 +464,25 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </p>
       ) : null}
 
-      <section className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section
+        data-mobile-race-stats
+        className="mb-4 grid grid-cols-4 divide-x divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm md:hidden"
+        aria-label="レース集計"
+      >
+        {[
+          ["今週末", weekendItems.length],
+          ["出走前", weekendItems.length + upcomingItems.length],
+          ["確定後", confirmedItems.length],
+          ["開催場", venueCount],
+        ].map(([label, value]) => (
+          <div className="min-w-0 px-1 py-3 text-center" key={label}>
+            <p className="m-0 truncate text-[10px] font-semibold text-slate-500">{label}</p>
+            <p className="m-0 mt-1 text-xl font-bold tabular-nums text-slate-950">{value}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="mb-8 hidden gap-3 md:grid md:grid-cols-2 lg:grid-cols-4">
         <StatTile tone="emerald" icon={<CalendarDays className="h-4 w-4" />} label="今週末の予想対象" value={weekendItems.length} />
         <StatTile tone="blue" icon={<Search className="h-4 w-4" />} label="出走前" value={weekendItems.length + upcomingItems.length} />
         <StatTile tone="violet" icon={<CheckCircle2 className="h-4 w-4" />} label="確定後" value={confirmedItems.length} />
