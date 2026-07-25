@@ -4,7 +4,7 @@ import { Activity, ArrowLeft, BarChart3, Users } from "lucide-react";
 
 import { CommentCard } from "@/components/CommentCard";
 import { ForecastAccuracyBadge } from "@/components/ForecastAccuracyBadge";
-import { MobileRaceNavigation } from "@/components/MobileRaceNavigation";
+import { MobilePaceAnalysisDashboard } from "@/components/MobilePaceAnalysisDashboard";
 import { PaceAnalysisTable } from "@/components/PaceAnalysisTable";
 import { RaceHero } from "@/components/RaceHero";
 import { ReasonList } from "@/components/ReasonList";
@@ -48,7 +48,13 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-7 px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
+    <>
+      <MobilePaceAnalysisDashboard
+        race={race}
+        analysis={analysis}
+        navigation={navigation}
+      />
+      <main className="mx-auto hidden w-full max-w-7xl flex-col gap-7 px-4 py-6 md:flex md:px-6 lg:px-8 lg:py-9">
       <div className="flex items-center justify-between gap-4 text-sm text-slate-500">
         <Link
           href="/"
@@ -61,7 +67,6 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
       </div>
 
       <RaceHero race={race} mode="analysis" />
-      <MobileRaceNavigation navigation={navigation} />
 
       <section>
         <div className="mb-4">
@@ -124,6 +129,7 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
           <PaceAnalysisTable horses={horses} />
         </div>
       </section>
-    </main>
+      </main>
+    </>
   );
 }

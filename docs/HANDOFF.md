@@ -1,5 +1,79 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 14:14 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `0dcc3e4`
+- 目的: 確定後分析のスマホ画面を短くし、結果と振り返りへすぐ到達できるようにする。
+
+### 完了内容
+
+- `MobilePaceAnalysisDashboard`を追加し、768px未満を
+  「サマリー・振り返り・全馬」の3タブへ分割した。
+- モバイルHeroを日付、コース、レース名、実際の流れ、天候、馬場、分析頭数へ圧縮した。
+- 初期サマリーは予想との答え合わせ、上位3頭、一言解説だけを表示する。
+- 振り返りタブには実際の流れ、上位3頭の傾向、分析対象、初心者向け解説全文、
+  算出根拠をまとめた。
+- 全馬タブではPC用テーブルを使わず、着順、馬番、馬名、脚質、ペース傾向、
+  上がり3Fを二段のコンパクト行で表示する。
+- PCI・RPCIの内部実数値は画面へ追加せず、既存の記号と言語ラベルだけを使用した。
+- 390px相当の小倉11Rで初期ページ高943px、上位3行、全馬18行、
+  3タブ切替、ページ横はみ出しなしを確認した。
+- 1440px相当ではモバイルタブと行が非表示になり、従来のPC用テーブルだけが表示された。
+
+### 変更ファイル
+
+1. `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
+2. `apps/web/src/components/MobilePaceAnalysisDashboard.test.tsx`
+3. `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`
+4. `tasks/current.md`
+5. `docs/DECISIONS.md`
+6. `docs/HANDOFF.md`
+
+### テスト結果
+
+```text
+Web: 103 passed
+Web typecheck: passed
+Web production build: passed
+Web lint: package.jsonにlintスクリプトがないため実行不可
+390px相当サマリー: page height 943 / result rows 3 / scrollWidth 375
+390px相当全馬: result rows 18 / scrollWidth 375 / 横スクロール表なし
+390px相当振り返り: 解説全文・算出根拠あり / scrollWidth 375
+1440px相当: visible mobile tabs 0 / mobile result rows 0 / desktop table 1
+```
+
+### 未完了・次の具体的作業
+
+- トップのレース一覧はスマホでも開催場を縦に連続表示するため、開催日によってスクロールが長い。
+- `apps/web/src/app/page.tsx`と一覧コンポーネントを確認し、768px未満だけ競馬場タブと
+  コンパクトな1R〜12R行へ分離する。PCの開催場横並びは維持する。
+- ロケテスト公開へ反映する際は実行用クローンでpull後、Quick Tunnelを再起動する。
+
+### 仮実装・暫定値・未確定仕様
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- 初期サマリーは上位3頭。取消・中止等で着順1〜3が欠ける場合は存在する着順だけを表示する。
+- 全馬行は64px基準だが、長い馬名や端末文字サイズ設定では自動的に高くなる。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
+2. `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`
+3. `apps/web/src/app/page.tsx`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
 ## 2026-07-25 14:00 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
