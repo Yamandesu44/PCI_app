@@ -1,5 +1,83 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 01:27 JST Codex向け引き継ぎ整理
+
+- 引き継ぎ整理担当: OpenAI Codex
+- 引き継ぎ先: OpenAI Codex（次タスク）
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `94a6f0e`
+- 最新コミット: 本節と同じコミット（`git log -1 --oneline`で確認）
+- 目的: 新規実装を行わず、直前のスマホ開催日カレンダー改善を検証し、
+  次の担当がGitと資料だけから安全に再開できる状態へ整理する。
+
+### Git差分の確認
+
+- 引き継ぎ整理開始時のworking treeはクリーンだった。
+- 最新の機能コミットは`94a6f0e feat(web): compact mobile race calendar`。
+- 直前の機能差分は`RaceDateCalendar`のモバイル日付ストリップ、テスト、
+  `page.tsx`のモバイル幅制約、および関連資料だけである。
+- 未追跡ファイル、ステージ済み差分、未コミットの機能変更はなかった。
+
+### 今回完了した内容
+
+- `CLAUDE.md`の作業中断・終了手順を確認した。
+- Web全テストと型チェックを最新コミット上で再実行した。
+- Web lintを実行し、スクリプト未定義で開始できないことを再確認した。
+- `tasks/current.md`へスマホ画面向け残タスクを優先度・確定度別に整理した。
+- 新しい設計判断や仕様変更はないため、`docs/DECISIONS.md`と`docs/SPEC.md`は変更していない。
+
+### 変更ファイル
+
+1. `tasks/current.md`
+2. `docs/HANDOFF.md`
+
+### テスト実行コマンドと結果
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run lint --workspace=@pci/web
+```
+
+```text
+Web: 16 files / 111 tests passed
+Web typecheck: passed
+Web lint: failed before lint開始（Missing script: "lint"）
+Sandbox内の初回Vitest: 親ディレクトリ読取制限で起動前に失敗
+通常のローカル権限での同一Vitest: 111 tests passed
+```
+
+### 仮実装・暫定値・未確定仕様
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- 日付ストリップは56px幅のセルとし、期間内の全開催日をDOMへ保持する。
+- 日付DOMの絞り込み・仮想化は未採用。実端末で性能問題を確認した場合だけ設計する。
+- 取り込み警告の要約で常時表示する「最優先状態」の選定順は未確定。
+  既存データを削らず、現行の警告優先度から判断できない場合は仕様確認を行う。
+- 320px・375px・430px、iOS Safari、Android Chromeでの通し確認は未実施。
+
+### 既知の問題
+
+- `apps/web/package.json`に`lint`スクリプトとESLint依存がなく、Web lintを実行できない。
+- Codexの制限付きサンドボックスではVitest/esbuildが親ディレクトリを走査して
+  `Access is denied`になる場合がある。通常のローカル権限では再現せず全テストが通る。
+- Cloudflare Quick Tunnelは一時URLであり、実行ターミナルの終了や再起動でURLが変わる。
+
+### スマホ画面向け残タスク
+
+1. P1: `IngestStatusBanner.tsx`のモバイル要約化とコンポーネントテスト更新。
+2. P2: 主要導線の390px通し確認、iOS/Android実端末確認、アクセシビリティ確認。
+3. P3: 日付ストリップの性能問題が実測された場合だけDOM削減を検討。
+
+### Codexが最初に行う作業
+
+1. `git status --short`と`git log -1 --oneline`を実行し、本節のコミットとcleanなworking treeを確認する。
+2. `apps/web/src/components/IngestStatusBanner.tsx`と
+   `apps/web/src/components/IngestStatusBanner.test.tsx`を読み、既存警告の優先順位と開閉構造を確認する。
+3. P1の作業範囲を「モバイル要約・PC維持・テスト・390px確認」に限定して実装し、
+   `npm.cmd test --workspace=@pci/web`と`npm.cmd run typecheck --workspace=@pci/web`を実行する。
+
 ## 2026-07-26 01:19 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
