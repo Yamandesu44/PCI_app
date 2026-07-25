@@ -1,5 +1,119 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 (Claude Code) Codex引き継ぎ検証＋取り込み警告のモバイル要約化
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時のローカルHEAD: `d2a74ff`（自分の前回セッションの最終コミット）
+- 作業開始時点でorigin: `d751bf8`（**117コミット先行**。`git pull --ff-only`で安全に追従）
+- 最新コミット: 本節と同じコミット（`git log -1 --oneline`で確認）
+
+### Codex引き継ぎの検証結果（コード変更前に実施）
+
+ユーザー指示により、実装前にCodexの117コミット分の作業を検証した。
+
+- **Git確認**: ローカルはorigin/claude/sweet-einstein-ilnaovより117コミット遅れていた
+  （0 ahead / 117 behind、working tree clean）。履歴を書き換えず`git pull --ff-only`で
+  fast-forward追従（安全: ローカルに独自コミットが無かったため）。
+- **完了内容の概要**（詳細はHANDOFF.md内の各日時セクション・`docs/DECISIONS.md`参照）:
+  RPCI予測モデルのv1→v4反復改善（各候補は必ず本番と独立期間比較し、改善しない場合は
+  正直に不採用として記録）、ability-v3/PAI course-aptitude、S3/L3内部永続化、
+  重複レースキーの安全な統合（dry-run既定・署名検証付き削除ガード）、Windows取り込みの
+  堅牢化（文字化け修正・readiness事前確認・Webhook集約秘匿）、モバイルUI全面改修、
+  限定ロケテスト基盤（Basic/Bearer認証・Cloudflare Quick Tunnel・公開前HTTP点検CLI）。
+- **テスト再実行**（このクラウド環境、Codexの記載件数と照合）: API 596 passed、
+  ingestion-worker 239 passed、Web 111 passed（新規追加前）。いずれもCodex記載と完全一致。
+  ruff/lint-imports/mypy --strict（API）/typecheck/build/OpenAPI同期/Alembicチェーン
+  （001→006単線）もすべて確認しclean。
+- **唯一の見かけ上の不一致（原因特定済み・対応不要）**: `python -m mypy src/ --strict`を
+  素の設定でこのLinux環境で実行すると`windows_client.py`で3件（`_software_id`/`_race_option`
+  の型を決定できない）エラーが出て、「ingestion-worker全体のRuff・mypy違反を解消した」という
+  記載と食い違うように見えた。原因は`if sys.platform != "win32": raise ...`というOS分岐を、
+  mypyがこの環境（Linux）のデフォルトプラットフォーム前提で解析し、以降の属性代入を
+  「到達不能コード」とみなして型を見失うという**mypyの`--platform`依存の環境差**。
+  `mypy --strict --platform win32`で実行すると24ファイル全体で0エラーになることを確認した。
+  Windows実行機（本番の実行環境）では自然に発生しない。**コードの不具合ではないため
+  対応不要**と判断し記録のみ残す。
+- 新規に監査したポイント: 新規認証コード（`middleware.ts`/`betaAccess.ts`）は定数時間比較・
+  設定不備時fail-closedで健全。重複レース統合スクリプト（`reconcile_duplicate_races.py`）は
+  既定dry-run・`--apply`必須・署名検証付き削除ガードで安全設計。新規コンポーネントの
+  `predicted_rpci`/`rpci_actual`等はすべて`paceSpeedFromIndex()`翻訳層経由で、UIへの
+  実数値露出なし（`docs/PROJECT_RULES.md §5`順守を確認）。
+- **重大な不整合はなし**と判断し、`tasks/current.md`最優先未完了タスクへ進んだ。
+
+### 今回完了した内容（取り込み警告のモバイル要約化、P1確定タスク）
+
+- `IngestStatusBanner.tsx`へ768px未満専用の要約行（アイコン(h-6 w-6)＋見出しのみ・
+  `truncate`付き1行、`md:hidden`）を追加した。768px以上は既存の見出し＋detail文の
+  2段表示（`hidden items-start gap-3 md:flex`）を維持する。外側のpaddingは
+  `p-3 md:p-4`とし、モバイルでの余白も詰めた。
+- 詳細（失敗一覧・成績未取込・馬場情報未反映・重複レース・復旧コマンド）を格納する
+  `<details>`は構造・内容とも変更していない（既存の折りたたみのまま両breakpointで表示）。
+- **最優先状態の選定順は独自に決めていない**: `ingestStatusMeta()`は既にif/else-ifの
+  優先度カスケード（失敗＞成績未取込＞馬場情報未反映＞重複レース＞鮮度低下＞正常）で
+  単一の`headline`/`tone`へ絞り込み済みのため、モバイル要約はその`meta.headline`を
+  そのまま使うだけで新しい優先順位判断は発生しない。件数も既存のheadline文字列に
+  埋め込み済みの値をそのまま使い、複数カテゴリを横断合算する新しい集計は行っていない
+  （その集計方法自体は前回セッションが「未確定」として残した論点で、今回も未確定のまま）。
+- `IngestStatusBanner.test.tsx`に2件追加（既存2件は無変更）:
+  「モバイル専用の要約行に見出しを常時表示し、detail文は含めない」
+  「PC表示（md:）は見出し・detail文とも従来どおり維持する」。
+- Playwright（`/opt/pw-browsers/chromium`）で実際にレンダリングした静的プレビュー
+  （`renderToStaticMarkup`＋ビルド済みTailwind CSS）を390px・1024pxでスクリーンショットし、
+  390pxで警告/正常/失敗の3状態とも1行に収まり横はみ出しが無いこと、1024pxで従来の
+  見出し＋detail文の2段表示が保たれることを目視確認した（一時ファイルは確認後に削除）。
+
+### 変更ファイル
+
+1. `apps/web/src/components/IngestStatusBanner.tsx`
+2. `apps/web/src/components/IngestStatusBanner.test.tsx`
+3. `tasks/current.md`
+4. `docs/HANDOFF.md`
+
+新しい設計判断・仕様変更は発生していないため`docs/DECISIONS.md`は更新していない
+（`ingestStatusMeta()`のロジックは無変更、既存の優先順位をそのまま流用したため）。
+
+### テスト実行コマンドと結果
+
+```bash
+cd apps/web
+npm run test          # 113 passed（16 files、+2）
+npm run typecheck     # 成功
+npm run build         # 成功（5ページ）
+```
+
+lint: 引き続き`apps/web/package.json`に`lint`スクリプトが無く実行不可（既知・Codex記載どおり）。
+
+### 未完了・次に実施する具体的な手順
+
+- **P2（未実施）**: 390px等での主要導線通し確認、iOS Safari/Android Chrome実機確認、
+  アクセシビリティ確認（`tasks/current.md`「検証タスク」参照）。
+- **P3（条件付き）**: 日付ストリップのDOM削減。実機で性能問題が出るまで着手しない。
+- **未確定のまま**: モバイル警告で複数カテゴリが同時に該当する場合の「合算件数」の
+  集計方法（`ingestStatusMeta()`は現状1カテゴリしか同時に返さない設計のため、
+  合算が必要かどうか自体を含めユーザー確認が必要）。
+- **条件待ち**: 予想照合30件到達時の初回レビュー、ダート確定100件+ハイ20件到達時の
+  RPCI v4監視レビュー（いずれも閾値未到達、`tasks/current.md`参照）。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `tasks/current.md`
+3. `apps/web/src/components/IngestStatusBanner.tsx`
+4. `apps/web/src/components/IngestStatusBanner.test.tsx`
+
+### Codexが最初に実行するコマンド
+
+```bash
+git fetch origin && git checkout claude/sweet-einstein-ilnaov && git pull origin claude/sweet-einstein-ilnaov
+git log --oneline -5
+git status   # クリーンであるはず
+cd apps/web && npm run test && npm run typecheck && npm run build
+```
+
+---
+
 ## 2026-07-26 01:31 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

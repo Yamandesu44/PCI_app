@@ -38,8 +38,24 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
     meta.metadataRecoveryCommand !== null;
 
   return (
-    <div className={`mb-6 rounded-lg border ${tone.border} ${tone.bg} p-4`}>
-      <div className="flex items-start gap-3">
+    <div className={`mb-6 rounded-lg border ${tone.border} ${tone.bg} p-3 md:p-4`}>
+      {/* モバイル(768px未満)専用の要約行: 見出しのみを1行で常時表示し、
+          detail文と余白を省いて初期表示の高さを抑える。PC(md:)側は非表示。
+          優先度・件数は既存の ingestStatusMeta() の判定結果をそのまま使い、
+          複数異常時の選定順を独自に決めない。 */}
+      <div className="flex items-center gap-2 md:hidden">
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${tone.icon}`}>
+          <Icon className="h-3.5 w-3.5" aria-hidden />
+        </span>
+        <p
+          className="m-0 min-w-0 flex-1 truncate text-sm font-semibold"
+          style={{ color: meta.color }}
+        >
+          {meta.headline}
+        </p>
+      </div>
+
+      <div className="hidden items-start gap-3 md:flex">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${tone.icon}`}>
           <Icon className="h-4 w-4" aria-hidden />
         </span>
@@ -48,7 +64,11 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
             {meta.headline}
           </p>
           <p className="m-0 mt-1 text-sm leading-6 text-slate-700">{meta.detail}</p>
+        </div>
+      </div>
 
+      <div className="mt-2 md:ml-11 md:mt-0">
+        <div className="min-w-0 flex-1">
           {hasDetails ? (
             <details className="group mt-3">
               <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-white/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">

@@ -1,5 +1,26 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-26 完了: Claude Code — Codex引き継ぎ検証＋取り込み警告のモバイル要約化
+
+- [x] 117コミット分のCodex作業を検証（`git pull --ff-only`は0 ahead/117 behindで安全に実施）。
+  API 596/ingestion-worker 239/Web 111 tests、ruff/lint-imports/mypy --strict/typecheck/build
+  すべてこのクラウド環境で再実行し、Codexの記載件数と完全一致を確認した。
+- [x] 唯一の見かけ上の不一致（ingestion-worker mypyがこの環境で3件エラー）を調査し、
+  `sys.platform != "win32"` 分岐に対するmypyのプラットフォーム推定差（`--platform win32`で
+  0エラーに一致）と特定。コードの不具合ではないため対応不要と判断（`docs/HANDOFF.md`参照）。
+- [x] 重大な不整合が無いことを確認したため、`tasks/current.md`最優先未完了タスク
+  「P1 取り込み警告のモバイル要約化」から作業を再開した。
+- [x] `IngestStatusBanner.tsx`へ768px未満専用の要約行（アイコン＋見出しのみ・1行・truncate）を
+  追加した。768px以上は既存の見出し＋detail文の2段表示を維持する。
+  最優先状態の選定は既存の`ingestStatusMeta()`の判定結果（1つに絞り込み済み）をそのまま使い、
+  複数異常時の優先順位を独自に決めていない。
+- [x] `IngestStatusBanner.test.tsx`に、モバイル要約行の内容（detail文を含まない）と
+  PC表示が従来どおり（見出し＋detail文）であることを確認するテストを追加し、
+  既存2件のテストは変更していない。
+- [x] Playwrightで実際にレンダリングした静的プレビューを390px・1024pxでスクリーンショット確認し、
+  390pxで1行に収まること・1024pxで従来の2段表示が保たれることを目視確認した。
+- [x] Web 113 tests、型チェック、本番ビルドを完了した。
+
 ## 2026-07-26 完了: Claude Code向け引き継ぎ整理
 
 - [x] ブランチ、最新コミット、Git差分、未追跡ファイルを確認した。
@@ -22,9 +43,7 @@
 
 ### 確定タスク
 
-- [ ] **P1 取り込み警告のモバイル要約化**:
-  `apps/web/src/components/IngestStatusBanner.tsx`で件数・状態・最優先警告を常時表示し、
-  対象レース一覧と復旧コマンドを任意展開にする。PC表示と警告情報量は維持する。
+- [x] **P1 取り込み警告のモバイル要約化**: 完了（上記2026-07-26セクション参照）。
 
 ### 検証タスク
 
