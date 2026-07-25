@@ -1088,3 +1088,21 @@
   代表3レースの目視確認を開始条件として維持する。
 - **検証**: HTTPモック8 tests、Web 95 tests、API公開認証契約5 tests、
   Web/APIクライアント型チェック、Next.js本番ビルドを完了した。
+
+## ADR-2026-07-25: 初回ロケテストはNext.jsだけをQuick Tunnelで一時公開する
+
+- **背景**: 初回テストは3〜5人・開催2週分で、Windows実行機の実データを確認することが目的。
+  現行PostgreSQLは約121MBで移行可能な容量だが、無料APIの休止や短期DBの失効を含む
+  マネージド構成へ今すぐ移すと、UI評価よりインフラ移行の検証範囲が大きくなる。
+- **判断**: Windows実行機のNext.js本番サーバーを`127.0.0.1:3100`で起動し、
+  Cloudflare Quick TunnelでBasic認証付きWebだけをHTTPS公開する。
+  FastAPIは`127.0.0.1:8000`、PostgreSQLはlocalhostに残し、外部ポートを開放しない。
+- **安全策**: `run_location_test_tunnel.ps1`はAPI/DB readiness、秘密値の分離、
+  ループバックAPI、ポート、本番ビルド、Web未認証401、認証済み200、API疎通を確認してから
+  URLを表示する。資格情報はログへ出さず、停止時にWebとトンネルの子プロセスを終了する。
+- **制約**: Quick Tunnelは開発・テスト専用で、URLは起動ごとに変わり、SLAはない。
+  一般公開、URL固定、常時稼働、正式なユーザー認証が必要になった時点で利用を終了する。
+- **将来**: 継続提供へ進む場合は、Vercel等のWeb、管理されたFastAPI、
+  PostgreSQLへ移行し、既存の`location-test:preflight`で公開Web/API契約を検証する。
+- **運用境界**: `cloudflared`のインストールと利用開始は実行機の利用者が行う。
+  リポジトリはインストーラーや利用条件への同意を自動化しない。

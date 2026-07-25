@@ -4,6 +4,19 @@
 > 個別ユーザー認証は未実装。少人数用の共有認証を有効にし、
 > [`../LOCATION_TEST.md`](../LOCATION_TEST.md)の開始条件とアクセス制限を満たしてから行う。
 
+## 現在採用する少人数ロケテスト構成
+
+3〜5人・開催2週分の初回テストでは、Windows実行機のPostgreSQL、FastAPI、Next.jsを使い、
+Basic認証付きNext.jsだけをCloudflare Quick Tunnelで一時公開する。
+FastAPIの`API_BASE_URL`は`http://127.0.0.1:8000`のままとし、APIとDBは外部公開しない。
+
+現行DBは2026-07-25時点で約121MB。データ移行を伴わず、無料APIの休止や短期DBの期限に
+影響されずに実データを確認できるため、期間限定テストにはこの構成を採用した。
+Quick TunnelはURL固定・SLA・正式運用を提供しないため、一般公開や継続運用には使用しない。
+起動方法と停止条件は[`../LOCATION_TEST.md`](../LOCATION_TEST.md)を正とする。
+
+以下のVercel・APIホスティング・マネージドPostgreSQL構成は、正式公開へ進む場合の候補である。
+
 ## アーキテクチャ
 
 ```

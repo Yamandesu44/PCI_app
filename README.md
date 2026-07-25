@@ -25,7 +25,7 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 | ingestion-worker（mykeibadb / JV-Link） | ✅ Windows自動同期・鮮度/完全性監視・失敗通知 |
 | 実データ | ✅ mykeibadb（MySQL）からPostgreSQLへ同期 |
 | 予想精度の期間外検証 | ⏳ 2026-07-25以降の事前予想を蓄積中 |
-| 少人数ロケテスト | ⏳ Web共有認証・APIトークン実装済み。公開基盤への設定と開始前点検が必要 |
+| 少人数ロケテスト | ⏳ Quick Tunnel方式と自動点検を実装済み。実行機へのcloudflared導入と代表3レース確認が必要 |
 
 ローカル起動: API は [`apps/api/README.md`](./apps/api/README.md)、Web は [`apps/web/README.md`](./apps/web/README.md) を参照。
 

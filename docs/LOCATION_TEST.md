@@ -28,7 +28,77 @@
 - FastAPIの`PUBLIC_API_TOKEN`は参加者へ渡さず、Next.jsサーバーだけに設定する
 - `INGEST_TOKEN`、`PUBLIC_API_TOKEN`、共有パスワードはそれぞれ別の値にする
 
-## 3. 認証設定
+## 3. 今回採用する公開構成
+
+初回の3〜5人・開催2週分のテストは、Windows実行機のデータをそのまま使い、
+Cloudflare Quick TunnelでBasic認証付きNext.jsだけを一時公開する。
+
+```text
+参加者
+  └─ HTTPS / TryCloudflare一時URL
+       └─ cloudflared
+            └─ Next.js 127.0.0.1:3100
+                 └─ FastAPI 127.0.0.1:8000
+                      └─ PostgreSQL localhost:5432
+```
+
+- インターネットへ公開するのはNext.jsだけ。FastAPIとPostgreSQLのポートは開放しない
+- Quick Tunnelは開発・テスト専用で、URLは起動ごとに変わり、SLAはない
+- Windows実行機、Docker DB、FastAPI、起動用PowerShellをテスト中は稼働させる
+- URLは招待者へ個別に伝え、SNSや検索可能な場所へ掲載しない
+- 正式公開や継続運用では、Vercel等のWeb、管理されたAPI、PostgreSQLへ移行する
+
+Cloudflareの[公式配布ページ](https://developers.cloudflare.com/tunnel/downloads/)から
+Windows版`cloudflared`をインストールする。
+[Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)
+自体はCloudflareアカウントを作成せず利用できる。
+
+## 4. Quick Tunnelの認証設定
+
+リポジトリルートのコマンドプロンプトで設定ファイルを作る。
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+copy apps\web\.env.location-test.example apps\web\.env.location-test.local
+notepad apps\web\.env.location-test.local
+```
+
+`BETA_ACCESS_PASSWORD`は16文字以上の推測されにくい値へ置き換える。
+FastAPIで`PUBLIC_API_TOKEN`を設定している場合だけ、同じ値を`API_ACCESS_TOKEN`へ設定する。
+設定済みファイルはGit管理対象外であり、参加者へ送らない。
+
+```text
+API_BASE_URL=http://127.0.0.1:8000
+BETA_ACCESS_USER=<参加者へ伝える共有ユーザー名>
+BETA_ACCESS_PASSWORD=<参加者へ伝える長い共有パスワード>
+API_ACCESS_TOKEN=<設定時だけFastAPIのPUBLIC_API_TOKENと同じ値>
+```
+
+公開せず事前点検だけ行う。
+
+```cmd
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\web\scripts\run_location_test_tunnel.ps1 -PreflightOnly
+```
+
+すべて`PASS`なら公開を開始する。
+
+```cmd
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\web\scripts\run_location_test_tunnel.ps1
+```
+
+表示された`https://....trycloudflare.com`を参加者へ伝える。スクリプトは公開前に、
+API/DB readiness、設定、依存コマンド、本番ビルド、未認証401、認証済み200、
+WebからAPIへの疎通を自動確認する。停止は同じ画面で`Ctrl+C`を押す。
+
+`cloudflared.exe`をPATHへ追加していない場合は、絶対パスを指定する。
+
+```cmd
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\web\scripts\run_location_test_tunnel.ps1 -CloudflaredPath "C:\path\to\cloudflared.exe"
+```
+
+## 5. マネージド環境へ移行する場合の認証設定
+
+以下は初回Quick Tunnelではなく、将来Web/APIを別の公開基盤へ配置する場合の設定である。
 
 公開環境のFastAPIへ次を設定する。
 
@@ -49,7 +119,7 @@ BETA_ACCESS_PASSWORD=<参加者へ伝える長い共有パスワード>
 `BETA_ACCESS_USER`と`BETA_ACCESS_PASSWORD`は両方設定する。片方だけならWebは503となる。
 ローカル開発では両方を未設定にすれば従来どおり無認証で起動する。
 
-## 4. 開始前点検
+## 6. 開始前点検
 
 ```cmd
 cd C:\Users\yuuta\PCI_app
@@ -83,7 +153,8 @@ npm.cmd run build
 - FastAPIの`/api/v1/races`がトークンなし401、正しいBearerトークンで200
 - Webからレース一覧を開き、サーバー間トークン付きでデータを取得できる
 
-公開環境の起動後は、上記4項目をルートの自動点検CLIで確認する。
+マネージド公開環境の起動後は、上記4項目をルートの自動点検CLIで確認する。
+Quick Tunnel方式では起動スクリプトが同等の点検を行うため、このCLIは使用しない。
 秘密値はコマンド引数に渡さず、実行するターミナルの環境変数へ設定する。
 
 ```cmd
@@ -112,7 +183,7 @@ CLIは次を自動判定する。
 このCLIはレース内容の正確性までは判定しない。HTTP点検合格後も、芝短距離、ダート中距離、
 枠順確定後の多頭数レースを各1件開き、レース名、距離、頭数、出走馬を目視確認する。
 
-## 5. 参加者に確認すること
+## 7. 参加者に確認すること
 
 各開催日の利用後、次の5項目を1〜5段階と自由記述で集める。
 
@@ -125,7 +196,7 @@ CLIは次を自動判定する。
 誤データは、開催日、競馬場、R番号、表示内容、正しい内容、画面画像を記録する。
 予想への賛否とデータ不具合を同じ分類にせず、別々に集計する。
 
-## 6. 停止条件
+## 8. 停止条件
 
 次のいずれかが発生したら新規招待を止め、必要なら公開を停止する。
 
@@ -136,7 +207,7 @@ CLIは次を自動判定する。
 - 共有パスワードが意図しない相手へ伝わる
 - 予想検証が再現不能、または未来情報の混入が疑われる
 
-## 7. 初回終了判定
+## 9. 初回終了判定
 
 開催2週後に、回答者数、主要5項目の中央値、誤データ件数、API 500件数、
 事前予想照合件数を`docs/HANDOFF.md`へ記録する。

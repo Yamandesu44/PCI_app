@@ -58,3 +58,14 @@ Vercel プロジェクト設定で必要な環境変数:
 
 少人数ロケテストでも、WebとAPIをアクセス制限なしで公開しないこと。開始条件と点検手順は
 [`docs/LOCATION_TEST.md`](../../docs/LOCATION_TEST.md)を参照。
+
+初回の3〜5人向けテストでは、ローカルAPI/DBを外部公開せず、次のスクリプトで
+Basic認証付きNext.jsだけをCloudflare Quick Tunnelへ公開する。
+
+```cmd
+copy .env.location-test.example .env.location-test.local
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\run_location_test_tunnel.ps1 -PreflightOnly
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\run_location_test_tunnel.ps1
+```
+
+`.env.location-test.local`はGit管理対象外。詳細と停止条件は上記運用手順を正とする。
