@@ -1,5 +1,84 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 14:00 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `18604c4`
+- 目的: スマホのレース詳細から、同一開催の前後レースへ素早く移動できるようにする。
+
+### 完了内容
+
+- `buildRaceNavigation()`を追加し、同日・同競馬場の実在レースだけを番号順に整列する。
+- 出走前・確定後の両ページで日付指定のレース一覧APIを取得し、共通の
+  `MobileRaceNavigation`へ渡す構成にした。
+- 前R・次Rは44pxのアイコンボタン、1R〜12Rは横スクロール可能な番号列とし、
+  現在Rを中央付近へ自動スクロールする。
+- 遷移先は`raceHref()`に統一し、`entries`は予想、`result`は確定後分析へ移動する。
+- レースキーの連番を推測しないため、欠番・中止・障害レースの状態差があっても
+  APIに存在しない画面へのリンクを作らない。
+- 一覧APIだけが失敗した場合はナビを省略し、取得済みの予想・分析画面は表示を継続する。
+- 390px相当の新潟11Rで現在R中央表示、前R移動、内部スクロール、ページ横はみ出しなしを確認した。
+- 確定後の小倉11Rでも、1R〜12Rの各状態に応じた正規リンクを確認した。
+
+### 変更ファイル
+
+1. `apps/web/src/lib/races.ts`
+2. `apps/web/src/lib/races.test.ts`
+3. `apps/web/src/components/MobileRaceNavigation.tsx`
+4. `apps/web/src/components/MobileRaceNavigation.test.tsx`
+5. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+6. `apps/web/src/components/RaceForecastDashboard.tsx`
+7. `apps/web/src/app/races/[raceKey]/forecast/page.tsx`
+8. `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`
+9. `tasks/current.md`
+10. `docs/DECISIONS.md`
+11. `docs/HANDOFF.md`
+
+### テスト結果
+
+```text
+Web: 101 passed
+Web typecheck: passed
+Web production build: passed
+Web lint: package.jsonにlintスクリプトがないため実行不可
+390px相当: viewport 375 / page scrollWidth 375 / nav clientWidth 230 / nav scrollWidth 532
+新潟11R→10R: 前Rリンクで遷移し、現在Rと前後リンクが更新されることを確認
+小倉11R確定後: 1R〜12Rの正規キーとstatus別遷移先を確認
+1440px相当: モバイルナビ非表示 / viewport 1425 / scrollWidth 1425
+```
+
+### 未完了・次の具体的作業
+
+- `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`はスマホでもPCと同じ連続構成で、
+  各馬テーブルが縦長になる。予想画面と同様に、要約・振り返り・各馬結果を目的別に分ける。
+- 実装時は`RaceHero`、`ForecastAccuracyBadge`、`CommentCard`、`PaceAnalysisTable`の内容を失わず、
+  768px未満だけを専用コンポーネントへ分離する。
+- ロケテスト公開へ反映する際は実行用クローンでpull後、Quick Tunnelを再起動する。
+
+### 仮実装・暫定値・未確定仕様
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- レース番号列は現在Rを中央付近へ寄せるが、先頭・末尾ではブラウザの最大スクロール位置に従う。
+- 専用ナビAPIは追加せず既存の日付指定一覧APIを利用する。件数や応答速度が問題になった場合だけ見直す。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/MobileRaceNavigation.tsx`
+2. `apps/web/src/lib/races.ts`
+3. `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
 ## 2026-07-25 13:50 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

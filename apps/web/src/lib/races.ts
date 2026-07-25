@@ -112,6 +112,54 @@ export function compareRaceSummary(a: RaceSummary, b: RaceSummary): number {
   );
 }
 
+export interface RaceNavigationItem {
+  raceKey: string;
+  label: string;
+  href: string;
+  isCurrent: boolean;
+}
+
+export interface RaceNavigation {
+  items: RaceNavigationItem[];
+  previous: RaceNavigationItem | null;
+  next: RaceNavigationItem | null;
+}
+
+/**
+ * APIから取得した実在レースだけで、同日・同競馬場内の移動情報を組み立てる。
+ * RaceKeyの連番を推測しないため、中止や欠番があっても存在しない画面へ遷移しない。
+ */
+export function buildRaceNavigation(
+  races: RaceSummary[],
+  currentRaceKey: string,
+): RaceNavigation | null {
+  const currentRace = races.find((race) => race.race_key === currentRaceKey);
+  if (!currentRace) return null;
+
+  const venueRaces = races
+    .filter(
+      (race) =>
+        race.race_date === currentRace.race_date &&
+        race.jyo_cd === currentRace.jyo_cd,
+    )
+    .sort((a, b) => raceNumberValue(a.race_key) - raceNumberValue(b.race_key));
+  const currentIndex = venueRaces.findIndex((race) => race.race_key === currentRaceKey);
+  if (currentIndex < 0) return null;
+
+  const items = venueRaces.map((race) => ({
+    raceKey: race.race_key,
+    label: raceNumber(race.race_key),
+    href: raceHref(race),
+    isCurrent: race.race_key === currentRaceKey,
+  }));
+
+  return {
+    items,
+    previous: items[currentIndex - 1] ?? null,
+    next: items[currentIndex + 1] ?? null,
+  };
+}
+
 export interface RaceVenueGroup {
   jyoCd: string;
   venueName: string;

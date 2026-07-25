@@ -20,7 +20,12 @@ import { ReasonList } from "@/components/ReasonList";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatRaceDate, jyoName, raceNumber } from "@/lib/races";
+import {
+  formatRaceDate,
+  jyoName,
+  raceNumber,
+  type RaceNavigation,
+} from "@/lib/races";
 import {
   benefitRecommendation,
   confidenceInsight,
@@ -39,6 +44,7 @@ import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 interface RaceForecastDashboardProps {
   race: RaceDetail;
   forecast: Forecast;
+  navigation?: RaceNavigation | null;
 }
 
 function confidencePct(confidence: number): number {
@@ -87,7 +93,11 @@ function confidenceClass(tone: ReturnType<typeof confidenceInsight>["tone"]): st
   return tones[tone];
 }
 
-export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardProps) {
+export function RaceForecastDashboard({
+  race,
+  forecast,
+  navigation,
+}: RaceForecastDashboardProps) {
   const horses = forecast.horses ?? [];
   const frameNoByHorseNo = new Map(horses.map((horse) => [horse.horse_no, horse.frame_no]));
   const topHorses = sortByPai(horses).slice(0, 5);
@@ -113,7 +123,11 @@ export function RaceForecastDashboard({ race, forecast }: RaceForecastDashboardP
 
   return (
     <>
-      <MobileRaceForecastDashboard race={race} forecast={forecast} />
+      <MobileRaceForecastDashboard
+        race={race}
+        forecast={forecast}
+        navigation={navigation}
+      />
       <main className="mx-auto hidden w-full max-w-7xl flex-col gap-7 px-4 py-6 md:flex md:px-6 lg:px-8 lg:py-9">
       <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
         <Link

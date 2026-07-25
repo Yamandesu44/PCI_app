@@ -17,11 +17,17 @@ import {
 
 import { FormationView } from "@/components/FormationView";
 import { HorseFitTable } from "@/components/HorseFitTable";
+import { MobileRaceNavigation } from "@/components/MobileRaceNavigation";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { ReasonList } from "@/components/ReasonList";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
-import { formatRaceDate, jyoName, raceNumber } from "@/lib/races";
+import {
+  formatRaceDate,
+  jyoName,
+  raceNumber,
+  type RaceNavigation,
+} from "@/lib/races";
 import {
   benefitRecommendation,
   confidenceInsight,
@@ -38,6 +44,7 @@ import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 interface MobileRaceForecastDashboardProps {
   race: RaceDetail;
   forecast: Forecast;
+  navigation?: RaceNavigation | null;
 }
 
 type MobileTab = "summary" | "formation" | "horses" | "detail";
@@ -165,6 +172,7 @@ export function MobileExpandableHorseRow({
 export function MobileRaceForecastDashboard({
   race,
   forecast,
+  navigation,
 }: MobileRaceForecastDashboardProps) {
   const [activeTab, setActiveTab] = useState<MobileTab>("summary");
   const horses = forecast.horses ?? [];
@@ -234,6 +242,8 @@ export function MobileRaceForecastDashboard({
           />
         </div>
       </section>
+
+      <MobileRaceNavigation navigation={navigation} />
 
       <div className="sticky top-0 z-20 -mx-3 mt-3 border-y border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
         <div

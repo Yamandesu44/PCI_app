@@ -4,11 +4,13 @@ import { Activity, ArrowLeft, BarChart3, Users } from "lucide-react";
 
 import { CommentCard } from "@/components/CommentCard";
 import { ForecastAccuracyBadge } from "@/components/ForecastAccuracyBadge";
+import { MobileRaceNavigation } from "@/components/MobileRaceNavigation";
 import { PaceAnalysisTable } from "@/components/PaceAnalysisTable";
 import { RaceHero } from "@/components/RaceHero";
 import { ReasonList } from "@/components/ReasonList";
 import { api } from "@/lib/api";
 import { paceSpeedFromIndex } from "@/lib/pace";
+import { buildRaceNavigation, type RaceNavigation } from "@/lib/races";
 import { ApiError, type PaceAnalysis, type RaceDetail } from "@pci/api-client";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +39,13 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
   const horses = analysis.horses ?? [];
   const resultSpeed = paceSpeedFromIndex(analysis.rpci_actual);
   const pci3Speed = paceSpeedFromIndex(analysis.pci3_actual);
+  let navigation: RaceNavigation | null = null;
+  try {
+    const races = await api.listRaces(undefined, race.race_date);
+    navigation = buildRaceNavigation(races, race.race_key);
+  } catch {
+    // 一覧APIが一時的に失敗しても、取得済みのレース分析は表示する。
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-7 px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
@@ -52,6 +61,7 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
       </div>
 
       <RaceHero race={race} mode="analysis" />
+      <MobileRaceNavigation navigation={navigation} />
 
       <section>
         <div className="mb-4">

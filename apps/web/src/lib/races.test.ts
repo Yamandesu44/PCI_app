@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { RaceSummary } from "@pci/api-client";
 
 import {
+  buildRaceNavigation,
   compareRaceSummary,
   formatRaceDate,
   groupRacesByDateAndVenue,
@@ -142,6 +143,50 @@ describe("raceNumberValue / compareRaceSummary", () => {
       "2026062005010110",
       "2026062106010111",
     ]);
+  });
+});
+
+describe("buildRaceNavigation", () => {
+  it("同日・同競馬場の実在レースだけを番号順に並べる", () => {
+    const races = [
+      makeRace({
+        race_key: "2026062005010111",
+        status: "entries",
+      }),
+      makeRace({
+        race_key: "2026062005010109",
+        status: "result",
+      }),
+      makeRace({
+        race_key: "2026062005010110",
+        status: "entries",
+      }),
+      makeRace({
+        race_key: "2026062009010110",
+        jyo_cd: "09",
+      }),
+      makeRace({
+        race_key: "2026062105010110",
+        race_date: "2026-06-21",
+      }),
+    ];
+
+    const navigation = buildRaceNavigation(races, "2026062005010110");
+
+    expect(navigation?.items.map((item) => item.label)).toEqual(["9R", "10R", "11R"]);
+    expect(navigation?.previous).toMatchObject({
+      label: "9R",
+      href: "/races/2026062005010109/pace-analysis",
+    });
+    expect(navigation?.next).toMatchObject({
+      label: "11R",
+      href: "/races/2026062005010111/forecast",
+    });
+    expect(navigation?.items.find((item) => item.isCurrent)?.label).toBe("10R");
+  });
+
+  it("現在のレースが一覧にない場合はナビゲーションを表示しない", () => {
+    expect(buildRaceNavigation([makeRace()], "missing")).toBeNull();
   });
 });
 

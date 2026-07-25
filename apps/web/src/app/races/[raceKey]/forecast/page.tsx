@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { RaceForecastDashboard } from "@/components/RaceForecastDashboard";
 import { api } from "@/lib/api";
+import { buildRaceNavigation, type RaceNavigation } from "@/lib/races";
 import { ApiError, type Forecast, type RaceDetail } from "@pci/api-client";
 
 // 予想は実行時にバックエンドへ問い合わせる（ビルド時フェッチを避ける）。
@@ -25,5 +26,19 @@ export default async function ForecastPage({ params }: PageProps) {
     throw err;
   }
 
-  return <RaceForecastDashboard race={race} forecast={forecast} />;
+  let navigation: RaceNavigation | null = null;
+  try {
+    const races = await api.listRaces(undefined, race.race_date);
+    navigation = buildRaceNavigation(races, race.race_key);
+  } catch {
+    // 一覧APIが一時的に失敗しても、取得済みのレース予想は表示する。
+  }
+
+  return (
+    <RaceForecastDashboard
+      race={race}
+      forecast={forecast}
+      navigation={navigation}
+    />
+  );
 }
