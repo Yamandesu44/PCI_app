@@ -1,5 +1,104 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-25 11:24 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `181746b`
+- 実装コミット: `9843b42`
+- 目的: 初回少人数ロケテストの公開方式を決定し、安全に起動・停止できる状態を作る。
+
+### 完了内容
+
+- 現行PostgreSQLが約121MBであることを確認し、無料公開基盤の現行制約と比較した。
+- 初回3〜5人・開催2週分は、Windows実行機のFastAPI/PostgreSQLをlocalhostに残し、
+  Basic認証付きNext.jsだけをCloudflare Quick Tunnelで一時公開する方針に決定した。
+- `apps/web/scripts/run_location_test_tunnel.ps1`
+  - API/DB readiness、ループバックAPI、秘密値の分離、ポート、依存コマンド、
+    Next.js本番ビルドを公開前に検査する。
+  - Next.jsを`127.0.0.1:3100`で起動し、Quick Tunnel URLの未認証401、
+    認証済み200、画面上のAPI疎通を確認してからURLを表示する。
+  - 資格情報をログへ出さず、終了時にWebとトンネルの子プロセスを停止する。
+- `apps/web/.env.location-test.example`を追加し、実値を入れる
+  `.env.location-test.local`はGit管理対象外のままにした。
+- `docs/LOCATION_TEST.md`へインストール、事前点検、公開、停止手順を追加した。
+- Quick Tunnelはテスト専用であり、正式公開時はマネージド構成へ移行する判断を
+  `docs/DECISIONS.md`と`docs/design/08-deployment.md`へ記録した。
+
+### 未完了・作業が止まっている箇所
+
+- Windows実行機に`cloudflared`が未導入のため、実TryCloudflare URLの発行は未実施。
+- `.env.location-test.local`の実資格情報は未設定。秘密値のためリポジトリへ記録しない。
+- 実URLでの代表3レース（芝短距離、ダート中距離、枠順確定後の多頭数）の目視確認は未実施。
+- 事前予想照合30件、ダート確定100件かつ実績ハイ20件は条件到達待ち。
+- Slack Webhook再発行はユーザーのSlack操作が必要。
+
+### 仮実装・暫定値・未確定仕様
+
+- Quick Tunnelは初回3〜5人・開催2週分だけの暫定公開方式。URL固定、SLA、常時稼働は保証しない。
+- Next.jsローカル公開ポートは既定`3100`。使用中なら`-Port`で変更できる。
+- 正式公開時のWeb/API/PostgreSQLサービス、費用、個別ユーザー認証は未確定。
+
+### 既知の問題
+
+- `cloudflared`がない状態では事前点検が明示的に失敗する。リポジトリは外部実行ファイルを
+  自動インストールしない。
+- Windows PowerShell 5.1はBOMなしUTF-8の日本語スクリプトを誤読するため、
+  `run_location_test_tunnel.ps1`はUTF-8 BOM付きで管理する。
+
+### テスト結果
+
+```text
+PowerShell 5.1 AST parse: passed
+Quick Tunnel preflight（公開なし、cloudflared代替パス）: passed
+Web: 95 passed
+Web production build: passed（Middleware 34.9 kB）
+Web typecheck（build後に単独再実行）: passed
+git diff --check: passed
+秘密設定: .env.location-test.local ignored / example tracked
+```
+
+型チェックと本番ビルドを最初に並列実行した際、ビルドが`.next/types`を再生成する競合で
+型チェックだけ失敗した。ビルド完了後に同じ型チェックを単独再実行して成功しており、
+コードの型エラーではない。
+
+### Claude Codeが次に実施する具体的な手順
+
+1. Cloudflare公式配布ページからWindows版`cloudflared`を導入する。
+2. `apps/web/.env.location-test.example`を`.env.location-test.local`へコピーし、
+   `BETA_ACCESS_USER`と16文字以上の`BETA_ACCESS_PASSWORD`を設定する。
+3. `run_location_test_tunnel.ps1 -PreflightOnly`を実行し、全`PASS`を確認する。
+4. 同スクリプトを通常実行し、発行URLで未認証401、共有認証後のトップ画面、
+   代表3レースのレース名・距離・頭数・出走馬を確認する。
+5. 問題がなければ3〜5人へURLとWeb共有資格情報だけを個別共有し、開催2週分の感想を集める。
+
+### 対象ファイル
+
+1. `apps/web/scripts/run_location_test_tunnel.ps1`
+2. `apps/web/.env.location-test.example`
+3. `docs/LOCATION_TEST.md`
+4. `docs/design/08-deployment.md`
+5. `docs/DECISIONS.md`
+6. `tasks/current.md`
+
+### Claude Codeが最初に確認するファイル
+
+1. `docs/LOCATION_TEST.md`
+2. `apps/web/scripts/run_location_test_tunnel.ps1`
+3. `tasks/current.md`
+4. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+git pull origin claude/sweet-einstein-ilnaov
+copy apps\web\.env.location-test.example apps\web\.env.location-test.local
+notepad apps\web\.env.location-test.local
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\web\scripts\run_location_test_tunnel.ps1 -PreflightOnly
+```
+
 ## 2026-07-25 11:04 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
