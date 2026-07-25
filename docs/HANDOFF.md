@@ -1,5 +1,80 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 01:19 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `2c71441`
+- 最新コミット: 本節と同じコミット（`git log -1 --oneline`で確認）
+- 目的: スマホの月間開催日カレンダーを日付ストリップへ圧縮し、レース一覧へ早く到達できるようにする。
+
+### 完了内容
+
+- `RaceDateCalendar`へ768px未満専用の`MobileDateStrip`を追加した。
+- レースが存在する開催日だけを曜日・月日の2段表示で横一列に並べた。
+- 選択日を中央へ自動スクロールし、前後の開催日へ移動できるようにした。
+- 日付リンクへ`performance_days`を引き継ぎ、検証期間の選択を維持した。
+- モバイル側の幅制約を追加し、長期間の日付があってもページ全体が横へ広がらないようにした。
+- 768px以上は既存の月間カレンダーを維持した。
+
+### 変更ファイル
+
+1. `apps/web/src/components/RaceDateCalendar.tsx`
+2. `apps/web/src/components/RaceDateCalendar.test.tsx`
+3. `apps/web/src/app/page.tsx`
+4. `tasks/current.md`
+5. `docs/DECISIONS.md`
+6. `docs/HANDOFF.md`
+
+### テスト結果
+
+```text
+Web: 111 passed
+Web typecheck: passed
+Web production build: passed
+Web lint: package.jsonにlintスクリプトがないため実行不可
+390px相当: calendar height 149 / first race list top 845 / horizontal overflowなし
+選択日中央寄せ: strip center 184 / selected center 184 / delta 0
+日付切替: 7月25日から7月26日へ遷移し、performance_days=90の維持を確認
+1440px相当: mobile calendar 0 / desktop monthly calendar 1 / horizontal overflowなし
+```
+
+### 未完了・次の具体的作業
+
+- 次のスマホ優先改善は、取り込み警告を要約表示へ圧縮する。
+- `apps/web/src/components/IngestStatusBanner.tsx`のモバイル表示で、警告タイトル・件数・
+  最優先状態だけを常時表示し、対象レース一覧と再同期・補完コマンドを`details`へ移す。
+- 768px以上の表示は維持し、390px相当で警告あり・警告なし・詳細展開、
+  キーボード操作、横はみ出しを検証する。
+
+### 仮実装・暫定値・未確定仕様
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- 各日付セルは56px幅とし、選択日は中央へ配置する。
+- 期間内の全開催日をDOMへ保持する。端末性能への影響が確認された場合は仮想化または
+  前後期間の絞り込みを検討する。
+
+### 既知の不具合
+
+- `apps/web/package.json`にlintスクリプトがなく、Web lintは単独実行できない。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/RaceDateCalendar.tsx`
+2. `apps/web/src/components/RaceDateCalendar.test.tsx`
+3. `apps/web/src/app/page.tsx`
+4. `tasks/current.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+npm.cmd run build --workspace=@pci/web
+```
+
 ## 2026-07-26 01:05 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex

@@ -497,7 +497,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       ) : null}
 
       <div className="grid items-start gap-7 lg:grid-cols-[272px_minmax(0,1fr)]">
-        <aside className="lg:sticky lg:top-24">
+        <aside className="min-w-0 lg:sticky lg:top-24">
           <RaceDateCalendar
             dates={dates}
             selectedDate={selectedDate}

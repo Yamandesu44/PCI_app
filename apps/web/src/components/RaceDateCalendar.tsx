@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ForecastPerformancePeriod } from "@pci/api-client";
 
@@ -25,6 +25,110 @@ function toYmd(date: Date): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${mm}-${dd}`;
+}
+
+function dateFromKey(key: string): Date {
+  return new Date(`${key}T00:00:00`);
+}
+
+function MobileDateStrip({
+  dates,
+  selectedDate,
+  performanceDays,
+  today,
+}: Props & { today: string }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const selectedRef = useRef<HTMLSpanElement>(null);
+  const availableDates = [...new Set(dates)].sort();
+  const activeDate = selectedDate ?? availableDates.at(-1) ?? null;
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    const selected = selectedRef.current;
+    if (!scroller || !selected) return;
+
+    scroller.scrollLeft =
+      selected.offsetLeft - (scroller.clientWidth - selected.clientWidth) / 2;
+  }, [activeDate]);
+
+  const active = activeDate ? dateFromKey(activeDate) : null;
+
+  return (
+    <div
+      data-mobile-date-calendar
+      className="min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-3 shadow-sm md:hidden"
+    >
+      <div className="mb-2.5 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+          <CalendarDays className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="m-0 text-xs font-semibold text-slate-500">開催日</p>
+          <p className="m-0 mt-0.5 truncate text-sm font-semibold text-slate-950">
+            {active
+              ? `${active.getMonth() + 1}月${active.getDate()}日（${WEEKDAYS[active.getDay()]}）`
+              : "開催日がありません"}
+          </p>
+        </div>
+      </div>
+
+      <div
+        ref={scrollerRef}
+        data-mobile-date-strip
+        className="-mx-1 flex w-full min-w-0 snap-x gap-1.5 overflow-x-auto px-1 pb-1"
+        aria-label="開催日の選択"
+      >
+        <span aria-hidden className="w-[calc(50%-28px)] shrink-0" />
+        {availableDates.map((key) => {
+          const date = dateFromKey(key);
+          const isSelected = key === activeDate;
+          const isToday = key === today;
+          const content = (
+            <>
+              <span className="text-[10px] font-medium">
+                {WEEKDAYS[date.getDay()]}
+              </span>
+              <span className="mt-0.5 text-sm font-bold tabular-nums">
+                {date.getMonth() + 1}/{date.getDate()}
+              </span>
+            </>
+          );
+          const className = [
+            "flex h-14 min-w-14 snap-center flex-col items-center justify-center rounded-md border text-center transition-colors",
+            isSelected
+              ? "border-emerald-700 bg-emerald-700 text-white shadow-sm"
+              : isToday
+                ? "border-blue-300 bg-blue-50 text-blue-700"
+                : "border-slate-200 bg-white text-slate-600 active:bg-slate-100",
+          ].join(" ");
+
+          return isSelected ? (
+            <span
+              key={key}
+              ref={selectedRef}
+              data-mobile-date-item
+              aria-current="date"
+              className={className}
+              aria-label={`${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（選択中）`}
+            >
+              {content}
+            </span>
+          ) : (
+            <Link
+              key={key}
+              data-mobile-date-item
+              href={`/?date=${key}&performance_days=${performanceDays}`}
+              className={className}
+              aria-label={`${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（開催日）`}
+            >
+              {content}
+            </Link>
+          );
+        })}
+        <span aria-hidden className="w-[calc(50%-28px)] shrink-0" />
+      </div>
+    </div>
+  );
 }
 
 /** 指定月のカレンダーグリッド（null = 前月の空白）を返す。*/
@@ -71,7 +175,14 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
   const monthLabel = `${year}年${month + 1}月`;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <>
+      <MobileDateStrip
+        dates={dates}
+        selectedDate={selectedDate}
+        performanceDays={performanceDays}
+        today={today}
+      />
+      <div className="hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:block">
       <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
         <span className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
           <CalendarDays className="h-4 w-4" aria-hidden />
@@ -184,6 +295,7 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
           選択中
         </span>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
