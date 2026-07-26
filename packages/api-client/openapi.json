@@ -1276,6 +1276,10 @@
             ],
             "title": "Finish Pos"
           },
+          "frame_no": {
+            "title": "Frame No",
+            "type": "integer"
+          },
           "horse_name": {
             "anyOf": [
               {
@@ -1320,7 +1324,8 @@
           }
         },
         "required": [
-          "horse_no"
+          "horse_no",
+          "frame_no"
         ],
         "title": "HorsePaceAnalysisSchema",
         "type": "object"

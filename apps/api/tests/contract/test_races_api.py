@@ -92,6 +92,7 @@ PACE_ANALYSIS_KEYS = {
 
 PACE_ANALYSIS_HORSE_KEYS = {
     "horse_no",
+    "frame_no",
     "finish_pos",
     "horse_name",
     "running_style",

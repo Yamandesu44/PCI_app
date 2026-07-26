@@ -1,5 +1,25 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-26 (6) 完了: Claude Code — 確定後分析にも馬番バッジの枠色を拡張（バックエンド対応）
+
+- [x] 前タスクで保留にした`PaceAnalysisTable.tsx`（確定後分析デスクトップ表）へ、
+  ユーザーの指示（「お願いします」）を受けて着手した。
+- [x] `HorsePaceAnalysisOutput`（dto.py）・`HorsePaceAnalysisSchema`（schemas.py）へ
+  `frame_no`を追加し、`GetPaceAnalysisUseCase`（既存の`RaceEntry.frame_no`から供給）→
+  OpenAPI再生成→`packages/api-client`型再生成の順で結線した。
+- [x] `PaceAnalysisTable.tsx`（デスクトップ表）と、あわせて発見した
+  `MobilePaceAnalysisDashboard.tsx`の`MobilePaceResultRow`（スマホ「全馬」タブ、
+  同じく色が付いていなかった）の両方を`frameColorClass()`へ統一した。
+- [x] 完全に未使用になった`globals.css`の`.horse-no`/`.horse-no.sm`定義を削除した
+  （旧`HorseFitTable.tsx`と`PaceAnalysisTable.tsx`がそれぞれ最後の参照元だったが、
+  前回・今回の変更でどちらも参照しなくなったため）。
+- [x] 新規4 tests（`PaceAnalysisTable.test.tsx`新規2件、`test_pace_analysis_use_cases.py`
+  1件、`MobilePaceAnalysisDashboard.test.tsx`のアサーション強化）を含む
+  API 597 tests・Web 125 tests、ruff・mypy strict・lint-imports・typecheck・
+  production buildすべて成功。OpenAPIスナップショット契約テストも再生成後に合格を確認した。
+  Playwrightで確定後分析のデスクトップ表・スマホ行の両方が正しい枠色で表示され、
+  横はみ出しが無いことを確認した。
+
 ## 2026-07-26 (5) 完了: Claude Code — 馬番バッジの枠色を全画面で統一
 
 - [x] 背景: ユーザーがスマホ画面4枚を提示し、「隊列予想では馬番ごとに枠色が塗られているが、

@@ -1,5 +1,87 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 (6) (Claude Code) 確定後分析にも馬番バッジの枠色を拡張（バックエンド対応）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景
+
+前タスク（馬番バッジ枠色統一）の末尾で「確定後分析のデスクトップ表
+（`PaceAnalysisTable.tsx`）にも同じ不統一があるが、APIスキーマに`frame_no`が無いため
+一段大きい変更になる」とユーザーへ確認を仰いだところ、「お願いします」と着手の
+指示を受けたため、バックエンドから対応した。
+
+### 実施内容（バックエンド、`apps/api`）
+
+- `application/dto.py`: `HorsePaceAnalysisOutput`へ`frame_no: int`を追加
+  （`horse_no`の直後、デフォルト値付きフィールドより前に配置）。
+- `application/race_query_use_cases.py`: `GetPaceAnalysisUseCase.execute()`内の
+  構築箇所へ`frame_no=e.frame_no`を追加（`RaceEntry.frame_no`は既存フィールドで
+  マイグレーション不要）。
+- `presentation/schemas.py`: `HorsePaceAnalysisSchema`へ`frame_no: int`を追加し、
+  `PaceAnalysisSchema.from_dto()`のマッピングにも`frame_no=h.frame_no`を追加。
+- `python scripts/export_openapi.py`でOpenAPIスペックを再生成
+  （契約テスト`test_committed_openapi_is_in_sync`が期待どおり一度失敗→再生成後に合格）。
+- `packages/api-client`で`npm run generate`を実行し`schema.d.ts`を再生成。
+  `HorsePaceAnalysisSchema`に`frame_no: number`（必須）が反映されたことを確認。
+
+### 実施内容（フロントエンド、`apps/web`）
+
+- `PaceAnalysisTable.tsx`（確定後分析デスクトップ表）: `.horse-no.sm`固定黒地バッジを
+  `frameColorClass(h.frame_no)`ベースへ変更。
+- 併せて`MobilePaceAnalysisDashboard.tsx`の`MobilePaceResultRow`
+  （スマホ確定後分析「全馬」タブ）も同じ不統一（`border-slate-200 bg-white`固定）を
+  発見し、同様に`frameColorClass(horse.frame_no)`へ変更した
+  （ユーザーの画面提示には無かったが、`HorsePaceAnalysis`型を使う同種の箇所のため
+  今回のバックエンド変更で無償に直せると判断し、範囲に含めた）。
+- `globals.css`の`.horse-no`/`.horse-no.sm`定義を削除した。前回のセッションで
+  `HorseFitTable.tsx`の参照を外し、今回`PaceAnalysisTable.tsx`の参照も外したことで
+  完全に未使用になったため（`grep`で参照ゼロを確認してから削除）。
+
+### 検証
+
+- API: `python -m pytest tests/unit/ tests/contract/ -q` 597 passed（+1）、
+  ruff・mypy --strict（65ファイル）・lint-imports すべて成功。
+- Web: `npm run test` 125 passed（+2 新規ファイル`PaceAnalysisTable.test.tsx`、
+  既存`MobilePaceAnalysisDashboard.test.tsx`のアサーション強化）、typecheck、
+  production buildすべて成功。
+- Playwright（`renderToStaticMarkup`＋ビルド済みTailwind CSS）で、デスクトップ表
+  （900px）とスマホ「全馬」行（390px想定）の両方を6頭のモックデータで確認し、
+  枠色が正しく交互（白/黒/赤のペア）に表示され、横はみ出しが無いことを確認した。
+  一時プレビューファイルは確認後に削除済み。
+
+### 変更ファイル
+
+1. `apps/api/src/pci/application/dto.py`
+2. `apps/api/src/pci/application/race_query_use_cases.py`
+3. `apps/api/src/pci/presentation/schemas.py`
+4. `apps/api/tests/unit/application/test_pace_analysis_use_cases.py`
+5. `apps/api/tests/contract/test_races_api.py`
+6. `packages/api-client/openapi.json`（再生成）
+7. `packages/api-client/src/schema.d.ts`（再生成）
+8. `apps/web/src/components/PaceAnalysisTable.tsx`
+9. `apps/web/src/components/PaceAnalysisTable.test.tsx`（新規）
+10. `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
+11. `apps/web/src/components/MobilePaceAnalysisDashboard.test.tsx`
+12. `apps/web/src/app/globals.css`
+13. `tasks/current.md`
+14. `docs/HANDOFF.md`
+
+新しい設計判断は発生していない（既存の`frameColorClass`をAPIスキーマ拡張の上で
+展開しただけ）ため`docs/DECISIONS.md`は更新していない。これで馬番バッジの枠色は
+出走前・確定後・デスクトップ・モバイルの全画面で統一された。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/api/src/pci/application/dto.py`
+3. `apps/web/src/lib/pace.ts`
+
+---
+
 ## 2026-07-26 (5) (Claude Code) 馬番バッジの枠色を全画面で統一
 
 - 作業担当: Claude Code

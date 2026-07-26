@@ -324,6 +324,7 @@ class HorsePaceAnalysisSchema(BaseModel):
     """確定後の馬単位ペース分析（各馬 PCI）。"""
 
     horse_no: int
+    frame_no: int
     finish_pos: int | None = None
     horse_name: str | None = None
     running_style: str | None = None
@@ -370,6 +371,7 @@ class PaceAnalysisSchema(BaseModel):
             horses=[
                 HorsePaceAnalysisSchema(
                     horse_no=h.horse_no,
+                    frame_no=h.frame_no,
                     finish_pos=h.finish_pos,
                     horse_name=h.horse_name,
                     running_style=h.running_style,

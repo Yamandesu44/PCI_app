@@ -16,6 +16,7 @@ import { ForecastAccuracyBadge } from "@/components/ForecastAccuracyBadge";
 import { MobileRaceNavigation } from "@/components/MobileRaceNavigation";
 import { ReasonList } from "@/components/ReasonList";
 import {
+  frameColorClass,
   paceSpeedFromIndex,
   sanitizeBeginnerComment,
 } from "@/lib/pace";
@@ -76,7 +77,9 @@ export function MobilePaceResultRow({ horse }: { horse: HorsePaceAnalysis }) {
       <span className="w-7 shrink-0 text-center text-base font-bold text-slate-950">
         {horse.finish_pos ?? "—"}
       </span>
-      <span className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-1 text-xs font-bold text-slate-900">
+      <span
+        className={`flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-xs font-bold ${frameColorClass(horse.frame_no)}`}
+      >
         {horse.horse_no}
       </span>
       <div className="min-w-0 flex-1">

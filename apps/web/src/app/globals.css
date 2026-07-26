@@ -187,12 +187,6 @@ h1 {
   background: #ecfdf5;
 }
 
-.horse-no.sm {
-  min-width: 24px;
-  height: 24px;
-  font-size: 0.85rem;
-}
-
 .pci3-mark {
   margin-left: 6px;
   color: var(--matched);
@@ -507,18 +501,6 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.horse-no {
-  min-width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #0f172a;
-  color: #fff;
-  border-radius: 6px;
-  font-weight: 700;
 }
 
 .horse-style {
