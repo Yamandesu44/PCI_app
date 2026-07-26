@@ -36,10 +36,39 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="コース種別×年で分布と中立点(style-advantage-v3)の妥当性を診断する",
     )
-    return p.parse_args()
+    # 最新年は年途中までしかないため、通年の他年と並べると季節差が年差に化ける。
+    # 月で窓を揃えて初めて年同士を対等に比較できる。
+    p.add_argument(
+        "--month-from",
+        type=int,
+        default=1,
+        choices=range(1, 13),
+        metavar="1-12",
+        help="--by-track-year で集計する月の下限（年をまたいで窓を揃える。default: 1）",
+    )
+    p.add_argument(
+        "--month-to",
+        type=int,
+        default=12,
+        choices=range(1, 13),
+        metavar="1-12",
+        help="--by-track-year で集計する月の上限（default: 12）",
+    )
+    args = p.parse_args()
+    if args.month_from > args.month_to:
+        p.error("--month-from は --month-to 以下にしてください")
+    return args
 
 
-def _print_track_year_distribution(session: Session, lo: float, hi: float) -> None:
+def _month_window_note(month_from: int, month_to: int) -> str:
+    if month_from == 1 and month_to == 12:
+        return "通年"
+    return f"{month_from}〜{month_to}月のみ"
+
+
+def _print_track_year_distribution(
+    session: Session, lo: float, hi: float, month_from: int, month_to: int
+) -> None:
     """コース種別×年で rpci_actual の分布と中立点の位置を表示する。
 
     脚質別有利度は「中立点からどちら側へ何ポイント離れたか」だけで前・後どちらを
@@ -48,7 +77,10 @@ def _print_track_year_distribution(session: Session, lo: float, hi: float) -> No
     ラベルの意味が薄まる。ここではその「ずれ」を直接観測する。
     """
     print("\n" + "=" * 78)
-    print("■ コース種別 × 年の rpci_actual 分布と中立点の妥当性")
+    print(
+        "■ コース種別 × 年の rpci_actual 分布と中立点の妥当性"
+        f"（{_month_window_note(month_from, month_to)}）"
+    )
     print("=" * 78)
     for track_type in ("芝", "ダート"):
         neutral = neutral_rpci(track_type)
@@ -73,11 +105,19 @@ def _print_track_year_distribution(session: Session, lo: float, hi: float) -> No
                   AND rpci_actual >= :lo
                   AND rpci_actual <= :hi
                   AND track_type = :track_type
+                  AND EXTRACT(MONTH FROM race_date) BETWEEN :month_from AND :month_to
                 GROUP BY yr
                 ORDER BY yr
                 """
             ),
-            {"neutral": neutral, "lo": lo, "hi": hi, "track_type": track_type},
+            {
+                "neutral": neutral,
+                "lo": lo,
+                "hi": hi,
+                "track_type": track_type,
+                "month_from": month_from,
+                "month_to": month_to,
+            },
         ).all()
         for yr, cnt, avg_v, p50, slow_side in rows:
             slow_pct = slow_side / cnt * 100 if cnt else 0.0
@@ -89,10 +129,10 @@ def _print_track_year_distribution(session: Session, lo: float, hi: float) -> No
         "\n  読み方: 「中立との差」が年ごとに動く、または「スロー側%」が50%から大きく"
         "\n  外れて年ごとに変わる場合、固定の中立点が実績分布とずれている。"
     )
-    _print_track_year_style_mix(session)
+    _print_track_year_style_mix(session, month_from, month_to)
 
 
-def _print_track_year_style_mix(session: Session) -> None:
+def _print_track_year_style_mix(session: Session, month_from: int, month_to: int) -> None:
     """コース種別×年で確定脚質(race_entries.running_style)の構成比を表示する。
 
     有利度の検証は確定脚質を入力に使うため、実績分布のずれ（上の表）だけでなく、
@@ -101,7 +141,10 @@ def _print_track_year_style_mix(session: Session) -> None:
     自在は有利度スコアの対象外（_SCOREABLE_STYLES）なので、独立した列として出す。
     """
     print("\n" + "=" * 78)
-    print("■ コース種別 × 年の確定脚質の構成比（有利度の入力データ側の変化を見る）")
+    print(
+        "■ コース種別 × 年の確定脚質の構成比"
+        f"（有利度の入力データ側の変化を見る・{_month_window_note(month_from, month_to)}）"
+    )
     print("=" * 78)
     for track_type in ("芝", "ダート"):
         print(f"\n  ── {track_type}")
@@ -125,11 +168,16 @@ def _print_track_year_style_mix(session: Session) -> None:
                 JOIN races r ON r.race_key = e.race_key
                 WHERE r.status = 'result'
                   AND r.track_type = :track_type
+                  AND EXTRACT(MONTH FROM r.race_date) BETWEEN :month_from AND :month_to
                 GROUP BY yr
                 ORDER BY yr
                 """
             ),
-            {"track_type": track_type},
+            {
+                "track_type": track_type,
+                "month_from": month_from,
+                "month_to": month_to,
+            },
         ).all()
         for yr, cnt, escape, front, stalker, closer, flexible, unset in rows:
             shares = [v / cnt * 100 if cnt else 0.0 for v in (escape, front, stalker, closer)]
@@ -320,7 +368,9 @@ def main() -> None:
     # ── 4b. コース種別×年の分布（中立点の妥当性診断） ────────────────
     if args.by_track_year:
         try:
-            _print_track_year_distribution(session, args.rpci_min, args.rpci_max)
+            _print_track_year_distribution(
+                session, args.rpci_min, args.rpci_max, args.month_from, args.month_to
+            )
         except Exception as exc:
             print(f"  コース種別×年 集計エラー: {exc}")
 
