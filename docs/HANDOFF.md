@@ -1,5 +1,80 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 (2) (Claude Code) スマホ主要導線の通し確認（静的レンダリング範囲）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind（前回セッションから新規コミットなし）
+- 最新コミット: 変更なし（**このセッションはコード変更なし、ドキュメントのみ更新**）
+
+### 実施内容
+
+`tasks/current.md`の検証タスク「P2 スマホ主要導線の通し確認」に着手した。
+
+- **環境確認**: このクラウド環境ではDocker daemonを起動できない
+  （`service docker start`が`ulimit: error setting limit (Operation not permitted)`で失敗、
+  非特権サンドボックスの制約）。実DB接続の開発サーバーでのクリック通し確認は不可と確認した。
+- **代替手法**: 主要導線を構成する各モバイルコンポーネント（`RaceDateCalendar`・
+  `MobileRaceGroupedSection`・`MobileRaceNavigation`・`MobileRaceForecastDashboard`・
+  `MobilePaceAnalysisDashboard`）を、既存`*.test.tsx`のfixtureを土台にした現実的な
+  モックデータで`renderToStaticMarkup`し、ビルド済みTailwind CSS（`.next/static/css/*.css`）を
+  適用した静的プレビューをPlaywright（`/opt/pw-browsers/chromium`）で390px幅スクリーンショット。
+  生成に使った一時テストファイル（`src/components/ZPreviewFlow.test.tsx`）は確認後に削除済み
+  （`git status`で残存無しを確認）。
+- **確認した導線**: レースボード（日付ストリップ→競馬場タブ→レース行）→同一開催ナビ→
+  レース詳細（ヒーロー→サマリータブ：展開恩恵馬TOP3・評価を下げたい馬・一覧へ戻るリンク）→
+  確定後分析（ヒーロー→サマリータブ：上位3頭・ひとこと振り返り）。
+- **機械的な横はみ出しチェック**: `document.documentElement.scrollWidth`と`clientWidth`が
+  ともに390で一致することをPlaywright上で確認（横スクロールが発生していない）。
+- **見かけ上の異常2点を調査し、いずれも自分のモックデータの不備と特定**（実装側の不具合ではない）:
+  1. レース行の展開ラベルが「判断材料が不足」と表示 → `beginnerPaceLabel()`
+     （`lib/pace.ts`）は「ハイ/平均/スロー」の3値のみを認識する設計で、モックに
+     独自の説明文字列を渡していたのが原因。正しい値で再現すると想定どおり表示された。
+  2. 確定後分析の「実際の流れ」バッジに`H`、各馬結果に`M`という文字 →
+     `PACE_SPEED_META`（`lib/pace.ts`）が持つ意図的な短縮記号（`symbol`フィールド）で、
+     常にフルの日本語ラベル（例:「Hハイ」＝symbol"H"+label"ハイ"）と併記される既存仕様。
+     内部の実数値露出ではなく`docs/PROJECT_RULES.md §5`の違反ではない。
+- **見つかった実装上の不具合は無し**。デフォルト表示（初期タブ）の範囲で、全パネルが
+  390px幅に収まり、テキストの意図しない欠けや崩れも無かった。
+
+### 未実施（範囲外・実機/実DBが必要）
+
+- 4タブ（サマリー/隊列/注目馬/詳細）の実際のクリック切り替え動作
+  （静的SSRレンダリングのため初期タブしか確認できていない。クライアント側JSでの
+  切り替えは今回検証していない）。
+- 実スクロール挙動、iOS Safari/Android Chrome実機、キーボード操作・スクリーンリーダー確認。
+  → `tasks/current.md`の「実端末ロケテスト」「モバイルアクセシビリティ確認」へ引き続き委ねる。
+
+### 変更ファイル
+
+1. `tasks/current.md`
+2. `docs/HANDOFF.md`
+
+コード変更・新しい設計判断は無いため、ソースファイルと`docs/DECISIONS.md`はいずれも
+変更していない。
+
+### テスト実行コマンドと結果
+
+```bash
+cd apps/web && npm run test   # 113 passed（変更なし。確認作業のみのため）
+```
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `tasks/current.md`
+
+### Codexが最初に実行するコマンド
+
+```bash
+git fetch origin && git checkout claude/sweet-einstein-ilnaov && git pull origin claude/sweet-einstein-ilnaov
+git log --oneline -5
+git status   # クリーンであるはず（このセッションはコード変更なし）
+```
+
+---
+
 ## 2026-07-26 (Claude Code) Codex引き継ぎ検証＋取り込み警告のモバイル要約化
 
 - 作業担当: Claude Code
