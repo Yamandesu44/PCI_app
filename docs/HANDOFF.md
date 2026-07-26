@@ -1,5 +1,77 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 (8) (Claude Code) スマホに統合順位予想（展開×能力）を追加
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザー報告）
+
+ユーザーがスマホ画面（注目馬タブ）のスクリーンショットを提示し、「PC版では展開・能力を
+鑑みた全馬の総合予想順位が表示されるが、スマホでは見れない。これは仕様か」と質問した。
+
+### 調査
+
+`grep`で`IntegratedRankingView`の使用箇所を確認したところ、`RaceForecastDashboard.tsx`
+（PC版、`検討サマリー`直後・`隊列予想`の前に配置）にしか組み込まれておらず、
+`MobileRaceForecastDashboard.tsx`（スマホ版、サマリー/隊列/注目馬/詳細の4タブ構成）
+には一度も追加されていなかった。統合順位予想はこのセッション前半にPhase1/2として
+新規実装した機能で、その後（別セッションでのCodexによる）スマホ全面改修に
+反映され忘れたのが原因（仕様ではなく実装漏れ）。
+
+### ユーザーとの合意事項
+
+追加先をAskUserQuestionで3案（注目馬タブへ追加／サマリータブ上部へ追加／
+サマリーに上位3頭プレビュー＋注目馬に全頭表示の両方）提示し、
+**「『注目馬』タブへ追加（推奨）」**を選択された。
+
+### 実施内容（`apps/web`）
+
+- `MobileRaceForecastDashboard.tsx`: 「注目馬」タブの先頭（既存の
+  「展開恩恵馬TOP5」より前）へ`{forecast.integrated_ranking ? <IntegratedRankingView
+  ranking={forecast.integrated_ranking} /> : null}`を追加した。サマリータブの
+  内容・構成は変更していない。
+- 副次対応: 枠色統一作業（前セッション(5)(6)）の際に見落としていた
+  `IntegratedRankingView.tsx`自身の重複した枠色定義（独自の`FRAME_CLASS`、
+  当時のgrep結果には含まれていたが実際の修正対象から漏れていた）を発見し、
+  共有の`lib/pace.ts`の`frameColorClass()`へ統一した。枠順未確定
+  （frame_no=0）時の表示も他画面と同じ「登録」表示へ揃えた
+  （従来は生の`horse_no`をそのまま表示していた）。
+- `IntegratedRankingView.tsx`にはテストが1件も無かったため、新規
+  `IntegratedRankingView.test.tsx`を追加した（上位5件常時表示・6位以下折りたたみ、
+  枠色バッジ、枠順未確定時の表示、分類/能力/展開適性タグ、エントリー0件時の
+  非表示を検証）。
+
+### 検証
+
+- Web 134 tests（新規6件）、typecheck、production buildすべて成功。
+- Playwright（`renderToStaticMarkup`＋ビルド済みTailwind CSS）で、
+  「注目馬」タブの実際の構成（統合順位予想＋展開恩恵馬TOP5を同一ページに
+  再現。`MobileRaceForecastDashboard`は非アクティブタブをSSRで描画しないため、
+  同じ構成をこのファイルの外で組み立てて確認）を390px幅でスクリーンショット確認。
+  横はみ出し無し、タグが多い行（3位など）も`flex-wrap`で自然に折り返すことを確認した。
+  一時プレビューファイルは確認後に削除済み。
+
+### 変更ファイル
+
+1. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+2. `apps/web/src/components/IntegratedRankingView.tsx`
+3. `apps/web/src/components/IntegratedRankingView.test.tsx`（新規）
+4. `tasks/current.md`
+5. `docs/HANDOFF.md`
+
+新しい設計判断（追加先タブ）はユーザーとのAskUserQuestionで確定済みのため
+`docs/DECISIONS.md`は更新していない。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+
+---
+
 ## 2026-07-26 (7) (Claude Code) ダートレースの展開速度誤判定を修正（重要バグ）
 
 - 作業担当: Claude Code

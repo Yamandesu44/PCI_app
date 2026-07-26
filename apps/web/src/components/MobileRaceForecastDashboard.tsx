@@ -17,6 +17,7 @@ import {
 
 import { FormationView } from "@/components/FormationView";
 import { HorseFitTable } from "@/components/HorseFitTable";
+import { IntegratedRankingView } from "@/components/IntegratedRankingView";
 import { MobileRaceNavigation } from "@/components/MobileRaceNavigation";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { ReasonList } from "@/components/ReasonList";
@@ -374,6 +375,10 @@ export function MobileRaceForecastDashboard({
 
         {activeTab === "horses" ? (
           <div className="grid gap-5">
+            {forecast.integrated_ranking ? (
+              <IntegratedRankingView ranking={forecast.integrated_ranking} />
+            ) : null}
+
             <section aria-labelledby="mobile-all-benefit-heading">
               <h2 id="mobile-all-benefit-heading" className="m-0 mb-2 text-base font-semibold text-slate-950">
                 展開恩恵馬 TOP5

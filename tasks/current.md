@@ -1,5 +1,24 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-26 (8) 完了: Claude Code — スマホに統合順位予想（展開×能力）を追加
+
+- [x] 背景: ユーザーが「PC版では展開・能力を鑑みた全馬の総合予想順位が表示されるが、
+  スマホでは見れない。仕様か」と質問。確認したところ`IntegratedRankingView`が
+  `RaceForecastDashboard.tsx`（PC版）にしか組み込まれておらず、スマホ版
+  `MobileRaceForecastDashboard.tsx`には統合順位予想Phase1/2実装時に反映漏れが
+  あったと判明（仕様ではなく実装漏れ）。
+- [x] 追加先をユーザーに確認し、「『注目馬』タブへ追加（推奨）」を選択された
+  （既存の展開恩恵馬TOP5・評価を下げたい馬と同じ「馬のランキング系」タブへ集約。
+  サマリータブの短さは維持）。
+- [x] 「注目馬」タブの先頭（展開恩恵馬TOP5より前）へ`IntegratedRankingView`を追加した。
+- [x] 副次対応: 枠色統一作業（(5)(6)）で見落としていた`IntegratedRankingView.tsx`自身の
+  重複した枠色定義（独自の`FRAME_CLASS`）を発見し、共有の`frameColorClass()`へ統一した
+  （テスト0件だったため今回`IntegratedRankingView.test.tsx`を新規追加）。
+- [x] 新規6 tests（`IntegratedRankingView.test.tsx`5件・枠順未確定時の表示統一1件）を
+  含むWeb 134 tests、typecheck、production buildすべて成功。Playwrightで
+  「注目馬」タブ相当（統合順位予想＋展開恩恵馬TOP5を同一ページに再現）を
+  390px幅で確認し、横はみ出しなし・タグの折り返しも自然であることを確認した。
+
 ## 2026-07-26 (7) 完了: Claude Code — ダートレースの展開速度誤判定を修正（重要バグ）
 
 - [x] 背景: ユーザーがスマホ画面を提示し、「画面上部は『平均ペース』なのに、詳細タブの
