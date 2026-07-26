@@ -10,6 +10,7 @@ interface PaceHeadlineProps {
   confidence: number;
   modelVersion: string;
   reasons: Reason[];
+  trackType: string | null | undefined;
 }
 
 /** 展開予想の見出し。専門用語に頼らず「どんな流れか」を最初に伝える。 */
@@ -21,9 +22,10 @@ export function PaceHeadline({
   confidence,
   modelVersion,
   reasons,
+  trackType,
 }: PaceHeadlineProps) {
   const meta = paceMeta(paceLabel);
-  const speed = paceSpeedFromIndex(predictedRpci);
+  const speed = paceSpeedFromIndex(predictedRpci, trackType);
   const confidencePct = Math.round(confidence * 100);
 
   return (

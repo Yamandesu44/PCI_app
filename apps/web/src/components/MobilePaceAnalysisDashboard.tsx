@@ -64,8 +64,14 @@ function optionalLabel(value: string | null | undefined): string {
 }
 
 /** スマホでは各馬結果を二段の行へ圧縮し、横スクロールなしで主要情報を見せる。 */
-export function MobilePaceResultRow({ horse }: { horse: HorsePaceAnalysis }) {
-  const speed = paceSpeedFromIndex(horse.pci);
+export function MobilePaceResultRow({
+  horse,
+  trackType,
+}: {
+  horse: HorsePaceAnalysis;
+  trackType: string | null | undefined;
+}) {
+  const speed = paceSpeedFromIndex(horse.pci, trackType);
 
   return (
     <article
@@ -114,8 +120,8 @@ export function MobilePaceAnalysisDashboard({
   const [activeTab, setActiveTab] = useState<MobileAnalysisTab>("summary");
   const horses = sortedHorses(analysis.horses ?? []);
   const topHorses = horses.filter((horse) => (horse.finish_pos ?? 99) <= 3);
-  const resultSpeed = paceSpeedFromIndex(analysis.rpci_actual);
-  const pci3Speed = paceSpeedFromIndex(analysis.pci3_actual);
+  const resultSpeed = paceSpeedFromIndex(analysis.rpci_actual, race.track_type);
+  const pci3Speed = paceSpeedFromIndex(analysis.pci3_actual, race.track_type);
   const commentHeadline = analysis.comment
     ? sanitizeBeginnerComment(analysis.comment.headline)
     : null;
@@ -222,7 +228,7 @@ export function MobilePaceAnalysisDashboard({
             </div>
             <div className="overflow-hidden rounded-md border border-slate-200 shadow-sm">
               {topHorses.map((horse) => (
-                <MobilePaceResultRow key={horse.horse_no} horse={horse} />
+                <MobilePaceResultRow key={horse.horse_no} horse={horse} trackType={race.track_type} />
               ))}
             </div>
           </section>
@@ -318,7 +324,7 @@ export function MobilePaceAnalysisDashboard({
           </div>
           <div className="overflow-hidden rounded-md border border-slate-200 shadow-sm">
             {horses.map((horse) => (
-              <MobilePaceResultRow key={horse.horse_no} horse={horse} />
+              <MobilePaceResultRow key={horse.horse_no} horse={horse} trackType={race.track_type} />
             ))}
           </div>
         </section>

@@ -196,6 +196,7 @@ export function MobileRaceForecastDashboard({
     confidence: forecast.confidence,
     horses,
     integratedRanking: forecast.integrated_ranking,
+    trackType: race.track_type,
   });
 
   return (
@@ -489,6 +490,7 @@ export function MobileRaceForecastDashboard({
                         confidence={forecast.confidence}
                         modelVersion={forecast.model_version}
                         reasons={forecast.forecast_reasons ?? []}
+                        trackType={race.track_type}
                       />
                       <div className="overflow-x-auto">
                         <HorseFitTable horses={horses} />

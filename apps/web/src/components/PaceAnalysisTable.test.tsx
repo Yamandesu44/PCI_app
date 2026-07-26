@@ -21,7 +21,7 @@ function horse(overrides: Partial<HorsePaceAnalysis> = {}): HorsePaceAnalysis {
 describe("PaceAnalysisTable", () => {
   it("馬番バッジを隊列予想・展開予想と同じ枠色で表示する", () => {
     const markup = renderToStaticMarkup(
-      <PaceAnalysisTable horses={[horse({ horse_no: 16, frame_no: 8 })]} />,
+      <PaceAnalysisTable horses={[horse({ horse_no: 16, frame_no: 8 })]} trackType="芝" />,
     );
 
     expect(markup).toMatch(/bg-pink-400[^"]*"[^>]*>\s*16\s*</);
@@ -29,9 +29,20 @@ describe("PaceAnalysisTable", () => {
 
   it("枠順未確定（frame_no=0）の馬は色を付けず「登録」表示にする", () => {
     const markup = renderToStaticMarkup(
-      <PaceAnalysisTable horses={[horse({ horse_no: 5, frame_no: 0 })]} />,
+      <PaceAnalysisTable horses={[horse({ horse_no: 5, frame_no: 0 })]} trackType="芝" />,
     );
 
     expect(markup).toMatch(/bg-slate-100[^"]*"[^>]*>\s*登録\s*</);
+  });
+
+  it("ペース傾向はダート専用閾値で判定する（trackType未考慮だと誤判定になる回帰テスト）", () => {
+    // pci=44はダートとしては平均域（40〜46）だが、芝の閾値（49未満でハイ）を
+    // 誤って使うと「ハイ」と表示されてしまう。
+    const markup = renderToStaticMarkup(
+      <PaceAnalysisTable horses={[horse({ pci: 44 })]} trackType="ダート" />,
+    );
+
+    expect(markup).toContain(">平均<");
+    expect(markup).not.toContain(">ハイ<");
   });
 });

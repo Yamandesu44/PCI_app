@@ -67,7 +67,7 @@ describe("MobilePaceAnalysisDashboard", () => {
 
   it("各馬結果を横スクロール不要の二段行で表示する", () => {
     const markup = renderToStaticMarkup(
-      <MobilePaceResultRow horse={horses[0]!} />,
+      <MobilePaceResultRow horse={horses[0]!} trackType={race.track_type} />,
     );
 
     expect(markup).toContain("テスト馬1");

@@ -113,12 +113,13 @@ export function RaceForecastDashboard({
   const confidence = confidencePct(forecast.confidence);
   const confidenceMeta = confidenceInsight(forecast.confidence);
   const course = `${race.track_type}${race.distance_m}m`;
-  const predictedSpeed = paceSpeedFromIndex(forecast.predicted_rpci);
+  const predictedSpeed = paceSpeedFromIndex(forecast.predicted_rpci, race.track_type);
   const decisionChecklist = forecastDecisionChecklist({
     predictedRpci: forecast.predicted_rpci,
     confidence: forecast.confidence,
     horses,
     integratedRanking: forecast.integrated_ranking,
+    trackType: race.track_type,
   });
 
   return (
@@ -471,6 +472,7 @@ export function RaceForecastDashboard({
                     confidence={forecast.confidence}
                     modelVersion={forecast.model_version}
                     reasons={forecast.forecast_reasons ?? []}
+                    trackType={race.track_type}
                   />
                   <section className="panel">
                     <h3>各馬の展開適性</h3>

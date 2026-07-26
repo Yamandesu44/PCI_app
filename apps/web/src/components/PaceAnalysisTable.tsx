@@ -1,8 +1,13 @@
 import { frameColorClass, paceSpeedFromIndex } from "@/lib/pace";
 import type { HorsePaceAnalysis } from "@pci/api-client";
 
+interface PaceAnalysisTableProps {
+  horses: HorsePaceAnalysis[];
+  trackType: string | null | undefined;
+}
+
 /** 確定後の各馬 PCI を着順で並べて表示。PCI3 寄与馬（上位3着）を強調する。 */
-export function PaceAnalysisTable({ horses }: { horses: HorsePaceAnalysis[] }) {
+export function PaceAnalysisTable({ horses, trackType }: PaceAnalysisTableProps) {
   return (
     <table className="pci-table">
       <thead>
@@ -18,7 +23,7 @@ export function PaceAnalysisTable({ horses }: { horses: HorsePaceAnalysis[] }) {
       </thead>
       <tbody>
         {horses.map((h) => {
-          const speed = paceSpeedFromIndex(h.pci);
+          const speed = paceSpeedFromIndex(h.pci, trackType);
           return (
             <tr key={h.horse_no} className={h.is_pci3_contributor ? "pci3" : undefined}>
               <td>{h.finish_pos ?? "—"}</td>

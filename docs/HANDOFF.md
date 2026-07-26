@@ -1,5 +1,111 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 (7) (Claude Code) ダートレースの展開速度誤判定を修正（重要バグ）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザー報告）
+
+ユーザーがスマホ画面（中京7R 東海ステークス、ダート1400m）のスクリーンショットを提示し、
+「画面上部では『平均ペース』と記載されているが、詳細タブの展開は『かなり速い流れ』と
+なっている。この違いは何か」と報告した。
+
+### 原因
+
+ペース速度の判定ロジックが**バックエンドとフロントエンドで別々に実装され、食い違っていた**。
+
+- バックエンド`classify_pace()`（`apps/api/src/pci/domain/pace/rpci_forecast.py`）は、
+  芝・ダートで別々の閾値を使う設計（rule-v4）: 芝は高49.0/低51.0、ダートは高40.0/低46.0
+  （ダートの実績平均RPCIが43.0と、芝の53.1から大きく乖離しているための専用閾値）。
+  ヒーローの「想定展開」「読みやすい％」はこの判定結果（`forecast.pace_label`）を
+  そのまま表示するだけなので、常に正しかった。
+- フロントエンド`paceSpeedFromIndex()`（`apps/web/src/lib/pace.ts`）は、
+  **トラック種別を区別しない固定閾値**（47/50/52/55、芝の分布に寄せた値）で
+  数値を再分類していた。このレースの想定RPCIはダートとしては「平均」域（40〜46）
+  だが芝基準の47は下回る値だったため、バックエンドは正しく「平均」、
+  フロントは誤って「かなり速い流れ」と表示していた。
+- `paceSpeedFromIndex()`は「詳細」タブの展開チェックリストだけでなく、展開予想
+  ヒーロー（`PaceHeadline`）・確定後分析の各馬ペース傾向・PCI3表示など**7ファイル**で
+  使われており、ダートレース全般で発生し得る不具合だった（芝はたまたま閾値が
+  近いため目立たなかっただけ）。
+
+### ユーザーとの合意事項
+
+修正方針をAskUserQuestionで3案（3段階へ簡素化／5段階維持で芝・ダート別化／
+今は直さず別途相談）提示し、**「3段階へ簡素化（推奨）」**を選択された。
+新しい閾値は一切発明せず、バックエンドの既存閾値（芝49/51・ダート40/46）を
+そのまま使う。
+
+### 実施内容（`apps/web`）
+
+- `lib/pace.ts`: `PaceSpeedLevel`を5段階
+  （veryHigh/high/average/slow/verySlow/unknown）から3段階
+  （high/average/slow/unknown）へ簡素化。`paceSpeedFromIndex(value, trackType)`が
+  `trackType`を必須で受け取り、`trackType === "ダート"`ならダート専用閾値
+  （40.0/46.0）、それ以外は芝閾値（49.0/51.0）を使うようバックエンドの
+  `classify_pace()`と揃えた。`beginnerLabel`も「やや速い流れ」→「速い流れ」等、
+  3段階に合わせて統一。未使用だった`paceSpeedLabel`/`paceSpeedSymbol`
+  ラッパー関数は削除した。
+- `forecastDecisionChecklist()`へ`trackType`パラメータを追加し、内部の
+  `paceSpeedFromIndex()`呼び出しへ渡すようにした。
+- 呼び出し元7ファイルすべてで`race.track_type`（または`RaceDetail`型の
+  `track_type`）を明示的に渡すよう修正:
+  `PaceHeadline.tsx`（`trackType`プロパティ追加）、`RaceForecastDashboard.tsx`、
+  `MobileRaceForecastDashboard.tsx`、`RaceHero.tsx`、
+  `MobilePaceAnalysisDashboard.tsx`（`MobilePaceResultRow`へ`trackType`
+  プロパティ追加）、`PaceAnalysisTable.tsx`（`trackType`プロパティ追加）、
+  `app/races/[raceKey]/pace-analysis/page.tsx`。
+- `trackType`はオプション引数（バックエンドの`track_type: str = "芝"`と同じ
+  既定値方式）にはせず、**必須引数**にした。将来新しい呼び出し箇所が
+  `trackType`を渡し忘れて同じ不具合を再発することを防ぐため。
+
+### 検証
+
+- `pci=44・トラック=ダート`が「平均」、`pci=44・トラック=芝`が「ハイ」になる、
+  という不具合の直接的な再現テストを`lib/pace.test.ts`の新規describeブロックへ
+  追加（芝の3段階境界値・ダートの3段階境界値・両者の食い違い・未指定時の
+  安全な縮退を含む計5件）。`PaceAnalysisTable.test.tsx`にも同じ再現テストを
+  1件追加。
+- Web 129 tests（新規9件、既存の5段階前提テストは3段階へ更新）、typecheck、
+  production buildすべて成功。
+- Playwrightでユーザー報告と同じダート1400m・想定RPCI=44のレースを再現し、
+  ヒーローの「想定展開: 平均」表示に変化が無い（= 元々正しかった部分に
+  回帰が無い）ことを確認した。詳細タブの展開チェックリストは静的レンダリング
+  では非アクティブタブの内容がDOMに存在しないため画面上での目視確認はできず、
+  `paceSpeedFromIndex(44, "ダート").label === "平均"`という単体テストでの
+  直接検証で確認した（同じ関数を`forecastDecisionChecklist()`が呼ぶため、
+  ロジックとしては確実に一致する）。
+
+### 変更ファイル
+
+1. `apps/web/src/lib/pace.ts`
+2. `apps/web/src/lib/pace.test.ts`
+3. `apps/web/src/components/PaceHeadline.tsx`
+4. `apps/web/src/components/RaceForecastDashboard.tsx`
+5. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+6. `apps/web/src/components/RaceHero.tsx`
+7. `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
+8. `apps/web/src/components/MobilePaceAnalysisDashboard.test.tsx`
+9. `apps/web/src/components/PaceAnalysisTable.tsx`
+10. `apps/web/src/components/PaceAnalysisTable.test.tsx`
+11. `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`
+12. `tasks/current.md`
+13. `docs/HANDOFF.md`
+
+新しい閾値・仕様は発明していない（バックエンドの既存`RuleWeights`をそのまま
+フロントへ反映しただけ）ため`docs/DECISIONS.md`は更新していない。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/web/src/lib/pace.ts`
+3. `apps/api/src/pci/domain/pace/rpci_forecast.py`（`classify_pace()`、閾値の正）
+
+---
+
 ## 2026-07-26 (6) (Claude Code) 確定後分析にも馬番バッジの枠色を拡張（バックエンド対応）
 
 - 作業担当: Claude Code

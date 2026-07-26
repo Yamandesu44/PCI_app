@@ -58,13 +58,7 @@ export function beginnerPaceLabel(label: string): string {
   return "判断材料が不足";
 }
 
-export type PaceSpeedLevel =
-  | "veryHigh"
-  | "high"
-  | "average"
-  | "slow"
-  | "verySlow"
-  | "unknown";
+export type PaceSpeedLevel = "high" | "average" | "slow" | "unknown";
 
 export interface PaceSpeedMeta {
   level: PaceSpeedLevel;
@@ -78,22 +72,12 @@ export interface PaceSpeedMeta {
 }
 
 const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
-  veryHigh: {
-    level: "veryHigh",
-    label: "超ハイ",
-    symbol: "H++",
-    description: "前半負荷がかなり高い流れ。差し・追込の浮上に注意。",
-    beginnerLabel: "かなり速い流れ",
-    beginnerSummary: "前半からかなり流れそうです。前で運ぶ馬には最後まで粘る力が求められます。",
-    bettingHint: "最後に脚を使える馬や、後ろで我慢できる馬を相手に入れておきたいです。",
-    color: "#1d4ed8",
-  },
   high: {
     level: "high",
     label: "ハイ",
     symbol: "H",
-    description: "前半が速めの流れ。持続力と差し脚が活きやすい。",
-    beginnerLabel: "やや速い流れ",
+    description: "前半が速い流れ。持続力と差し脚が活きやすい。",
+    beginnerLabel: "速い流れ",
     beginnerSummary: "前半から流れそうです。前の馬が苦しくなれば、後ろから運ぶ馬にも出番があります。",
     bettingHint: "長く脚を使える馬や、流れに乗って差せる馬を重視したいです。",
     color: "#2563eb",
@@ -113,20 +97,10 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     label: "スロー",
     symbol: "S",
     description: "前半が緩めの流れ。逃げ・先行の粘り込みに注意。",
-    beginnerLabel: "やや落ち着いた流れ",
+    beginnerLabel: "落ち着いた流れ",
     beginnerSummary: "前半は落ち着きそうです。前めで運ぶ馬が余力を残しやすくなります。",
     bettingHint: "前の位置を取れそうな馬や、直線で素早く動ける馬を重視したいです。",
     color: "#dc2626",
-  },
-  verySlow: {
-    level: "verySlow",
-    label: "超スロー",
-    symbol: "S++",
-    description: "前半がかなり緩い流れ。位置取りと瞬発力が重要。",
-    beginnerLabel: "かなり落ち着いた流れ",
-    beginnerSummary: "前半はかなり落ち着きそうです。後ろから届かせるには一気に動ける力が必要です。",
-    bettingHint: "前めで運べる馬と、短い直線勝負に強い馬を中心に見たいです。",
-    color: "#991b1b",
   },
   unknown: {
     level: "unknown",
@@ -155,22 +129,35 @@ export function sanitizeBeginnerComment(text: string): string {
     .replace(DECIMAL_VALUE, "具体的な数値");
 }
 
-/** PCI/RPCI/PCI3の実数値を、非専門家向けの5段階ペース速度へ変換する。 */
-export function paceSpeedFromIndex(value: number | null | undefined): PaceSpeedMeta {
+// apps/api の classify_pace()（domain/pace/rpci_forecast.py）と同じ閾値。
+// ダートは実績分布（平均43.0）が芝（53.1）と大きく異なるため専用閾値を使う。
+// 値を変える場合は必ずバックエンド側（RuleWeights）も合わせて変更すること。
+const TURF_HIGH_THRESHOLD = 49.0;
+const TURF_SLOW_THRESHOLD = 51.0;
+const DIRT_HIGH_THRESHOLD = 40.0;
+const DIRT_SLOW_THRESHOLD = 46.0;
+
+/**
+ * PCI/RPCI/PCI3の実数値を、非専門家向けの3段階ペース速度へ変換する。
+ *
+ * 芝とダートで実績分布の中心が大きく異なるため、trackTypeに応じて
+ * バックエンドのclassify_pace()と同じ閾値を使い分ける。track_typeを渡さず
+ * 芝の閾値をダートへ流用すると、ダートの「平均」を「ハイ」と誤判定する
+ * （画面表示が上位のpace_labelと矛盾する）ため、呼び出し側は必ず
+ * レースのtrack_typeを渡すこと。
+ */
+export function paceSpeedFromIndex(
+  value: number | null | undefined,
+  trackType: string | null | undefined,
+): PaceSpeedMeta {
   if (value === null || value === undefined) return PACE_SPEED_META.unknown;
-  if (value < 47) return PACE_SPEED_META.veryHigh;
-  if (value < 50) return PACE_SPEED_META.high;
-  if (value <= 52) return PACE_SPEED_META.average;
-  if (value <= 55) return PACE_SPEED_META.slow;
-  return PACE_SPEED_META.verySlow;
-}
-
-export function paceSpeedLabel(value: number | null | undefined): string {
-  return paceSpeedFromIndex(value).label;
-}
-
-export function paceSpeedSymbol(value: number | null | undefined): string {
-  return paceSpeedFromIndex(value).symbol;
+  const [highThreshold, slowThreshold] =
+    trackType === "ダート"
+      ? [DIRT_HIGH_THRESHOLD, DIRT_SLOW_THRESHOLD]
+      : [TURF_HIGH_THRESHOLD, TURF_SLOW_THRESHOLD];
+  if (value < highThreshold) return PACE_SPEED_META.high;
+  if (value > slowThreshold) return PACE_SPEED_META.slow;
+  return PACE_SPEED_META.average;
 }
 
 export type ConfidenceTone = "strong" | "normal" | "caution";
@@ -458,13 +445,15 @@ export function forecastDecisionChecklist({
   confidence,
   horses,
   integratedRanking,
+  trackType,
 }: {
   predictedRpci: number | null | undefined;
   confidence: number;
   horses: HorseFit[];
   integratedRanking?: IntegratedRanking | null;
+  trackType: string | null | undefined;
 }): ForecastDecisionChecklistItem[] {
-  const speed = paceSpeedFromIndex(predictedRpci);
+  const speed = paceSpeedFromIndex(predictedRpci, trackType);
   const confidenceMeta = confidenceInsight(confidence);
   const integratedTop = [...(integratedRanking?.entries ?? [])]
     .sort((a, b) => a.rank - b.rank)
