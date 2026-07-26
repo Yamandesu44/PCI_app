@@ -191,6 +191,65 @@ def _print_track_year_style_mix(session: Session, month_from: int, month_to: int
         "\n  読み方: 構成比や未設定%が特定の年だけ大きく動いていれば、レース傾向ではなく"
         "\n  取り込み・脚質判定側の変化を疑う。"
     )
+    _print_track_year_rpci_source(session, month_from, month_to)
+
+
+def _print_track_year_rpci_source(session: Session, month_from: int, month_to: int) -> None:
+    """コース種別×年で rpci_actual の算出経路の内訳を表示する。
+
+    `aggregate_rpci` は race_s3f/race_l3f があればレースラップ由来（TARGET準拠）を使い、
+    無ければ全完走馬PCIの平均というフォールバックへ縮退する。この2経路は同じ
+    「RPCI」でも値の出方が違うため、ラップ保有率が年で変われば分布そのものが動く。
+    分布のずれを「競馬側の変化」と読む前に、まずここを潰す。
+    """
+    print("\n" + "=" * 78)
+    print(
+        "■ コース種別 × 年の rpci_actual 算出経路"
+        f"（ラップ由来 vs 全馬PCI平均フォールバック・{_month_window_note(month_from, month_to)}）"
+    )
+    print("=" * 78)
+    for track_type in ("芝", "ダート"):
+        print(f"\n  ── {track_type}")
+        print(
+            f"  {'年':>6s} {'件数':>7s} {'ラップ有%':>10s} "
+            f"{'ラップ由来の平均':>17s} {'代替の平均':>12s}"
+        )
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    EXTRACT(YEAR FROM race_date)::int AS yr,
+                    COUNT(*)                          AS cnt,
+                    SUM(CASE WHEN race_s3f IS NOT NULL AND race_l3f IS NOT NULL
+                        THEN 1 ELSE 0 END)            AS with_lap,
+                    AVG(CASE WHEN race_s3f IS NOT NULL AND race_l3f IS NOT NULL
+                        THEN rpci_actual END)         AS avg_lap,
+                    AVG(CASE WHEN race_s3f IS NULL OR race_l3f IS NULL
+                        THEN rpci_actual END)         AS avg_fallback
+                FROM races
+                WHERE status = 'result'
+                  AND rpci_actual IS NOT NULL
+                  AND track_type = :track_type
+                  AND EXTRACT(MONTH FROM race_date) BETWEEN :month_from AND :month_to
+                GROUP BY yr
+                ORDER BY yr
+                """
+            ),
+            {
+                "track_type": track_type,
+                "month_from": month_from,
+                "month_to": month_to,
+            },
+        ).all()
+        for yr, cnt, with_lap, avg_lap, avg_fallback in rows:
+            lap_pct = with_lap / cnt * 100 if cnt else 0.0
+            lap_txt = f"{avg_lap:17.1f}" if avg_lap is not None else f"{'-':>17s}"
+            fb_txt = f"{avg_fallback:12.1f}" if avg_fallback is not None else f"{'-':>12s}"
+            print(f"  {yr:6d} {cnt:7,d} {lap_pct:9.1f}% {lap_txt} {fb_txt}")
+    print(
+        "\n  読み方: 「ラップ有%」が年で大きく動き、かつ2経路の平均が離れている場合、"
+        "\n  分布のずれの主因は競馬側ではなくラップ取り込みの欠落・変化である。"
+    )
 
 
 def main() -> None:
