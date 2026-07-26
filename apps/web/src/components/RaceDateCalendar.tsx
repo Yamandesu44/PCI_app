@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import type { ForecastPerformancePeriod } from "@pci/api-client";
 
 interface Props {
@@ -13,6 +20,10 @@ interface Props {
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
+// スマホの日付ストリップは選択日の前後だけを表示する（全開催日を並べると
+// 遡るのに大量スライドが必要になるため）。それより前後は月カレンダーへ委ねる。
+const STRIP_WINDOW_BEFORE = 4;
+const STRIP_WINDOW_AFTER = 1;
 
 function todayKey(): string {
   const d = new Date();
@@ -41,6 +52,13 @@ function MobileDateStrip({
   const selectedRef = useRef<HTMLSpanElement>(null);
   const availableDates = [...new Set(dates)].sort();
   const activeDate = selectedDate ?? availableDates.at(-1) ?? null;
+  const activeIndex = activeDate ? availableDates.indexOf(activeDate) : -1;
+  const windowStart = activeIndex === -1 ? 0 : Math.max(0, activeIndex - STRIP_WINDOW_BEFORE);
+  const windowEnd =
+    activeIndex === -1
+      ? availableDates.length
+      : Math.min(availableDates.length, activeIndex + STRIP_WINDOW_AFTER + 1);
+  const stripDates = availableDates.slice(windowStart, windowEnd);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -66,7 +84,7 @@ function MobileDateStrip({
           <p className="m-0 text-xs font-semibold text-slate-500">開催日</p>
           <p className="m-0 mt-0.5 truncate text-sm font-semibold text-slate-950">
             {active
-              ? `${active.getMonth() + 1}月${active.getDate()}日（${WEEKDAYS[active.getDay()]}）`
+              ? `${active.getFullYear()}年${active.getMonth() + 1}月${active.getDate()}日（${WEEKDAYS[active.getDay()]}）`
               : "開催日がありません"}
           </p>
         </div>
@@ -79,7 +97,7 @@ function MobileDateStrip({
         aria-label="開催日の選択"
       >
         <span aria-hidden className="w-[calc(50%-28px)] shrink-0" />
-        {availableDates.map((key) => {
+        {stripDates.map((key) => {
           const date = dateFromKey(key);
           const isSelected = key === activeDate;
           const isToday = key === today;
@@ -153,6 +171,7 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
 
   const [year, setYear] = useState(anchorDate.getFullYear());
   const [month, setMonth] = useState(anchorDate.getMonth());
+  const [showPicker, setShowPicker] = useState(false);
 
   const prevMonth = () => {
     if (month === 0) {
@@ -170,6 +189,8 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
       setMonth((m) => m + 1);
     }
   };
+  const prevYear = () => setYear((y) => y - 1);
+  const nextYear = () => setYear((y) => y + 1);
 
   const cells = calendarDays(year, month);
   const monthLabel = `${year}年${month + 1}月`;
@@ -182,7 +203,27 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
         performanceDays={performanceDays}
         today={today}
       />
-      <div className="hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:block">
+
+      <div className="mt-2 flex justify-end md:hidden">
+        <button
+          type="button"
+          data-mobile-date-picker-toggle
+          onClick={() => setShowPicker((v) => !v)}
+          aria-expanded={showPicker}
+          className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+        >
+          {showPicker ? "閉じる" : "他の日程を探す"}
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${showPicker ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
+      </div>
+
+      <div
+        data-mobile-date-picker
+        className={`${showPicker ? "mt-2 block" : "hidden"} rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:mt-0 md:block`}
+      >
       <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
         <span className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
           <CalendarDays className="h-4 w-4" aria-hidden />
@@ -192,25 +233,45 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
           <p className="m-0 mt-0.5 text-[11px] text-slate-500">日付を選択</p>
         </div>
       </div>
-      {/* 月ナビゲーション */}
+      {/* 年・月ナビゲーション */}
       <div className="mb-3 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={prevMonth}
-          className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
-          aria-label="前月"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={prevYear}
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+            aria-label="前年"
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={prevMonth}
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+            aria-label="前月"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        </div>
         <span className="text-sm font-semibold text-slate-950">{monthLabel}</span>
-        <button
-          type="button"
-          onClick={nextMonth}
-          className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
-          aria-label="翌月"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={nextMonth}
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+            aria-label="翌月"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={nextYear}
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+            aria-label="翌年"
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* 曜日ヘッダー */}

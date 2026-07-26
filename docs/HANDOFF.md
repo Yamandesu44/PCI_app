@@ -1,5 +1,95 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 (4) (Claude Code) 開催日選択UIの改善（年表示・日付ストリップ絞り込み・月カレンダー展開）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザーフィードバック）
+
+ユーザーが実機でアプリを操作した後、JRA-VAN公式スマホアプリの画面2枚（メイン画面の
+開催日チップ列、および「別日程で検索」押下後の年選択＋開催日一覧画面）を提示し、
+「レース開催日を選ぶ方法がかなり煩わしい。特にスマホ版で、何年何月何日のレースか
+わからない上、遡るためにたくさんスライドする必要がある」とフィードバックした。
+
+### 原因調査
+
+`apps/web/src/components/RaceDateCalendar.tsx`とデータ経路を確認し、2点を特定した。
+
+1. スマホ版見出し（`MobileDateStrip`）と各日付チップが、月日と曜日のみを表示し
+   **年を一切表示していなかった**（`7月26日（日）`のように）。
+2. `GET /api/v1/races/dates`（`ListRaceDatesUseCase`）は「全開催日一覧」を無制限に返す
+   設計で、フロント側もそれを丸ごと1本の横スクロール帯（`MobileDateStrip`）に並べていた。
+   開催日が半年〜1年分蓄積していれば、遡るほど並ぶチップ数が増え続け、スライド量が
+   際限なく増える構造だった。JRA-VANの参考画像は直近6件程度のチップ＋「別日程で検索」
+   （年選択＋開催日一覧表の別画面）という2段構えで、近傍と遠方を明確に分離していた。
+
+### ユーザーとの合意事項
+
+「遠い日付へのジャンプ手段」の実装方針についてAskUserQuestionで3案
+（PC版月カレンダー流用／JRA-VAN風専用画面新設／年月ドロップダウンのみ追加）を提示し、
+**「既存のPC版月カレンダーを流用」**（新規ページ・新規API不要、低リスク）を選択された。
+
+### 実施内容（`apps/web/src/components/RaceDateCalendar.tsx`）
+
+- スマホ見出しへ年を追加: `${active.getFullYear()}年${...}月${...}日（${...}）`。
+- `STRIP_WINDOW_BEFORE=4`/`STRIP_WINDOW_AFTER=1`を新設し、`MobileDateStrip`が
+  `availableDates`全件ではなく、選択中の日付を基準に「前4件＋本人＋後1件（最大6件）」だけを
+  スライスして表示するように変更（`activeIndex`を`availableDates.indexOf(activeDate)`で求め、
+  `slice(windowStart, windowEnd)`で切り出す。配列境界は`Math.max`/`Math.min`で自然にクランプ）。
+- ストリップの下（`md:hidden`領域）に「他の日程を探す」トグルボタンを追加。
+  `useState`の`showPicker`で開閉し、開くと既存のPC版月カレンダー（開催日ドット付き、
+  `calendarDays()`のグリッド）を**インラインで展開表示**する。従来はこのカレンダー全体が
+  `hidden ... md:block`でスマホでは常に非表示だった。トグルボタン自体はスクロール外の
+  常時表示要素とし（JRA-VANのようにチップ列の中に埋め込むと、選択日センタリングで
+  スクロールされた際に押しにくくなるため、意図的に列の外に配置した）。
+- 月カレンダーの年月ナビ行へ、`ChevronsLeft`/`ChevronsRight`（前年/翌年）を
+  既存の`ChevronLeft`/`ChevronRight`（前月/翌月）の外側に追加。半年以上前の日付へは
+  月送りのみだと同様に大量クリックが必要になるため。
+
+### 未確定のまま残した点
+
+- ストリップの窓幅（前4件＋後1件＝最大6件）はJRA-VANの参考画像の見た目（6チップ）に
+  合わせた値で、実データでの使用感検証はしていない。将来「まだ少し多い/少ない」と
+  感じた場合は`STRIP_WINDOW_BEFORE`/`STRIP_WINDOW_AFTER`の定数だけを調整すればよい。
+- 月カレンダー展開時、日付を選択した後にトグルを自動で閉じる仕様にはしていない
+  （選択後も同じ月内で別日を続けて選べるよう、意図的に開いたままにした）。
+
+### 変更ファイル
+
+1. `apps/web/src/components/RaceDateCalendar.tsx`
+2. `apps/web/src/components/RaceDateCalendar.test.tsx`（新規3 tests追加、既存2 tests更新）
+3. `tasks/current.md`
+4. `docs/HANDOFF.md`
+
+新しい設計判断のうち「PC版カレンダー流用」はユーザーとのAskUserQuestionで確定済みのため、
+`docs/DECISIONS.md`への追記は不要と判断した（軽微なUI実装方針であり、ADR相当の
+「後で覆すと高コストな決定」には該当しない）。
+
+### テスト実行コマンドと結果
+
+```bash
+cd apps/web && npm run test        # 116 passed（+3、既存2件更新）
+npm run typecheck                  # 成功
+npm run build                      # 成功（/ First Load JS 117kB）
+```
+
+Playwright（`renderToStaticMarkup`＋ビルド済みTailwind CSS、`/opt/pw-browsers/chromium`）で
+390px幅の折りたたみ・展開（`hidden`クラスをDOM操作で外して疑似再現）両状態と、
+実際のデスクトップサイドバー幅である272px（`page.tsx`の`grid-cols-[272px_...]`）を
+スクリーンショット確認。3状態とも`scrollWidth===clientWidth`一致（横はみ出し無し）、
+年月ナビ行の折り返し・クロップも無いことを確認した。一時プレビューファイルは確認後に削除済み。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/web/src/components/RaceDateCalendar.tsx`
+3. `tasks/current.md`
+
+---
+
 ## 2026-07-26 (3) (Claude Code) 実端末ロケテストの準備確認
 
 - 作業担当: Claude Code
