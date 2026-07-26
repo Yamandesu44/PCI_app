@@ -33,6 +33,7 @@ import {
   confidenceInsight,
   discountRecommendation,
   forecastDecisionChecklist,
+  frameColorClass,
   horseNumberLabel,
   sanitizeBeginnerComment,
   sortDiscountCandidates,
@@ -83,7 +84,9 @@ function BenefitRow({ horse, index }: { horse: HorseFit; index: number }) {
       className={`flex min-h-16 min-w-0 items-center gap-3 rounded-md border px-3 py-2.5 ${benefitTone(index)}`}
     >
       <span className="w-5 shrink-0 text-center text-xs font-bold opacity-70">{index + 1}</span>
-      <span className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-current/15 bg-white/10 px-1 text-xs font-bold">
+      <span
+        className={`flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-xs font-bold ${frameColorClass(horse.frame_no)}`}
+      >
         {horse.frame_no > 0 ? horse.horse_no : "登録"}
       </span>
       <div className="min-w-0 flex-1">
@@ -134,7 +137,9 @@ export function MobileExpandableHorseRow({
         ) : (
           <AlertTriangle className="h-4 w-5 shrink-0 text-amber-700" aria-hidden />
         )}
-        <span className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-1 text-xs font-bold text-slate-900">
+        <span
+          className={`flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-xs font-bold ${frameColorClass(horse.frame_no)}`}
+        >
           {horse.frame_no > 0 ? horse.horse_no : "登録"}
         </span>
         <div className="min-w-0 flex-1">

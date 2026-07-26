@@ -1,5 +1,29 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-26 (5) 完了: Claude Code — 馬番バッジの枠色を全画面で統一
+
+- [x] 背景: ユーザーがスマホ画面4枚を提示し、「隊列予想では馬番ごとに枠色が塗られているが、
+  他の画面（サマリー/注目馬/詳細タブ）では色が塗られていなかったり表示形態が異なる。
+  隊列予想と同じにしてほしい」とフィードバック。
+- [x] `FormationView.tsx`にだけ枠色定義（`FRAME_CLASS`）があり、他画面は未使用・不統一
+  だったと確認。`lib/pace.ts`へ`frameColorClass()`として一本化し、
+  `FormationView.tsx`・`MobileRaceForecastDashboard.tsx`（サマリー/注目馬タブの
+  馬番バッジ）・`HorseFitTable.tsx`（詳細タブ）の計4箇所を同じ配色へ統一した。
+- [x] `HorseFitTable.tsx`は表示形態も合わせ、バッジ内は隊列予想と同じ「馬番のみ」へ変更
+  （従来は「馬番16」という文言がバッジ内にあった）。枠順未確定（frame_no=0）時は
+  色を付けず「登録」と表示し、「登録順N（馬番未確定）」の文言は行内テキストへ残した
+  （確定時に文言を付け足すと1行に収まらなくなる例をPlaywrightで確認したため、
+  確定時はバッジのみ・未確定時だけ文言を残す形にした）。
+- [x] 新規9 tests（`frameColorClass`単体4件、`MobileRaceForecastDashboard`1件、
+  `HorseFitTable`新規ファイル2件、既存2件の枠色アサーション強化）を含むWeb 123 tests、
+  typecheck、production buildが成功。Playwrightで18頭・複数枠のモックデータを用い、
+  サマリータブの黒/緑/白いずれのカード背景でも枠色バッジが視認できること、
+  横はみ出しが無いことを確認した。
+- **未対応（ユーザーへ確認待ち）**: 確定後分析の`PaceAnalysisTable.tsx`（デスクトップの
+  確定済み馬別PCI表）にも同じ「枠色が付いていない」箇所がある。ただしこちらが使う
+  `HorsePaceAnalysisSchema`には`frame_no`が含まれておらず、APIのdto/schema/OpenAPI再生成を
+  伴うため、フロントだけの今回の変更より一段大きい。ユーザーの指示があれば着手する。
+
 ## 2026-07-26 (4) 完了: Claude Code — 開催日選択UIの改善（年表示・日付ストリップ絞り込み・月カレンダー展開）
 
 - [x] 背景: ユーザーがJRA-VAN公式スマホアプリの画面（開催日チップ＋「別日程で検索」→

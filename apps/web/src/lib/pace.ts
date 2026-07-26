@@ -249,6 +249,27 @@ export function horseNumberLabel(horse: Pick<HorseFit, "horse_no" | "frame_no">)
   return `登録順 ${horse.horse_no}（馬番未確定）`;
 }
 
+/** JRA公式の枠色（1〜8枠）。馬番バッジの配色は画面によらずこの1箇所だけで管理する。 */
+const FRAME_CLASS: Record<number, string> = {
+  1: "border-slate-300 bg-white text-slate-950",
+  2: "border-slate-950 bg-slate-950 text-white",
+  3: "border-red-600 bg-red-600 text-white",
+  4: "border-blue-600 bg-blue-600 text-white",
+  5: "border-yellow-400 bg-yellow-400 text-slate-950",
+  6: "border-green-600 bg-green-600 text-white",
+  7: "border-orange-500 bg-orange-500 text-white",
+  8: "border-pink-400 bg-pink-400 text-slate-950",
+};
+
+/** 枠順未確定（frame_no=0）時に使う、色を持たない中立バッジ。 */
+const FRAME_CLASS_UNASSIGNED = "border-slate-200 bg-slate-100 text-slate-400";
+
+/** 馬番バッジの配色クラスを返す。frame_no<=0（枠順未確定）は色を付けない。 */
+export function frameColorClass(frameNo: number): string {
+  if (frameNo <= 0) return FRAME_CLASS_UNASSIGNED;
+  return FRAME_CLASS[frameNo] ?? FRAME_CLASS_UNASSIGNED;
+}
+
 export type RaceSpotlightTone = "focus" | "value" | "caution" | "normal";
 
 export interface RaceSpotlight {

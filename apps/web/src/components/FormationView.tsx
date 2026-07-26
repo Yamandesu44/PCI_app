@@ -3,18 +3,8 @@
 import { ArrowRight, Flag, Route } from "lucide-react";
 import { useState } from "react";
 
+import { frameColorClass } from "@/lib/pace";
 import type { Formation, FormationHorse } from "@pci/api-client";
-
-const FRAME_CLASS: Record<number, string> = {
-  1: "border-slate-300 bg-white text-slate-950",
-  2: "border-slate-950 bg-slate-950 text-white",
-  3: "border-red-600 bg-red-600 text-white",
-  4: "border-blue-600 bg-blue-600 text-white",
-  5: "border-yellow-400 bg-yellow-400 text-slate-950",
-  6: "border-green-600 bg-green-600 text-white",
-  7: "border-orange-500 bg-orange-500 text-white",
-  8: "border-pink-400 bg-pink-400 text-slate-950",
-};
 
 function horseName(horse: FormationHorse): string {
   return horse.horse_name ?? `${horse.horse_no}番`;
@@ -83,7 +73,7 @@ export function MobileFormationBoard({ formation }: { formation: Formation }) {
                         }`}
                       >
                         <span
-                          className={`flex h-6 min-w-6 items-center justify-center rounded border px-1 text-[10px] font-bold ${FRAME_CLASS[horse.frame_no] ?? FRAME_CLASS[1]}`}
+                          className={`flex h-6 min-w-6 items-center justify-center rounded border px-1 text-[10px] font-bold ${frameColorClass(horse.frame_no)}`}
                           aria-label={`${horse.frame_no}枠`}
                         >
                           {horse.horse_no}
@@ -108,7 +98,7 @@ export function MobileFormationBoard({ formation }: { formation: Formation }) {
         >
           <div className="flex items-center gap-2.5">
             <span
-              className={`flex h-8 min-w-8 shrink-0 items-center justify-center rounded border px-1 text-xs font-bold ${FRAME_CLASS[selectedHorse.frame_no] ?? FRAME_CLASS[1]}`}
+              className={`flex h-8 min-w-8 shrink-0 items-center justify-center rounded border px-1 text-xs font-bold ${frameColorClass(selectedHorse.frame_no)}`}
               aria-label={`${selectedHorse.frame_no}枠`}
             >
               {selectedHorse.horse_no}
@@ -198,7 +188,7 @@ export function FormationView({ formation }: { formation: Formation }) {
                     >
                       <div className="flex items-start gap-2.5">
                         <span
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border text-xs font-bold ${FRAME_CLASS[horse.frame_no] ?? FRAME_CLASS[1]}`}
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border text-xs font-bold ${frameColorClass(horse.frame_no)}`}
                           aria-label={`${horse.frame_no}枠`}
                         >
                           {horse.horse_no}

@@ -1,5 +1,104 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 (5) (Claude Code) 馬番バッジの枠色を全画面で統一
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザーフィードバック）
+
+ユーザーがスマホ実機の画面4枚（サマリータブの展開恩恵馬TOP3、注目馬タブの
+展開恩恵馬TOP5、詳細タブの個別PAI根拠カード、および比較対象として隊列予想）を提示し、
+「隊列予想では各馬番ごとに枠色が着色されているが、他の箇所では同様の色が塗られていな
+かったり、表示形態が異なることがある。隊列予想のものと同じようにしてほしい」と
+フィードバックした。
+
+### 調査
+
+`FormationView.tsx`に`FRAME_CLASS`（JRA公式8枠の配色をTailwindクラスで表現した
+ローカル定数）が定義されており、`隊列予想`はこれを使って馬番バッジを枠色で描画していた。
+一方、以下3箇所は同じ情報（`horse.frame_no`）を持ちながら未使用・不統一だった。
+
+1. `MobileRaceForecastDashboard.tsx`の`BenefitRow`（サマリータブ・展開恩恵馬TOP3）:
+   `border-current/15 bg-white/10`という、カードの背景色に応じた半透明バッジで
+   枠色を反映していなかった。
+2. 同ファイルの`MobileExpandableHorseRow`（注目馬タブ・展開恩恵馬TOP5／評価を下げたい馬）:
+   `border-slate-200 bg-white text-slate-900`という常に同じ配色のバッジだった。
+3. `HorseFitTable.tsx`（詳細タブの判断根拠データ、`globals.css`の`.horse-no`使用）:
+   常に黒地（`#0f172a`固定）のバッジで、かつバッジ内テキストが`horseNumberLabel()`の
+   フル文言（「馬番16」）で、隊列予想の「番号のみ」というフォーマットとも異なっていた。
+
+なお`PaceAnalysisTable.tsx`（確定後分析のデスクトップ表、`.horse-no.sm`使用）にも
+同じ不統一があるが、こちらが使う`HorsePaceAnalysisSchema`（API契約）には`frame_no`が
+含まれておらず、バックエンドのdto/schema/OpenAPI再生成を伴う一段大きい変更になるため
+**今回は対象外とし、ユーザーへの確認待ちとして残した**。
+
+### 実施内容
+
+- `apps/web/src/lib/pace.ts`へ`frameColorClass(frameNo: number): string`を追加した。
+  JRA公式8枠の配色（1:白／2:黒／3:赤／4:青／5:黄／6:緑／7:橙／8:桃、
+  `FormationView.tsx`の`FRAME_CLASS`と同じTailwindクラス文字列）を1箇所で管理し、
+  `frame_no<=0`（枠順未確定）時は色を付けない中立クラス（`border-slate-200 bg-slate-100
+  text-slate-400`）を返す。
+- `FormationView.tsx`のローカル`FRAME_CLASS`定義を削除し、`frameColorClass()`を
+  import して3箇所の呼び出しを置き換えた（挙動は変えず、定義を一本化しただけ）。
+- `MobileRaceForecastDashboard.tsx`の`BenefitRow`・`MobileExpandableHorseRow`の
+  馬番バッジを`frameColorClass(horse.frame_no)`へ変更した。
+- `HorseFitTable.tsx`の馬番バッジ（`.horse-no`固定黒地）をTailwindの
+  `frameColorClass(h.frame_no)`ベースへ変更し、バッジ内テキストも隊列予想と同じ
+  「番号のみ」（未確定時は「登録」）へ変更した。「登録順N（馬番未確定）」という
+  文言は、確定時（frame_no>0）は行内テキストから外し、未確定時だけ残した
+  （確定時にも文言を付けるとPlaywrightでの390px確認で1行に収まらず不格好に
+  折り返すことを確認したため、確定時はバッジのみで表現する設計にした）。
+  `.horse-no`/`.horse-no.sm`のCSS定義自体は`PaceAnalysisTable.tsx`が引き続き使うため
+  削除していない。
+
+### 検証
+
+- 新規9 tests: `lib/pace.test.ts`に`frameColorClass`の単体テスト4件
+  （8枠それぞれ異なる配色・具体的な配色値・未確定時は中立・未定義枠番への安全な縮退）、
+  `MobileRaceForecastDashboard.test.tsx`に1件追加（既存2件のアサーションも
+  枠色チェックへ強化）、新規`HorseFitTable.test.tsx`2件。
+- Web 123 tests、typecheck、production buildすべて成功。
+- Playwright（`renderToStaticMarkup`＋ビルド済みTailwind CSS、`/opt/pw-browsers/chromium`）
+  で18頭・複数枠のモックデータを使い、390px幅でサマリータブ（黒/緑/白の3種のカード背景）・
+  注目馬タブ・詳細タブそれぞれのバッジが枠色で視認でき、横はみ出しが無いことを確認した。
+  一時プレビューファイルは確認後に削除済み。
+
+### 変更ファイル
+
+1. `apps/web/src/lib/pace.ts`
+2. `apps/web/src/lib/pace.test.ts`
+3. `apps/web/src/components/FormationView.tsx`
+4. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+5. `apps/web/src/components/MobileRaceForecastDashboard.test.tsx`
+6. `apps/web/src/components/HorseFitTable.tsx`
+7. `apps/web/src/components/HorseFitTable.test.tsx`（新規）
+8. `tasks/current.md`
+9. `docs/HANDOFF.md`
+
+新しい設計判断・仕様変更は発生していないため（既存の`FRAME_CLASS`の値をそのまま
+他画面へ展開しただけ）、`docs/DECISIONS.md`は更新していない。
+
+### 未対応・ユーザー確認待ち
+
+`PaceAnalysisTable.tsx`（確定後分析のデスクトップ表）も同じ枠色未対応だが、
+`HorsePaceAnalysisSchema`に`frame_no`が無いため、対応するには
+`HorsePaceAnalysisOutput`（dto.py）→`HorsePaceAnalysisSchema`（schemas.py）→
+`GetPaceAnalysisUseCase`（`race_query_use_cases.py`、`RaceEntry.frame_no`は既存）→
+OpenAPI再生成→api-client型再生成→フロント、という一段大きい変更が必要。
+ユーザーの意向を確認してから着手する。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/web/src/lib/pace.ts`
+3. `tasks/current.md`
+
+---
+
 ## 2026-07-26 (4) (Claude Code) 開催日選択UIの改善（年表示・日付ストリップ絞り込み・月カレンダー展開）
 
 - 作業担当: Claude Code

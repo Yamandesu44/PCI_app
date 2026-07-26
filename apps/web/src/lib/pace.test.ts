@@ -7,6 +7,7 @@ import {
   fitTone,
   forecastAccuracyMeta,
   forecastDecisionChecklist,
+  frameColorClass,
   horseNumberLabel,
   paceMeta,
   beginnerPaceLabel,
@@ -141,6 +142,31 @@ describe("horseNumberLabel", () => {
     expect(label).not.toBe("馬番 3");
     expect(label).toContain("3");
     expect(label).toContain("未確定");
+  });
+});
+
+describe("frameColorClass", () => {
+  it("1〜8枠それぞれに異なる配色クラスを返す（隊列予想と同じ配色を全画面で共有する）", () => {
+    const classes = [1, 2, 3, 4, 5, 6, 7, 8].map((frameNo) => frameColorClass(frameNo));
+    expect(new Set(classes).size).toBe(8);
+  });
+
+  it("1枠は白地、2枠は黒地など、JRA公式の配色を反映する", () => {
+    expect(frameColorClass(1)).toContain("bg-white");
+    expect(frameColorClass(2)).toContain("bg-slate-950");
+    expect(frameColorClass(3)).toContain("bg-red-600");
+    expect(frameColorClass(5)).toContain("bg-yellow-400");
+    expect(frameColorClass(8)).toContain("bg-pink-400");
+  });
+
+  it("枠順未確定（frame_no<=0）は色を付けず中立表示にする", () => {
+    expect(frameColorClass(0)).not.toContain("bg-red");
+    expect(frameColorClass(0)).not.toContain("bg-white");
+    expect(frameColorClass(-1)).toBe(frameColorClass(0));
+  });
+
+  it("未定義の枠番（9以上）でも中立表示へ安全に縮退する", () => {
+    expect(frameColorClass(9)).toBe(frameColorClass(0));
   });
 });
 
