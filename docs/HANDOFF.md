@@ -1,5 +1,96 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-07-26 (9) (Claude Code) 地力(ability)の参照走数10走候補を準備（本番は5走のまま・重要なハードコード不具合を修正）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザー提案）
+
+ユーザーから「統合順位予想で使う地力は近走5走を参照しているが、短すぎて、
+本来得意なペースで走った6走目以降のデータを見落とす恐れがある。5走から10走へ
+変更すべきではないか」との提案があった。
+
+### 調査結果（ユーザーへ回答済み）
+
+1. **「得意なペース」判定は既に5走に限定されていない**:
+   - `affinity.py`の`build_horse_pace_affinity_profile`（PAI適性、「馬ごとの得意な
+     レース質」）は`forecast_use_cases.py`の`_build_affinity_profile`経由で
+     **最大12走**を参照している（好走＝3着以内・重賞なら5着以内のみ抽出）。
+   - 前付けペース傾向（rule-v2）・前後半3F履歴（RPCI v4特徴量）は**10走**参照。
+   - 5走に限定されているのは**「地力(ability)」と「脚質判定」の2つだけ**。
+   ユーザーの提案対象を「地力」と確認した上で作業した。
+2. **重要な副次発見（不具合）**: `AbilityWeights.recent_races`（現行5）を
+   バックテスト等で変更しても反映されない不具合があった。
+   `forecast_use_cases.py`の`_build_ability_score`が、`AbilityScorer`へ渡す前に
+   独自に`history[:5]`とハードコードしており、`AbilityScorer.score()`内部の
+   `[: w.recent_races]`スライスに実質的に到達する前に既に5走へ切り詰められていた。
+
+### ユーザーとの合意事項
+
+検証方針をAskUserQuestionで2案（比較ツールに10走候補を追加／検証を待たず
+今すぐ10走へ変更）提示し、**「比較ツールに10走候補を追加（推奨）」**を選択された。
+本番デフォルト（`recent_races=5`）は変更していない。
+
+### 実施内容（`apps/api`）
+
+- `application/forecast_use_cases.py`: `_build_ability_score`の
+  `history[:5]`ハードコードを撤去し、`AbilityScorer`へ取得済み履歴を
+  そのまま渡すよう修正（走数の決定は`AbilityWeights.recent_races`だけに委ねる）。
+- `application/backtest.py`: `DEFAULT_ABILITY_WEIGHT_PROFILES`へ`recent10`候補
+  （`AbilityWeights(recent_races=10)`、説明「参照走数を5走→10走へ拡大」）を追加。
+  既存の`--compare-ability-weights`（`ForecastBacktester`経由で本番と同じ
+  `ForecastRaceUseCase`を使う）が自動的にこの候補も比較する。
+- `tests/unit/application/test_forecast_use_cases.py`: 上記不具合の回帰テストを
+  追加。直近5走（1〜5走前）を不振の未勝利戦、6〜8走前をG1好走とする8走分の
+  履歴を用意し、`recent_races=10`のスコアラーでは`sample_size=8`・
+  地力スコアが現行（5走・不振のみ見る）より高くなることを確認する。
+  日数はすべて180日以内（新しさ減衰の影響を排除）に収めた。
+
+### 検証
+
+- API 598 tests（新規1件）、ruff、mypy --strict（65ファイル）、
+  lint-importsすべて成功。OpenAPI/schemaは変更していない
+  （API契約に影響する変更なし、内部ロジックとバックテスト候補の追加のみ）。
+
+### 未実施・次の担当への引き継ぎ
+
+このクラウド環境からは実DB接続ができないため、以下はユーザー（Windows実行機）に
+委ねる。
+
+```cmd
+cd apps\api
+.venv\Scripts\python.exe -m scripts.backtest_forecast --limit 200 --compare-ability-weights
+```
+
+出力される`recent10`候補の1位馬勝率・1位馬好走率・TOP3捕捉率が、現行（5走）と
+比べて2期間（できれば2025年後半・2026年前半など）で安定して改善するか確認する。
+`RuleWeights`・`PaiWeights`・既存の`AbilityWeights`ブレンド比率と同様、
+一方の指標だけ改善して他が悪化する場合は不採用とし、本番`recent_races=5`を維持する
+方針で判断すること。採用する場合は`AbilityWeights.recent_races`の
+デフォルト値を変更し、ゴールデンテスト・回帰テストの期待値を合わせて更新する。
+
+### 変更ファイル
+
+1. `apps/api/src/pci/application/forecast_use_cases.py`
+2. `apps/api/src/pci/application/backtest.py`
+3. `apps/api/tests/unit/application/test_forecast_use_cases.py`
+4. `tasks/current.md`
+5. `docs/HANDOFF.md`
+
+`recent_races`自体は`docs/SPEC.md §9-16`に記載済みの🧪暫定係数の一部であり、
+今回新たに仕様化・確定したものはないため`docs/DECISIONS.md`は更新していない。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/api/src/pci/application/backtest.py`（`DEFAULT_ABILITY_WEIGHT_PROFILES`）
+3. `docs/SPEC.md §9-16`（AbilityWeightsの暫定係数一覧）
+
+---
+
 ## 2026-07-26 (8) (Claude Code) スマホに統合順位予想（展開×能力）を追加
 
 - 作業担当: Claude Code

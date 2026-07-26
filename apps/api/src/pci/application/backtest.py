@@ -316,6 +316,11 @@ DEFAULT_ABILITY_WEIGHT_PROFILES: tuple[AbilityWeightProfile, ...] = (
         description="人気の市場支持をやや重視",
         weights=AbilityWeights(weight_form=0.45, weight_prize=0.30, weight_popularity=0.25),
     ),
+    AbilityWeightProfile(
+        name="recent10",
+        description="参照走数を5走→10走へ拡大（得意なペース以外の要因も含め古い好走を拾えるか検証）",
+        weights=AbilityWeights(recent_races=10),
+    ),
 )
 
 

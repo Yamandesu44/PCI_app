@@ -465,6 +465,10 @@ python -m scripts.backtest_forecast --monitor-dirt-v4 --limit 200 `
     gradeは直接利用するよう改善済み。馬体重は永続化のみで能力加点しない。
     4候補の同一期間比較CLIと実DBの期間分割検証は完了し、現行成分重みの維持を決定済み。
     その他の仮係数と実JV-Dataの人気/賞金オフセット検証（jvlink用）は残課題。
+    2026-07-26、参照走数`recent_races`（現行5）についてユーザーから
+    「6走目以降の好走を見落とす恐れがあるため10走へ拡大すべき」との提案があり、
+    `--compare-ability-weights`へ`recent10`候補を追加した（実装のみ・本番未変更）。
+    実DB比較（Windows実行機）で採用判断を行うまで`recent_races=5`を維持する。
 
 ## 馬場情報補完（2026-07-23更新）
 

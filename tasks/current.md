@@ -1,5 +1,33 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-07-26 (9) 完了: Claude Code — 地力(ability)の参照走数10走候補を準備（本番は5走のまま）
+
+- [x] 背景: ユーザーから「統合順位予想の地力は5走だと短く、得意なペースで走った
+  6走目以降を見落とす恐れがあるので10走へ変更すべき」との提案。
+- [x] 調査して回答: 「得意なペース」判定（`affinity.py`のPAI適性プロファイル）は
+  実はすでに最大12走（好走のみ抽出）、前付けペース傾向は10走を参照済みで、
+  5走に限定されているのは「地力(ability)」と「脚質判定」の2つだけと判明。
+  ユーザーの提案は「地力」を対象と再確認した。
+- [x] 重要な副次発見: `AbilityWeights.recent_races`を変えても、呼び出し元
+  （`forecast_use_cases.py`の`_build_ability_score`）が`history[:5]`と別途
+  ハードコードしており、設定を変えても反映されない不具合があった。今回修正した
+  （呼び出し元の切り詰めを撤去し、`AbilityScorer`側の`recent_races`だけに委ねる）。
+- [x] 検証方針をユーザーに確認し、「比較ツールに10走候補を追加（推奨・実装のみ、
+  本番デフォルトは変更しない）」を選択された。
+- [x] `backtest.py`の`DEFAULT_ABILITY_WEIGHT_PROFILES`へ`recent10`候補
+  （`AbilityWeights(recent_races=10)`）を追加した。既存の
+  `--compare-ability-weights`が自動的にこの候補も比較対象に含める。
+- [x] 上記のハードコード不具合を検出する回帰テストを追加
+  （直近5走を不振・6〜8走前をG1好走という履歴で、`recent_races=10`なら
+  `sample_size=8`・地力スコアが上がることを確認）。
+- [x] API 598 tests（新規1件）、ruff、mypy --strict、lint-importsすべて成功。
+- **未実施（このクラウド環境では実DB接続不可）**: `--compare-ability-weights`の
+  実DB実行と結果を見た上での本番`recent_races`採用判断。ユーザーのWindows実行機で
+  `cd apps/api && python -m scripts.backtest_forecast --limit 200 --compare-ability-weights`
+  を実行し、`recent10`候補の指標（1位馬勝率・1位馬好走率・TOP3捕捉率）が
+  現行を安定して上回るか確認してから、`AbilityWeights.recent_races`の
+  デフォルト値変更を判断する。
+
 ## 2026-07-26 (8) 完了: Claude Code — スマホに統合順位予想（展開×能力）を追加
 
 - [x] 背景: ユーザーが「PC版では展開・能力を鑑みた全馬の総合予想順位が表示されるが、

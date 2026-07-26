@@ -10,6 +10,7 @@ import pytest
 from pci.application.dto import EntryInput, RaceInfo
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
+from pci.domain.pace.ability import AbilityScorer, AbilityWeights
 from pci.domain.pace.rpci_forecast import PaceLabel, RaceContext, RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.racing.master import Horse
@@ -259,6 +260,67 @@ class TestForecastRaceUseCase:
             "中団",
             "後方",
         ]
+
+    def test_ability_score_respects_configured_recent_races(self) -> None:
+        """`AbilityWeights.recent_races`が呼び出し側の履歴切り詰めで無効化されない回帰テスト。
+
+        以前は`_build_ability_score`が`history[:5]`と別途ハードコードしており、
+        `recent_races`を10などへ変えてもドメイン層に渡る時点で既に5走に
+        切り詰められ、設定が反映されない不具合があった。
+        """
+        target_race = Race(
+            race_key=RaceKey(UPCOMING),
+            race_date=RACE_DATE,
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=12,
+            status=RaceStatus.ENTRIES,
+        )
+        # 直近5走（1〜5走前）は不振の未勝利戦、6〜8走前はG1好走という8走分の履歴。
+        # 日数は最大56日前までに収め、新しさ減衰（180日以内=満額）の影響を排除する。
+        history: list[tuple[RaceEntry, Race]] = []
+        for i in range(8):
+            is_old_good_run = i >= 5
+            race_date = RACE_DATE - datetime.timedelta(days=(i + 1) * 7)
+            past_race = Race(
+                race_key=RaceKey(f"202601{i + 1:02d}05010101"),
+                race_date=race_date,
+                jyo_cd="05",
+                distance_m=1600,
+                track_type="芝",
+                field_size=12,
+                status=RaceStatus.RESULT,
+                grade="G1" if is_old_good_run else None,
+            )
+            entry = RaceEntry(
+                race_key=past_race.race_key,
+                horse_no=1,
+                frame_no=1,
+                ketto_num="2020000001",
+                weight=480.0,
+                jockey_code="J001",
+                trainer_code="T001",
+                finish_pos=1 if is_old_good_run else 11,
+            )
+            history.append((entry, past_race))
+
+        default_use_case = ForecastRaceUseCase(FakeRaceRepository())
+        wider_use_case = ForecastRaceUseCase(
+            FakeRaceRepository(),
+            ability_scorer=AbilityScorer(AbilityWeights(recent_races=10)),
+        )
+
+        default_score = default_use_case._build_ability_score(
+            1, "2020000001", target_race, tuple(history)
+        )
+        wider_score = wider_use_case._build_ability_score(
+            1, "2020000001", target_race, tuple(history)
+        )
+
+        assert default_score.sample_size == 5
+        assert wider_score.sample_size == 8
+        assert wider_score.score > default_score.score
 
     def test_formation_is_hidden_before_draw_confirmation(self) -> None:
         repo = FakeRaceRepository()
