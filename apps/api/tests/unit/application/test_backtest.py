@@ -201,7 +201,69 @@ class TestSummarizeStyleAdvantage:
             "disadvantaged_lift": 0.0,
             "rate_gap": 1.0,
             "point_biserial": result.point_biserial,
+            "bands": [
+                {"label": "不利", "lo": 0.0, "hi": 35.0, "n": 1, "good_runs": 0, "good_rate": 0.0},
+                {
+                    "label": "やや不利",
+                    "lo": 35.0,
+                    "hi": 45.0,
+                    "n": 1,
+                    "good_runs": 0,
+                    "good_rate": 0.0,
+                },
+                {"label": "互角", "lo": 45.0, "hi": 55.0, "n": 0, "good_runs": 0, "good_rate": 0.0},
+                {
+                    "label": "やや有利",
+                    "lo": 55.0,
+                    "hi": 65.0,
+                    "n": 1,
+                    "good_runs": 1,
+                    "good_rate": 1.0,
+                },
+                {
+                    "label": "有利",
+                    "lo": 65.0,
+                    "hi": 100.0,
+                    "n": 1,
+                    "good_runs": 1,
+                    "good_rate": 1.0,
+                },
+            ],
         }
+
+    def test_bands_use_the_same_boundaries_as_the_web_labels(self) -> None:
+        """帯の境界が web の`styleVerdict`と一致することを固定する。
+
+        ここがずれると「画面で有利と出ている馬の実績」を測っていることに
+        ならなくなるため、境界値そのものを検証する。
+        """
+        # styleVerdict: >=65 有利 / >=55 やや有利 / >45 互角 / >35 やや不利 / それ以下 不利
+        boundary_samples = [
+            StyleAdvantageSample("R1", 1, 65.0, False),  # 有利（下端を含む）
+            StyleAdvantageSample("R1", 2, 55.0, False),  # やや有利（下端を含む）
+            StyleAdvantageSample("R1", 3, 45.1, False),  # 互角（45ちょうどは含まない）
+            StyleAdvantageSample("R1", 4, 45.0, False),  # やや不利（45ちょうどはこちら）
+            StyleAdvantageSample("R1", 5, 35.1, False),  # やや不利
+            StyleAdvantageSample("R1", 6, 35.0, False),  # 不利（35ちょうどはこちら）
+        ]
+
+        result = summarize_style_advantage(boundary_samples)
+
+        assert result is not None
+        by_label = {band.label: band.n for band in result.bands}
+        assert by_label == {"有利": 1, "やや有利": 1, "互角": 1, "やや不利": 2, "不利": 1}
+
+    def test_band_totals_match_overall_sample_count(self) -> None:
+        samples = [
+            StyleAdvantageSample("R1", i, float(score), score > 50)
+            for i, score in enumerate((5, 20, 36, 44, 50, 58, 64, 70, 95), start=1)
+        ]
+
+        result = summarize_style_advantage(samples)
+
+        assert result is not None
+        assert sum(band.n for band in result.bands) == result.n
+        assert sum(band.good_runs for band in result.bands) == sum(1 for s in samples if s.good_run)
 
     def test_collects_actual_pace_and_confirmed_styles(self) -> None:
         repo = FakeRaceRepository()

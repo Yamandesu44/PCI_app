@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime
 import math
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
@@ -249,6 +250,21 @@ class IntegratedAccuracy:
 
 
 @dataclass(frozen=True)
+class StyleAdvantageBand:
+    """有利度スコア帯ごとの好走率。帯の境界はUI表示ラベルと同一。"""
+
+    label: str
+    lo: float
+    hi: float
+    n: int
+    good_runs: int
+
+    @property
+    def good_rate(self) -> float:
+        return self.good_runs / self.n if self.n else 0.0
+
+
+@dataclass(frozen=True)
 class StyleAdvantageLift:
     """脚質別有利度が好走率を分離できているかを示すサマリ。"""
 
@@ -262,6 +278,9 @@ class StyleAdvantageLift:
     disadvantaged_lift: float
     rate_gap: float
     point_biserial: float
+    # 2群比較だけでは「全域で弱い」と「極端な場面だけ強い」を区別できないため、
+    # ユーザーが実際に目にする5段階ラベルと同じ粒度で好走率を並べる。
+    bands: tuple[StyleAdvantageBand, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -570,6 +589,54 @@ def summarize_integrated_accuracy(
     )
 
 
+def _style_advantage_band_label(score: float) -> str:
+    """スコアを5段階ラベルへ写す。
+
+    境界は web の `styleVerdict`（apps/web/src/lib/pace.ts）と同一。ここを揃えないと
+    「画面で有利と出ている馬の実績」を測っていることにならないため、
+    独自の等間隔帯は使わない。
+    """
+    if score >= 65:
+        return "有利"
+    if score >= 55:
+        return "やや有利"
+    if score > 45:
+        return "互角"
+    if score > 35:
+        return "やや不利"
+    return "不利"
+
+
+_STYLE_ADVANTAGE_BANDS: tuple[tuple[str, float, float], ...] = (
+    ("不利", 0.0, 35.0),
+    ("やや不利", 35.0, 45.0),
+    ("互角", 45.0, 55.0),
+    ("やや有利", 55.0, 65.0),
+    ("有利", 65.0, 100.0),
+)
+
+
+def _summarize_style_advantage_bands(
+    samples: list[StyleAdvantageSample],
+) -> tuple[StyleAdvantageBand, ...]:
+    """5段階ラベルごとの頭数と好走数を数える。"""
+    counts: dict[str, list[int]] = {label: [0, 0] for label, _, _ in _STYLE_ADVANTAGE_BANDS}
+    for sample in samples:
+        slot = counts[_style_advantage_band_label(sample.score)]
+        slot[0] += 1
+        slot[1] += int(sample.good_run)
+    return tuple(
+        StyleAdvantageBand(
+            label=label,
+            lo=lo,
+            hi=hi,
+            n=counts[label][0],
+            good_runs=counts[label][1],
+        )
+        for label, lo, hi in _STYLE_ADVANTAGE_BANDS
+    )
+
+
 def summarize_style_advantage(
     samples: list[StyleAdvantageSample],
 ) -> StyleAdvantageLift | None:
@@ -596,6 +663,7 @@ def summarize_style_advantage(
         disadvantaged_lift=(round(disadvantaged_rate / baseline_rate, 3) if baseline_rate else 0.0),
         rate_gap=round(advantaged_rate - disadvantaged_rate, 4),
         point_biserial=round(_style_advantage_point_biserial(samples), 4),
+        bands=_summarize_style_advantage_bands(samples),
     )
 
 
@@ -1057,6 +1125,17 @@ def style_advantage_lift_to_dict(
         "disadvantaged_lift": lift.disadvantaged_lift,
         "rate_gap": lift.rate_gap,
         "point_biserial": lift.point_biserial,
+        "bands": [
+            {
+                "label": band.label,
+                "lo": band.lo,
+                "hi": band.hi,
+                "n": band.n,
+                "good_runs": band.good_runs,
+                "good_rate": round(band.good_rate, 4),
+            }
+            for band in lift.bands
+        ],
     }
 
 
@@ -1297,31 +1376,51 @@ def format_pai_weight_comparison(comparisons: list[PaiWeightComparison]) -> str:
     return "\n".join(lines)
 
 
+def _pad_display(text: str, width: int) -> str:
+    """全角を2桁として数え、等幅端末で列が揃うよう右側を空白で埋める。
+
+    `str.ljust`は文字数で数えるため、日本語ラベルの列が崩れる。
+    """
+    display = sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
+    return text + " " * max(0, width - display)
+
+
 def format_actual_style_advantage_validation(
     lift: StyleAdvantageLift | None,
 ) -> str:
     """実績ペース・確定脚質を使う診断結果をCLI向けに整形する。"""
     if lift is None:
         return "脚質別展開有利度: 有効サンプルなし"
-    return "\n".join(
-        [
-            "=" * 72,
-            "脚質別展開有利度の単体検証（実績ペース・確定脚質を使用）",
-            "※ 本番予測ではなく、方向性と係数の診断専用",
-            f"全体好走率: {lift.baseline_rate:.1%}（{lift.n}頭）",
-            (
-                f"やや有利以上: {lift.advantaged_rate:.1%} "
-                f"（{lift.advantaged_n}頭 / {lift.advantaged_lift:.2f}x）"
-            ),
-            (
-                f"やや不利以下: {lift.disadvantaged_rate:.1%} "
-                f"（{lift.disadvantaged_n}頭 / {lift.disadvantaged_lift:.2f}x）"
-            ),
-            f"有利−不利の好走率差: {lift.rate_gap:+.1%}",
-            f"有利度×好走の相関: {lift.point_biserial:+.3f}",
-            "=" * 72,
-        ]
-    )
+    lines = [
+        "=" * 72,
+        "脚質別展開有利度の単体検証（実績ペース・確定脚質を使用）",
+        "※ 本番予測ではなく、方向性と係数の診断専用",
+        f"全体好走率: {lift.baseline_rate:.1%}（{lift.n}頭）",
+        (
+            f"やや有利以上: {lift.advantaged_rate:.1%} "
+            f"（{lift.advantaged_n}頭 / {lift.advantaged_lift:.2f}x）"
+        ),
+        (
+            f"やや不利以下: {lift.disadvantaged_rate:.1%} "
+            f"（{lift.disadvantaged_n}頭 / {lift.disadvantaged_lift:.2f}x）"
+        ),
+        f"有利−不利の好走率差: {lift.rate_gap:+.1%}",
+        f"有利度×好走の相関: {lift.point_biserial:+.3f}",
+    ]
+    if lift.bands:
+        lines.append("")
+        header = _pad_display("表示ラベル", 12) + _pad_display("スコア帯", 12)
+        lines.append(f"  {header}    頭数     好走   好走率   対ベース")
+        for band in lift.bands:
+            lift_ratio = band.good_rate / lift.baseline_rate if lift.baseline_rate else 0.0
+            span = f"{band.lo:.0f}〜{band.hi:.0f}"
+            lines.append(
+                f"  {_pad_display(band.label, 12)}{_pad_display(span, 12)}"
+                f"{band.n:8,d} {band.good_runs:8,d} {band.good_rate:7.1%} {lift_ratio:8.2f}x"
+            )
+        lines.append("※ 単調に増えていれば全域で機能、両端だけ離れていれば極端な場面のみ有効")
+    lines.append("=" * 72)
+    return "\n".join(lines)
 
 
 def format_actual_style_advantage_breakdown(
