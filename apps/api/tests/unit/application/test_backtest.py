@@ -229,7 +229,39 @@ class TestSummarizeStyleAdvantage:
                     "good_rate": 1.0,
                 },
             ],
+            # 脚質を持たないサンプルは脚質グループ集計の対象外。
+            "style_groups": [],
         }
+
+    def test_style_groups_split_front_runners_from_closers(self) -> None:
+        """同じ帯でも前付けと差し追込を分けて集計することを検証する。
+
+        「有利」帯にはスロー想定で加点された前付け馬とハイ想定で加点された
+        差し追込馬が混ざるため、分けないと相殺されて非単調の原因を追えない。
+        """
+        samples = [
+            # 前付けの「有利」は好走、差し追込の「有利」は凡走という食い違いを作る
+            StyleAdvantageSample("R1", 1, 70.0, True, RunningStyleLabel.ESCAPE),
+            StyleAdvantageSample("R1", 2, 70.0, True, RunningStyleLabel.FRONT),
+            StyleAdvantageSample("R1", 3, 70.0, False, RunningStyleLabel.STALKER),
+            StyleAdvantageSample("R1", 4, 70.0, False, RunningStyleLabel.CLOSER),
+            StyleAdvantageSample("R1", 5, 20.0, False, RunningStyleLabel.FLEXIBLE),
+        ]
+
+        result = summarize_style_advantage(samples)
+
+        assert result is not None
+        by_label = {group.label: group for group in result.style_groups}
+        assert set(by_label) == {"前付け（逃げ・先行）", "差し追込"}
+        # 自在は前付けにも差し追込にも入らない
+        assert by_label["前付け（逃げ・先行）"].n == 2
+        assert by_label["差し追込"].n == 2
+        assert by_label["前付け（逃げ・先行）"].baseline_rate == 1.0
+        assert by_label["差し追込"].baseline_rate == 0.0
+        # 全体の帯では両者が混ざり、有利帯の好走率は50%に相殺される
+        overall_advantage = next(band for band in result.bands if band.label == "有利")
+        assert overall_advantage.n == 4
+        assert overall_advantage.good_rate == 0.5
 
     def test_bands_use_the_same_boundaries_as_the_web_labels(self) -> None:
         """帯の境界が web の`styleVerdict`と一致することを固定する。

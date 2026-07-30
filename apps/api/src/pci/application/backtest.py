@@ -196,6 +196,9 @@ class StyleAdvantageSample:
     horse_no: int
     score: float
     good_run: bool
+    # 同じ「有利」でも前付けと差し追込では実績が異なりうるため、
+    # 帯別集計を脚質グループで割れるように保持する。
+    running_style: RunningStyleLabel | None = None
 
 
 # ----- 集計結果 -----
@@ -265,6 +268,16 @@ class StyleAdvantageBand:
 
 
 @dataclass(frozen=True)
+class StyleAdvantageGroupBands:
+    """脚質グループ（前付け／差し追込）ごとの帯別集計。"""
+
+    label: str
+    n: int
+    baseline_rate: float
+    bands: tuple[StyleAdvantageBand, ...]
+
+
+@dataclass(frozen=True)
 class StyleAdvantageLift:
     """脚質別有利度が好走率を分離できているかを示すサマリ。"""
 
@@ -281,6 +294,9 @@ class StyleAdvantageLift:
     # 2群比較だけでは「全域で弱い」と「極端な場面だけ強い」を区別できないため、
     # ユーザーが実際に目にする5段階ラベルと同じ粒度で好走率を並べる。
     bands: tuple[StyleAdvantageBand, ...] = ()
+    # 同じ帯にスロー想定で加点された前付け馬とハイ想定で加点された差し追込馬が
+    # 混ざるため、実績が食い違うと帯全体では相殺される。分けて保持する。
+    style_groups: tuple[StyleAdvantageGroupBands, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -607,6 +623,17 @@ def _style_advantage_band_label(score: float) -> str:
     return "不利"
 
 
+_STYLE_ADVANTAGE_GROUPS: tuple[tuple[str, frozenset[RunningStyleLabel]], ...] = (
+    (
+        "前付け（逃げ・先行）",
+        frozenset({RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT}),
+    ),
+    (
+        "差し追込",
+        frozenset({RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER}),
+    ),
+)
+
 _STYLE_ADVANTAGE_BANDS: tuple[tuple[str, float, float], ...] = (
     ("不利", 0.0, 35.0),
     ("やや不利", 35.0, 45.0),
@@ -637,6 +664,26 @@ def _summarize_style_advantage_bands(
     )
 
 
+def _summarize_style_advantage_groups(
+    samples: list[StyleAdvantageSample],
+) -> tuple[StyleAdvantageGroupBands, ...]:
+    """前付け・差し追込それぞれの帯別集計を作る。脚質不明のサンプルは除く。"""
+    groups: list[StyleAdvantageGroupBands] = []
+    for label, members in _STYLE_ADVANTAGE_GROUPS:
+        subset = [s for s in samples if s.running_style in members]
+        if not subset:
+            continue
+        groups.append(
+            StyleAdvantageGroupBands(
+                label=label,
+                n=len(subset),
+                baseline_rate=round(sum(s.good_run for s in subset) / len(subset), 4),
+                bands=_summarize_style_advantage_bands(subset),
+            )
+        )
+    return tuple(groups)
+
+
 def summarize_style_advantage(
     samples: list[StyleAdvantageSample],
 ) -> StyleAdvantageLift | None:
@@ -664,6 +711,7 @@ def summarize_style_advantage(
         rate_gap=round(advantaged_rate - disadvantaged_rate, 4),
         point_biserial=round(_style_advantage_point_biserial(samples), 4),
         bands=_summarize_style_advantage_bands(samples),
+        style_groups=_summarize_style_advantage_groups(samples),
     )
 
 
@@ -703,6 +751,7 @@ def collect_actual_style_advantage_samples(
                     horse_no=entry.horse_no,
                     score=score,
                     good_run=is_good_run(entry.finish_pos, race.grade),
+                    running_style=style,
                 )
             )
     return samples
@@ -1125,17 +1174,27 @@ def style_advantage_lift_to_dict(
         "disadvantaged_lift": lift.disadvantaged_lift,
         "rate_gap": lift.rate_gap,
         "point_biserial": lift.point_biserial,
-        "bands": [
+        "bands": [_style_advantage_band_to_dict(band) for band in lift.bands],
+        "style_groups": [
             {
-                "label": band.label,
-                "lo": band.lo,
-                "hi": band.hi,
-                "n": band.n,
-                "good_runs": band.good_runs,
-                "good_rate": round(band.good_rate, 4),
+                "label": group.label,
+                "n": group.n,
+                "baseline_rate": group.baseline_rate,
+                "bands": [_style_advantage_band_to_dict(band) for band in group.bands],
             }
-            for band in lift.bands
+            for group in lift.style_groups
         ],
+    }
+
+
+def _style_advantage_band_to_dict(band: StyleAdvantageBand) -> dict[str, Any]:
+    return {
+        "label": band.label,
+        "lo": band.lo,
+        "hi": band.hi,
+        "n": band.n,
+        "good_runs": band.good_runs,
+        "good_rate": round(band.good_rate, 4),
     }
 
 
@@ -1419,8 +1478,33 @@ def format_actual_style_advantage_validation(
                 f"{band.n:8,d} {band.good_runs:8,d} {band.good_rate:7.1%} {lift_ratio:8.2f}x"
             )
         lines.append("※ 単調に増えていれば全域で機能、両端だけ離れていれば極端な場面のみ有効")
+    lines.extend(_format_style_group_bands(lift))
     lines.append("=" * 72)
     return "\n".join(lines)
+
+
+def _format_style_group_bands(lift: StyleAdvantageLift) -> list[str]:
+    """前付け・差し追込に分けた帯別好走率を整形する。"""
+    lines: list[str] = []
+    for group in lift.style_groups:
+        if group.n == 0:
+            continue
+        lines.append("")
+        lines.append(f"■ {group.label}のみ（{group.n:,}頭 / 好走率 {group.baseline_rate:.1%}）")
+        header = _pad_display("表示ラベル", 12) + _pad_display("スコア帯", 12)
+        lines.append(f"  {header}    頭数     好走   好走率   対ベース")
+        for band in group.bands:
+            if band.n == 0:
+                continue
+            ratio = band.good_rate / group.baseline_rate if group.baseline_rate else 0.0
+            span = f"{band.lo:.0f}〜{band.hi:.0f}"
+            lines.append(
+                f"  {_pad_display(band.label, 12)}{_pad_display(span, 12)}"
+                f"{band.n:8,d} {band.good_runs:8,d} {band.good_rate:7.1%} {ratio:8.2f}x"
+            )
+    if lines:
+        lines.append("※ 片方だけ非単調なら、そのグループの加点則が実態と合っていない")
+    return lines
 
 
 def format_actual_style_advantage_breakdown(
@@ -1625,6 +1709,7 @@ class ForecastBacktester:
                             horse_no=horse.horse_no,
                             score=style_score,
                             good_run=good_run,
+                            running_style=_scoreable_style(horse.running_style),
                         )
                     )
             if out.integrated_ranking is not None:
@@ -1724,19 +1809,22 @@ class ForecastBacktester:
                 predicted_style = predicted_styles[horse_no]
                 actual_style = actual_styles[horse_no]
                 good_run = is_good_run(actual_entries[horse_no].finish_pos, race.grade)
+                # 各パターンで使った脚質をそのまま持たせる（予測脚質を使うパターンは
+                # 予測脚質、確定脚質を使うパターンは確定脚質）。
                 values = (
-                    (forecast_samples, forecast_scores[predicted_style]),
-                    (actual_pace_samples, actual_pace_scores[predicted_style]),
-                    (actual_style_samples, actual_style_scores[actual_style]),
-                    (oracle_samples, oracle_scores[actual_style]),
+                    (forecast_samples, forecast_scores[predicted_style], predicted_style),
+                    (actual_pace_samples, actual_pace_scores[predicted_style], predicted_style),
+                    (actual_style_samples, actual_style_scores[actual_style], actual_style),
+                    (oracle_samples, oracle_scores[actual_style], actual_style),
                 )
-                for samples, score in values:
+                for samples, score, sample_style in values:
                     samples.append(
                         StyleAdvantageSample(
                             race_key=race_key,
                             horse_no=horse_no,
                             score=score,
                             good_run=good_run,
+                            running_style=sample_style,
                         )
                     )
             n_races += 1
