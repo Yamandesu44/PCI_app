@@ -50,12 +50,26 @@ class StyleAdvantageWeights:
     escape_crowd_penalty: float = 6.0
     score_min: float = 5.0
     score_max: float = 95.0
+    # 先行・差しの増幅率。既定1.0は従来の暗黙値と同じで、挙動は変わらない。
+    # 実測ではペース感応度が脚質間で最大6倍以上違うため、候補比較で
+    # 脚質ごとに独立して動かせるようにしている（ADR-0010）。
+    front_gain: float = 1.0
+    stalker_gain: float = 1.0
+    # 自在の増幅率。None は「採点しない」＝現行の挙動（entries は4件）。
+    # 実測では自在が先行と同等に反応するが、採点対象へ加えると公開スキーマが
+    # 変わるため、既定では従来どおり採点しない（ADR-0010 が Proposed のため）。
+    flexible_gain: float | None = None
 
     def __post_init__(self) -> None:
         if self.slope_per_point <= 0:
             raise ValueError("スコア勾配は正の値である必要があります")
-        if self.escape_gain < 1.0 or self.closer_gain < 1.0:
-            raise ValueError("逃げ・追込の増幅率は1.0以上である必要があります")
+        # 増幅率の下限は0。実測（ADR-0010）で差し・追込の感応度は前付けの1/4以下と
+        # 判明しており、「逃げ・追込は必ず1.0以上」という当初の前提は成立しない。
+        gains = (self.escape_gain, self.closer_gain, self.front_gain, self.stalker_gain)
+        if any(gain < 0 for gain in gains):
+            raise ValueError("脚質ごとの増幅率は0以上である必要があります")
+        if self.flexible_gain is not None and self.flexible_gain < 0:
+            raise ValueError("自在の増幅率は0以上である必要があります")
         if self.escape_crowd_penalty < 0:
             raise ValueError("逃げ競合の減点は0以上である必要があります")
         if not 0 <= self.score_min < self.score_max <= 100:
@@ -133,12 +147,26 @@ def build_style_advantage(
         escape_score = max(config.score_min, escape_score - crowd_penalty)
 
     closer_score = _score(-config.closer_gain)
-    entries = (
+    scored = [
         StyleAdvantageEntry(style=RunningStyleLabel.ESCAPE, score=round(escape_score, 1)),
-        StyleAdvantageEntry(style=RunningStyleLabel.FRONT, score=round(_score(1.0), 1)),
-        StyleAdvantageEntry(style=RunningStyleLabel.STALKER, score=round(_score(-1.0), 1)),
+        StyleAdvantageEntry(
+            style=RunningStyleLabel.FRONT, score=round(_score(config.front_gain), 1)
+        ),
+        StyleAdvantageEntry(
+            style=RunningStyleLabel.STALKER, score=round(_score(-config.stalker_gain), 1)
+        ),
         StyleAdvantageEntry(style=RunningStyleLabel.CLOSER, score=round(closer_score, 1)),
-    )
+    ]
+    # 自在はスロー寄りで前付けと同方向に反応する（ADR-0010の実測）。
+    # 採点するかは重み側で決め、既定（None）では従来どおり entries に含めない。
+    if config.flexible_gain is not None:
+        scored.append(
+            StyleAdvantageEntry(
+                style=RunningStyleLabel.FLEXIBLE,
+                score=round(_score(config.flexible_gain), 1),
+            )
+        )
+    entries = tuple(scored)
 
     if delta > 0:
         direction = "前半が緩む想定のため前に行く脚質が有利"

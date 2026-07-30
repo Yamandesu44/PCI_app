@@ -157,3 +157,53 @@ class TestStyleAdvantageWeights:
     def test_invalid_score_range_rejected(self) -> None:
         with pytest.raises(ValueError, match="スコア範囲"):
             StyleAdvantageWeights(score_min=50, score_max=50)
+
+    def test_negative_gain_rejected(self) -> None:
+        with pytest.raises(ValueError, match="増幅率"):
+            StyleAdvantageWeights(closer_gain=-0.1)
+
+    def test_gain_below_one_allowed(self) -> None:
+        """実測で差し・追込の感応度は前付けの1/4以下と判明したため1.0未満を許す。
+
+        当初は「逃げ・追込は必ず1.0以上」と検証していたが、その前提はデータで
+        否定された（ADR-0010）。候補比較で下げられないと検証自体ができない。
+        """
+        weights = StyleAdvantageWeights(closer_gain=0.4, stalker_gain=0.0)
+        assert weights.closer_gain == 0.4
+        assert weights.stalker_gain == 0.0
+
+
+class TestFlexibleScoring:
+    """自在の採点は重みで切り替える（既定は従来どおり採点しない）。"""
+
+    def test_default_keeps_four_entries_without_flexible(self) -> None:
+        advantage = build_style_advantage(55.0, "芝", (ESCAPE, FRONT, STALKER, CLOSER))
+
+        styles = [entry.style for entry in advantage.entries]
+        assert styles == [ESCAPE, FRONT, STALKER, CLOSER]
+        assert RunningStyleLabel.FLEXIBLE not in styles
+
+    def test_flexible_gain_adds_a_fifth_entry(self) -> None:
+        advantage = build_style_advantage(
+            55.0,
+            "芝",
+            (ESCAPE, FRONT, STALKER, CLOSER),
+            weights=StyleAdvantageWeights(flexible_gain=0.8),
+        )
+
+        scores = _scores(advantage)
+        assert RunningStyleLabel.FLEXIBLE in scores
+        # 自在はスロー寄りで前付けと同方向（50超）、かつ先行より弱く反応する。
+        assert 50.0 < scores[RunningStyleLabel.FLEXIBLE] < scores[FRONT]
+
+    def test_per_style_gains_do_not_change_default_output(self) -> None:
+        """front_gain/stalker_gain の既定値が従来の暗黙値と一致することを固定する。"""
+        base = build_style_advantage(56.0, "ダート", (ESCAPE, FRONT, STALKER, CLOSER))
+        explicit = build_style_advantage(
+            56.0,
+            "ダート",
+            (ESCAPE, FRONT, STALKER, CLOSER),
+            weights=StyleAdvantageWeights(front_gain=1.0, stalker_gain=1.0),
+        )
+
+        assert _scores(base) == _scores(explicit)

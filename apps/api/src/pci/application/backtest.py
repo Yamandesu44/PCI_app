@@ -54,7 +54,7 @@ from pci.domain.pace.rpci_forecast import (
     classify_pace,
 )
 from pci.domain.pace.running_style import RunningStyleLabel
-from pci.domain.pace.style_advantage import build_style_advantage
+from pci.domain.pace.style_advantage import StyleAdvantageWeights, build_style_advantage
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
@@ -265,6 +265,24 @@ class StyleAdvantageBand:
     @property
     def good_rate(self) -> float:
         return self.good_runs / self.n if self.n else 0.0
+
+
+@dataclass(frozen=True)
+class StyleAdvantageProfile:
+    """実DB比較に使う脚質別有利度の候補係数。本番設定は書き換えない。"""
+
+    name: str
+    description: str
+    # None は現行（DEFAULT_STYLE_ADVANTAGE_WEIGHTS）を意味する。
+    weights: StyleAdvantageWeights | None
+
+
+@dataclass(frozen=True)
+class StyleAdvantageProfileResult:
+    """候補係数を同一レース集合へ適用した結果。"""
+
+    profile: StyleAdvantageProfile
+    lift: StyleAdvantageLift | None
 
 
 @dataclass(frozen=True)
@@ -717,6 +735,114 @@ def collect_pace_style_matrix(
     )
 
 
+DEFAULT_STYLE_ADVANTAGE_PROFILES: tuple[StyleAdvantageProfile, ...] = (
+    StyleAdvantageProfile(
+        name="current",
+        description="現行（前後対称・自在は採点なし）",
+        weights=None,
+    ),
+    StyleAdvantageProfile(
+        name="closer-weak",
+        description="差し追込の増幅だけ実測へ寄せる（自在は据え置き）",
+        weights=StyleAdvantageWeights(stalker_gain=0.0, closer_gain=0.4),
+    ),
+    StyleAdvantageProfile(
+        name="flexible-only",
+        description="自在の採点だけ追加（前後の係数は現行のまま）",
+        weights=StyleAdvantageWeights(flexible_gain=0.8),
+    ),
+    StyleAdvantageProfile(
+        name="measured",
+        description="ADR-0010の実測示唆値（逃1.3/先1.0/自在0.8/差0.0/追0.4）",
+        weights=StyleAdvantageWeights(
+            escape_gain=1.3,
+            front_gain=1.0,
+            stalker_gain=0.0,
+            closer_gain=0.4,
+            flexible_gain=0.8,
+        ),
+    ),
+)
+
+
+def compare_style_advantage_profiles(
+    targets: Iterable[Race],
+    repo: RaceRepository,
+    profiles: Iterable[StyleAdvantageProfile] = DEFAULT_STYLE_ADVANTAGE_PROFILES,
+) -> list[StyleAdvantageProfileResult]:
+    """候補係数を同一レース集合へ適用し、有利度の分離力を比べる。候補は自動採用しない。"""
+    races = list(targets)
+    results: list[StyleAdvantageProfileResult] = []
+    for profile in profiles:
+        samples = collect_actual_style_advantage_samples(races, repo, weights=profile.weights)
+        results.append(
+            StyleAdvantageProfileResult(
+                profile=profile,
+                lift=summarize_style_advantage(samples),
+            )
+        )
+    return results
+
+
+def _is_monotonic(bands: tuple[StyleAdvantageBand, ...]) -> bool:
+    """帯の好走率が不利→有利へ単調非減少か。頭数0の帯は判定から除く。"""
+    rates = [band.good_rate for band in bands if band.n > 0]
+    return all(a <= b for a, b in zip(rates, rates[1:], strict=False))
+
+
+def format_style_advantage_profile_comparison(
+    results: list[StyleAdvantageProfileResult],
+) -> str:
+    """候補係数の比較結果をCLI向けに整形する。"""
+    lines = [
+        "=" * 88,
+        "脚質別有利度の係数候補比較（候補は自動採用しません）",
+        "※ 実績ペース・確定脚質で採点し直した結果。単調性は帯別好走率が不利→有利で崩れないこと",
+        "-" * 88,
+        f"  {_pad_display('候補', 16)}{_pad_display('好走率差（現行差）', 20)}"
+        f"{_pad_display('相関', 10)}{_pad_display('前付け単調', 14)}"
+        f"{_pad_display('差し追込単調', 14)}",
+    ]
+    baseline_gap: float | None = None
+    for result in results:
+        lift = result.lift
+        if lift is None:
+            lines.append(f"  {_pad_display(result.profile.name, 16)}有効サンプルなし")
+            continue
+        if baseline_gap is None:
+            baseline_gap = lift.rate_gap
+        delta = lift.rate_gap - baseline_gap
+        by_label = {group.label: group for group in lift.style_groups}
+        front = by_label.get("前付け（逃げ・先行）")
+        closer = by_label.get("差し追込")
+        front_txt = "○" if front and _is_monotonic(front.bands) else "×"
+        closer_txt = "○" if closer and _is_monotonic(closer.bands) else "×"
+        lines.append(
+            f"  {_pad_display(result.profile.name, 16)}"
+            f"{_pad_display(f'{lift.rate_gap:+.1%} ({delta:+.1%})', 20)}"
+            f"{_pad_display(f'{lift.point_biserial:+.3f}', 10)}"
+            f"{_pad_display(front_txt, 14)}{_pad_display(closer_txt, 14)}"
+        )
+    lines.append("-" * 88)
+    for result in results:
+        lines.append(f"  {result.profile.name}: {result.profile.description}")
+    lines.append("=" * 88)
+    return "\n".join(lines)
+
+
+def style_advantage_profiles_to_dict(
+    results: list[StyleAdvantageProfileResult],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": result.profile.name,
+            "description": result.profile.description,
+            "lift": style_advantage_lift_to_dict(result.lift),
+        }
+        for result in results
+    ]
+
+
 def format_pace_style_matrix(matrix: PaceStyleMatrix | None) -> str:
     """実績ペース×確定脚質の素の好走率をCLI向けの表に整形する。"""
     if matrix is None:
@@ -863,9 +989,15 @@ def summarize_style_advantage(
 
 
 def collect_actual_style_advantage_samples(
-    targets: Iterable[Race], repo: RaceRepository
+    targets: Iterable[Race],
+    repo: RaceRepository,
+    weights: StyleAdvantageWeights | None = None,
 ) -> list[StyleAdvantageSample]:
-    """実績ペース・確定脚質で、脚質有利度ルール単体の理論上限を検証する。"""
+    """実績ペース・確定脚質で、脚質有利度ルール単体の理論上限を検証する。
+
+    `weights`を渡すと候補係数で採点し直す。同じ対象レースで現行と候補を
+    比べるために使う（本番の重みは書き換えない）。
+    """
     samples: list[StyleAdvantageSample] = []
     for race in targets:
         if race.rpci_actual is None:
@@ -885,6 +1017,7 @@ def collect_actual_style_advantage_samples(
             race.rpci_actual,
             race.track_type,
             tuple(styles_by_horse.values()),
+            weights=weights,
         )
         scores = {entry.style: entry.score for entry in advantage.entries}
         for entry in entries:

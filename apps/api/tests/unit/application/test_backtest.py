@@ -36,6 +36,7 @@ from pci.application.backtest import (
     compare_ability_weight_reports,
     compare_pai_weight_reports,
     compare_rule_weight_reports,
+    compare_style_advantage_profiles,
     format_ability_weight_comparison,
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
@@ -44,6 +45,7 @@ from pci.application.backtest import (
     format_report,
     format_rule_weight_comparison,
     format_style_advantage_attribution,
+    format_style_advantage_profile_comparison,
     group_races_by_track,
     pai_weight_comparisons_to_dict,
     report_to_dict,
@@ -338,6 +340,84 @@ class TestSummarizeStyleAdvantage:
         assert result.advantaged_rate == 1.0
         assert result.disadvantaged_rate == 0.0
         assert "診断専用" in format_actual_style_advantage_validation(result)
+
+
+class TestStyleAdvantageProfileComparison:
+    @staticmethod
+    def _seed(repo: FakeRaceRepository, race_key: str, rpci_actual: float) -> Race:
+        race = Race(
+            race_key=RaceKey(race_key),
+            race_date=datetime.date(2026, 1, 15),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=5,
+            status=RaceStatus.RESULT,
+            rpci_actual=rpci_actual,
+        )
+        repo.save_race(race)
+        styles = (
+            RunningStyleLabel.ESCAPE,
+            RunningStyleLabel.FRONT,
+            RunningStyleLabel.STALKER,
+            RunningStyleLabel.CLOSER,
+            RunningStyleLabel.FLEXIBLE,
+        )
+        for horse_no, style in enumerate(styles, start=1):
+            repo.save_entry(
+                RaceEntry(
+                    race_key=race.race_key,
+                    horse_no=horse_no,
+                    frame_no=horse_no,
+                    ketto_num=f"H{race_key}{horse_no}",
+                    weight=480.0,
+                    jockey_code="J001",
+                    trainer_code="T001",
+                    finish_pos=horse_no,
+                    running_style=str(style),
+                )
+            )
+        return race
+
+    def test_current_profile_leaves_flexible_unscored(self) -> None:
+        repo = FakeRaceRepository()
+        race = self._seed(repo, "2026011505010101", 55.0)
+
+        results = compare_style_advantage_profiles([race], repo)
+
+        by_name = {r.profile.name: r for r in results}
+        current = by_name["current"].lift
+        assert current is not None
+        # 自在は現行では採点されないため、サンプルに現れない。
+        assert all(s.label != "自在" for s in current.style_groups)
+        assert current.n == 4
+
+    def test_flexible_profile_scores_the_extra_style(self) -> None:
+        repo = FakeRaceRepository()
+        race = self._seed(repo, "2026011505010102", 55.0)
+
+        results = compare_style_advantage_profiles([race], repo)
+
+        by_name = {r.profile.name: r for r in results}
+        flexible = by_name["flexible-only"].lift
+        assert flexible is not None
+        # 自在の1頭が加わり、現行の4頭から5頭になる。
+        assert flexible.n == 5
+
+    def test_comparison_output_lists_every_candidate(self) -> None:
+        repo = FakeRaceRepository()
+        races = [
+            self._seed(repo, "2026011505010103", 55.0),
+            self._seed(repo, "2026011505010104", 45.0),
+        ]
+
+        text = format_style_advantage_profile_comparison(
+            compare_style_advantage_profiles(races, repo)
+        )
+
+        for name in ("current", "closer-weak", "flexible-only", "measured"):
+            assert name in text
+        assert "自動採用しません" in text
 
 
 class TestPaceStyleMatrix:
