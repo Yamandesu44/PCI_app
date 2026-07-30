@@ -256,10 +256,11 @@ class TestSummarizeStyleAdvantage:
 
         assert result is not None
         by_label = {group.label: group for group in result.style_groups}
-        assert set(by_label) == {"前付け（逃げ・先行）", "差し追込"}
-        # 自在は前付けにも差し追込にも入らない
+        assert set(by_label) == {"前付け（逃げ・先行）", "差し追込", "自在"}
+        # 自在は前付けにも差し追込にも入らず、独立したグループになる
         assert by_label["前付け（逃げ・先行）"].n == 2
         assert by_label["差し追込"].n == 2
+        assert by_label["自在"].n == 1
         assert by_label["前付け（逃げ・先行）"].baseline_rate == 1.0
         assert by_label["差し追込"].baseline_rate == 0.0
         # 全体の帯では両者が混ざり、有利帯の好走率は50%に相殺される

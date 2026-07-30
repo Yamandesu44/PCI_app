@@ -743,8 +743,15 @@ DEFAULT_STYLE_ADVANTAGE_PROFILES: tuple[StyleAdvantageProfile, ...] = (
     ),
     StyleAdvantageProfile(
         name="closer-weak",
-        description="差し追込の増幅だけ実測へ寄せる（自在は据え置き）",
+        description="差し追込の増幅だけ実測へ寄せる（差しは0＝常に互角）",
         weights=StyleAdvantageWeights(stalker_gain=0.0, closer_gain=0.4),
+    ),
+    StyleAdvantageProfile(
+        # stalker_gain=0 だと差しが全頭スコア50へ潰れ、帯がひとつに集中して
+        # 単調性を判定できない。差しを動かしたまま弱める案も並べて比べる。
+        name="closer-mild",
+        description="差し追込を弱めるが差しも動かす（差0.3/追0.5）",
+        weights=StyleAdvantageWeights(stalker_gain=0.3, closer_gain=0.5),
     ),
     StyleAdvantageProfile(
         name="flexible-only",
@@ -800,8 +807,7 @@ def format_style_advantage_profile_comparison(
         "※ 実績ペース・確定脚質で採点し直した結果。単調性は帯別好走率が不利→有利で崩れないこと",
         "-" * 88,
         f"  {_pad_display('候補', 16)}{_pad_display('好走率差（現行差）', 20)}"
-        f"{_pad_display('相関', 10)}{_pad_display('前付け単調', 14)}"
-        f"{_pad_display('差し追込単調', 14)}",
+        f"{_pad_display('相関', 10)}{_pad_display('単調 前/後/自在', 18)}",
     ]
     baseline_gap: float | None = None
     for result in results:
@@ -813,15 +819,16 @@ def format_style_advantage_profile_comparison(
             baseline_gap = lift.rate_gap
         delta = lift.rate_gap - baseline_gap
         by_label = {group.label: group for group in lift.style_groups}
-        front = by_label.get("前付け（逃げ・先行）")
-        closer = by_label.get("差し追込")
-        front_txt = "○" if front and _is_monotonic(front.bands) else "×"
-        closer_txt = "○" if closer and _is_monotonic(closer.bands) else "×"
+        marks = []
+        for label in ("前付け（逃げ・先行）", "差し追込", "自在"):
+            group = by_label.get(label)
+            # 採点していない脚質は「－」。×（非単調）と区別する。
+            marks.append("－" if group is None else ("○" if _is_monotonic(group.bands) else "×"))
         lines.append(
             f"  {_pad_display(result.profile.name, 16)}"
             f"{_pad_display(f'{lift.rate_gap:+.1%} ({delta:+.1%})', 20)}"
             f"{_pad_display(f'{lift.point_biserial:+.3f}', 10)}"
-            f"{_pad_display(front_txt, 14)}{_pad_display(closer_txt, 14)}"
+            f"{_pad_display(' '.join(marks), 18)}"
         )
     lines.append("-" * 88)
     for result in results:
@@ -905,6 +912,9 @@ _STYLE_ADVANTAGE_GROUPS: tuple[tuple[str, frozenset[RunningStyleLabel]], ...] = 
         "差し追込",
         frozenset({RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER}),
     ),
+    # 自在を採点する候補では、どちらのグループにも属さないまま全体帯にだけ現れ、
+    # 単調性を確認できなくなる。空なら表示側で落ちるので既定候補でも害はない。
+    ("自在", frozenset({RunningStyleLabel.FLEXIBLE})),
 )
 
 _STYLE_ADVANTAGE_BANDS: tuple[tuple[str, float, float], ...] = (
