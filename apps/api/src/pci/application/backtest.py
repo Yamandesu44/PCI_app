@@ -754,6 +754,13 @@ DEFAULT_STYLE_ADVANTAGE_PROFILES: tuple[StyleAdvantageProfile, ...] = (
         weights=StyleAdvantageWeights(stalker_gain=0.3, closer_gain=0.5),
     ),
     StyleAdvantageProfile(
+        # 「後方脚質には順序づけられるシグナルが無い」という実測の論理的な終点。
+        # 差し・追込を常に互角(50)とし、有利不利の主張を前付けだけに限る。
+        name="back-neutral",
+        description="差し・追込を常に互角にする（後方は順序づけない）",
+        weights=StyleAdvantageWeights(stalker_gain=0.0, closer_gain=0.0),
+    ),
+    StyleAdvantageProfile(
         name="flexible-only",
         description="自在の採点だけ追加（前後の係数は現行のまま）",
         weights=StyleAdvantageWeights(flexible_gain=0.8),
