@@ -72,17 +72,20 @@ from pci.application.backtest import (
     ability_weight_comparisons_to_dict,
     build_actual_style_advantage_breakdown,
     collect_actual_style_advantage_samples,
+    collect_pace_style_matrix,
     compare_ability_weight_reports,
     compare_pai_weight_reports,
     compare_rule_weight_reports,
     format_ability_weight_comparison,
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
+    format_pace_style_matrix,
     format_pai_weight_comparison,
     format_report,
     format_rule_weight_comparison,
     format_style_advantage_attribution,
     group_races_by_track,
+    pace_style_matrix_to_dict,
     pai_weight_comparisons_to_dict,
     report_to_dict,
     rule_weight_comparisons_to_dict,
@@ -208,6 +211,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="予測/実績ペースと予測/確定脚質の4パターンで誤差要因を診断する",
     )
+    diagnostic_mode.add_argument(
+        "--pace-style-matrix",
+        action="store_true",
+        help="実績ペース×確定脚質の素の好走率を出す（有利度ルールを介さない一次データ）",
+    )
     p.add_argument(
         "--style-breakdown",
         action="append",
@@ -306,6 +314,19 @@ def main() -> None:
     print(f"対象 {len(targets)} レースでバックテストを実行します{filter_note}…\n")
 
     repo = SqlAlchemyRaceRepository(session)
+    if args.pace_style_matrix:
+        matrix = collect_pace_style_matrix(targets, repo)
+        print(format_pace_style_matrix(matrix))
+        if args.output:
+            _write_diagnostic_output(
+                args.output,
+                {
+                    "mode": "pace_style_matrix",
+                    "pace_style_matrix": pace_style_matrix_to_dict(matrix),
+                },
+            )
+        return
+
     if args.validate_style_advantage:
         samples = collect_actual_style_advantage_samples(targets, repo)
         summary = summarize_style_advantage(samples)

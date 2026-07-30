@@ -268,6 +268,43 @@ class StyleAdvantageBand:
 
 
 @dataclass(frozen=True)
+class PaceStyleCell:
+    """ある脚質×あるペース区分の好走実績。"""
+
+    pace_label: str
+    n: int
+    good_runs: int
+
+    @property
+    def good_rate(self) -> float:
+        return self.good_runs / self.n if self.n else 0.0
+
+
+@dataclass(frozen=True)
+class PaceStyleRow:
+    """ある脚質の、ペース区分別の好走実績。"""
+
+    style: str
+    n: int
+    good_runs: int
+    cells: tuple[PaceStyleCell, ...]
+
+    @property
+    def good_rate(self) -> float:
+        return self.good_runs / self.n if self.n else 0.0
+
+
+@dataclass(frozen=True)
+class PaceStyleMatrix:
+    """実績ペース×確定脚質の素の好走率。有利度スコアを介さない一次データ。"""
+
+    n_races: int
+    n_horses: int
+    baseline_rate: float
+    rows: tuple[PaceStyleRow, ...]
+
+
+@dataclass(frozen=True)
 class StyleAdvantageGroupBands:
     """脚質グループ（前付け／差し追込）ごとの帯別集計。"""
 
@@ -603,6 +640,116 @@ def summarize_integrated_accuracy(
         if good_runs
         else 0.0,
     )
+
+
+def collect_pace_style_matrix(
+    targets: Iterable[Race],
+    repo: RaceRepository,
+    rule_weights: RuleWeights = DEFAULT_RULE_WEIGHTS,
+) -> PaceStyleMatrix | None:
+    """実績ペース×確定脚質で、素の好走率を集計する。
+
+    `--validate-style-advantage`は「現行ルールが当たっているか」を測るが、
+    ここでは有利度スコアを介さず「どの脚質が、どのペースで走るのか」そのものを測る。
+    ルールを作り直す際は、ルールの答え合わせではなくこちらが土台になる。
+    自在は有利度スコアの対象外（_SCOREABLE_STYLES）だが、出走の3割超を占め
+    前が苦しくなった分の受け皿になっている可能性があるため、ここでは対象に含める。
+    """
+    styles = (
+        RunningStyleLabel.ESCAPE,
+        RunningStyleLabel.FRONT,
+        RunningStyleLabel.STALKER,
+        RunningStyleLabel.CLOSER,
+        RunningStyleLabel.FLEXIBLE,
+    )
+    labels = (PaceLabel.HIGH, PaceLabel.AVERAGE, PaceLabel.SLOW)
+    # (脚質, ペース) -> [頭数, 好走数]
+    counts: dict[tuple[RunningStyleLabel, PaceLabel], list[int]] = {
+        (style, label): [0, 0] for style in styles for label in labels
+    }
+    n_races = 0
+    for race in targets:
+        if race.rpci_actual is None:
+            continue
+        pace = classify_pace(race.rpci_actual, race.track_type, rule_weights)
+        counted = False
+        for entry in repo.find_entries(race.race_key):
+            if entry.running_style is None:
+                continue
+            try:
+                style = RunningStyleLabel(entry.running_style)
+            except ValueError:
+                continue
+            slot = counts.get((style, pace))
+            if slot is None:
+                continue
+            slot[0] += 1
+            slot[1] += int(is_good_run(entry.finish_pos, race.grade))
+            counted = True
+        if counted:
+            n_races += 1
+
+    total_n = sum(slot[0] for slot in counts.values())
+    if total_n == 0:
+        return None
+    total_good = sum(slot[1] for slot in counts.values())
+    rows = tuple(
+        PaceStyleRow(
+            style=style.value,
+            n=sum(counts[(style, label)][0] for label in labels),
+            good_runs=sum(counts[(style, label)][1] for label in labels),
+            cells=tuple(
+                PaceStyleCell(
+                    pace_label=label.value,
+                    n=counts[(style, label)][0],
+                    good_runs=counts[(style, label)][1],
+                )
+                for label in labels
+            ),
+        )
+        for style in styles
+    )
+    return PaceStyleMatrix(
+        n_races=n_races,
+        n_horses=total_n,
+        baseline_rate=round(total_good / total_n, 4),
+        rows=rows,
+    )
+
+
+def format_pace_style_matrix(matrix: PaceStyleMatrix | None) -> str:
+    """実績ペース×確定脚質の素の好走率をCLI向けの表に整形する。"""
+    if matrix is None:
+        return "実績ペース×脚質: 有効サンプルなし"
+    lines = [
+        "=" * 78,
+        "実績ペース × 確定脚質 の素の好走率（有利度スコアを介さない）",
+        "※ ルールの答え合わせではなく、ルールを作り直すための土台",
+        f"対象: {matrix.n_races:,}レース / {matrix.n_horses:,}頭"
+        f" / 全体好走率 {matrix.baseline_rate:.1%}",
+        "-" * 78,
+        f"  {_pad_display('脚質', 8)}{_pad_display('頭数', 9)}{_pad_display('自脚質の平均', 14)}"
+        f"{_pad_display('ハイ', 16)}{_pad_display('平均', 16)}{_pad_display('スロー', 16)}",
+    ]
+    for row in matrix.rows:
+        if row.n == 0:
+            continue
+        cells = ""
+        for cell in row.cells:
+            if cell.n == 0:
+                cells += _pad_display("-", 16)
+                continue
+            # 自脚質の平均と比べることで「この脚質がどのペースで走るか」だけを取り出す。
+            ratio = cell.good_rate / row.good_rate if row.good_rate else 0.0
+            cells += _pad_display(f"{cell.good_rate:.1%} ({ratio:.2f}x)", 16)
+        lines.append(
+            f"  {_pad_display(row.style, 8)}{_pad_display(f'{row.n:,}', 9)}"
+            f"{_pad_display(f'{row.good_rate:.1%}', 14)}{cells}"
+        )
+    lines.append("-" * 78)
+    lines.append("※ 括弧内はその脚質自身の平均に対する比。1.00xから離れるほどペースの影響が大きい")
+    lines.append("=" * 78)
+    return "\n".join(lines)
 
 
 def _style_advantage_band_label(score: float) -> str:
@@ -1183,6 +1330,34 @@ def style_advantage_lift_to_dict(
                 "bands": [_style_advantage_band_to_dict(band) for band in group.bands],
             }
             for group in lift.style_groups
+        ],
+    }
+
+
+def pace_style_matrix_to_dict(matrix: PaceStyleMatrix | None) -> dict[str, Any] | None:
+    if matrix is None:
+        return None
+    return {
+        "n_races": matrix.n_races,
+        "n_horses": matrix.n_horses,
+        "baseline_rate": matrix.baseline_rate,
+        "rows": [
+            {
+                "style": row.style,
+                "n": row.n,
+                "good_runs": row.good_runs,
+                "good_rate": round(row.good_rate, 4),
+                "cells": [
+                    {
+                        "pace_label": cell.pace_label,
+                        "n": cell.n,
+                        "good_runs": cell.good_runs,
+                        "good_rate": round(cell.good_rate, 4),
+                    }
+                    for cell in row.cells
+                ],
+            }
+            for row in matrix.rows
         ],
     }
 
