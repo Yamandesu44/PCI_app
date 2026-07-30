@@ -437,14 +437,59 @@ describe("styleAdvantageScores", () => {
     expect(scores[3].value).toBe(33);
   });
 
-  it("スコアを 有利/やや有利/互角/やや不利/不利 の言葉へ変換する", () => {
-    const verdicts = styleAdvantageScores(advantage).map((s) => s.verdict);
-    expect(verdicts).toEqual(["有利", "やや有利", "やや不利", "不利"]);
+  it("前付けのスコアを 有利/やや有利/互角/やや不利/不利 の言葉へ変換する", () => {
+    const verdicts = styleAdvantageScores({
+      ...advantage,
+      entries: [
+        { style: "逃げ", score: 72.0 },
+        { style: "先行", score: 62.0 },
+      ],
+    }).map((s) => s.verdict);
+    expect(verdicts).toEqual(["有利", "やや有利"]);
+
     const even = styleAdvantageScores({
       ...advantage,
       entries: [{ style: "先行", score: 50.0 }],
     });
     expect(even[0].verdict).toBe("互角");
+
+    const unfavorable = styleAdvantageScores({
+      ...advantage,
+      entries: [
+        { style: "先行", score: 38.0 },
+        { style: "逃げ", score: 32.6 },
+      ],
+    }).map((s) => s.verdict);
+    expect(unfavorable).toEqual(["やや不利", "不利"]);
+  });
+
+  it("差し・追込は展開から有利不利を断定しない", () => {
+    // 実績検証（docs/SPEC.md §3.4）で、差し・追込は有利度スコアと好走率の
+    // 関係が確認できなかった。高スコアでも「有利」と表示してはいけない。
+    const scores = styleAdvantageScores({
+      ...advantage,
+      entries: [
+        { style: "差し", score: 88.0 },
+        { style: "追込", score: 12.0 },
+      ],
+    });
+
+    expect(scores.map((s) => s.verdict)).toEqual(["展開の影響は小さい", "展開の影響は小さい"]);
+    expect(scores.every((s) => s.isDirectional)).toBe(false);
+    expect(scores[0].note).toContain("決め手");
+  });
+
+  it("前付けは断定してよい脚質として印を付ける", () => {
+    const scores = styleAdvantageScores({
+      ...advantage,
+      entries: [
+        { style: "逃げ", score: 72.0 },
+        { style: "先行", score: 62.0 },
+      ],
+    });
+
+    expect(scores.every((s) => s.isDirectional)).toBe(true);
+    expect(scores.every((s) => s.note === null)).toBe(true);
   });
 
   it("開催条件別の参考扱いと理由を表示用へ変換する", () => {

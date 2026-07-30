@@ -25,7 +25,7 @@ export interface PaceMeta {
 const PACE_META: Record<string, PaceMeta> = {
   ハイ: {
     tone: "high",
-    summary: "前半から速い流れ。差し・追い込みが届きやすい展開です。",
+    summary: "前半から速い流れ。前に行く馬には厳しい展開です。",
     color: "#2563eb",
   },
   平均: {
@@ -76,10 +76,10 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     level: "high",
     label: "ハイ",
     symbol: "H",
-    description: "前半が速い流れ。持続力と差し脚が活きやすい。",
+    description: "前半が速い流れ。前に行く馬は持続力を問われる。",
     beginnerLabel: "速い流れ",
-    beginnerSummary: "前半から流れそうです。前の馬が苦しくなれば、後ろから運ぶ馬にも出番があります。",
-    bettingHint: "長く脚を使える馬や、流れに乗って差せる馬を重視したいです。",
+    beginnerSummary: "前半から流れそうです。前で運ぶ馬は苦しくなりやすい展開です。",
+    bettingHint: "前に行く馬は苦しくなりやすい点を割り引いて見たいです。",
     color: "#2563eb",
   },
   average: {
@@ -542,6 +542,13 @@ export interface StyleAdvantageScore {
   description: string;
   /** 有利/互角/不利の言葉ラベル（数字が苦手なユーザー向け）。 */
   verdict: string;
+  /**
+   * 展開から有利不利を断定してよい脚質か。
+   * 差し・追込は実績検証で展開との関係が確認できなかったため false（下記 NOTE 参照）。
+   */
+  isDirectional: boolean;
+  /** 断定しない理由。isDirectional=true のときは null。 */
+  note: string | null;
 }
 
 export interface StyleAdvantageReliabilityMeta {
@@ -570,14 +577,37 @@ function styleVerdict(score: number): string {
  * 以前は web 側でその脚質の最大PAIを流用しており、スコアが高止まりして
  * 差が出なかった。算出はドメイン層（想定RPCIの中立点からの乖離）へ移した。
  */
+/**
+ * 展開から有利不利を断定してよい脚質。
+ *
+ * 2022〜2026年の全確定レース（芝63,646頭・ダート70,942頭）で検証したところ、
+ * 前付け（逃げ・先行）は有利度が上がるほど好走率が上がる（芝0.84x→1.18x、
+ * ダート0.94x→1.14x）一方、差し・追込は芝でほぼ平坦（0.98〜1.03x）、
+ * ダートは最上位帯で逆行した。「スローなら前が楽」は成立するが
+ * 「ハイなら差しに向く」は成立せず、届くかどうかは展開よりその馬の決め手に依存する。
+ * 詳細は docs/SPEC.md §3.4。
+ */
+const DIRECTIONAL_STYLES = new Set(["逃げ", "先行"]);
+
+const NON_DIRECTIONAL_VERDICT = "展開の影響は小さい";
+
+const NON_DIRECTIONAL_NOTE =
+  "差し・追込は、展開よりも各馬の決め手が結果を左右します。過去5年の実績でも、" +
+  "展開の向き不向きと成績のあいだに関係は見られませんでした。";
+
 export function styleAdvantageScores(advantage: StyleAdvantage): StyleAdvantageScore[] {
-  return advantage.entries.map((entry) => ({
-    key: entry.style,
-    label: entry.style,
-    value: Math.round(entry.score),
-    description: STYLE_DESCRIPTIONS[entry.style] ?? "",
-    verdict: styleVerdict(entry.score),
-  }));
+  return advantage.entries.map((entry) => {
+    const isDirectional = DIRECTIONAL_STYLES.has(entry.style);
+    return {
+      key: entry.style,
+      label: entry.style,
+      value: Math.round(entry.score),
+      description: STYLE_DESCRIPTIONS[entry.style] ?? "",
+      verdict: isDirectional ? styleVerdict(entry.score) : NON_DIRECTIONAL_VERDICT,
+      isDirectional,
+      note: isDirectional ? null : NON_DIRECTIONAL_NOTE,
+    };
+  });
 }
 
 /** APIが判定した開催条件別の信頼度を、注意表示用の言葉へ変換する。 */

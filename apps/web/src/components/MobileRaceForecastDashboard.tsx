@@ -453,11 +453,18 @@ export function MobileRaceForecastDashboard({
                       <span className="font-semibold text-slate-700">
                         {score.label} ・ {score.verdict}
                       </span>
-                      <span className="font-mono font-semibold text-slate-600">{score.value}</span>
+                      {score.isDirectional ? (
+                        <span className="font-mono font-semibold text-slate-600">{score.value}</span>
+                      ) : null}
                     </div>
-                    <Progress value={score.value} className="mt-1.5" />
+                    {score.isDirectional ? <Progress value={score.value} className="mt-1.5" /> : null}
                   </div>
                 ))}
+                {styleScores.some((score) => !score.isDirectional) ? (
+                  <p className="m-0 text-[11px] leading-4 text-muted-foreground">
+                    {styleScores.find((score) => !score.isDirectional)?.note}
+                  </p>
+                ) : null}
               </div>
             </section>
 
