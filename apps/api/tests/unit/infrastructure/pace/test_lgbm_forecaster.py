@@ -19,6 +19,7 @@ from pci.infrastructure.pace.lgbm_forecaster import (
     FEATURE_NAMES_V2,
     FEATURE_NAMES_V3,
     FEATURE_NAMES_V4,
+    FEATURE_NAMES_V5,
     MODEL_VERSION,
     MODEL_VERSION_DIRT,
     MODEL_VERSION_DIRT_V2,
@@ -29,6 +30,7 @@ from pci.infrastructure.pace.lgbm_forecaster import (
     MODEL_VERSION_TURF_V2,
     MODEL_VERSION_TURF_V3,
     MODEL_VERSION_TURF_V4,
+    MODEL_VERSION_TURF_V5_FEATURES,
     LightGBMRpciForecaster,
     SplitLightGBMRpciForecaster,
     _feature_names_for_booster,
@@ -51,6 +53,7 @@ def _ctx(
     cond: str | None = None,
     field_front_pace_samples: tuple[FrontRunnerPaceSample, ...] = (),
     historical_lap_samples: tuple[HistoricalLapSample, ...] = (),
+    race_month: int | None = None,
 ) -> RaceContext:
     return RaceContext(
         distance_m=distance_m,
@@ -60,6 +63,7 @@ def _ctx(
         venue_code=venue_code,
         field_front_pace_samples=field_front_pace_samples,
         historical_lap_samples=historical_lap_samples,
+        race_month=race_month,
     )
 
 
@@ -153,13 +157,46 @@ class TestBuildFeatures:
         assert len(feats) == len(FEATURE_NAMES_V4)
         assert feats[33:] == pytest.approx([2.0, 5.0, 0.5, -1.0, 3.0, 0.5])
 
+    def test_v5_month_features_use_race_month(self) -> None:
+        feats = build_features(
+            _ctx((FRONT,) * 4, race_month=7),
+            FEATURE_NAMES_V5,
+        )
+
+        assert len(feats) == len(FEATURE_NAMES_V5)
+        assert feats[len(FEATURE_NAMES_V4) :] == [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]
+
+    def test_v5_unknown_month_is_all_zero(self) -> None:
+        feats = build_features(_ctx((FRONT,) * 4), FEATURE_NAMES_V5)
+
+        assert feats[len(FEATURE_NAMES_V4) :] == [0.0] * 12
+
 
 class TestFeatureSchemaSelection:
     """モデル内の特徴量数から互換スキーマを選択する。"""
 
     @pytest.mark.parametrize(
         "feature_names",
-        [FEATURE_NAMES, FEATURE_NAMES_V2, FEATURE_NAMES_V3, FEATURE_NAMES_V4],
+        [
+            FEATURE_NAMES,
+            FEATURE_NAMES_V2,
+            FEATURE_NAMES_V3,
+            FEATURE_NAMES_V4,
+            FEATURE_NAMES_V5,
+        ],
     )
     def test_supported_feature_counts(self, feature_names: list[str]) -> None:
         booster = MagicMock()
@@ -182,8 +219,22 @@ class TestFeatureSchemaSelection:
                 MODEL_VERSION_TURF_V2,
                 MODEL_VERSION_TURF_V3,
                 MODEL_VERSION_TURF_V4,
+                MODEL_VERSION_TURF_V5_FEATURES,
             )
             == MODEL_VERSION_TURF_V2
+        )
+
+    def test_v5_feature_schema_uses_v5_model_version(self) -> None:
+        assert (
+            _version_for_feature_names(
+                FEATURE_NAMES_V5,
+                MODEL_VERSION_TURF,
+                MODEL_VERSION_TURF_V2,
+                MODEL_VERSION_TURF_V3,
+                MODEL_VERSION_TURF_V4,
+                MODEL_VERSION_TURF_V5_FEATURES,
+            )
+            == MODEL_VERSION_TURF_V5_FEATURES
         )
 
 

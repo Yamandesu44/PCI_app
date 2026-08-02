@@ -82,6 +82,7 @@ class RaceContext:
     running_styles: tuple[RunningStyleLabel, ...]
     track_condition: str | None = None
     venue_code: str | None = None  # 競馬場コード (jyo_cd "01"〜"10")。LightGBM 特徴量。
+    race_month: int | None = None  # 開催月 (1〜12)。ML v5の季節性特徴量。
     # rule-v2: 逃げ・先行候補の実績ペース傾向。空なら頭数ベース（rule-v1相当）。
     front_pace_samples: tuple[FrontRunnerPaceSample, ...] = ()
     # ML v3候補: 全出走馬の過去走から、前で運んだときのペース傾向を集約する。

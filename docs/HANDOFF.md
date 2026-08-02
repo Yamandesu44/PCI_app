@@ -1,5 +1,78 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-02 (OpenAI Codex → Claude Code) ダートRPCI開催月特徴量の独立評価完了
+
+- 更新日時: 2026-08-02 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `c7dc415`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 現行v4を維持したままダート固有特徴量を分離実装し、期間外バイアスへの効果を評価する。
+
+### 完了した内容
+
+1. 実DB診断で、ダートの月別平均RPCIが`35.7〜44.3`、馬場状態別が`41.7〜42.6`と確認した。
+2. `feature-set=v5`を追加し、v4へ開催月one-hot 12列を加えた。推論時は
+   `ForecastRaceUseCase`が`race.race_date.month`を`RaceContext.race_month`へ渡す。
+3. 2026-06-01より前の7,431レースで`lgbm-dirt-v6-month`を学習した。
+   学習内テストはMAE 2.345、RMSE 3.017、バイアス -0.576。
+4. 2026-06-01以降の同一226レースで評価した。MAE 3.896、バイアス +2.574、
+   展開ラベル的中率77.4%、PAI最上位帯リフト1.24x、有利−不利差+2.0%。
+5. 本番採用を見送った。現行v4比でMAE・分類は改善したが、一次指標のバイアスが
+   `+2.571→+2.574`で改善しなかった。既定モデルと既定パスは変更していない。
+
+### 対象ファイル
+
+- `apps/api/scripts/train_rpci_lgbm.py`
+- `apps/api/src/pci/domain/pace/rpci_forecast.py`
+- `apps/api/src/pci/application/forecast_use_cases.py`
+- `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+- `apps/api/tests/unit/test_train_rpci_lgbm.py`
+- `apps/api/tests/unit/infrastructure/pace/test_lgbm_forecaster.py`
+- `tasks/current.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- v5は候補作成用の特徴量スキーマであり、本番モデルではない。
+- Windows実行機には比較用の`models/rpci_lgbm_dirt_v6_month.txt`と来歴JSONが残るが、Git管理外。
+- 開催月の効果には開催場構成の季節変化も含まれ得る。月×競馬場の交互作用は未実装。
+- 同じ226レースを複数候補の判断に使っているため、次の採用判断は新しい独立期間を推奨する。
+- 期間外バイアス`+2.571`は未解決。既定`rpci_lgbm_dirt_v4.txt`を維持する。
+
+### テスト・検証結果
+
+- `pytest -m 'not integration' -q`: 628 passed、30 deselected
+- `ruff check src tests scripts`: pass
+- `mypy src --strict --python-version 3.12`: 0 issues（65 files）
+- `lint-imports`: グローバルPython・API仮想環境とも`No module named lint_imports`で実行不能
+- 実DB学習: 7,431レース、成功。
+- 独立バックテスト: 226レース、スキップ0。
+- pytestの警告1件はサンドボックスで`.pytest_cache`を作れないことによるもので、結果への影響なし。
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`先頭の開催月特徴量評価
+2. `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`の`FEATURE_NAMES_V5`
+3. `docs/DECISIONS.md`末尾のADR-2026-08-02（開催月特徴量）
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+.venv\Scripts\python.exe -m pytest tests/unit/test_train_rpci_lgbm.py tests/unit/infrastructure/pace/test_lgbm_forecaster.py -q
+```
+
+### 次に実施する具体的な手順
+
+1. 次候補へ進む場合は、`train_rpci_lgbm.py`の`feature-set=v5`を上書きせずv6として分離する。
+2. 月×競馬場を候補にする前に、競馬場・月セルの最低件数を診断し、疎なセルをまとめる規則を決める。
+3. 採用判断には2026-06-01以降226レースだけでなく、新たに蓄積した未使用期間を追加する。
+
 ## 2026-08-02 (OpenAI Codex → Claude Code) ダートRPCI再学習評価完了
 
 - 更新日時: 2026-08-02 11:00 JST

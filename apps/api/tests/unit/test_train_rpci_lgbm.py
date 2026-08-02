@@ -13,6 +13,7 @@ from scripts.train_rpci_lgbm import (
     _HISTORY_JOIN,
     _LAP_FEATURES,
     _LAP_JOIN,
+    _MONTH_FEATURES,
     _QUERY_TEMPLATE,
     _build_label_sample_weights,
     _parse_args,
@@ -60,6 +61,16 @@ def test_v4_lap_query_uses_only_prior_races_and_last_ten_runs() -> None:
     assert "LIMIT 10" in _LAP_JOIN
     assert "COUNT(prior.lap_delta) AS sample_size" in _LAP_JOIN
     assert "AS history_lap_coverage" in _LAP_FEATURES
+
+
+def test_v5_month_query_contains_all_months_in_order() -> None:
+    positions = [
+        _MONTH_FEATURES.index(f"AS month_{month:02d}")
+        for month in range(1, 13)
+    ]
+
+    assert positions == sorted(positions)
+    assert "EXTRACT(MONTH FROM r.race_date)" in _MONTH_FEATURES
 
 
 def test_label_recall_uses_track_specific_thresholds(
@@ -202,6 +213,22 @@ def test_v4_feature_set_requires_explicit_output(
         sys,
         "argv",
         ["train_rpci_lgbm", "--track-type", "dirt", "--feature-set", "v4"],
+    )
+
+    with pytest.raises(SystemExit):
+        _parse_args()
+
+    assert "本番モデルの上書きを防ぐため" in capsys.readouterr().err
+
+
+def test_v5_feature_set_requires_explicit_output(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["train_rpci_lgbm", "--track-type", "dirt", "--feature-set", "v5"],
     )
 
     with pytest.raises(SystemExit):

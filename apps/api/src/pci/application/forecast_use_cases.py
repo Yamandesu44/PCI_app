@@ -154,6 +154,7 @@ class ForecastRaceUseCase:
             running_styles=tuple(p.running_style for p in profiles),
             track_condition=race.track_condition,
             venue_code=race.jyo_cd,
+            race_month=race.race_date.month,
             front_pace_samples=tuple(front_pace_samples),
             field_front_pace_samples=tuple(field_front_pace_samples),
             historical_lap_samples=tuple(historical_lap_samples),

@@ -55,6 +55,7 @@ from pci.infrastructure.pace.lgbm_forecaster import (
     FEATURE_NAMES_V2,
     FEATURE_NAMES_V3,
     FEATURE_NAMES_V4,
+    FEATURE_NAMES_V5,
 )
 
 # ── DB クエリ（FEATURE_NAMES と同じ順序で SELECT する）────────────────────
@@ -113,6 +114,7 @@ _QUERY_TEMPLATE = """\
         CASE WHEN r.jyo_cd = '10' THEN 1.0 ELSE 0.0 END                 AS venue_10,
         {history_features}
         {lap_features}
+        {month_features}
         r.rpci_actual                                                   AS target,
         -- 以降は学習に使わない来歴記録用。race_key が PK なので集約不要。
         r.race_date                                                     AS prov_race_date,
@@ -229,6 +231,21 @@ _LAP_JOIN = """\
     ) lap_hist ON TRUE
 """
 
+_MONTH_FEATURES = """\
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 1 THEN 1.0 ELSE 0.0 END AS month_01,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 2 THEN 1.0 ELSE 0.0 END AS month_02,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 3 THEN 1.0 ELSE 0.0 END AS month_03,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 4 THEN 1.0 ELSE 0.0 END AS month_04,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 5 THEN 1.0 ELSE 0.0 END AS month_05,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 6 THEN 1.0 ELSE 0.0 END AS month_06,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 7 THEN 1.0 ELSE 0.0 END AS month_07,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 8 THEN 1.0 ELSE 0.0 END AS month_08,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 9 THEN 1.0 ELSE 0.0 END AS month_09,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 10 THEN 1.0 ELSE 0.0 END AS month_10,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 11 THEN 1.0 ELSE 0.0 END AS month_11,
+        CASE WHEN EXTRACT(MONTH FROM r.race_date) = 12 THEN 1.0 ELSE 0.0 END AS month_12,
+"""
+
 _TRACK_FILTER: dict[str, str] = {
     "turf": "AND r.track_type = '芝'",
     "dirt": "AND r.track_type = 'ダート'",
@@ -322,9 +339,9 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--feature-set",
-        choices=["v1", "v2", "v3", "v4"],
+        choices=["v1", "v2", "v3", "v4", "v5"],
         default="v1",
-        help="特徴量定義。v4は対象日より前の前付けペース・前後半3F履歴も追加（default: v1）",
+        help="特徴量定義。v5はv4に開催月の季節性を追加（default: v1）",
     )
     p.add_argument(
         "--model-version",
@@ -360,8 +377,8 @@ def main() -> None:
 
     track_filter = _TRACK_FILTER[track_type]
     date_filter = "AND r.race_date < :before_date" if args.before_date else ""
-    uses_history = args.feature_set in {"v3", "v4"}
-    uses_lap_history = args.feature_set == "v4"
+    uses_history = args.feature_set in {"v3", "v4", "v5"}
+    uses_lap_history = args.feature_set in {"v4", "v5"}
     query_sql = text(
         _QUERY_TEMPLATE.format(
             track_filter=track_filter,
@@ -374,6 +391,7 @@ def main() -> None:
                 _LAP_FEATURES if uses_lap_history else _EMPTY_LAP_FEATURES
             ),
             lap_join=_LAP_JOIN if uses_lap_history else "",
+            month_features=_MONTH_FEATURES if args.feature_set == "v5" else "",
         )
     )
 
@@ -400,6 +418,7 @@ def main() -> None:
         "v2": FEATURE_NAMES_V2,
         "v3": FEATURE_NAMES_V3,
         "v4": FEATURE_NAMES_V4,
+        "v5": FEATURE_NAMES_V5,
     }[args.feature_set]
     feature_count = len(feature_names)
 
