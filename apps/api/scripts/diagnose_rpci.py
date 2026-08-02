@@ -34,7 +34,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--by-track-year",
         action="store_true",
-        help="コース種別×年で分布と中立点(style-advantage-v3)の妥当性を診断する",
+        help="コース種別×年で分布と中立点(style-advantage-v4)の妥当性を診断する",
     )
     # 最新年は年途中までしかないため、通年の他年と並べると季節差が年差に化ける。
     # 月で窓を揃えて初めて年同士を対等に比較できる。

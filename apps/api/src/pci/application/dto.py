@@ -114,7 +114,7 @@ class StyleAdvantageEntryOutput:
 
 @dataclass
 class StyleAdvantageOutput:
-    """脚質別の展開有利度（style-advantage-v3）。"""
+    """脚質別の展開有利度（style-advantage-v4）。"""
 
     model_version: str
     reliability: Literal["standard", "reference"] = "standard"

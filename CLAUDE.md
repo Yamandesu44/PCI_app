@@ -213,7 +213,7 @@ cd apps/api && python -m scripts.backtest_forecast --limit 200
 - 0007: フロントエンド構成（Next.js App Router + OpenAPI 型共有）
 - 0008: 展開コメント生成方式（ルールベースNLG + LLM疎結合IF）
 - 0009: ペース指標カラムの配置（core 層 confirmed PCI 埋め込み + mart 層版管理分離）
-- 0010: 脚質別有利度の非対称化と自在の採点（**Proposed** — 実測根拠あり・要判断）
+- 0010: 脚質別有利度は前付けだけ採点（style-advantage-v4・後方脚質は常に互角）
 
 ---
 

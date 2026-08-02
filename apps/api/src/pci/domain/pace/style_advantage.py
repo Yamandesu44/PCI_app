@@ -1,13 +1,19 @@
-"""脚質別の展開有利度（style-advantage-v3）。
+"""脚質別の展開有利度（style-advantage-v4）。
 
 想定RPCIが中立点からどちらへ寄っているかを、脚質（逃/先/差/追）ごとの
 有利・不利スコアへ翻訳する。UIの「展開分析」カードの算出元。
 
 方向性（pci.py / rpci_forecast.py と統一）:
-    スロー寄り（RPCI > 中立） → 前半が緩む → 逃げ・先行が有利、差し・追込が不利
-    ハイ寄り  （RPCI < 中立） → 前傾ラップ → 差し・追込が有利、逃げ・先行が不利
+    スロー寄り（RPCI > 中立） → 前半が緩む → 逃げ・先行が有利
+    ハイ寄り  （RPCI < 中立） → 前傾ラップ → 逃げ・先行が不利
 
-スコアは 50 を「互角」とする 0〜100 の対称尺度。中立点はコース種別ごとの
+v4 で差し・追込は常に互角（50）とし、有利不利を主張しない。2022〜2026年の
+全確定レース（芝101,478頭・ダート107,828頭）の実測で、前付けはペースに強く反応する
+一方（芝 0.84x→1.18x）、後方脚質は帯別好走率が単調にならず、係数をどう弱めても
+順序づけられなかったため（ADR-0010）。「スローなら前が楽」は成立するが
+「ハイなら差しに向く」は成立せず、届くかは展開よりその馬の決め手に依存する。
+
+スコアは 50 を「互角」とする 0〜100 の尺度。中立点はコース種別ごとの
 展開3分類閾値（rule-v4、`classify_pace` と同じ RuleWeights）の中点から導出し、
 判定基準の二重定義を作らない。逃げ候補が複数いる場合は先行争いの消耗を見込んで
 逃げのみ減点する。
@@ -27,7 +33,7 @@ from pci.domain.pace.rpci_forecast import DEFAULT_WEIGHTS, RuleWeights
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "style-advantage-v3"
+MODEL_VERSION = "style-advantage-v4"
 
 
 class StyleAdvantageReliability(StrEnum):
@@ -39,25 +45,29 @@ class StyleAdvantageReliability(StrEnum):
 
 @dataclass(frozen=True)
 class StyleAdvantageWeights:
-    """style-advantage-v3 の仮係数。実データ検証後の調整を前提とする。"""
+    """style-advantage-v4 の係数。前付けの係数は暫定、後方の0はADR-0010で確定。"""
 
     # RPCIが中立から1ポイント離れるごとのスコア変化量
     slope_per_point: float = 4.0
-    # 逃げ・追込は先行・差しより展開の影響を強く受ける（増幅率）
+    # 逃げは先行より展開の影響を強く受ける（増幅率）
     escape_gain: float = 1.2
-    closer_gain: float = 1.2
+    # 追込も差しと同じく0＝常に互角（上の stalker_gain 参照）
+    closer_gain: float = 0.0
     # 逃げ候補が2頭以上のとき、1頭増えるごとに逃げスコアを減点
     escape_crowd_penalty: float = 6.0
     score_min: float = 5.0
     score_max: float = 95.0
-    # 先行・差しの増幅率。既定1.0は従来の暗黙値と同じで、挙動は変わらない。
-    # 実測ではペース感応度が脚質間で最大6倍以上違うため、候補比較で
-    # 脚質ごとに独立して動かせるようにしている（ADR-0010）。
+    # 先行の増幅率。
     front_gain: float = 1.0
-    stalker_gain: float = 1.0
-    # 自在の増幅率。None は「採点しない」＝現行の挙動（entries は4件）。
-    # 実測では自在が先行と同等に反応するが、採点対象へ加えると公開スキーマが
-    # 変わるため、既定では従来どおり採点しない（ADR-0010 が Proposed のため）。
+    # 差し・追込は0＝常に互角。ADR-0010の実測で、後方脚質には順序づけ可能な
+    # シグナルが存在しないと確認されたため、有利不利を主張しない。
+    # 係数を弱める案（差0.3/追0.5 等）も試したが、どう調整しても帯別好走率が
+    # 単調にならなかった。前付けだけを採点する方が分離力も大きい。
+    stalker_gain: float = 0.0
+    # 自在の増幅率。None は「採点しない」＝ entries は4件のまま。
+    # 一次データでは自在が先行と同等に反応するが、実際に採点すると直近ダートで
+    # 悪化し、自在自身の帯別好走率も4条件中1条件でしか単調にならなかったため
+    # 採点しない（ADR-0010 Validation results）。候補比較用に口だけ残す。
     flexible_gain: float | None = None
 
     def __post_init__(self) -> None:
@@ -168,10 +178,12 @@ def build_style_advantage(
         )
     entries = tuple(scored)
 
+    # 「ハイ→後ろが有利」は実測で成立しなかったため説明からも外す（ADR-0010）。
+    # 前に行く脚質について言えることだけを述べる。
     if delta > 0:
         direction = "前半が緩む想定のため前に行く脚質が有利"
     elif delta < 0:
-        direction = "前傾ラップの想定のため後ろから運ぶ脚質が有利"
+        direction = "前傾ラップの想定のため前に行く脚質には厳しい"
     else:
         direction = "想定ペースが中立のため脚質間の有利不利は小さい"
     reasons = [

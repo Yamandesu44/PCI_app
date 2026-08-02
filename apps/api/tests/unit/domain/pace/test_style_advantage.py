@@ -1,4 +1,4 @@
-"""脚質別有利度（style-advantage-v3）のテスト。"""
+"""脚質別有利度（style-advantage-v4）のテスト。"""
 
 from __future__ import annotations
 
@@ -42,20 +42,27 @@ class TestNeutralRpci:
 
 class TestBuildStyleAdvantage:
     def test_slow_pace_favors_front_styles(self) -> None:
-        """スロー想定（RPCI高）では 逃げ・先行 > 50 > 差し・追込。"""
+        """スロー想定（RPCI高）では 逃げ・先行 > 50。逃げは増幅率で先行より外へ振れる。"""
         advantage = build_style_advantage(55.0, "芝", (ESCAPE, STALKER))
         scores = _scores(advantage)
-        assert scores[ESCAPE] > 50 > scores[STALKER]
-        assert scores[FRONT] > 50 > scores[CLOSER]
-        # 増幅率により、逃げ・追込は先行・差しより外側に振れる。
-        assert scores[ESCAPE] > scores[FRONT]
-        assert scores[CLOSER] < scores[STALKER]
+        assert scores[ESCAPE] > scores[FRONT] > 50
 
-    def test_high_pace_favors_closer_styles(self) -> None:
-        """ハイ想定（RPCI低）では 差し・追込 > 50 > 逃げ・先行。"""
+    def test_high_pace_is_unfavorable_for_front_styles(self) -> None:
+        """ハイ想定（RPCI低）では 逃げ・先行 < 50。後方は互角のまま動かさない。"""
         advantage = build_style_advantage(45.0, "芝", (ESCAPE, STALKER))
         scores = _scores(advantage)
-        assert scores[CLOSER] > scores[STALKER] > 50 > scores[FRONT] > scores[ESCAPE]
+        assert scores[ESCAPE] < scores[FRONT] < 50
+
+    def test_back_styles_stay_even_regardless_of_pace(self) -> None:
+        """差し・追込は展開で動かさない（v4・ADR-0010）。
+
+        実測で後方脚質は帯別好走率が単調にならず、係数を弱めても順序づけられなかった。
+        「ハイなら差しに向く」と主張しないことが、この指標の意味そのもの。
+        """
+        for rpci in (40.0, 45.0, 50.0, 55.0, 60.0):
+            scores = _scores(build_style_advantage(rpci, "芝", (ESCAPE, STALKER)))
+            assert scores[STALKER] == 50.0
+            assert scores[CLOSER] == 50.0
 
     def test_neutral_pace_is_even(self) -> None:
         advantage = build_style_advantage(neutral_rpci("芝"), "芝", (ESCAPE,))
@@ -79,9 +86,10 @@ class TestBuildStyleAdvantage:
     def test_scores_are_clamped(self) -> None:
         """RPCIクランプ端（65）でもスコアは設定レンジに収まる。"""
         advantage = build_style_advantage(65.0, "芝", ())
-        scores = _scores(advantage)
-        assert scores[ESCAPE] == 95.0
-        assert scores[CLOSER] == 5.0
+        assert _scores(advantage)[ESCAPE] == 95.0
+        # 下端の確認は後方脚質を動かす候補係数で行う（既定では常に50のため）。
+        low = build_style_advantage(65.0, "芝", (), weights=StyleAdvantageWeights(closer_gain=1.2))
+        assert _scores(low)[CLOSER] == 5.0
 
     def test_model_version_and_reasons(self) -> None:
         advantage = build_style_advantage(53.0, "芝", ())
@@ -142,10 +150,18 @@ class TestBuildStyleAdvantage:
         assert advantage.reliability_reason is None
 
     @given(st.floats(min_value=35.0, max_value=65.0))
-    def test_front_score_monotonic_in_rpci(self, rpci: float) -> None:
-        """先行スコアはRPCIに単調（スロー寄りほど高い）で、差しと対称。"""
+    def test_front_score_stays_in_range_and_back_stays_even(self, rpci: float) -> None:
+        """先行スコアはレンジ内に収まり、差しはRPCIによらず互角のまま。"""
         scores = _scores(build_style_advantage(rpci, "芝", ()))
         assert 5.0 <= scores[FRONT] <= 95.0
+        assert scores[STALKER] == 50.0
+
+    @given(st.floats(min_value=35.0, max_value=65.0))
+    def test_front_and_back_are_symmetric_when_back_is_scored(self, rpci: float) -> None:
+        """後方を採点する候補係数では、先行と差しが50を挟んで対称になる。"""
+        scores = _scores(
+            build_style_advantage(rpci, "芝", (), weights=StyleAdvantageWeights(stalker_gain=1.0))
+        )
         assert scores[FRONT] + scores[STALKER] == pytest.approx(100.0)
 
 
@@ -196,14 +212,24 @@ class TestFlexibleScoring:
         # 自在はスロー寄りで前付けと同方向（50超）、かつ先行より弱く反応する。
         assert 50.0 < scores[RunningStyleLabel.FLEXIBLE] < scores[FRONT]
 
-    def test_per_style_gains_do_not_change_default_output(self) -> None:
-        """front_gain/stalker_gain の既定値が従来の暗黙値と一致することを固定する。"""
-        base = build_style_advantage(56.0, "ダート", (ESCAPE, FRONT, STALKER, CLOSER))
-        explicit = build_style_advantage(
-            56.0,
-            "ダート",
-            (ESCAPE, FRONT, STALKER, CLOSER),
-            weights=StyleAdvantageWeights(front_gain=1.0, stalker_gain=1.0),
+    def test_v3_symmetric_behaviour_is_reproducible_via_weights(self) -> None:
+        """旧v3（前後対称）の挙動が候補係数で再現できることを固定する。
+
+        v4は後方を採点しないが、比較検証のために旧挙動を作れる必要がある。
+        """
+        v4 = _scores(build_style_advantage(46.0, "ダート", (ESCAPE, FRONT, STALKER, CLOSER)))
+        v3 = _scores(
+            build_style_advantage(
+                46.0,
+                "ダート",
+                (ESCAPE, FRONT, STALKER, CLOSER),
+                weights=StyleAdvantageWeights(stalker_gain=1.0, closer_gain=1.2),
+            )
         )
 
-        assert _scores(base) == _scores(explicit)
+        assert v4[STALKER] == 50.0 and v4[CLOSER] == 50.0
+        assert v3[STALKER] < 50.0
+        assert v3[CLOSER] < v3[STALKER]
+        # 前付け側は v3/v4 で変えていない。
+        assert v4[ESCAPE] == v3[ESCAPE]
+        assert v4[FRONT] == v3[FRONT]

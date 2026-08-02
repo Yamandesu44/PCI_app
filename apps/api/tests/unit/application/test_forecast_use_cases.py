@@ -369,7 +369,10 @@ class TestForecastRaceUseCase:
         assert by_no == {i: i for i in range(1, 7)}
 
     def test_style_advantage_reflects_pace_direction(self) -> None:
-        """スロー想定なら前有利、ハイ想定なら後有利のスコアになる（50=互角）。"""
+        """スロー想定なら前有利、ハイ想定なら前不利になる（50=互角）。
+
+        v4では後方脚質を採点しない（常に50）ため、方向はすべて前付け側で確認する。
+        """
         repo = FakeRaceRepository()
         _register_upcoming(repo, n=4)
 
@@ -377,10 +380,11 @@ class TestForecastRaceUseCase:
             repo, forecaster=_FixedForecaster(55.0, PaceLabel.SLOW)
         ).execute(UPCOMING)
         assert slow_case.style_advantage is not None
-        assert slow_case.style_advantage.model_version == "style-advantage-v3"
+        assert slow_case.style_advantage.model_version == "style-advantage-v4"
         assert slow_case.style_advantage.reliability == "standard"
         slow_scores = {entry.style: entry.score for entry in slow_case.style_advantage.entries}
-        assert slow_scores["先行"] > 50 > slow_scores["差し"]
+        assert slow_scores["先行"] > 50
+        assert slow_scores["差し"] == 50
         assert slow_case.style_advantage.reasons
 
         high_case = ForecastRaceUseCase(
@@ -388,7 +392,8 @@ class TestForecastRaceUseCase:
         ).execute(UPCOMING)
         assert high_case.style_advantage is not None
         high_scores = {entry.style: entry.score for entry in high_case.style_advantage.entries}
-        assert high_scores["差し"] > 50 > high_scores["先行"]
+        assert high_scores["先行"] < 50
+        assert high_scores["差し"] == 50
 
     def test_kokura_turf_in_july_marks_style_advantage_as_reference(self) -> None:
         repo = FakeRaceRepository()
