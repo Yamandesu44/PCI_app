@@ -19,6 +19,7 @@
 4. 390px実ブラウザで横はみ出しなし、タブの矢印移動、隊列表示を確認した。
 5. 非選択タブ用の空の`hidden`パネルを追加し、すべての`aria-controls`参照先を常時実在させた。
 6. `FormationView.headingId`を追加し、モバイル・デスクトップ間の見出しID重複を解消した。
+7. 開催日ストリップをナビゲーションランドマーク化し、競馬場タブへ左右矢印・Home・End操作を追加した。
 
 ### 対象ファイル
 
@@ -26,6 +27,10 @@
 - `apps/web/src/components/MobileTabList.test.tsx`
 - `apps/web/src/components/FormationView.tsx`
 - `apps/web/src/components/FormationView.test.tsx`
+- `apps/web/src/components/RaceDateCalendar.tsx`
+- `apps/web/src/components/RaceDateCalendar.test.tsx`
+- `apps/web/src/components/MobileRaceGroupedSection.tsx`
+- `apps/web/src/components/MobileRaceGroupedSection.test.tsx`
 - `apps/web/src/components/MobileRaceForecastDashboard.tsx`
 - `apps/web/src/components/MobileRaceForecastDashboard.test.tsx`
 - `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
@@ -53,6 +58,8 @@
 - 390px実ブラウザ: `innerWidth=390`、文書幅375、横はみ出しなし。矢印キーで
   `mobile-tab-summary`から`mobile-tab-formation`へフォーカス・選択が同期。
 - 隊列表示後も全4タブの参照先が存在し、表示パネルは1件、重複IDは0件。
+- ホーム390px実ブラウザ: 開催日ナビゲーションを認識。競馬場タブは札幌から新潟へ
+  矢印キーで移動し、`tabIndex`・`aria-selected`・レース一覧が同期。横はみ出しなし。
 
 ### Claude Codeが最初に確認するファイル
 
@@ -70,8 +77,8 @@ npm.cmd run typecheck --workspace=@pci/web
 
 ### 次に実施する具体的な手順
 
-1. `docs/LOCATION_TEST.md`第10節に従い、iOS VoiceOverで詳細4タブの選択状態と読み上げ順を記録する。
-2. 同じ手順をAndroid TalkBackで実施し、選択状態とパネル内容の読み上げが同期するか確認する。
+1. `docs/LOCATION_TEST.md`第10節に従い、iOS VoiceOverで開催日・競馬場・詳細タブの読み上げ順を記録する。
+2. 同じ手順をAndroid TalkBackで実施し、選択状態と表示内容の読み上げが同期するか確認する。
 3. RPCIは2026-08-03以降の確定ダートが100レースかつ各ラベル20件に達するまで再評価しない。
 
 ## 2026-08-02 (OpenAI Codex → Claude Code) 新規29レースの予備評価完了

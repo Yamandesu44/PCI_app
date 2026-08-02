@@ -77,6 +77,8 @@ describe("MobileRaceGroupedSection", () => {
     );
 
     expect(markup.match(/data-mobile-venue-tab/g)).toHaveLength(3);
+    expect(markup.match(/tabindex="0"/g)).toHaveLength(1);
+    expect(markup.match(/tabindex="-1"/g)).toHaveLength(2);
     expect(markup.match(/data-mobile-race-row/g)).toHaveLength(2);
     expect(markup).toContain('aria-selected="true"');
     expect(markup).toContain("2歳未勝利");

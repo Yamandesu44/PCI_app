@@ -48,7 +48,7 @@ function MobileDateStrip({
   performanceDays,
   today,
 }: Props & { today: string }) {
-  const scrollerRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLElement>(null);
   const selectedRef = useRef<HTMLSpanElement>(null);
   const availableDates = [...new Set(dates)].sort();
   const activeDate = selectedDate ?? availableDates.at(-1) ?? null;
@@ -90,7 +90,7 @@ function MobileDateStrip({
         </div>
       </div>
 
-      <div
+      <nav
         ref={scrollerRef}
         data-mobile-date-strip
         className="-mx-1 flex w-full min-w-0 snap-x gap-1.5 overflow-x-auto px-1 pb-1"
@@ -144,7 +144,7 @@ function MobileDateStrip({
           );
         })}
         <span aria-hidden className="w-[calc(50%-28px)] shrink-0" />
-      </div>
+      </nav>
     </div>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { ChevronRight } from "lucide-react";
 
+import { tabIndexForKey } from "@/components/MobileTabList";
 import { beginnerPaceLabel, raceSpotlight } from "@/lib/pace";
 import {
   formatRaceDate,
@@ -128,6 +129,24 @@ function MobileRaceDateGroup({
     dateGroup.venues[0];
   const idBase = `${sectionId}-${dateGroup.raceDate}`;
 
+  const handleVenueKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) => {
+    const nextIndex = tabIndexForKey(currentIndex, event.key, dateGroup.venues.length);
+    if (nextIndex === null) return;
+
+    const nextVenue = dateGroup.venues[nextIndex];
+    if (!nextVenue) return;
+
+    event.preventDefault();
+    setSelectedVenue(nextVenue.jyoCd);
+    const tabButtons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+      '[role="tab"]',
+    );
+    tabButtons?.[nextIndex]?.focus();
+  };
+
   if (!activeVenue) return null;
 
   return (
@@ -149,7 +168,7 @@ function MobileRaceDateGroup({
         aria-label={`${formatRaceDate(dateGroup.raceDate)}の競馬場`}
         className="mb-2 grid min-h-11 grid-flow-col auto-cols-fr rounded-md bg-slate-100 p-1"
       >
-        {dateGroup.venues.map((venue) => {
+        {dateGroup.venues.map((venue, index) => {
           const selected = venue.jyoCd === activeVenue.jyoCd;
           return (
             <button
@@ -158,9 +177,11 @@ function MobileRaceDateGroup({
               data-mobile-venue-tab
               type="button"
               role="tab"
+              tabIndex={selected ? 0 : -1}
               aria-selected={selected}
               aria-controls={`${idBase}-panel`}
               onClick={() => setSelectedVenue(venue.jyoCd)}
+              onKeyDown={(event) => handleVenueKeyDown(event, index)}
               className={[
                 "min-w-0 rounded px-2 py-2 text-xs font-semibold transition-colors",
                 selected
