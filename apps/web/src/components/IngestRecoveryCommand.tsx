@@ -34,7 +34,7 @@ export function IngestRecoveryCommand({ command }: { command: string }) {
       <button
         type="button"
         onClick={copyCommand}
-        className="flex h-9 w-9 shrink-0 items-center justify-center border-l border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="flex h-11 w-11 shrink-0 items-center justify-center border-l border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         aria-label={label}
         title={label}
       >

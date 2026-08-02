@@ -1,5 +1,75 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-02 (OpenAI Codex → Claude Code) モバイル詳細タブのアクセシビリティ改善完了
+
+- 更新日時: 2026-08-02 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `1e29ba7`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: RPCI候補の次回評価期間を待つ間に、実データを使ってモバイル詳細画面の
+  キーボード操作と取り込み警告の視認性を改善する。
+
+### 完了した内容
+
+1. `MobileTabList`を追加し、出走前・確定後の4タブを共通化した。
+2. 選択中のタブだけをTabキーの停止位置にし、左右矢印・Home・Endで選択とフォーカスを移動する。
+3. `IngestStatusBanner`へモバイル向け状態チップを追加し、復旧操作を44px以上にした。
+4. 390px実ブラウザで横はみ出しなし、タブの矢印移動、隊列表示を確認した。
+
+### 対象ファイル
+
+- `apps/web/src/components/MobileTabList.tsx`
+- `apps/web/src/components/MobileTabList.test.tsx`
+- `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+- `apps/web/src/components/MobileRaceForecastDashboard.test.tsx`
+- `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
+- `apps/web/src/components/MobilePaceAnalysisDashboard.test.tsx`
+- `apps/web/src/components/IngestStatusBanner.tsx`
+- `apps/web/src/components/IngestRecoveryCommand.tsx`
+- `tasks/current.md`
+- `docs/LOCATION_TEST.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・未確定仕様・既知事項
+
+- タブは選択時に即時表示する自動アクティベーション方式。API契約や内部PCI/RPCI表示は変更していない。
+- 非選択パネルをDOMへ残さない既存方式は維持しており、非選択タブの`aria-controls`参照先は
+  選択されるまでDOMに存在しない。
+- VoiceOver/TalkBackによる実機読み上げは未実施。`tasks/current.md`の実機確認へ残している。
+- ダートRPCI候補は2026-08-03以降の最低標本数到達まで評価保留で、既定v4を維持する。
+
+### テスト・実行結果
+
+- `npm.cmd test --workspace=@pci/web`: 20 files / 140 tests passed
+- `npm.cmd run typecheck --workspace=@pci/web`: 成功
+- `npm.cmd run build --workspace=@pci/web`: 成功
+- Webワークスペースに`lint`スクリプトは未定義。Next.js buildもlintをスキップする既存設定。
+- 390px実ブラウザ: `innerWidth=390`、文書幅375、横はみ出しなし。矢印キーで
+  `mobile-tab-summary`から`mobile-tab-formation`へフォーカス・選択が同期。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/MobileTabList.tsx`の`handleKeyDown`
+2. `apps/web/src/components/IngestStatusBanner.tsx`の`data-mobile-ingest-summary`
+3. `tasks/current.md`先頭と「スマホ画面向け改善の残タスク」
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+```
+
+### 次に実施する具体的な手順
+
+1. `docs/LOCATION_TEST.md`第10節に従い、iOS VoiceOverで詳細4タブの選択状態と読み上げ順を記録する。
+2. 同じ手順をAndroid TalkBackで実施し、`aria-controls`の既知制約に実害があるか判定する。
+3. RPCIは2026-08-03以降の確定ダートが100レースかつ各ラベル20件に達するまで再評価しない。
+
 ## 2026-08-02 (OpenAI Codex → Claude Code) 新規29レースの予備評価完了
 
 - 更新日時: 2026-08-02 JST

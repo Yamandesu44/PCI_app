@@ -14,6 +14,7 @@ import {
 import { CommentCard } from "@/components/CommentCard";
 import { ForecastAccuracyBadge } from "@/components/ForecastAccuracyBadge";
 import { MobileRaceNavigation } from "@/components/MobileRaceNavigation";
+import { MobileTabList } from "@/components/MobileTabList";
 import { ReasonList } from "@/components/ReasonList";
 import {
   frameColorClass,
@@ -179,35 +180,15 @@ export function MobilePaceAnalysisDashboard({
       <MobileRaceNavigation navigation={navigation} />
 
       <div className="sticky top-0 z-20 -mx-3 mt-3 border-y border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
-        <div
-          role="tablist"
-          aria-label="確定後分析の表示切り替え"
-          className="grid h-12 grid-cols-3 overflow-hidden rounded-md border border-slate-200 bg-slate-50"
-        >
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`mobile-analysis-tab-${tab.id}`}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={`mobile-analysis-panel-${tab.id}`}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-r border-slate-200 text-[11px] font-semibold last:border-r-0 ${
-                  isActive
-                    ? "bg-slate-950 text-white"
-                    : "bg-white text-slate-500"
-                }`}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        <MobileTabList
+          tabs={TABS}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          ariaLabel="確定後分析の表示切り替え"
+          tabIdPrefix="mobile-analysis-tab"
+          panelIdPrefix="mobile-analysis-panel"
+          columnsClassName="grid-cols-3"
+        />
       </div>
 
       {activeTab === "summary" ? (

@@ -51,6 +51,8 @@ describe("MobileRaceForecastDashboard", () => {
 
     expect(markup).toContain('role="tablist"');
     expect(markup.match(/role="tab"/g)).toHaveLength(4);
+    expect(markup.match(/tabindex="0"/g)).toHaveLength(1);
+    expect(markup.match(/tabindex="-1"/g)).toHaveLength(3);
     expect(markup).toContain("展開恩恵馬 TOP3");
     expect(markup.match(/data-mobile-benefit/g)).toHaveLength(3);
     expect(markup).not.toContain("テスト馬4");
