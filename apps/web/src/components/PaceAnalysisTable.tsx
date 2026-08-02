@@ -1,8 +1,13 @@
-import { paceSpeedFromIndex } from "@/lib/pace";
+import { frameColorClass, paceSpeedFromIndex } from "@/lib/pace";
 import type { HorsePaceAnalysis } from "@pci/api-client";
 
+interface PaceAnalysisTableProps {
+  horses: HorsePaceAnalysis[];
+  trackType: string | null | undefined;
+}
+
 /** 確定後の各馬 PCI を着順で並べて表示。PCI3 寄与馬（上位3着）を強調する。 */
-export function PaceAnalysisTable({ horses }: { horses: HorsePaceAnalysis[] }) {
+export function PaceAnalysisTable({ horses, trackType }: PaceAnalysisTableProps) {
   return (
     <table className="pci-table">
       <thead>
@@ -18,12 +23,17 @@ export function PaceAnalysisTable({ horses }: { horses: HorsePaceAnalysis[] }) {
       </thead>
       <tbody>
         {horses.map((h) => {
-          const speed = paceSpeedFromIndex(h.pci);
+          const speed = paceSpeedFromIndex(h.pci, trackType);
           return (
             <tr key={h.horse_no} className={h.is_pci3_contributor ? "pci3" : undefined}>
               <td>{h.finish_pos ?? "—"}</td>
               <td>
-                <span className="horse-no sm">{h.horse_no}</span>
+                <span
+                  className={`inline-flex h-6 min-w-6 items-center justify-center rounded border px-1 text-xs font-bold ${frameColorClass(h.frame_no)}`}
+                  aria-label={h.frame_no > 0 ? `${h.frame_no}枠` : "枠順未確定"}
+                >
+                  {h.frame_no > 0 ? h.horse_no : "登録"}
+                </span>
                 {h.is_pci3_contributor ? <span className="pci3-mark">★</span> : null}
               </td>
               <td>{h.horse_name ?? "—"}</td>

@@ -23,6 +23,7 @@ const race = {
 
 const horses = Array.from({ length: 4 }, (_, index) => ({
   horse_no: index + 1,
+  frame_no: index + 1,
   horse_name: `テスト馬${index + 1}`,
   finish_pos: index + 1,
   running_style: index === 0 ? "差し" : "先行",
@@ -66,7 +67,7 @@ describe("MobilePaceAnalysisDashboard", () => {
 
   it("各馬結果を横スクロール不要の二段行で表示する", () => {
     const markup = renderToStaticMarkup(
-      <MobilePaceResultRow horse={horses[0]!} />,
+      <MobilePaceResultRow horse={horses[0]!} trackType={race.track_type} />,
     );
 
     expect(markup).toContain("テスト馬1");
@@ -74,5 +75,7 @@ describe("MobilePaceAnalysisDashboard", () => {
     expect(markup).toContain("34.5秒");
     expect(markup).toContain('aria-label="上位3着"');
     expect(markup).not.toMatch(/>50</);
+    // 馬番バッジは隊列予想・展開予想側と同じ枠色（1枠→白地）を使う。
+    expect(markup).toMatch(/h-9 min-w-9[^"]*bg-white[^"]*"[^>]*>\s*1\s*</);
   });
 });

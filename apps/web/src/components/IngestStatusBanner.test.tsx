@@ -111,4 +111,45 @@ describe("IngestStatusBanner", () => {
     expect(markup).toContain("詳細と復旧手順");
     expect(markup).toContain("max-md:hidden");
   });
+
+  it("モバイル専用の要約行に見出しを常時表示し、detail文は含めない", () => {
+    const markup = renderToStaticMarkup(
+      <IngestStatusBanner
+        status={status({
+          has_incomplete_races: true,
+          incomplete_race_count: 3,
+          incomplete_races: [],
+        })}
+      />,
+    );
+
+    const mobileMatch = /<div class="flex items-center gap-2 md:hidden">[\s\S]*?<\/div>/.exec(
+      markup,
+    );
+    expect(mobileMatch).not.toBeNull();
+    const mobileSummary = mobileMatch![0];
+    expect(mobileSummary).toContain("成績未取込のレースが3件あります");
+    expect(mobileSummary).not.toContain("開催済みですが出走前の状態で残っています");
+  });
+
+  it("PC表示（md:）は見出し・detail文とも従来どおり維持する", () => {
+    const markup = renderToStaticMarkup(
+      <IngestStatusBanner
+        status={status({
+          has_incomplete_races: true,
+          incomplete_race_count: 3,
+          incomplete_races: [],
+        })}
+      />,
+    );
+
+    expect(markup).toContain('class="hidden items-start gap-3 md:flex"');
+    const desktopMatch = /<div class="hidden items-start gap-3 md:flex">[\s\S]*?<\/div><\/div>/.exec(
+      markup,
+    );
+    expect(desktopMatch).not.toBeNull();
+    const desktopBlock = desktopMatch![0];
+    expect(desktopBlock).toContain("成績未取込のレースが3件あります");
+    expect(desktopBlock).toContain("開催済みですが出走前の状態で残っています");
+  });
 });

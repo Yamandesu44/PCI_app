@@ -172,6 +172,7 @@ class GetPaceAnalysisUseCase:
         horses = [
             HorsePaceAnalysisOutput(
                 horse_no=e.horse_no,
+                frame_no=e.frame_no,
                 finish_pos=e.finish_pos,
                 running_style=e.running_style,
                 pci=e.pci_actual,

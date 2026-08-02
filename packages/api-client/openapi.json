@@ -1276,6 +1276,10 @@
             ],
             "title": "Finish Pos"
           },
+          "frame_no": {
+            "title": "Frame No",
+            "type": "integer"
+          },
           "horse_name": {
             "anyOf": [
               {
@@ -1320,7 +1324,8 @@
           }
         },
         "required": [
-          "horse_no"
+          "horse_no",
+          "frame_no"
         ],
         "title": "HorsePaceAnalysisSchema",
         "type": "object"
@@ -2511,7 +2516,7 @@
         "type": "object"
       },
       "StyleAdvantageSchema": {
-        "description": "脚質別の展開有利度（style-advantage-v3）。",
+        "description": "脚質別の展開有利度（style-advantage-v4）。",
         "properties": {
           "entries": {
             "default": [],

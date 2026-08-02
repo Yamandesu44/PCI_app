@@ -25,7 +25,7 @@ export interface PaceMeta {
 const PACE_META: Record<string, PaceMeta> = {
   ハイ: {
     tone: "high",
-    summary: "前半から速い流れ。差し・追い込みが届きやすい展開です。",
+    summary: "前半から速い流れ。前に行く馬には厳しい展開です。",
     color: "#2563eb",
   },
   平均: {
@@ -58,13 +58,7 @@ export function beginnerPaceLabel(label: string): string {
   return "判断材料が不足";
 }
 
-export type PaceSpeedLevel =
-  | "veryHigh"
-  | "high"
-  | "average"
-  | "slow"
-  | "verySlow"
-  | "unknown";
+export type PaceSpeedLevel = "high" | "average" | "slow" | "unknown";
 
 export interface PaceSpeedMeta {
   level: PaceSpeedLevel;
@@ -78,24 +72,14 @@ export interface PaceSpeedMeta {
 }
 
 const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
-  veryHigh: {
-    level: "veryHigh",
-    label: "超ハイ",
-    symbol: "H++",
-    description: "前半負荷がかなり高い流れ。差し・追込の浮上に注意。",
-    beginnerLabel: "かなり速い流れ",
-    beginnerSummary: "前半からかなり流れそうです。前で運ぶ馬には最後まで粘る力が求められます。",
-    bettingHint: "最後に脚を使える馬や、後ろで我慢できる馬を相手に入れておきたいです。",
-    color: "#1d4ed8",
-  },
   high: {
     level: "high",
     label: "ハイ",
     symbol: "H",
-    description: "前半が速めの流れ。持続力と差し脚が活きやすい。",
-    beginnerLabel: "やや速い流れ",
-    beginnerSummary: "前半から流れそうです。前の馬が苦しくなれば、後ろから運ぶ馬にも出番があります。",
-    bettingHint: "長く脚を使える馬や、流れに乗って差せる馬を重視したいです。",
+    description: "前半が速い流れ。前に行く馬は持続力を問われる。",
+    beginnerLabel: "速い流れ",
+    beginnerSummary: "前半から流れそうです。前で運ぶ馬は苦しくなりやすい展開です。",
+    bettingHint: "前に行く馬は苦しくなりやすい点を割り引いて見たいです。",
     color: "#2563eb",
   },
   average: {
@@ -113,20 +97,10 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     label: "スロー",
     symbol: "S",
     description: "前半が緩めの流れ。逃げ・先行の粘り込みに注意。",
-    beginnerLabel: "やや落ち着いた流れ",
+    beginnerLabel: "落ち着いた流れ",
     beginnerSummary: "前半は落ち着きそうです。前めで運ぶ馬が余力を残しやすくなります。",
     bettingHint: "前の位置を取れそうな馬や、直線で素早く動ける馬を重視したいです。",
     color: "#dc2626",
-  },
-  verySlow: {
-    level: "verySlow",
-    label: "超スロー",
-    symbol: "S++",
-    description: "前半がかなり緩い流れ。位置取りと瞬発力が重要。",
-    beginnerLabel: "かなり落ち着いた流れ",
-    beginnerSummary: "前半はかなり落ち着きそうです。後ろから届かせるには一気に動ける力が必要です。",
-    bettingHint: "前めで運べる馬と、短い直線勝負に強い馬を中心に見たいです。",
-    color: "#991b1b",
   },
   unknown: {
     level: "unknown",
@@ -155,22 +129,35 @@ export function sanitizeBeginnerComment(text: string): string {
     .replace(DECIMAL_VALUE, "具体的な数値");
 }
 
-/** PCI/RPCI/PCI3の実数値を、非専門家向けの5段階ペース速度へ変換する。 */
-export function paceSpeedFromIndex(value: number | null | undefined): PaceSpeedMeta {
+// apps/api の classify_pace()（domain/pace/rpci_forecast.py）と同じ閾値。
+// ダートは実績分布（平均43.0）が芝（53.1）と大きく異なるため専用閾値を使う。
+// 値を変える場合は必ずバックエンド側（RuleWeights）も合わせて変更すること。
+const TURF_HIGH_THRESHOLD = 49.0;
+const TURF_SLOW_THRESHOLD = 51.0;
+const DIRT_HIGH_THRESHOLD = 40.0;
+const DIRT_SLOW_THRESHOLD = 46.0;
+
+/**
+ * PCI/RPCI/PCI3の実数値を、非専門家向けの3段階ペース速度へ変換する。
+ *
+ * 芝とダートで実績分布の中心が大きく異なるため、trackTypeに応じて
+ * バックエンドのclassify_pace()と同じ閾値を使い分ける。track_typeを渡さず
+ * 芝の閾値をダートへ流用すると、ダートの「平均」を「ハイ」と誤判定する
+ * （画面表示が上位のpace_labelと矛盾する）ため、呼び出し側は必ず
+ * レースのtrack_typeを渡すこと。
+ */
+export function paceSpeedFromIndex(
+  value: number | null | undefined,
+  trackType: string | null | undefined,
+): PaceSpeedMeta {
   if (value === null || value === undefined) return PACE_SPEED_META.unknown;
-  if (value < 47) return PACE_SPEED_META.veryHigh;
-  if (value < 50) return PACE_SPEED_META.high;
-  if (value <= 52) return PACE_SPEED_META.average;
-  if (value <= 55) return PACE_SPEED_META.slow;
-  return PACE_SPEED_META.verySlow;
-}
-
-export function paceSpeedLabel(value: number | null | undefined): string {
-  return paceSpeedFromIndex(value).label;
-}
-
-export function paceSpeedSymbol(value: number | null | undefined): string {
-  return paceSpeedFromIndex(value).symbol;
+  const [highThreshold, slowThreshold] =
+    trackType === "ダート"
+      ? [DIRT_HIGH_THRESHOLD, DIRT_SLOW_THRESHOLD]
+      : [TURF_HIGH_THRESHOLD, TURF_SLOW_THRESHOLD];
+  if (value < highThreshold) return PACE_SPEED_META.high;
+  if (value > slowThreshold) return PACE_SPEED_META.slow;
+  return PACE_SPEED_META.average;
 }
 
 export type ConfidenceTone = "strong" | "normal" | "caution";
@@ -247,6 +234,27 @@ export function horseNumberLabel(horse: Pick<HorseFit, "horse_no" | "frame_no">)
     return `馬番 ${horse.horse_no}`;
   }
   return `登録順 ${horse.horse_no}（馬番未確定）`;
+}
+
+/** JRA公式の枠色（1〜8枠）。馬番バッジの配色は画面によらずこの1箇所だけで管理する。 */
+const FRAME_CLASS: Record<number, string> = {
+  1: "border-slate-300 bg-white text-slate-950",
+  2: "border-slate-950 bg-slate-950 text-white",
+  3: "border-red-600 bg-red-600 text-white",
+  4: "border-blue-600 bg-blue-600 text-white",
+  5: "border-yellow-400 bg-yellow-400 text-slate-950",
+  6: "border-green-600 bg-green-600 text-white",
+  7: "border-orange-500 bg-orange-500 text-white",
+  8: "border-pink-400 bg-pink-400 text-slate-950",
+};
+
+/** 枠順未確定（frame_no=0）時に使う、色を持たない中立バッジ。 */
+const FRAME_CLASS_UNASSIGNED = "border-slate-200 bg-slate-100 text-slate-400";
+
+/** 馬番バッジの配色クラスを返す。frame_no<=0（枠順未確定）は色を付けない。 */
+export function frameColorClass(frameNo: number): string {
+  if (frameNo <= 0) return FRAME_CLASS_UNASSIGNED;
+  return FRAME_CLASS[frameNo] ?? FRAME_CLASS_UNASSIGNED;
 }
 
 export type RaceSpotlightTone = "focus" | "value" | "caution" | "normal";
@@ -437,13 +445,15 @@ export function forecastDecisionChecklist({
   confidence,
   horses,
   integratedRanking,
+  trackType,
 }: {
   predictedRpci: number | null | undefined;
   confidence: number;
   horses: HorseFit[];
   integratedRanking?: IntegratedRanking | null;
+  trackType: string | null | undefined;
 }): ForecastDecisionChecklistItem[] {
-  const speed = paceSpeedFromIndex(predictedRpci);
+  const speed = paceSpeedFromIndex(predictedRpci, trackType);
   const confidenceMeta = confidenceInsight(confidence);
   const integratedTop = [...(integratedRanking?.entries ?? [])]
     .sort((a, b) => a.rank - b.rank)
@@ -532,6 +542,13 @@ export interface StyleAdvantageScore {
   description: string;
   /** 有利/互角/不利の言葉ラベル（数字が苦手なユーザー向け）。 */
   verdict: string;
+  /**
+   * 展開から有利不利を断定してよい脚質か。
+   * 差し・追込は実績検証で展開との関係が確認できなかったため false（下記 NOTE 参照）。
+   */
+  isDirectional: boolean;
+  /** 断定しない理由。isDirectional=true のときは null。 */
+  note: string | null;
 }
 
 export interface StyleAdvantageReliabilityMeta {
@@ -556,18 +573,41 @@ function styleVerdict(score: number): string {
 }
 
 /**
- * API の脚質別有利度（style-advantage-v3、50=互角）を表示用に変換する。
+ * API の脚質別有利度（style-advantage-v4、50=互角）を表示用に変換する。
  * 以前は web 側でその脚質の最大PAIを流用しており、スコアが高止まりして
  * 差が出なかった。算出はドメイン層（想定RPCIの中立点からの乖離）へ移した。
  */
+/**
+ * 展開から有利不利を断定してよい脚質。
+ *
+ * 2022〜2026年の全確定レース（芝63,646頭・ダート70,942頭）で検証したところ、
+ * 前付け（逃げ・先行）は有利度が上がるほど好走率が上がる（芝0.84x→1.18x、
+ * ダート0.94x→1.14x）一方、差し・追込は芝でほぼ平坦（0.98〜1.03x）、
+ * ダートは最上位帯で逆行した。「スローなら前が楽」は成立するが
+ * 「ハイなら差しに向く」は成立せず、届くかどうかは展開よりその馬の決め手に依存する。
+ * 詳細は docs/SPEC.md §3.4。
+ */
+const DIRECTIONAL_STYLES = new Set(["逃げ", "先行"]);
+
+const NON_DIRECTIONAL_VERDICT = "展開の影響は小さい";
+
+const NON_DIRECTIONAL_NOTE =
+  "差し・追込は、展開よりも各馬の決め手が結果を左右します。過去5年の実績でも、" +
+  "展開の向き不向きと成績のあいだに関係は見られませんでした。";
+
 export function styleAdvantageScores(advantage: StyleAdvantage): StyleAdvantageScore[] {
-  return advantage.entries.map((entry) => ({
-    key: entry.style,
-    label: entry.style,
-    value: Math.round(entry.score),
-    description: STYLE_DESCRIPTIONS[entry.style] ?? "",
-    verdict: styleVerdict(entry.score),
-  }));
+  return advantage.entries.map((entry) => {
+    const isDirectional = DIRECTIONAL_STYLES.has(entry.style);
+    return {
+      key: entry.style,
+      label: entry.style,
+      value: Math.round(entry.score),
+      description: STYLE_DESCRIPTIONS[entry.style] ?? "",
+      verdict: isDirectional ? styleVerdict(entry.score) : NON_DIRECTIONAL_VERDICT,
+      isDirectional,
+      note: isDirectional ? null : NON_DIRECTIONAL_NOTE,
+    };
+  });
 }
 
 /** APIが判定した開催条件別の信頼度を、注意表示用の言葉へ変換する。 */

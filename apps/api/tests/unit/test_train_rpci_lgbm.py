@@ -1,6 +1,10 @@
 """LightGBM学習データ定義の回帰テスト。"""
 
+import argparse
+import datetime
+import json
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -13,6 +17,7 @@ from scripts.train_rpci_lgbm import (
     _build_label_sample_weights,
     _parse_args,
     _print_label_recall,
+    _write_training_provenance,
 )
 
 from pci.domain.pace.rpci_forecast import PaceLabel
@@ -203,3 +208,69 @@ def test_v4_feature_set_requires_explicit_output(
         _parse_args()
 
     assert "本番モデルの上書きを防ぐため" in capsys.readouterr().err
+
+
+class TestTrainingProvenance:
+    """モデルの隣に残す学習来歴の回帰テスト。
+
+    2026-08-02: `rpci_actual`の算出式が旧フォールバックからラップ由来へ
+    切り替わっていたのに、モデル側は何も知らず系統的にずれ続けていた
+    （HANDOFF 2026-07-26 (12)）。同じ見落としを繰り返さないための記録。
+    """
+
+    @staticmethod
+    def _rows(feature_count: int, lap_flags: list[int]) -> list[tuple[object, ...]]:
+        # [特徴量..., target, race_date, has_lap] の並びを模す
+        return [
+            tuple([0.0] * feature_count)
+            + (50.0, datetime.date(2026, 1, index + 1), flag)
+            for index, flag in enumerate(lap_flags)
+        ]
+
+    def _write(self, tmp_path: Path, lap_flags: list[int]) -> dict[str, object]:
+        feature_count = 3
+        args = argparse.Namespace(
+            feature_set="v4",
+            label_balance="none",
+            before_date=datetime.date(2026, 6, 1),
+            limit=2000,
+            rpci_min=20.0,
+            rpci_max=90.0,
+        )
+        meta_path = _write_training_provenance(
+            tmp_path / "model.txt",
+            rows=self._rows(feature_count, lap_flags),
+            feature_count=feature_count,
+            args=args,
+            track_type="dirt",
+            metrics={"mae": 4.5289, "rmse": 5.4, "bias": 3.3731},
+        )
+        result: dict[str, object] = json.loads(meta_path.read_text(encoding="utf-8"))
+        return result
+
+    def test_records_lap_derived_ratio_and_date_range(self, tmp_path: Path) -> None:
+        payload = self._write(tmp_path, [1, 1, 1, 1])
+
+        assert payload["lap_derived_ratio"] == 1.0
+        assert payload["n_races"] == 4
+        assert payload["date_from"] == "2026-01-01"
+        assert payload["date_to"] == "2026-01-04"
+        assert payload["track_type"] == "dirt"
+
+    def test_flags_training_data_that_still_contains_the_old_formula(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        payload = self._write(tmp_path, [1, 1, 0, 0])
+
+        assert payload["lap_derived_ratio"] == 0.5
+        assert "旧フォールバック式" in capsys.readouterr().out
+
+    def test_sidecar_sits_next_to_the_model(self, tmp_path: Path) -> None:
+        self._write(tmp_path, [1])
+
+        assert (tmp_path / "model.txt.meta.json").exists()
+
+    def test_metrics_are_rounded_for_readability(self, tmp_path: Path) -> None:
+        payload = self._write(tmp_path, [1])
+
+        assert payload["test_metrics"] == {"mae": 4.5289, "rmse": 5.4, "bias": 3.3731}

@@ -55,6 +55,9 @@ describe("MobileRaceForecastDashboard", () => {
     expect(markup.match(/data-mobile-benefit/g)).toHaveLength(3);
     expect(markup).not.toContain("テスト馬4");
     expect(markup).not.toContain("判断根拠データ");
+    // 馬番バッジは隊列予想と同じ枠色（frame_no=1→白地、2→黒地）を使う。
+    expect(markup).toMatch(/h-9 min-w-9[^"]*bg-white[^"]*"[^>]*>\s*1\s*</);
+    expect(markup).toMatch(/h-9 min-w-9[^"]*bg-slate-950[^"]*"[^>]*>\s*2\s*</);
   });
 
   it("注目馬の理由を初期状態で閉じたコンパクト行にする", () => {
@@ -77,5 +80,25 @@ describe("MobileRaceForecastDashboard", () => {
     expect(markup).toContain("今回の評価理由");
     expect(markup).toContain("今回の流れが向きそうです。");
     expect(markup).toContain("data-mobile-expandable-horse");
+    // 1枠（frame_no=1）は隊列予想と同じ白地バッジになる。
+    expect(markup).toMatch(/h-9 min-w-9[^"]*bg-white[^"]*"[^>]*>\s*1\s*</);
+  });
+
+  it("枠順未確定（frame_no=0）の馬は色を付けず「登録」表示にする", () => {
+    const unassigned = { ...forecast.horses![0], frame_no: 0 };
+
+    const markup = renderToStaticMarkup(
+      <MobileExpandableHorseRow
+        horse={unassigned}
+        rank={1}
+        label="軸候補"
+        reason="今回の流れが向きそうです。"
+        tone="benefit"
+      />,
+    );
+
+    expect(markup).toContain("登録<");
+    // 枠色を付けず、中立（slate-100）のバッジになる。
+    expect(markup).toContain("bg-slate-100");
   });
 });

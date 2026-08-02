@@ -113,12 +113,13 @@ export function RaceForecastDashboard({
   const confidence = confidencePct(forecast.confidence);
   const confidenceMeta = confidenceInsight(forecast.confidence);
   const course = `${race.track_type}${race.distance_m}m`;
-  const predictedSpeed = paceSpeedFromIndex(forecast.predicted_rpci);
+  const predictedSpeed = paceSpeedFromIndex(forecast.predicted_rpci, race.track_type);
   const decisionChecklist = forecastDecisionChecklist({
     predictedRpci: forecast.predicted_rpci,
     confidence: forecast.confidence,
     horses,
     integratedRanking: forecast.integrated_ranking,
+    trackType: race.track_type,
   });
 
   return (
@@ -268,11 +269,13 @@ export function RaceForecastDashboard({
                       {score.label}
                       <span
                         className={`ml-2 rounded px-1.5 py-0.5 text-xs font-semibold ${
-                          score.value > 54
-                            ? "bg-emerald-100 text-emerald-800"
-                            : score.value < 46
-                              ? "bg-rose-100 text-rose-800"
-                              : "bg-slate-100 text-slate-600"
+                          !score.isDirectional
+                            ? "bg-slate-100 text-slate-600"
+                            : score.value > 54
+                              ? "bg-emerald-100 text-emerald-800"
+                              : score.value < 46
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-slate-100 text-slate-600"
                         }`}
                       >
                         {score.verdict}
@@ -280,11 +283,21 @@ export function RaceForecastDashboard({
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">{score.description}</p>
                   </div>
-                  <span className="font-mono text-lg font-semibold">{score.value}</span>
+                  {/* 断定しない脚質でスコアと満杯のバーを出すと、文言より視覚が勝って
+                      「有利」と読まれてしまうため、数値表現ごと出さない。 */}
+                  {score.isDirectional ? (
+                    <span className="font-mono text-lg font-semibold">{score.value}</span>
+                  ) : null}
                 </div>
-                <Progress value={score.value} className="mt-3" />
+                {score.isDirectional ? <Progress value={score.value} className="mt-3" /> : null}
               </div>
             ))}
+            {/* 理由は脚質ごとに繰り返さず、リストの下に一度だけ置く。 */}
+            {styleScores.some((score) => !score.isDirectional) ? (
+              <p className="m-0 text-xs leading-5 text-muted-foreground md:col-span-2">
+                {styleScores.find((score) => !score.isDirectional)?.note}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -448,10 +461,19 @@ export function RaceForecastDashboard({
         <Card>
           <CardHeader>
             <CardTitle>脚質別プロファイル</CardTitle>
-            <CardDescription>Rechartsで展開の偏りを可視化します。</CardDescription>
+            <CardDescription>
+              想定ペースがどの脚質に傾くかを表します。差し・追込は実績検証で展開との関係が
+              確認できなかったため参考扱いです。
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <PaceProfileChart data={styleScores.map(({ label, value }) => ({ style: label, value }))} />
+            <PaceProfileChart
+              data={styleScores.map(({ label, value, isDirectional }) => ({
+                style: label,
+                value,
+                muted: !isDirectional,
+              }))}
+            />
           </CardContent>
         </Card>
       </section>
@@ -471,6 +493,7 @@ export function RaceForecastDashboard({
                     confidence={forecast.confidence}
                     modelVersion={forecast.model_version}
                     reasons={forecast.forecast_reasons ?? []}
+                    trackType={race.track_type}
                   />
                   <section className="panel">
                     <h3>各馬の展開適性</h3>

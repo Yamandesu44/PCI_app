@@ -114,7 +114,7 @@ class StyleAdvantageEntryOutput:
 
 @dataclass
 class StyleAdvantageOutput:
-    """脚質別の展開有利度（style-advantage-v3）。"""
+    """脚質別の展開有利度（style-advantage-v4）。"""
 
     model_version: str
     reliability: Literal["standard", "reference"] = "standard"
@@ -271,6 +271,7 @@ class HorsePaceAnalysisOutput:
     """確定後の馬単位ペース分析（各馬 PCI）。"""
 
     horse_no: int
+    frame_no: int
     finish_pos: int | None = None
     running_style: str | None = None
     pci: float | None = None

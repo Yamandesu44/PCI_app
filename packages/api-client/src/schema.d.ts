@@ -994,6 +994,8 @@ export interface components {
             agari_3f_s?: number | null;
             /** Finish Pos */
             finish_pos?: number | null;
+            /** Frame No */
+            frame_no: number;
             /** Horse Name */
             horse_name?: string | null;
             /** Horse No */
@@ -1472,7 +1474,7 @@ export interface components {
         };
         /**
          * StyleAdvantageSchema
-         * @description 脚質別の展開有利度（style-advantage-v3）。
+         * @description 脚質別の展開有利度（style-advantage-v4）。
          */
         StyleAdvantageSchema: {
             /**

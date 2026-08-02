@@ -14,8 +14,8 @@ function optionalLabel(value: string | null | undefined): string {
 /** レース詳細ページの冒頭で、予測・分析の前提になる条件をひと目で伝える。 */
 export function RaceHero({ race, mode }: RaceHeroProps) {
   const tone = statusTone(race.status);
-  const resultSpeed = paceSpeedFromIndex(race.rpci_actual);
-  const pci3Speed = paceSpeedFromIndex(race.pci3_actual);
+  const resultSpeed = paceSpeedFromIndex(race.rpci_actual, race.track_type);
+  const pci3Speed = paceSpeedFromIndex(race.pci3_actual, race.track_type);
   const primaryMetric =
     mode === "forecast"
       ? { label: "出走頭数", value: `${race.field_size}頭` }

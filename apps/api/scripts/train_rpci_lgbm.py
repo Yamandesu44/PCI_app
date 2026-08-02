@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import math
 import sys
 from pathlib import Path
@@ -112,7 +113,13 @@ _QUERY_TEMPLATE = """\
         CASE WHEN r.jyo_cd = '10' THEN 1.0 ELSE 0.0 END                 AS venue_10,
         {history_features}
         {lap_features}
-        r.rpci_actual                                                   AS target
+        r.rpci_actual                                                   AS target,
+        -- 以降は学習に使わない来歴記録用。race_key が PK なので集約不要。
+        r.race_date                                                     AS prov_race_date,
+        CASE
+            WHEN r.race_s3f IS NOT NULL AND r.race_l3f IS NOT NULL THEN 1
+            ELSE 0
+        END                                                             AS prov_has_lap
     FROM races r
     JOIN race_entries e ON e.race_key = r.race_key
     {history_join}
@@ -399,7 +406,8 @@ def main() -> None:
         ],
         dtype=np.float64,
     )
-    y_np = np.array([float(row[-1]) for row in rows], dtype=np.float64)
+    # 来歴列を後ろへ足したので、target は末尾ではなく特徴量の直後にある。
+    y_np = np.array([float(row[feature_count]) for row in rows], dtype=np.float64)
 
     # SQLは新しい順。直近20%を検証へ取り分け、残る古い80%だけで学習する。
     # LIMIT指定時も最新期間を保持しつつ、将来から過去を予測する漏洩を防ぐ。
@@ -458,6 +466,15 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     model.save_model(str(output))
     print(f"\nモデルを保存しました: {output.resolve()}")
+    meta_path = _write_training_provenance(
+        output,
+        rows=rows,
+        feature_count=feature_count,
+        args=args,
+        track_type=track_type,
+        metrics={"mae": mae, "rmse": rmse, "bias": bias},
+    )
+    print(f"学習来歴を保存しました: {meta_path.resolve()}")
     if args.label_balance == "none":
         print(
             "次のステップ: 芝・ダート両方の学習が完了したら\n"
@@ -468,6 +485,54 @@ def main() -> None:
             "候補モデルです。本番モデルへ置換せず、backtest_forecast.py の\n"
             "--turf-model-path / --dirt-model-path で独立検証してください。"
         )
+
+
+def _write_training_provenance(
+    model_path: Path,
+    *,
+    rows: list[Any],
+    feature_count: int,
+    args: argparse.Namespace,
+    track_type: str,
+    metrics: dict[str, float],
+) -> Path:
+    """モデルの隣へ、何で学習したかを記録した JSON を書く。
+
+    2026-08-02の調査で、`rpci_actual`の算出式が途中でラップ由来へ切り替わっていた
+    ことが判明した（ADR-0010・HANDOFF 2026-07-26 (12)）。旧式で学習したモデルを
+    新式の実績と突き合わせても、モデル側は何も知らないまま系統的にずれるだけで、
+    誰も気づけなかった。ここで学習データの素性を残し、次に同じことが起きたときに
+    「モデルと評価対象の前提が違う」と判定できるようにする。
+
+    とくに`lap_derived_ratio`が重要で、1.0未満なら学習データに旧式が混ざっている。
+    """
+    dates = [row[feature_count + 1] for row in rows]
+    lap_flags = [int(row[feature_count + 2]) for row in rows]
+    payload = {
+        "model_file": model_path.name,
+        "trained_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        "track_type": track_type,
+        "feature_set": args.feature_set,
+        "label_balance": args.label_balance,
+        "n_races": len(rows),
+        "date_from": str(min(dates)),
+        "date_to": str(max(dates)),
+        "before_date": str(args.before_date) if args.before_date else None,
+        "limit": args.limit,
+        "rpci_range": [args.rpci_min, args.rpci_max],
+        # 1.0 = 全件がレースラップ由来（TARGET準拠）。1.0未満は旧フォールバック式の混入。
+        "lap_derived_ratio": round(sum(lap_flags) / len(lap_flags), 4),
+        "test_metrics": {k: round(v, 4) for k, v in metrics.items()},
+    }
+    meta_path = model_path.with_suffix(model_path.suffix + ".meta.json")
+    meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    ratio = payload["lap_derived_ratio"]
+    if isinstance(ratio, float) and ratio < 1.0:
+        print(
+            f"  警告: 学習データの {(1 - ratio):.1%} が旧フォールバック式の rpci_actual です。"
+            "\n  ラップをバックフィルしてから学習し直すことを推奨します。"
+        )
+    return meta_path
 
 
 def _print_label_recall(

@@ -17,6 +17,7 @@ import {
 
 import { FormationView } from "@/components/FormationView";
 import { HorseFitTable } from "@/components/HorseFitTable";
+import { IntegratedRankingView } from "@/components/IntegratedRankingView";
 import { MobileRaceNavigation } from "@/components/MobileRaceNavigation";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { ReasonList } from "@/components/ReasonList";
@@ -33,6 +34,7 @@ import {
   confidenceInsight,
   discountRecommendation,
   forecastDecisionChecklist,
+  frameColorClass,
   horseNumberLabel,
   sanitizeBeginnerComment,
   sortDiscountCandidates,
@@ -83,7 +85,9 @@ function BenefitRow({ horse, index }: { horse: HorseFit; index: number }) {
       className={`flex min-h-16 min-w-0 items-center gap-3 rounded-md border px-3 py-2.5 ${benefitTone(index)}`}
     >
       <span className="w-5 shrink-0 text-center text-xs font-bold opacity-70">{index + 1}</span>
-      <span className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-current/15 bg-white/10 px-1 text-xs font-bold">
+      <span
+        className={`flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-xs font-bold ${frameColorClass(horse.frame_no)}`}
+      >
         {horse.frame_no > 0 ? horse.horse_no : "登録"}
       </span>
       <div className="min-w-0 flex-1">
@@ -134,7 +138,9 @@ export function MobileExpandableHorseRow({
         ) : (
           <AlertTriangle className="h-4 w-5 shrink-0 text-amber-700" aria-hidden />
         )}
-        <span className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-1 text-xs font-bold text-slate-900">
+        <span
+          className={`flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-xs font-bold ${frameColorClass(horse.frame_no)}`}
+        >
           {horse.frame_no > 0 ? horse.horse_no : "登録"}
         </span>
         <div className="min-w-0 flex-1">
@@ -191,6 +197,7 @@ export function MobileRaceForecastDashboard({
     confidence: forecast.confidence,
     horses,
     integratedRanking: forecast.integrated_ranking,
+    trackType: race.track_type,
   });
 
   return (
@@ -368,6 +375,10 @@ export function MobileRaceForecastDashboard({
 
         {activeTab === "horses" ? (
           <div className="grid gap-5">
+            {forecast.integrated_ranking ? (
+              <IntegratedRankingView ranking={forecast.integrated_ranking} />
+            ) : null}
+
             <section aria-labelledby="mobile-all-benefit-heading">
               <h2 id="mobile-all-benefit-heading" className="m-0 mb-2 text-base font-semibold text-slate-950">
                 展開恩恵馬 TOP5
@@ -442,11 +453,18 @@ export function MobileRaceForecastDashboard({
                       <span className="font-semibold text-slate-700">
                         {score.label} ・ {score.verdict}
                       </span>
-                      <span className="font-mono font-semibold text-slate-600">{score.value}</span>
+                      {score.isDirectional ? (
+                        <span className="font-mono font-semibold text-slate-600">{score.value}</span>
+                      ) : null}
                     </div>
-                    <Progress value={score.value} className="mt-1.5" />
+                    {score.isDirectional ? <Progress value={score.value} className="mt-1.5" /> : null}
                   </div>
                 ))}
+                {styleScores.some((score) => !score.isDirectional) ? (
+                  <p className="m-0 text-[11px] leading-4 text-muted-foreground">
+                    {styleScores.find((score) => !score.isDirectional)?.note}
+                  </p>
+                ) : null}
               </div>
             </section>
 
@@ -484,6 +502,7 @@ export function MobileRaceForecastDashboard({
                         confidence={forecast.confidence}
                         modelVersion={forecast.model_version}
                         reasons={forecast.forecast_reasons ?? []}
+                        trackType={race.track_type}
                       />
                       <div className="overflow-x-auto">
                         <HorseFitTable horses={horses} />

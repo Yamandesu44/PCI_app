@@ -1,18 +1,7 @@
 import { Trophy } from "lucide-react";
 
-import { horseNumberLabel } from "@/lib/pace";
+import { frameColorClass, horseNumberLabel } from "@/lib/pace";
 import type { IntegratedEntry, IntegratedRanking } from "@pci/api-client";
-
-const FRAME_CLASS: Record<number, string> = {
-  1: "border-slate-300 bg-white text-slate-950",
-  2: "border-slate-950 bg-slate-950 text-white",
-  3: "border-red-600 bg-red-600 text-white",
-  4: "border-blue-600 bg-blue-600 text-white",
-  5: "border-yellow-400 bg-yellow-400 text-slate-950",
-  6: "border-green-600 bg-green-600 text-white",
-  7: "border-orange-500 bg-orange-500 text-white",
-  8: "border-pink-400 bg-pink-400 text-slate-950",
-};
 
 // 分類タグ（記号ではなく言葉タグで表す）。無印はタグを付けない。
 const CATEGORY_TAG: Record<string, { label: string; chip: string; row: string }> = {
@@ -63,10 +52,10 @@ function RankingRows({ entries }: { entries: IntegratedEntry[] }) {
               <span className="mt-0.5 text-[10px] font-medium text-slate-400">位</span>
             </span>
             <span
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded border text-xs font-bold ${FRAME_CLASS[entry.frame_no] ?? FRAME_CLASS[1]}`}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded border text-xs font-bold ${frameColorClass(entry.frame_no)}`}
               aria-label={entry.frame_no > 0 ? `${entry.frame_no}枠` : "枠順未確定"}
             >
-              {entry.horse_no}
+              {entry.frame_no > 0 ? entry.horse_no : "登録"}
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">

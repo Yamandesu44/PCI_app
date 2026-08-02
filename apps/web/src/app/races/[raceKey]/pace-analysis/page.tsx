@@ -37,8 +37,8 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
   }
 
   const horses = analysis.horses ?? [];
-  const resultSpeed = paceSpeedFromIndex(analysis.rpci_actual);
-  const pci3Speed = paceSpeedFromIndex(analysis.pci3_actual);
+  const resultSpeed = paceSpeedFromIndex(analysis.rpci_actual, race.track_type);
+  const pci3Speed = paceSpeedFromIndex(analysis.pci3_actual, race.track_type);
   let navigation: RaceNavigation | null = null;
   try {
     const races = await api.listRaces(undefined, race.race_date);
@@ -126,7 +126,7 @@ export default async function PaceAnalysisPage({ params }: PageProps) {
           <p className="m-0 mt-1 text-sm text-slate-500">★は上位3頭の傾向に含まれる馬です。</p>
         </div>
         <div className="overflow-x-auto p-2 sm:p-4">
-          <PaceAnalysisTable horses={horses} />
+          <PaceAnalysisTable horses={horses} trackType={race.track_type} />
         </div>
       </section>
       </main>

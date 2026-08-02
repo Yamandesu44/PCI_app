@@ -417,11 +417,16 @@ class ForecastRaceUseCase:
         target_race: Race,
         history: tuple[tuple[RaceEntry, Race], ...],
     ) -> AbilityScore:
-        """近走の着順・grade・賞金・人気から能力指数を算出する。"""
+        """近走の着順・grade・賞金・人気から能力指数を算出する。
+
+        何走分を使うかは`AbilityScorer`（`AbilityWeights.recent_races`）が決めるため、
+        ここでは取得済み履歴をそのまま渡す（以前は呼び出し側でも`history[:5]`と
+        別途ハードコードしており、`recent_races`を変えても反映されない不具合があった）。
+        """
         if not ketto_num:
             return self._ability_scorer.score(horse_no, ())
         results: list[AbilityRaceResult] = []
-        for entry, past_race in history[:5]:
+        for entry, past_race in history:
             results.append(
                 AbilityRaceResult(
                     finish_pos=entry.finish_pos,

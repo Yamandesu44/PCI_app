@@ -7,6 +7,7 @@ import {
   fitTone,
   forecastAccuracyMeta,
   forecastDecisionChecklist,
+  frameColorClass,
   horseNumberLabel,
   paceMeta,
   beginnerPaceLabel,
@@ -53,23 +54,41 @@ describe("fitTone", () => {
 });
 
 describe("paceSpeedFromIndex", () => {
-  it("PCI/RPCI系の数値を5段階のペース速度に分類する", () => {
-    expect(paceSpeedFromIndex(46.9).label).toBe("超ハイ");
-    expect(paceSpeedFromIndex(47).label).toBe("ハイ");
-    expect(paceSpeedFromIndex(50).label).toBe("平均");
-    expect(paceSpeedFromIndex(52).label).toBe("平均");
-    expect(paceSpeedFromIndex(52.1).label).toBe("スロー");
-    expect(paceSpeedFromIndex(55.1).label).toBe("超スロー");
+  it("芝はバックエンドのclassify_pace()と同じ閾値（49/51）で3段階に分類する", () => {
+    expect(paceSpeedFromIndex(48.9, "芝").label).toBe("ハイ");
+    expect(paceSpeedFromIndex(49, "芝").label).toBe("平均");
+    expect(paceSpeedFromIndex(51, "芝").label).toBe("平均");
+    expect(paceSpeedFromIndex(51.1, "芝").label).toBe("スロー");
+  });
+
+  it("ダートはバックエンドのclassify_pace()と同じ専用閾値（40/46）で3段階に分類する", () => {
+    expect(paceSpeedFromIndex(39.9, "ダート").label).toBe("ハイ");
+    expect(paceSpeedFromIndex(40, "ダート").label).toBe("平均");
+    expect(paceSpeedFromIndex(46, "ダート").label).toBe("平均");
+    expect(paceSpeedFromIndex(46.1, "ダート").label).toBe("スロー");
+  });
+
+  it("同じ数値でも芝とダートで異なるラベルになる（track_typeを渡さないと誤判定になる不具合の回帰テスト）", () => {
+    // 実際に発生した不具合: ダートの想定RPCIが44（ダートとしては平均域）なのに、
+    // track_typeを渡さず芝の閾値で判定すると「ハイ」（かなり速い流れ）と誤表示されていた。
+    expect(paceSpeedFromIndex(44, "ダート").label).toBe("平均");
+    expect(paceSpeedFromIndex(44, "芝").label).toBe("ハイ");
+  });
+
+  it("track_type未指定・想定外の値は芝の閾値へ安全に縮退する", () => {
+    expect(paceSpeedFromIndex(48.9, null).label).toBe("ハイ");
+    expect(paceSpeedFromIndex(48.9, undefined).label).toBe("ハイ");
+    expect(paceSpeedFromIndex(48.9, "障害").label).toBe("ハイ");
   });
 
   it("null/undefinedは判定不可にする", () => {
-    expect(paceSpeedFromIndex(null).label).toBe("判定不可");
-    expect(paceSpeedFromIndex(undefined).symbol).toBe("-");
+    expect(paceSpeedFromIndex(null, "芝").label).toBe("判定不可");
+    expect(paceSpeedFromIndex(undefined, "芝").symbol).toBe("-");
   });
 
   it("初心者向けラベルを持つ", () => {
-    expect(paceSpeedFromIndex(48).beginnerLabel).toBe("やや速い流れ");
-    expect(paceSpeedFromIndex(53).beginnerSummary).toContain("前半");
+    expect(paceSpeedFromIndex(48, "芝").beginnerLabel).toBe("速い流れ");
+    expect(paceSpeedFromIndex(50, "芝").beginnerSummary).toContain("流れ");
   });
 });
 
@@ -141,6 +160,31 @@ describe("horseNumberLabel", () => {
     expect(label).not.toBe("馬番 3");
     expect(label).toContain("3");
     expect(label).toContain("未確定");
+  });
+});
+
+describe("frameColorClass", () => {
+  it("1〜8枠それぞれに異なる配色クラスを返す（隊列予想と同じ配色を全画面で共有する）", () => {
+    const classes = [1, 2, 3, 4, 5, 6, 7, 8].map((frameNo) => frameColorClass(frameNo));
+    expect(new Set(classes).size).toBe(8);
+  });
+
+  it("1枠は白地、2枠は黒地など、JRA公式の配色を反映する", () => {
+    expect(frameColorClass(1)).toContain("bg-white");
+    expect(frameColorClass(2)).toContain("bg-slate-950");
+    expect(frameColorClass(3)).toContain("bg-red-600");
+    expect(frameColorClass(5)).toContain("bg-yellow-400");
+    expect(frameColorClass(8)).toContain("bg-pink-400");
+  });
+
+  it("枠順未確定（frame_no<=0）は色を付けず中立表示にする", () => {
+    expect(frameColorClass(0)).not.toContain("bg-red");
+    expect(frameColorClass(0)).not.toContain("bg-white");
+    expect(frameColorClass(-1)).toBe(frameColorClass(0));
+  });
+
+  it("未定義の枠番（9以上）でも中立表示へ安全に縮退する", () => {
+    expect(frameColorClass(9)).toBe(frameColorClass(0));
   });
 });
 
@@ -256,6 +300,7 @@ describe("forecastDecisionChecklist", () => {
     const checklist = forecastDecisionChecklist({
       predictedRpci: 48,
       confidence: 0.72,
+      trackType: "芝",
       horses: [
         {
           horse_no: 1,
@@ -297,7 +342,7 @@ describe("forecastDecisionChecklist", () => {
     });
 
     expect(checklist).toHaveLength(4);
-    expect(checklist[0]).toMatchObject({ label: "展開", value: "やや速い流れ" });
+    expect(checklist[0]).toMatchObject({ label: "展開", value: "速い流れ" });
     expect(checklist[1]).toMatchObject({ label: "総合上位3頭" });
     expect(checklist[1]?.value).toBe("総合一位 / テストホース");
     expect(checklist[2]).toMatchObject({ label: "注意馬", value: "大きな割引材料なし" });
@@ -308,6 +353,7 @@ describe("forecastDecisionChecklist", () => {
     const checklist = forecastDecisionChecklist({
       predictedRpci: null,
       confidence: 0.4,
+      trackType: "芝",
       horses: [],
     });
 
@@ -372,7 +418,7 @@ describe("forecastAccuracyMeta", () => {
 
 describe("styleAdvantageScores", () => {
   const advantage = {
-    model_version: "style-advantage-v3",
+    model_version: "style-advantage-v4",
     reliability: "standard" as const,
     reliability_reason: null,
     entries: [
@@ -391,14 +437,59 @@ describe("styleAdvantageScores", () => {
     expect(scores[3].value).toBe(33);
   });
 
-  it("スコアを 有利/やや有利/互角/やや不利/不利 の言葉へ変換する", () => {
-    const verdicts = styleAdvantageScores(advantage).map((s) => s.verdict);
-    expect(verdicts).toEqual(["有利", "やや有利", "やや不利", "不利"]);
+  it("前付けのスコアを 有利/やや有利/互角/やや不利/不利 の言葉へ変換する", () => {
+    const verdicts = styleAdvantageScores({
+      ...advantage,
+      entries: [
+        { style: "逃げ", score: 72.0 },
+        { style: "先行", score: 62.0 },
+      ],
+    }).map((s) => s.verdict);
+    expect(verdicts).toEqual(["有利", "やや有利"]);
+
     const even = styleAdvantageScores({
       ...advantage,
       entries: [{ style: "先行", score: 50.0 }],
     });
     expect(even[0].verdict).toBe("互角");
+
+    const unfavorable = styleAdvantageScores({
+      ...advantage,
+      entries: [
+        { style: "先行", score: 38.0 },
+        { style: "逃げ", score: 32.6 },
+      ],
+    }).map((s) => s.verdict);
+    expect(unfavorable).toEqual(["やや不利", "不利"]);
+  });
+
+  it("差し・追込は展開から有利不利を断定しない", () => {
+    // 実績検証（docs/SPEC.md §3.4）で、差し・追込は有利度スコアと好走率の
+    // 関係が確認できなかった。高スコアでも「有利」と表示してはいけない。
+    const scores = styleAdvantageScores({
+      ...advantage,
+      entries: [
+        { style: "差し", score: 88.0 },
+        { style: "追込", score: 12.0 },
+      ],
+    });
+
+    expect(scores.map((s) => s.verdict)).toEqual(["展開の影響は小さい", "展開の影響は小さい"]);
+    expect(scores.every((s) => s.isDirectional)).toBe(false);
+    expect(scores[0].note).toContain("決め手");
+  });
+
+  it("前付けは断定してよい脚質として印を付ける", () => {
+    const scores = styleAdvantageScores({
+      ...advantage,
+      entries: [
+        { style: "逃げ", score: 72.0 },
+        { style: "先行", score: 62.0 },
+      ],
+    });
+
+    expect(scores.every((s) => s.isDirectional)).toBe(true);
+    expect(scores.every((s) => s.note === null)).toBe(true);
   });
 
   it("開催条件別の参考扱いと理由を表示用へ変換する", () => {

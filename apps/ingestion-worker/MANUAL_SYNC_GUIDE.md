@@ -32,14 +32,29 @@ cd C:\Users\yuuta\PCI_app\apps\ingestion-worker
 .\scripts\sync_mykeibadb.bat
 ```
 
-同期開始時にFastAPIの`/ready`を確認し、APIまたはPostgreSQLが利用できない場合は
+同期開始時に、**書き込み先**（FastAPIの`/ready`＝API＋PostgreSQL）と
+**読み取り元**（mykeibadbのMySQL）の両方を確認し、どちらかが利用できない場合は
 `mykeibadb.exe`を起動する前に処理を中止する。データを変更せず、接続確認だけ行う場合は次を実行する。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\run_mykeibadb_full_sync.ps1 -PreflightOnly
 ```
 
-失敗時はログにDocker Desktop、DBコンテナ、Alembic、FastAPIの確認手順が表示される。
+失敗時はログに原因別の対処が表示される（書き込み先ならDocker Desktop・DBコンテナ・
+Alembic・FastAPI、読み取り元ならMySQL80サービスやパスワード設定）。
+
+読み取り元だけを個別に確認したい場合は次を実行する。
+
+```powershell
+.venv\Scripts\python.exe -m ingestion.check_mykeibadb
+```
+
+`batch.py`と同じ`MYKEIBADB_*`設定で実際に接続し、テーブルが見えるところまで確認する。
+サービス停止（6.1）・認証失敗（6.2）・DB名違いを区別して対処を表示する。
+
+> 読み取り元の確認は2026-08-02に追加した。それ以前はMySQLが停止していても
+> プリフライトが通過し、`mykeibadb.exe`が何もしないままexit 0を返したうえで
+> `batch.py`が3回リトライして初めて接続拒否が分かる、という遠回りになっていた。
 
 これで以下が順番に実行される。
 
@@ -180,7 +195,15 @@ python check_data.py --month  # 月別内訳も表示
 
 ### 6.1 `Can't connect to MySQL server on 'localhost' ([WinError 10061] 拒否されました)`
 
-MySQL80 サービスが停止している。
+MySQL80 サービスが停止している。2026-08-02以降はプリフライトが
+`mykeibadb.exe`の起動前にこれを検出して中止する。
+
+**最も手早い対処**: `Win+R` → `services.msc` → MySQL80 を右クリック → 開始。
+PATHに依存しないため、MySQL Workbenchが
+`Unable to execute command chcp`（管理機能がPATHを見つけられない別問題）で
+使えない状態でも起動できる。
+
+コマンドで確認・起動する場合は以下。
 
 ```cmd
 sc query MySQL80

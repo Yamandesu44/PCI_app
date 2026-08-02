@@ -7,6 +7,7 @@ DB に格納された値の分布と外れ値を表示する。
     cd apps/api
     python -m scripts.diagnose_rpci
     python -m scripts.diagnose_rpci --show-outliers   # 外れ値の詳細表示
+    python -m scripts.diagnose_rpci --by-track-year   # コース種別×年の分布と中立点の妥当性
 """
 
 from __future__ import annotations
@@ -17,8 +18,10 @@ import sys
 sys.path.insert(0, "src")
 
 from sqlalchemy import func, select, text
+from sqlalchemy.orm import Session
 
 from pci.config.settings import get_settings
+from pci.domain.pace.style_advantage import neutral_rpci
 from pci.infrastructure.database.models import RaceEntryModel, RaceModel
 from pci.infrastructure.database.session import build_engine, build_session_maker
 
@@ -28,7 +31,225 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--show-outliers", action="store_true", help="外れ値レースを一覧表示")
     p.add_argument("--rpci-min", type=float, default=20.0, help="正常範囲の下限 (default: 20)")
     p.add_argument("--rpci-max", type=float, default=90.0, help="正常範囲の上限 (default: 90)")
-    return p.parse_args()
+    p.add_argument(
+        "--by-track-year",
+        action="store_true",
+        help="コース種別×年で分布と中立点(style-advantage-v4)の妥当性を診断する",
+    )
+    # 最新年は年途中までしかないため、通年の他年と並べると季節差が年差に化ける。
+    # 月で窓を揃えて初めて年同士を対等に比較できる。
+    p.add_argument(
+        "--month-from",
+        type=int,
+        default=1,
+        choices=range(1, 13),
+        metavar="1-12",
+        help="--by-track-year で集計する月の下限（年をまたいで窓を揃える。default: 1）",
+    )
+    p.add_argument(
+        "--month-to",
+        type=int,
+        default=12,
+        choices=range(1, 13),
+        metavar="1-12",
+        help="--by-track-year で集計する月の上限（default: 12）",
+    )
+    args = p.parse_args()
+    if args.month_from > args.month_to:
+        p.error("--month-from は --month-to 以下にしてください")
+    return args
+
+
+def _month_window_note(month_from: int, month_to: int) -> str:
+    if month_from == 1 and month_to == 12:
+        return "通年"
+    return f"{month_from}〜{month_to}月のみ"
+
+
+def _print_track_year_distribution(
+    session: Session, lo: float, hi: float, month_from: int, month_to: int
+) -> None:
+    """コース種別×年で rpci_actual の分布と中立点の位置を表示する。
+
+    脚質別有利度は「中立点からどちら側へ何ポイント離れたか」だけで前・後どちらを
+    有利とするかを決める（style_advantage.neutral_rpci）。中立点は閾値から導く固定値なので、
+    実績分布が年をまたいでずれると、同じルールでも有利／不利の振り分け比率が変わり、
+    ラベルの意味が薄まる。ここではその「ずれ」を直接観測する。
+    """
+    print("\n" + "=" * 78)
+    print(
+        "■ コース種別 × 年の rpci_actual 分布と中立点の妥当性"
+        f"（{_month_window_note(month_from, month_to)}）"
+    )
+    print("=" * 78)
+    for track_type in ("芝", "ダート"):
+        neutral = neutral_rpci(track_type)
+        print(f"\n  ── {track_type}（現行の中立点 {neutral:.1f}）")
+        header = (
+            f"  {'年':>6s} {'件数':>7s} {'平均':>7s} {'中央':>7s} "
+            f"{'中立との差':>11s} {'スロー側%':>10s}"
+        )
+        print(header)
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    EXTRACT(YEAR FROM race_date)::int                       AS yr,
+                    COUNT(*)                                                AS cnt,
+                    AVG(rpci_actual)                                        AS avg_v,
+                    percentile_cont(0.50) WITHIN GROUP (ORDER BY rpci_actual) AS p50,
+                    SUM(CASE WHEN rpci_actual > :neutral THEN 1 ELSE 0 END) AS slow_side
+                FROM races
+                WHERE status = 'result'
+                  AND rpci_actual IS NOT NULL
+                  AND rpci_actual >= :lo
+                  AND rpci_actual <= :hi
+                  AND track_type = :track_type
+                  AND EXTRACT(MONTH FROM race_date) BETWEEN :month_from AND :month_to
+                GROUP BY yr
+                ORDER BY yr
+                """
+            ),
+            {
+                "neutral": neutral,
+                "lo": lo,
+                "hi": hi,
+                "track_type": track_type,
+                "month_from": month_from,
+                "month_to": month_to,
+            },
+        ).all()
+        for yr, cnt, avg_v, p50, slow_side in rows:
+            slow_pct = slow_side / cnt * 100 if cnt else 0.0
+            print(
+                f"  {yr:6d} {cnt:7,d} {avg_v:7.1f} {p50:7.1f} "
+                f"{avg_v - neutral:+11.1f} {slow_pct:9.1f}%"
+            )
+    print(
+        "\n  読み方: 「中立との差」が年ごとに動く、または「スロー側%」が50%から大きく"
+        "\n  外れて年ごとに変わる場合、固定の中立点が実績分布とずれている。"
+    )
+    _print_track_year_style_mix(session, month_from, month_to)
+
+
+def _print_track_year_style_mix(session: Session, month_from: int, month_to: int) -> None:
+    """コース種別×年で確定脚質(race_entries.running_style)の構成比を表示する。
+
+    有利度の検証は確定脚質を入力に使うため、実績分布のずれ（上の表）だけでなく、
+    脚質ラベルそのものの分布や欠損率が年で変われば同じルールの見え方が変わる。
+    2つを並べて初めて「馬場・レース傾向の変化」と「データ側の変化」を区別できる。
+    自在は有利度スコアの対象外（_SCOREABLE_STYLES）なので、独立した列として出す。
+    """
+    print("\n" + "=" * 78)
+    print(
+        "■ コース種別 × 年の確定脚質の構成比"
+        f"（有利度の入力データ側の変化を見る・{_month_window_note(month_from, month_to)}）"
+    )
+    print("=" * 78)
+    for track_type in ("芝", "ダート"):
+        print(f"\n  ── {track_type}")
+        print(
+            f"  {'年':>6s} {'対象頭数':>9s} {'逃げ%':>7s} {'先行%':>7s} "
+            f"{'差し%':>7s} {'追込%':>7s} {'自在%':>7s} {'未設定%':>8s}"
+        )
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    EXTRACT(YEAR FROM r.race_date)::int AS yr,
+                    COUNT(*)                            AS cnt,
+                    SUM(CASE WHEN e.running_style = '逃げ' THEN 1 ELSE 0 END) AS escape,
+                    SUM(CASE WHEN e.running_style = '先行' THEN 1 ELSE 0 END) AS front,
+                    SUM(CASE WHEN e.running_style = '差し' THEN 1 ELSE 0 END) AS stalker,
+                    SUM(CASE WHEN e.running_style = '追込' THEN 1 ELSE 0 END) AS closer,
+                    SUM(CASE WHEN e.running_style = '自在' THEN 1 ELSE 0 END) AS flexible,
+                    SUM(CASE WHEN e.running_style IS NULL THEN 1 ELSE 0 END)  AS unset
+                FROM race_entries e
+                JOIN races r ON r.race_key = e.race_key
+                WHERE r.status = 'result'
+                  AND r.track_type = :track_type
+                  AND EXTRACT(MONTH FROM r.race_date) BETWEEN :month_from AND :month_to
+                GROUP BY yr
+                ORDER BY yr
+                """
+            ),
+            {
+                "track_type": track_type,
+                "month_from": month_from,
+                "month_to": month_to,
+            },
+        ).all()
+        for yr, cnt, escape, front, stalker, closer, flexible, unset in rows:
+            shares = [v / cnt * 100 if cnt else 0.0 for v in (escape, front, stalker, closer)]
+            flexible_pct = flexible / cnt * 100 if cnt else 0.0
+            unset_pct = unset / cnt * 100 if cnt else 0.0
+            body = " ".join(f"{share:6.1f}%" for share in shares)
+            print(
+                f"  {yr:6d} {cnt:9,d} {body} {flexible_pct:6.1f}% {unset_pct:7.1f}%"
+            )
+    print(
+        "\n  読み方: 構成比や未設定%が特定の年だけ大きく動いていれば、レース傾向ではなく"
+        "\n  取り込み・脚質判定側の変化を疑う。"
+    )
+    _print_track_year_rpci_source(session, month_from, month_to)
+
+
+def _print_track_year_rpci_source(session: Session, month_from: int, month_to: int) -> None:
+    """コース種別×年で rpci_actual の算出経路の内訳を表示する。
+
+    `aggregate_rpci` は race_s3f/race_l3f があればレースラップ由来（TARGET準拠）を使い、
+    無ければ全完走馬PCIの平均というフォールバックへ縮退する。この2経路は同じ
+    「RPCI」でも値の出方が違うため、ラップ保有率が年で変われば分布そのものが動く。
+    分布のずれを「競馬側の変化」と読む前に、まずここを潰す。
+    """
+    print("\n" + "=" * 78)
+    print(
+        "■ コース種別 × 年の rpci_actual 算出経路"
+        f"（ラップ由来 vs 全馬PCI平均フォールバック・{_month_window_note(month_from, month_to)}）"
+    )
+    print("=" * 78)
+    for track_type in ("芝", "ダート"):
+        print(f"\n  ── {track_type}")
+        print(
+            f"  {'年':>6s} {'件数':>7s} {'ラップ有%':>10s} "
+            f"{'ラップ由来の平均':>17s} {'代替の平均':>12s}"
+        )
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    EXTRACT(YEAR FROM race_date)::int AS yr,
+                    COUNT(*)                          AS cnt,
+                    SUM(CASE WHEN race_s3f IS NOT NULL AND race_l3f IS NOT NULL
+                        THEN 1 ELSE 0 END)            AS with_lap,
+                    AVG(CASE WHEN race_s3f IS NOT NULL AND race_l3f IS NOT NULL
+                        THEN rpci_actual END)         AS avg_lap,
+                    AVG(CASE WHEN race_s3f IS NULL OR race_l3f IS NULL
+                        THEN rpci_actual END)         AS avg_fallback
+                FROM races
+                WHERE status = 'result'
+                  AND rpci_actual IS NOT NULL
+                  AND track_type = :track_type
+                  AND EXTRACT(MONTH FROM race_date) BETWEEN :month_from AND :month_to
+                GROUP BY yr
+                ORDER BY yr
+                """
+            ),
+            {
+                "track_type": track_type,
+                "month_from": month_from,
+                "month_to": month_to,
+            },
+        ).all()
+        for yr, cnt, with_lap, avg_lap, avg_fallback in rows:
+            lap_pct = with_lap / cnt * 100 if cnt else 0.0
+            lap_txt = f"{avg_lap:17.1f}" if avg_lap is not None else f"{'-':>17s}"
+            fb_txt = f"{avg_fallback:12.1f}" if avg_fallback is not None else f"{'-':>12s}"
+            print(f"  {yr:6d} {cnt:7,d} {lap_pct:9.1f}% {lap_txt} {fb_txt}")
+    print(
+        "\n  読み方: 「ラップ有%」が年で大きく動き、かつ2経路の平均が離れている場合、"
+        "\n  分布のずれの主因は競馬側ではなくラップ取り込みの欠落・変化である。"
+    )
 
 
 def main() -> None:
@@ -202,6 +423,15 @@ def main() -> None:
             )
         except Exception as exc:
             print(f"  分位数取得エラー: {exc}")
+
+    # ── 4b. コース種別×年の分布（中立点の妥当性診断） ────────────────
+    if args.by_track_year:
+        try:
+            _print_track_year_distribution(
+                session, args.rpci_min, args.rpci_max, args.month_from, args.month_to
+            )
+        except Exception as exc:
+            print(f"  コース種別×年 集計エラー: {exc}")
 
     # ── 5. 外れ値レース詳細 ──────────────────────────────────────────
     if args.show_outliers:

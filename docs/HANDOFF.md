@@ -1,79 +1,1403 @@
 # HANDOFF — 現在の作業状態
 
-## 2026-08-02 10:07 JST OpenAI Codex 更新
+## 2026-08-02 (Claude Code → OpenAI Codex) 引き継ぎ ★最初にここを読む
 
-- 作業担当: OpenAI Codex
-- 引き継ぎ先: Claude Code
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
 - ブランチ: `claude/sweet-einstein-ilnaov`
-- 作業開始コミット: `d751bf8`
+- 最新コミット: `c89f902`（origin へ push 済み・作業ツリーはクリーン）
+- 本セッションのコミット: `7e10be2`〜`c89f902` の16件
+
+### ⏳ Codexが最初にやること（詳細は末尾「再開手順」）
+
+**ユーザーのWindows実行機でダートRPCIモデルの再学習が実行中。**
+その学習ログ（テストセット精度と`lap_derived_ratio`）を受け取るところから再開する。
+**学習ログを見る前に新規実装を始めないこと。** 次の判断がその数値に依存する。
+
+### 本セッションで何が起きたか（要約）
+
+一般公開に向けた完成度評価を起点に、中核指標の不具合を1件発見して修正し、
+ルールの前提そのものを実測で見直した。
+
+1. **`rpci_actual`の算出式が途中で切り替わっていた**（最重要）。
+   ラップ(S3/L3)があればTARGET準拠式、無ければ全馬PCI平均のフォールバックへ縮退する
+   2経路があり、**ダートで平均5.4pt乖離**する。ラップ保有率は2022〜2024年0%・2026年100%で、
+   年をまたぐRPCI比較が「式の違いを競馬側の変化」と取り違えていた。
+   → ユーザーが全期間（2022-01-01〜2025-07-23）を`--step results`で再取り込みし、
+   **全期間がラップ由来へ統一**された。副次効果として`rpci_actual`の外れ値が96件→**0件**。
+2. **展開有利度は前付け馬にしか効いていなかった**。式統一後の全期間検証で、
+   差し・追込は帯別好走率が平坦〜逆行し、係数をどう弱めても単調にならないと判明。
+   → **ADR-0010 を採用し`style-advantage-v4`へ**（差し・追込は常に互角）。
+3. **UI表示も実態へ合わせた**（ドメイン修正より先に実施）。差し・追込は「有利/不利」と
+   断定せず「展開の影響は小さい」と表示し、スコア数値と進捗バーを出さない。
+4. **同期プリフライトへ読み取り元MySQLの疎通確認を追加**（MySQL80停止時の遠回りを解消）。
+5. **モデルに学習来歴を残すようにした**（1.の再発防止）。
+
+### 数値で見た変化
+
+| 指標 | 修正前 | 現在 |
+|---|---|---|
+| 展開有利度（本番条件・全体） | **-12.8%** | **+1.7%** |
+| 同（ダート / 芝） | -16.8% / -9.8% | +2.3% / +1.8% |
+| ダート想定RPCI MAE | 5.522 | 4.529 |
+| ダート想定RPCI バイアス | +4.309 | **+3.373**（まだ大きい） |
+| `rpci_actual` 外れ値 | 96件 | **0件** |
+| 統合順位 1位馬勝率/好走率 | 21.5% / 51.5% | 19.0% / 50.5%（実質変化なし） |
+
+### ⚠️ 未解決・既知の問題（重要な順）
+
+1. **ダート想定RPCIのバイアス +3.373 が残る。** ダート中立点43.0に対し閾値帯は40〜46
+   （幅6pt）なので、判定が系統的にスロー側へずれる。**原因はほぼ確実に、ダートモデルの
+   学習データに旧式`rpci_actual`が混ざっていること**（学習は2026-06-01以前＝バックフィル前）。
+   → **これが現在再学習中の対象。** 本セッションの残作業はここだけ。
+2. **展開有利度は本番条件で+1.7%しかない。** オラクル条件（実績ペースを与えた場合）では
+   +8.5〜10.2%あるので、**予測誤差がシグナルの8割以上を食っている**。1.の解決で改善する見込み。
+3. **統合順位は1番人気（勝率約32%・複勝率約63%）に届いていない。** 19.0%/50.5%。
+   `style_advantage`は表示専用で統合順位には入っていないため、今回の修正は効いていない。
+4. **ダートは現行でも前付けの帯別好走率が単調にならない。** 係数ではなくダート固有の
+   別要因。ADR-0010の対象外として切り離してある。
+5. **`batch.py`の`results`送信失敗が exit 0 に埋もれる。** 7月に9日間気づけなかった事象の
+   構造が未修正のまま。`ingest_results()`の戻り値を`main()`が受け取っていない
+   （`batch.py:735-743` vs `:503-507`）。今回のMySQL停止と同じ「失敗が見えない」系。
+6. **2025年のみ取り込みが不完全。** ラップ保有率が芝94.8%・ダート97.6%（約77レース）。
+   同年だけ脚質未設定%も突出（芝5.5%）しており、成績が正しく取り込まれていないレース群が
+   存在する。別途追跡が必要。
+7. **`-PreflightOnly`の実動作が未確認。** PowerShellがクラウド環境に無いため未実行。
+   括弧・try/finally/catchの対応は目視確認済み。次にWindows実行機を触るとき確認すること。
+
+### 🧪 仮実装・未確定仕様
+
+- **`StyleAdvantageWeights`**: 差し0.0/追込0.0はADR-0010で**確定**。
+  `escape_gain=1.2` / `front_gain=1.0` / `slope_per_point=4.0` / クランプ[5,95] /
+  `escape_crowd_penalty=6.0`は引き続き🧪暫定。
+- **`AbilityWeights`**: `recent_races=5`維持（10走候補は実DB比較で不採用）。
+  成分ブレンド（form0.55/賞金0.30/人気0.15）は`form-only`が2期間・全指標で上回ったが、
+  母数拡大による結論反転が初見のためユーザー判断で**採用見送り・様子見**。
+  `--compare-ability-weights`に候補は残してある。
+- **`RuleWeights`のダート閾値40.0/46.0・中立点43.0**: 式統一後の分布でも
+  スロー側割合は50.7〜57.7%とおおむね半々で、再較正は不要と判断した（変更していない）。
+- **`PaiWeights`**、`_NEIGHBOR_BLEED_RATIO`、`FormationWeights`、`STALE_AFTER_DAYS`:
+  従来どおり🧪暫定（本セッションで触れていない）。
+
+### 検証結果（すべてこの引き継ぎ時点で実行）
+
+| 対象 | 結果 |
+|---|---|
+| API `pytest tests/unit/ tests/contract/` | **620 passed** |
+| ingestion-worker `pytest tests/` | **249 passed** |
+| Web `npm run test` | **136 passed**（19ファイル） |
+| API `ruff check src/ tests/ scripts/` | pass |
+| ingestion `ruff check src/ tests/` | pass |
+| API `mypy src/ --strict` | **0エラー**（65ファイル） |
+| `lint-imports` | 2 kept, **0 broken** |
+| Web `typecheck` / `build` | pass / success |
+
+**既存の（本セッション以前から存在する）型エラー**（いずれも`src/`外のため
+CLAUDE.mdの基準には抵触しない。本セッション前後で同数であることを確認済み）:
+- `apps/api/scripts/` 6件（`backtest_forecast.py` no-redef 1、`repair_rpci.py` 2、
+  `train_rpci_lgbm.py` lightgbm callbacks 1 ほか）
+- `apps/ingestion-worker/src/ingestion/client/windows_client.py` 3件（has-type）
+
+### 再開手順（Codexが最初に実行するコマンド）
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+.venv\Scripts\python.exe -m pytest tests/unit/ tests/contract/ -q
+```
+
+そのうえで、**ユーザーから再学習ログを受け取ってから**下記「Codexへの引き継ぎ事項」へ進む。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `docs/adr/0010-style-advantage-asymmetry.md`（Accepted・実測値と全経緯）
+3. `docs/SPEC.md` §3.4（🚨2項目＋一次データ）
+4. `apps/api/scripts/train_rpci_lgbm.py`（`_write_training_provenance`）
+5. `tasks/current.md`
+
+## 2026-08-02 (Claude Code) 同期プリフライトへ「読み取り元MySQL」の疎通確認を追加
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+
+### 背景（実際に発生した事象）
+
+ユーザーが手動同期を実行したところ、MySQL80サービスが停止していたため失敗した。
+問題は失敗したこと自体ではなく、**原因に辿り着くまでの遠回り**だった。
+
+1. プリフライトが「API と PostgreSQL は ready」と表示して通過
+2. `mykeibadb.exe` が7秒で **exit 0**（MySQLが無いので実際には何もできていない）
+3. `batch.py` が接続拒否で落ち、30秒・60秒待って3回リトライ
+
+プリフライトが確認していたのは**書き込み先だけ**で、肝心の**読み取り元**を
+見ていなかった。「準備OK」と出た直後に接続拒否で落ちるため、かえって紛らわしい。
+
+### 実施内容
+
+- `src/ingestion/check_mykeibadb.py`（新規）
+  - `batch.py`と同じ`MyKeibaDbConfig.from_env()`で実際に接続し、
+    `SHOW TABLES`まで確認する。設定の解釈がズレない。
+  - TCPポート疎通ではなく実接続にしたのは、サービス停止（§6.1）だけでなく
+    認証失敗（§6.2）・DB名違いも同じ入口で捕まえるため。
+    エラーコード（2003/1045/1698/1049）で分類し、MANUAL_SYNC_GUIDEの該当節へ誘導する。
+  - テーブル0件も失敗扱い。初回取り込みが走っていない空DBを「正常」と誤判定しないため。
+  - pymysqlは任意extra（`.[mysql]`）なので、importは関数内で行い未インストール時は
+    インストールコマンドを表示する。
+- `scripts/run_mykeibadb_full_sync.ps1`
+  - `Test-MykeibadbReadiness`を追加し、`mykeibadb.exe`起動前に実行する。
+  - `2>&1`で拾ったstderrをPowerShellが終了エラーにしないよう、
+    呼び出し中だけ`$ErrorActionPreference`をContinueへ落とす
+    （`run_batch.ps1`が既に同じ対処をしている既知の罠）。
+- `MANUAL_SYNC_GUIDE.md`
+  - プリフライトが読み取り元も見ることを明記し、単独実行コマンドを追加。
+  - §6.1へ「services.msc から起動するのが最速」を追記
+    （PATHに依存しないため、MySQL Workbenchが`Unable to execute command chcp`で
+    使えない状態でも起動できる。これはWorkbench側のPATH問題で、MySQL本体とは別件）。
+
+### 検証
+
+- ingestion 249 tests（新規10件）、ruff 全pass。
+- `mypy src/ --strict`: 新規ファイルは0エラー。既存の`windows_client.py`に3件の
+  エラーが残るが、これは本変更以前から存在する（stashして確認済み）。
+- PowerShellはこの環境に無いため未実行。括弧・try/finally/catchの対応は目視確認済み。
+  **次にWindows実行機を触るとき、`-PreflightOnly`で動作確認すること。**
+
+### 未確認・次にやること
+
+- `-PreflightOnly`での実動作確認（Windows実行機）。
+- 関連する既知の穴として、`batch.py`の`results`送信失敗が
+  exit 0 に埋もれる問題が未修正のまま残っている（2026-07-26 (13)の調査で判明）。
+  今回の変更はこれとは別件。
+
+## 2026-07-26 (14) (Claude Code) ✅ ADR-0010 採用 — style-advantage-v4（後方脚質は採点しない）
+
+- 作業担当: Claude Code（実DB検証はユーザーがWindows実行機で実施）
+- 引き継ぎ先: OpenAI Codex
+- 追加コミット: `7ecfed4`（脚質別係数と候補比較CLI）/ `562dcf9`（比較の欠陥修正）/
+  `deae219`（自在の取り下げ）/ 本コミット（採用）
+
+### 検証と決定
+
+独立2期間（2022〜2024 / 2025〜2026-07）× 芝・ダートの4条件で
+`--compare-style-advantage-weights`を実行し、候補を比較した。
+
+| 候補 | 芝22-24 | ダ22-24 | 芝25-26 | ダ25-26 |
+|---|---|---|---|---|
+| closer-weak | +2.9% | +0.0% | +2.7% | +1.1% |
+| closer-mild | +0.9% | +0.2% | +1.4% | +0.2% |
+| flexible-only | +0.8% | +0.3% | +0.1% | **-0.8%** |
+| measured | +2.6% | +0.3% | +1.3% | **-0.6%** |
+| **back-neutral** | **+8.1%** | **+3.4%** | **+4.0%** | **+0.6%** |
+
+**`back-neutral`（差し・追込を常に互角）を採用**し、`style-advantage-v4`とした。
+
+### 当初の提案から変わった点（重要）
+
+1. **自在の採点対象化は取り下げた。** 一次データでは自在が先行と同等に反応していたが、
+   実際に採点すると直近ダートで悪化（-0.8%/-0.6%）し、自在自身の帯別単調性も
+   4条件中1条件でしか成立しなかった。**「ペースに反応する」ことと
+   「有利不利の分離に貢献する」ことは別**だった。
+   → `entries`は4件のままで、**API公開スキーマとWeb表示への影響はなくなった**。
+2. **ADRに書いた採用条件のひとつが誤りだったため改訂した。**
+   「差し追込グループが単調であること」は、後方を順序づけないと決めた候補に対しては
+   原理的に満たせない。単調性は候補が順序づけを主張しているグループにのみ課す。
+3. **比較ツール自体にも欠陥があり、先に直した**（`562dcf9`）。
+   自在がどのグループにも属さず単調性を確認できなかった点と、
+   `stalker_gain=0`が差しを1帯へ潰して判定を無意味にしていた点。
+
+### 実装内容
+
+- `domain/pace/style_advantage.py`
+  - 既定を`stalker_gain=0.0` / `closer_gain=0.0`へ（差し・追込は常に50）。
+    `escape_gain=1.2` / `front_gain=1.0`は据え置き（前付け側は実測と整合していた）。
+  - `MODEL_VERSION`を`style-advantage-v4`へ。
+  - `reasons`の文言から「ハイ→後ろが有利」を削除し、前付けについて言えることだけを述べる。
+- OpenAPI / `packages/api-client`を再生成（`model_version`の説明文のみの差分）。
+- 2026-07-26にUI層で先行実施した「差し・追込は展開の影響は小さい」という表示が、
+  これでドメインの挙動と一致した（スコアが常に50＝互角）。
+
+### 検証
+
+API 616 tests・ruff・mypy --strict（65ファイル）・lint-imports、
+Web 136 tests・typecheck・production build すべて成功。
+
+### 残課題
+
+- **ダートは現行でも前付けの帯別好走率が単調にならない。** 係数ではなく
+  ダート固有の別要因。本件と切り離して追う必要がある。
+- 有利／不利ラベルが付く馬は減る（芝で全体の約3割）。主張の数は減るが精度は上がる。
+  実運用で体感を確認したい。
+- `escape_gain`/`slope_per_point`/クランプ幅は引き続き🧪暫定。
+
+### Codexが最初に確認するファイル
+
+1. `docs/adr/0010-style-advantage-asymmetry.md`（Accepted・全経緯と実測値）
+2. `docs/SPEC.md` §3.4
+3. `apps/api/src/pci/domain/pace/style_advantage.py`
+
+## 2026-07-26 (13) (Claude Code) 🚨 展開有利度は「前付け馬」にしか効いていないと判明（要設計判断）
+
+- 作業担当: Claude Code（実DB実行はユーザーがWindows実行機で実施）
+- 引き継ぎ先: OpenAI Codex
+- 追加コミット: `f4ff23e`（帯別集計）/ `34ee306`（脚質グループ別集計）
+- 前提: (12)のバックフィル完了後、全期間が同一式になった状態での再検証
+
+### バックフィルの結果（(12)の続き）
+
+ユーザーが2022-01-01〜2025-07-23の`--step results`を再実行し、`rpci_actual`が
+全期間でラップ由来（TARGET準拠）に統一された。
+
+- ダートの1〜7月平均は2022〜2026年で41.1〜42.0へ収束（旧: 2022〜2025年45.9〜46.2 / 2026年42.0）。
+  **「2026年にダートが激変した」という現象は式の違いだったと確定**。
+- 副次効果: `rpci_actual`の外れ値が96件→**0件**（最小2.00/最大96.90 → 20.90/72.00）。
+  ラップ由来式は個々の馬のタイム異常の影響を受けず、フォールバックより頑健。
+- 残課題: 2025年のみラップ保有率が芝94.8%・ダート97.6%と未達（約77レース）。
+  同じ2025年だけ脚質の未設定%も突出（芝5.5%・ダート3.0%、他年0.7〜1.0%）しており、
+  **成績が正しく取り込まれていない2025年のレース群が存在する**。別途追跡が必要。
+
+### 統一後の再検証で判明したこと
+
+`--validate-style-advantage`で全期間（芝63,646頭・ダート70,942頭）を再測定した結果、
+**旧来の「ダートで+8〜12pt」は較正ずれによる見かけの数字**だったと確定した。
+
+| | 旧測定 | 統一後 |
+|---|---|---|
+| 芝 全体 | +4.6% | **+2.9%** |
+| ダート 全体 | +8.9% | **+2.9%** |
+
+旧ダートの高い数字は、82%のレースが「スロー＝前有利」と判定されていたため、
+**「ペースを読めていた」のではなく「ダートは前が止まりにくい」という恒常傾向を
+拾っていただけ**だった。
+
+### 🚨 核心的な発見: 有利度は前付け馬にしか効いていない
+
+脚質グループ別の帯集計（`34ee306`で追加）で、対ベース好走率が以下と判明した。
+
+| グループ | 不利 | やや不利 | 互角 | やや有利 | 有利 |
+|---|---|---|---|---|---|
+| 芝・前付け（19,388頭） | 0.84x | 0.89x | 1.02x | 1.07x | **1.18x** |
+| ダート・前付け（18,598頭） | 0.94x | 0.88x | 0.96x | 1.03x | **1.14x** |
+| 芝・差し追込（44,258頭） | 1.03x | 0.99x | 0.98x | 1.01x | **0.98x** |
+| ダート・差し追込（52,344頭） | 0.94x | 0.99x | 1.03x | 1.08x | **1.02x** |
+
+- **前付けは両コースとも単調**で、芝は0.84x→1.18xと大きく分離する。
+- **差し追込は芝で完全に平坦**（0.98〜1.03x、しかも「不利」帯が最高）、
+  **ダートは「有利」帯で逆行**する。
+- 全体の+2.9%は**前付け馬だけが稼いでいる**。差し追込は出走頭数の70〜74%を
+  占めるがシグナルがなく、ダート相関-0.000・芝+0.037の主因はここ。
+- 解釈: 「スロー→前が楽に運べる」は成立するが、「ハイ→差しに向く」は成立しない。
+  ペースが速いことは前が苦しくなる理由にはなっても、特定の差し馬が届く理由にはならない。
+
+### 併せて判明: ベースライン好走率が脚質で約2倍違う
+
+| | 前付け | 差し追込 |
+|---|---|---|
+| 芝 | 33.9% | 18.2% |
+| ダート | 33.9% | 15.9% |
+
+有利度スコアは全馬50中心のため、この差を全く表現していない。
+**スコア70の差し馬（実力16〜18%）を「有利」、スコア30の逃げ馬（実力32%）を「不利」と
+表示している**状態で、展開恩恵馬の抽出や統合順位にも波及している可能性がある。
+
+### 変更ファイル
+
+1. `apps/api/src/pci/application/backtest.py`
+   - `StyleAdvantageBand` / `StyleAdvantageGroupBands`を追加し、`StyleAdvantageLift`へ
+     `bands`（表示ラベル別）と`style_groups`（前付け／差し追込別）を持たせた。
+   - 帯の境界は web の`styleVerdict`と同一（等間隔帯にしない）。境界一致を検証するテスト付き。
+   - `StyleAdvantageSample`へ`running_style`を追加（既定None・既存呼び出しは非破壊）。
+2. `apps/api/tests/unit/application/test_backtest.py`（帯境界・帯合計・脚質分割の3件を追加）
+3. `docs/SPEC.md` §3.4、`docs/HANDOFF.md`（本節）、`tasks/current.md`
+
+**ドメイン層のコード・係数は一切変更していない。**
+
+### 実施した暫定対応（ユーザー判断で「UI表示だけ先に直す」を選択）
+
+ドメイン層のスコア算出・係数は**一切変更していない**。表示だけを実態へ合わせた。
+
+- `apps/web/src/lib/pace.ts`: `StyleAdvantageScore`へ`isDirectional`/`note`を追加。
+  `DIRECTIONAL_STYLES`（逃げ・先行）以外は verdict を「展開の影響は小さい」に置換する。
+  判定を1箇所に閉じたので、PC・スマホ双方が同じ基準になる。
+- `RaceForecastDashboard.tsx` / `MobileRaceForecastDashboard.tsx`:
+  差し・追込では**スコア数値と進捗バーを描画しない**。文言で「影響は小さい」と書いても
+  大きな数値と満杯のバーが並ぶと視覚が勝って「有利」と読まれるため。
+  理由文はリスト下に一度だけ置く（脚質ごとに繰り返さない）。
+- `PaceProfileChart.tsx`: `muted`フラグを追加し、差し・追込は淡色＋「（参考）」表示。
+- ハイペース時の文言から裏付けのない主張を外した
+  （「差し・追い込みが届きやすい」→「前に行く馬には厳しい」等）。
+  スロー時の「逃げ・先行が粘りやすい」は実データが支持するため変更していない。
+- 検証: Web 136 tests（新規2件・既存1件を新仕様へ更新）、typecheck、build成功。
+  Playwrightで実コンポーネントをレンダリングし、PC・スマホ・プロファイルの3箇所を目視確認。
+
+### 一次データの測定と ADR-0010 の起票
+
+ドメイン是正の判断材料が、有利度スコア経由の測定しかなかった（＝現行ルールの
+答え合わせしかできない）ため、`--pace-style-matrix`を追加した（commit `baad549`）。
+実績ペース×確定脚質の素の好走率を、有利度ルールを介さず集計する。
+自在は有利度の対象外だが出走の3割超を占めるため集計対象に含めた。
+
+**実測結果（2022-01-01〜2026-07-21、芝101,478頭・ダート107,828頭）**
+
+「スロー−ハイ」の差（各脚質の自平均に対する比）:
+
+| 脚質 | 芝 | ダート | 現行の乗数 | 実測から示唆される乗数 |
+|---|---|---|---|---|
+| 逃げ | +0.33 | +0.15 | +1.2 | 約 +1.3 |
+| 先行 | +0.19 | +0.16 | +1.0 | +1.0 |
+| **自在** | **+0.17** | **+0.11** | **採点対象外** | 約 **+0.8** |
+| 差し | +0.05 | -0.04 | -1.0 | 約 **0.0** |
+| 追込 | -0.05 | -0.09 | -1.2 | 約 **-0.4** |
+
+- **ペース感応度は脚質間で最大6倍以上違う**。前後対称の単一係数は実態と合わない。
+- **自在は先行とほぼ同等に反応するのに、まったく採点されていない**。
+  出走頭数の34〜37%を占める最大グループであり、機会損失が大きい。
+- 差し・追込の反応は前付けの1/4以下。現行の-1.0/-1.2は過大。
+  前付け側の係数は概ね妥当で、**壊れているのは後方側と自在の欠落**。
+
+これを根拠に **`docs/adr/0010-style-advantage-asymmetry.md`（Status: Proposed）** を起票した。
+係数の具体値はADR内でも確定しておらず、`--compare-rule-weights`と同じ手順で
+独立2期間の検証後に採用する方針を明記している。
+
+### 次にやること（ADR-0010の採否をユーザーが判断）
+
+採用する場合の影響範囲:
+
+- `StyleAdvantageWeights`を脚質ごとの独立係数へ（現行は`escape_gain`/`closer_gain`の2つ）。
+- `_SCOREABLE_STYLES`へ`FLEXIBLE`を追加し、`entries`が4件→5件になる。
+  **API公開スキーマとWeb表示が変わる**（OpenAPI/api-client再生成、
+  `PaceProfileChart`・展開分析カードの5行対応が必要）。
+- 採用条件は ADR-0010「採用条件」節を参照（両グループ単調・両コースで現行以上・
+  独立2期間で再現）。
+
+**判断までドメイン層の係数・設計は変更しない。**
+
+既知の未検証点: 自在は「どの分類にも寄らない」残余カテゴリであり、
+`running_style.py`の判定閾値そのものの妥当性は未検証。判定精度が低ければ
+採点しても効果が出ない可能性がある（ADR-0010のNegativeに記載）。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節と(12)）
+2. `docs/SPEC.md` §3.4 の🚨2項目
+3. `apps/api/src/pci/domain/pace/style_advantage.py`
+4. `apps/api/src/pci/application/backtest.py`（`_summarize_style_advantage_groups`）
+
+## 2026-07-26 (12) (Claude Code) 🚨 展開有利度のダート崩壊は「rpci_actual の算出式切替」が原因と特定
+
+- 作業担当: Claude Code（実DB実行はユーザーがWindows実行機で実施）
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 追加コミット: `7e10be2` / `1d33c3f` / `962a369`（`scripts/diagnose_rpci.py`の診断拡張）
+
+### 発端
+
+一般公開に向けた完成度評価の一環でバックテスト出力を精査したところ、
+展開有利度（`style-advantage-v3`）が2026年前半で逆相関になっていた
+（直近300レース混合で -10.7pt、芝 -9.9pt、ダート -11.8pt）。
+本プロダクトの中核指標のため、公開可否に直結する問題として切り分けを行った。
+
+### 切り分けの経過（すべて実DB・ユーザー実行）
+
+1. `--diagnose-style-advantage`（4パターン）で2026年前半を診断。入力を確定値に
+   置換しても改善せず、当初は「ルール自体の問題」と判断した。**この判断は誤り**で、
+   `--limit 300`がコース別だと直近2ヶ月しか見ておらず、期間の切り取りが原因だった。
+2. `--validate-style-advantage --style-breakdown year`（2022〜2026、芝61,919頭・
+   ダート70,000頭）で、**ルールは5年間・両コースで一貫して有効**と判明
+   （芝+3.1〜+6.1pt、ダート+7.7〜+11.9pt）。2026年のダートだけ+2.9ptへ低下。
+3. 同一月窓（5〜7月）で前年と比較。芝は2025年+2.5%→2026年+4.4%で問題なし。
+   **ダートのみ2025年+18.8%→2026年-0.6%**。季節性ではないと確定。
+4. `scripts/diagnose_rpci.py --by-track-year`を新規追加して分布を直接観測。
+   当初は通年と部分年（2026年は1〜7月のみ）を並べる交絡があったため、
+   `--month-from/--month-to`を追加して月窓を揃えた（`1d33c3f`）。
+
+### 確定した原因
+
+`aggregate_rpci`（`domain/pace/pci.py`）には**2つの算出経路**がある。
+
+- レースラップ由来（`race_s3f`/`race_l3f`あり）: TARGET準拠の正式式
+- フォールバック: 全完走馬PCIの平均（docstring上も「暫定」）
+
+この2経路は**ダートで平均5.4pt乖離する**（2025年1〜7月の同一期間内比較で
+ラップ由来40.9／代替46.3）。芝は約1.6ptしか離れない。
+
+ラップ保有率（1〜7月）:
+
+| 年 | 芝 | ダート |
+|---|---|---|
+| 2022〜2024 | 0.0% | 0.0% |
+| 2025 | 4.0% | 2.8% |
+| 2026 | **100.0%** | **100.0%** |
+
+2025-07-24以降のラップバックフィル境界と一致する。つまり**2026年のダート平均42.0は
+競馬の変化ではなく、式がフォールバックからラップ由来へ全面的に切り替わった結果**。
+
+ダートの中立点43.0（閾値40.0/46.0の中点）は旧フォールバック分布で較正されていたため、
+新分布とは合わない。中立点に対する「スロー側」割合が82%前後→57.7%へ動き、
+「有利」と判定される馬が24%→42%に増えて選別力を失った。
+芝が壊れていないのは、2経路の差が小さく較正がほぼそのまま通用するため。
+
+### 判明した副次的な含意
+
+- **年をまたぐRPCI関連のバックテストは式の違いを含む**ため、絶対値の比較は
+  そのままでは成立しない（候補同士を同一データで比べる相対比較への影響は限定的）。
+- `--monitor-dirt-v4`で観測されていた想定RPCIバイアス+4.071は、この文脈で
+  再評価が必要（学習データと評価データで式が混在している可能性）。
+- 現時点の**ダートの展開分析はユーザーに誤った内容を表示している**状態。
+
+### 変更ファイル
+
+1. `apps/api/scripts/diagnose_rpci.py`（`--by-track-year` / `--month-from` /
+   `--month-to` を追加。RPCI分布・確定脚質構成比・算出経路の3表を出力）
+2. `docs/SPEC.md` §3.4（🚨項目を追加。2026-07-23時点の「開催条件に局在」という
+   解釈は見直しが必要と明記）
+3. `docs/HANDOFF.md`（本節）、`tasks/current.md`
+
+ドメイン・アプリ層のコードは変更していない。閾値・中立点も**変更していない**
+（対処方針が未確定のため、独断で較正しない）。
+
+### 次にやること（未実施）
+
+1. **mykeibadbが2022〜2025年のラップを保持しているか確認**する。
+   ```cmd
+   cd apps\ingestion-worker
+   .venv\Scripts\python.exe -m ingestion.diagnose_lap_coverage --date 20220101 --date-to 20250723
+   ```
+   - 保持していれば → 全期間をバックフィルして式を統一し、そのうえでダート閾値を再較正する。
+     全期間の履歴が同一式になるため、モデル再学習と過去バックテストの信頼性も回復する。
+   - 保持していなければ → ラップ由来分布（2025-07-24以降）だけでダート閾値40.0/46.0を
+     較正し直す。標本は約1年に限られる。
+2. 対処が入るまでの暫定措置として、ダートの`reliability`を`reference`に落として
+   表示上の強い推奨を避けるかを検討する（既存機構で実装可能）。
+3. ダートRPCI v4モデルの学習データに旧式が混在していないか確認する。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `docs/SPEC.md` §3.4 の🚨項目
+3. `apps/api/src/pci/domain/pace/pci.py`（`aggregate_rpci`の2経路）
+4. `apps/api/src/pci/domain/pace/style_advantage.py`（`neutral_rpci`）
+5. `apps/api/scripts/diagnose_rpci.py`
+
+## 2026-07-26 (11) (Claude Code) 成分ブレンド重み再検証（2026-07-22と同日付区切り・母数拡大） → 採用は様子見
+
+- 作業担当: Claude Code（実DB実行はユーザーがWindows実行機で実施）
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 前提: (10)で発見した「2026-07-22の成分ブレンド結論との食い違い」の追跡調査
+
+### 経緯
+
+(10)の`recent10`検証と同じ2回の実行で、成分ブレンド候補`form-only`/`form-heavy`が
+たまたま両期間・全指標改善という結果だった。ただし使った日付区切り
+（直近200件・〜2025-12-31以前200件）が2026-07-22の比較
+（2025-07-01〜12-31・2026-01-01〜07-21）と異なるため、即断せず同じ日付区切りで
+再検証することをユーザーに確認し、実施した。
+
+### 実DB再検証結果（`--date-from`/`--date-to`を2026-07-22と揃え、`--limit 300`）
+
+母数は2026-07-22時点より増加している（2025-07-01〜12-31: 212→300件、
+2026-01-01〜07-21: 97→300件。データ蓄積が進んだため）。
+
+| 候補 | 2025-07-01〜12-31 (300件) | 2026-01-01〜07-21 (300件) | 判定 |
+|---|---|---|---|
+| form-only | +0.7% / +2.7% / +0.9% | +2.3% / +0.7% / +1.3% | 両期間・全指標改善 |
+| form-heavy | -0.3% / +1.0% / +0.5% | +1.7% / +2.3% / +0.8% | 前半期間の1位勝率のみ悪化 |
+| market-aware | +0.0% / +0.3% / +0.0% | -1.3% / -4.0% / +0.0% | 後半期間で明確に悪化 |
+| recent10 | +1.0% / +1.0% / -0.8% | +0.0% / -1.3% / -0.5% | 両期間TOP3捕捉率が悪化（(10)の不採用判断を再確認） |
+
+（列は1位勝率(差)／1位好走率(差)／TOP3捕捉率(差)）
+
+### 判断: 今回は採用を見送り、現行ブレンド（form0.55/本賞金0.30/人気0.15）を維持
+
+- `form-only`は同じ日付区切りでも両期間・全3指標が改善し、採用基準（両期間で
+  全指標が悪化しないこと）を満たしている。2026-07-22時点は満たしていなかったため、
+  母数拡大（212→300、97→300）で結論が反転した可能性がある。
+- ただし母数拡大による結論反転は今回が初見で、安定して再現するかは未確認。
+  ユーザーに採用可否を確認したところ、**「もう少し様子見」**を選択された
+  （データがさらに増えた後の安定性を見てから判断したい）。
+- コード変更なし。`AbilityWeights`のデフォルト（`weight_form=0.55` /
+  `weight_prize=0.30` / `weight_popularity=0.15`、`ability.py:44`付近）は変更していない。
+
+### 未実施・次の担当への引き継ぎ
+
+データがさらに蓄積された時点（次回の実DB検証タイミング）で、同じ日付区切り
+（2025-07-01〜12-31、2026-01-01〜07-21）または新しい直近期間で`form-only`が
+引き続き両期間・全指標を改善するか再確認すること。安定して再現するなら
+`AbilityWeights`のデフォルトを`weight_form=1.0`/`weight_prize=0.0`/
+`weight_popularity=0.0`へ変更し、関連テスト・ゴールデン値を更新する。
+
+### 変更ファイル
+
+1. `docs/SPEC.md`（§9-16 に再検証結果を追記）
+2. `docs/HANDOFF.md`（本節）
+3. `tasks/current.md`
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `docs/SPEC.md §9-16`
+3. `apps/api/src/pci/domain/pace/ability.py`（`AbilityWeights`のデフォルト値）
+
+## 2026-07-26 (10) (Claude Code) 地力(ability)参照走数10走の実DB検証結果 → 不採用、5走を維持
+
+- 作業担当: Claude Code（実DB実行はユーザーがWindows実行機で実施）
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 前提: (9)で追加した`recent10`候補・不具合修正の実DB検証
+
+### 実DB比較結果（ユーザー実行、`--compare-ability-weights`）
+
+2つの独立期間で`recent10`（`AbilityWeights(recent_races=10)`）と現行（5走）を比較。
+
+| 期間 | 1位勝率(差) | 1位好走率(差) | TOP3捕捉率(差) |
+|---|---|---|---|
+| 直近200レース（〜2026-07-26） | 23.0%(+1.5%) | 50.5%(-1.0%) | 40.7%(-0.3%) |
+| 〜2025-12-31以前200レース | 20.0%(+1.5%) | 41.5%(+1.5%) | 35.2%(-0.5%) |
+
+### 判断: 不採用（`recent_races=5`を本番維持）
+
+- 1位勝率は両期間で+1.5%と安定して改善。
+- しかし**TOP3捕捉率は両期間とも悪化**（-0.3%/-0.5%）し、1位好走率は
+  符号が不安定（-1.0%→+1.5%）。
+- `RuleWeights`・`PaiWeights`・既存`AbilityWeights`ブレンド比率の検証と同じ基準
+  （両期間で全指標が悪化しないことを採用条件とする）を満たさないため、
+  `AbilityWeights.recent_races`のデフォルトは変更せず、現行5走を維持する。
+- `recent10`候補は`DEFAULT_ABILITY_WEIGHT_PROFILES`に残す（データ蓄積後の
+  再検証や将来のADR判断で再利用できるようにするため、削除しない）。
+
+### 副次的な発見（今回は未決着・要ユーザー判断）
+
+同じ2回の実行結果で、成分ブレンド候補`form-only`（近走100%）・`form-heavy`
+（近走70%）が**両期間・全3指標を改善**していた（例: form-only 直近200で
++2.0%/+0.5%/+1.5%、〜2025-12-31以前200で+1.5%/+3.5%/+1.0%）。
+
+これは2026-07-22に実施済みの同候補比較（2025-07-01〜12-31・212レース／
+2026-01-01〜07-21・97レースで「両期間で全指標が改善する候補はなく現行維持」と
+結論。0Bエントリ参照）と食い違う。期間の区切り方・母数が異なる比較であり、
+どちらが正しい／再現性があるかは今回の2回（各200件・日付境界も異なる）だけでは
+判断できない。**本セッションでは成分ブレンドの変更提案はせず、事実として記録するに
+留める**。次に着手する場合は、2026-07-22と同じ日付区切り（2025-07-01〜12-31、
+2026-01-01〜07-21）で再現するか確認してから判断すること。
+
+### 変更ファイル
+
+1. `docs/SPEC.md`（§9-16 に実DB検証結果と副次発見を追記）
+2. `docs/HANDOFF.md`（本節）
+3. `tasks/current.md`
+
+コード変更はなし（判断の記録のみ）。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `docs/SPEC.md §9-16`
+3. `apps/api/src/pci/application/backtest.py`（`DEFAULT_ABILITY_WEIGHT_PROFILES`）
+
+## 2026-07-26 (9) (Claude Code) 地力(ability)の参照走数10走候補を準備（本番は5走のまま・重要なハードコード不具合を修正）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザー提案）
+
+ユーザーから「統合順位予想で使う地力は近走5走を参照しているが、短すぎて、
+本来得意なペースで走った6走目以降のデータを見落とす恐れがある。5走から10走へ
+変更すべきではないか」との提案があった。
+
+### 調査結果（ユーザーへ回答済み）
+
+1. **「得意なペース」判定は既に5走に限定されていない**:
+   - `affinity.py`の`build_horse_pace_affinity_profile`（PAI適性、「馬ごとの得意な
+     レース質」）は`forecast_use_cases.py`の`_build_affinity_profile`経由で
+     **最大12走**を参照している（好走＝3着以内・重賞なら5着以内のみ抽出）。
+   - 前付けペース傾向（rule-v2）・前後半3F履歴（RPCI v4特徴量）は**10走**参照。
+   - 5走に限定されているのは**「地力(ability)」と「脚質判定」の2つだけ**。
+   ユーザーの提案対象を「地力」と確認した上で作業した。
+2. **重要な副次発見（不具合）**: `AbilityWeights.recent_races`（現行5）を
+   バックテスト等で変更しても反映されない不具合があった。
+   `forecast_use_cases.py`の`_build_ability_score`が、`AbilityScorer`へ渡す前に
+   独自に`history[:5]`とハードコードしており、`AbilityScorer.score()`内部の
+   `[: w.recent_races]`スライスに実質的に到達する前に既に5走へ切り詰められていた。
+
+### ユーザーとの合意事項
+
+検証方針をAskUserQuestionで2案（比較ツールに10走候補を追加／検証を待たず
+今すぐ10走へ変更）提示し、**「比較ツールに10走候補を追加（推奨）」**を選択された。
+本番デフォルト（`recent_races=5`）は変更していない。
+
+### 実施内容（`apps/api`）
+
+- `application/forecast_use_cases.py`: `_build_ability_score`の
+  `history[:5]`ハードコードを撤去し、`AbilityScorer`へ取得済み履歴を
+  そのまま渡すよう修正（走数の決定は`AbilityWeights.recent_races`だけに委ねる）。
+- `application/backtest.py`: `DEFAULT_ABILITY_WEIGHT_PROFILES`へ`recent10`候補
+  （`AbilityWeights(recent_races=10)`、説明「参照走数を5走→10走へ拡大」）を追加。
+  既存の`--compare-ability-weights`（`ForecastBacktester`経由で本番と同じ
+  `ForecastRaceUseCase`を使う）が自動的にこの候補も比較する。
+- `tests/unit/application/test_forecast_use_cases.py`: 上記不具合の回帰テストを
+  追加。直近5走（1〜5走前）を不振の未勝利戦、6〜8走前をG1好走とする8走分の
+  履歴を用意し、`recent_races=10`のスコアラーでは`sample_size=8`・
+  地力スコアが現行（5走・不振のみ見る）より高くなることを確認する。
+  日数はすべて180日以内（新しさ減衰の影響を排除）に収めた。
+
+### 検証
+
+- API 598 tests（新規1件）、ruff、mypy --strict（65ファイル）、
+  lint-importsすべて成功。OpenAPI/schemaは変更していない
+  （API契約に影響する変更なし、内部ロジックとバックテスト候補の追加のみ）。
+
+### 未実施・次の担当への引き継ぎ
+
+このクラウド環境からは実DB接続ができないため、以下はユーザー（Windows実行機）に
+委ねる。
+
+```cmd
+cd apps\api
+.venv\Scripts\python.exe -m scripts.backtest_forecast --limit 200 --compare-ability-weights
+```
+
+出力される`recent10`候補の1位馬勝率・1位馬好走率・TOP3捕捉率が、現行（5走）と
+比べて2期間（できれば2025年後半・2026年前半など）で安定して改善するか確認する。
+`RuleWeights`・`PaiWeights`・既存の`AbilityWeights`ブレンド比率と同様、
+一方の指標だけ改善して他が悪化する場合は不採用とし、本番`recent_races=5`を維持する
+方針で判断すること。採用する場合は`AbilityWeights.recent_races`の
+デフォルト値を変更し、ゴールデンテスト・回帰テストの期待値を合わせて更新する。
+
+### 変更ファイル
+
+1. `apps/api/src/pci/application/forecast_use_cases.py`
+2. `apps/api/src/pci/application/backtest.py`
+3. `apps/api/tests/unit/application/test_forecast_use_cases.py`
+4. `tasks/current.md`
+5. `docs/HANDOFF.md`
+
+`recent_races`自体は`docs/SPEC.md §9-16`に記載済みの🧪暫定係数の一部であり、
+今回新たに仕様化・確定したものはないため`docs/DECISIONS.md`は更新していない。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/api/src/pci/application/backtest.py`（`DEFAULT_ABILITY_WEIGHT_PROFILES`）
+3. `docs/SPEC.md §9-16`（AbilityWeightsの暫定係数一覧）
+
+---
+
+## 2026-07-26 (8) (Claude Code) スマホに統合順位予想（展開×能力）を追加
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザー報告）
+
+ユーザーがスマホ画面（注目馬タブ）のスクリーンショットを提示し、「PC版では展開・能力を
+鑑みた全馬の総合予想順位が表示されるが、スマホでは見れない。これは仕様か」と質問した。
+
+### 調査
+
+`grep`で`IntegratedRankingView`の使用箇所を確認したところ、`RaceForecastDashboard.tsx`
+（PC版、`検討サマリー`直後・`隊列予想`の前に配置）にしか組み込まれておらず、
+`MobileRaceForecastDashboard.tsx`（スマホ版、サマリー/隊列/注目馬/詳細の4タブ構成）
+には一度も追加されていなかった。統合順位予想はこのセッション前半にPhase1/2として
+新規実装した機能で、その後（別セッションでのCodexによる）スマホ全面改修に
+反映され忘れたのが原因（仕様ではなく実装漏れ）。
+
+### ユーザーとの合意事項
+
+追加先をAskUserQuestionで3案（注目馬タブへ追加／サマリータブ上部へ追加／
+サマリーに上位3頭プレビュー＋注目馬に全頭表示の両方）提示し、
+**「『注目馬』タブへ追加（推奨）」**を選択された。
+
+### 実施内容（`apps/web`）
+
+- `MobileRaceForecastDashboard.tsx`: 「注目馬」タブの先頭（既存の
+  「展開恩恵馬TOP5」より前）へ`{forecast.integrated_ranking ? <IntegratedRankingView
+  ranking={forecast.integrated_ranking} /> : null}`を追加した。サマリータブの
+  内容・構成は変更していない。
+- 副次対応: 枠色統一作業（前セッション(5)(6)）の際に見落としていた
+  `IntegratedRankingView.tsx`自身の重複した枠色定義（独自の`FRAME_CLASS`、
+  当時のgrep結果には含まれていたが実際の修正対象から漏れていた）を発見し、
+  共有の`lib/pace.ts`の`frameColorClass()`へ統一した。枠順未確定
+  （frame_no=0）時の表示も他画面と同じ「登録」表示へ揃えた
+  （従来は生の`horse_no`をそのまま表示していた）。
+- `IntegratedRankingView.tsx`にはテストが1件も無かったため、新規
+  `IntegratedRankingView.test.tsx`を追加した（上位5件常時表示・6位以下折りたたみ、
+  枠色バッジ、枠順未確定時の表示、分類/能力/展開適性タグ、エントリー0件時の
+  非表示を検証）。
+
+### 検証
+
+- Web 134 tests（新規6件）、typecheck、production buildすべて成功。
+- Playwright（`renderToStaticMarkup`＋ビルド済みTailwind CSS）で、
+  「注目馬」タブの実際の構成（統合順位予想＋展開恩恵馬TOP5を同一ページに
+  再現。`MobileRaceForecastDashboard`は非アクティブタブをSSRで描画しないため、
+  同じ構成をこのファイルの外で組み立てて確認）を390px幅でスクリーンショット確認。
+  横はみ出し無し、タグが多い行（3位など）も`flex-wrap`で自然に折り返すことを確認した。
+  一時プレビューファイルは確認後に削除済み。
+
+### 変更ファイル
+
+1. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+2. `apps/web/src/components/IntegratedRankingView.tsx`
+3. `apps/web/src/components/IntegratedRankingView.test.tsx`（新規）
+4. `tasks/current.md`
+5. `docs/HANDOFF.md`
+
+新しい設計判断（追加先タブ）はユーザーとのAskUserQuestionで確定済みのため
+`docs/DECISIONS.md`は更新していない。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+
+---
+
+## 2026-07-26 (7) (Claude Code) ダートレースの展開速度誤判定を修正（重要バグ）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザー報告）
+
+ユーザーがスマホ画面（中京7R 東海ステークス、ダート1400m）のスクリーンショットを提示し、
+「画面上部では『平均ペース』と記載されているが、詳細タブの展開は『かなり速い流れ』と
+なっている。この違いは何か」と報告した。
+
+### 原因
+
+ペース速度の判定ロジックが**バックエンドとフロントエンドで別々に実装され、食い違っていた**。
+
+- バックエンド`classify_pace()`（`apps/api/src/pci/domain/pace/rpci_forecast.py`）は、
+  芝・ダートで別々の閾値を使う設計（rule-v4）: 芝は高49.0/低51.0、ダートは高40.0/低46.0
+  （ダートの実績平均RPCIが43.0と、芝の53.1から大きく乖離しているための専用閾値）。
+  ヒーローの「想定展開」「読みやすい％」はこの判定結果（`forecast.pace_label`）を
+  そのまま表示するだけなので、常に正しかった。
+- フロントエンド`paceSpeedFromIndex()`（`apps/web/src/lib/pace.ts`）は、
+  **トラック種別を区別しない固定閾値**（47/50/52/55、芝の分布に寄せた値）で
+  数値を再分類していた。このレースの想定RPCIはダートとしては「平均」域（40〜46）
+  だが芝基準の47は下回る値だったため、バックエンドは正しく「平均」、
+  フロントは誤って「かなり速い流れ」と表示していた。
+- `paceSpeedFromIndex()`は「詳細」タブの展開チェックリストだけでなく、展開予想
+  ヒーロー（`PaceHeadline`）・確定後分析の各馬ペース傾向・PCI3表示など**7ファイル**で
+  使われており、ダートレース全般で発生し得る不具合だった（芝はたまたま閾値が
+  近いため目立たなかっただけ）。
+
+### ユーザーとの合意事項
+
+修正方針をAskUserQuestionで3案（3段階へ簡素化／5段階維持で芝・ダート別化／
+今は直さず別途相談）提示し、**「3段階へ簡素化（推奨）」**を選択された。
+新しい閾値は一切発明せず、バックエンドの既存閾値（芝49/51・ダート40/46）を
+そのまま使う。
+
+### 実施内容（`apps/web`）
+
+- `lib/pace.ts`: `PaceSpeedLevel`を5段階
+  （veryHigh/high/average/slow/verySlow/unknown）から3段階
+  （high/average/slow/unknown）へ簡素化。`paceSpeedFromIndex(value, trackType)`が
+  `trackType`を必須で受け取り、`trackType === "ダート"`ならダート専用閾値
+  （40.0/46.0）、それ以外は芝閾値（49.0/51.0）を使うようバックエンドの
+  `classify_pace()`と揃えた。`beginnerLabel`も「やや速い流れ」→「速い流れ」等、
+  3段階に合わせて統一。未使用だった`paceSpeedLabel`/`paceSpeedSymbol`
+  ラッパー関数は削除した。
+- `forecastDecisionChecklist()`へ`trackType`パラメータを追加し、内部の
+  `paceSpeedFromIndex()`呼び出しへ渡すようにした。
+- 呼び出し元7ファイルすべてで`race.track_type`（または`RaceDetail`型の
+  `track_type`）を明示的に渡すよう修正:
+  `PaceHeadline.tsx`（`trackType`プロパティ追加）、`RaceForecastDashboard.tsx`、
+  `MobileRaceForecastDashboard.tsx`、`RaceHero.tsx`、
+  `MobilePaceAnalysisDashboard.tsx`（`MobilePaceResultRow`へ`trackType`
+  プロパティ追加）、`PaceAnalysisTable.tsx`（`trackType`プロパティ追加）、
+  `app/races/[raceKey]/pace-analysis/page.tsx`。
+- `trackType`はオプション引数（バックエンドの`track_type: str = "芝"`と同じ
+  既定値方式）にはせず、**必須引数**にした。将来新しい呼び出し箇所が
+  `trackType`を渡し忘れて同じ不具合を再発することを防ぐため。
+
+### 検証
+
+- `pci=44・トラック=ダート`が「平均」、`pci=44・トラック=芝`が「ハイ」になる、
+  という不具合の直接的な再現テストを`lib/pace.test.ts`の新規describeブロックへ
+  追加（芝の3段階境界値・ダートの3段階境界値・両者の食い違い・未指定時の
+  安全な縮退を含む計5件）。`PaceAnalysisTable.test.tsx`にも同じ再現テストを
+  1件追加。
+- Web 129 tests（新規9件、既存の5段階前提テストは3段階へ更新）、typecheck、
+  production buildすべて成功。
+- Playwrightでユーザー報告と同じダート1400m・想定RPCI=44のレースを再現し、
+  ヒーローの「想定展開: 平均」表示に変化が無い（= 元々正しかった部分に
+  回帰が無い）ことを確認した。詳細タブの展開チェックリストは静的レンダリング
+  では非アクティブタブの内容がDOMに存在しないため画面上での目視確認はできず、
+  `paceSpeedFromIndex(44, "ダート").label === "平均"`という単体テストでの
+  直接検証で確認した（同じ関数を`forecastDecisionChecklist()`が呼ぶため、
+  ロジックとしては確実に一致する）。
+
+### 変更ファイル
+
+1. `apps/web/src/lib/pace.ts`
+2. `apps/web/src/lib/pace.test.ts`
+3. `apps/web/src/components/PaceHeadline.tsx`
+4. `apps/web/src/components/RaceForecastDashboard.tsx`
+5. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+6. `apps/web/src/components/RaceHero.tsx`
+7. `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
+8. `apps/web/src/components/MobilePaceAnalysisDashboard.test.tsx`
+9. `apps/web/src/components/PaceAnalysisTable.tsx`
+10. `apps/web/src/components/PaceAnalysisTable.test.tsx`
+11. `apps/web/src/app/races/[raceKey]/pace-analysis/page.tsx`
+12. `tasks/current.md`
+13. `docs/HANDOFF.md`
+
+新しい閾値・仕様は発明していない（バックエンドの既存`RuleWeights`をそのまま
+フロントへ反映しただけ）ため`docs/DECISIONS.md`は更新していない。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/web/src/lib/pace.ts`
+3. `apps/api/src/pci/domain/pace/rpci_forecast.py`（`classify_pace()`、閾値の正）
+
+---
+
+## 2026-07-26 (6) (Claude Code) 確定後分析にも馬番バッジの枠色を拡張（バックエンド対応）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景
+
+前タスク（馬番バッジ枠色統一）の末尾で「確定後分析のデスクトップ表
+（`PaceAnalysisTable.tsx`）にも同じ不統一があるが、APIスキーマに`frame_no`が無いため
+一段大きい変更になる」とユーザーへ確認を仰いだところ、「お願いします」と着手の
+指示を受けたため、バックエンドから対応した。
+
+### 実施内容（バックエンド、`apps/api`）
+
+- `application/dto.py`: `HorsePaceAnalysisOutput`へ`frame_no: int`を追加
+  （`horse_no`の直後、デフォルト値付きフィールドより前に配置）。
+- `application/race_query_use_cases.py`: `GetPaceAnalysisUseCase.execute()`内の
+  構築箇所へ`frame_no=e.frame_no`を追加（`RaceEntry.frame_no`は既存フィールドで
+  マイグレーション不要）。
+- `presentation/schemas.py`: `HorsePaceAnalysisSchema`へ`frame_no: int`を追加し、
+  `PaceAnalysisSchema.from_dto()`のマッピングにも`frame_no=h.frame_no`を追加。
+- `python scripts/export_openapi.py`でOpenAPIスペックを再生成
+  （契約テスト`test_committed_openapi_is_in_sync`が期待どおり一度失敗→再生成後に合格）。
+- `packages/api-client`で`npm run generate`を実行し`schema.d.ts`を再生成。
+  `HorsePaceAnalysisSchema`に`frame_no: number`（必須）が反映されたことを確認。
+
+### 実施内容（フロントエンド、`apps/web`）
+
+- `PaceAnalysisTable.tsx`（確定後分析デスクトップ表）: `.horse-no.sm`固定黒地バッジを
+  `frameColorClass(h.frame_no)`ベースへ変更。
+- 併せて`MobilePaceAnalysisDashboard.tsx`の`MobilePaceResultRow`
+  （スマホ確定後分析「全馬」タブ）も同じ不統一（`border-slate-200 bg-white`固定）を
+  発見し、同様に`frameColorClass(horse.frame_no)`へ変更した
+  （ユーザーの画面提示には無かったが、`HorsePaceAnalysis`型を使う同種の箇所のため
+  今回のバックエンド変更で無償に直せると判断し、範囲に含めた）。
+- `globals.css`の`.horse-no`/`.horse-no.sm`定義を削除した。前回のセッションで
+  `HorseFitTable.tsx`の参照を外し、今回`PaceAnalysisTable.tsx`の参照も外したことで
+  完全に未使用になったため（`grep`で参照ゼロを確認してから削除）。
+
+### 検証
+
+- API: `python -m pytest tests/unit/ tests/contract/ -q` 597 passed（+1）、
+  ruff・mypy --strict（65ファイル）・lint-imports すべて成功。
+- Web: `npm run test` 125 passed（+2 新規ファイル`PaceAnalysisTable.test.tsx`、
+  既存`MobilePaceAnalysisDashboard.test.tsx`のアサーション強化）、typecheck、
+  production buildすべて成功。
+- Playwright（`renderToStaticMarkup`＋ビルド済みTailwind CSS）で、デスクトップ表
+  （900px）とスマホ「全馬」行（390px想定）の両方を6頭のモックデータで確認し、
+  枠色が正しく交互（白/黒/赤のペア）に表示され、横はみ出しが無いことを確認した。
+  一時プレビューファイルは確認後に削除済み。
+
+### 変更ファイル
+
+1. `apps/api/src/pci/application/dto.py`
+2. `apps/api/src/pci/application/race_query_use_cases.py`
+3. `apps/api/src/pci/presentation/schemas.py`
+4. `apps/api/tests/unit/application/test_pace_analysis_use_cases.py`
+5. `apps/api/tests/contract/test_races_api.py`
+6. `packages/api-client/openapi.json`（再生成）
+7. `packages/api-client/src/schema.d.ts`（再生成）
+8. `apps/web/src/components/PaceAnalysisTable.tsx`
+9. `apps/web/src/components/PaceAnalysisTable.test.tsx`（新規）
+10. `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
+11. `apps/web/src/components/MobilePaceAnalysisDashboard.test.tsx`
+12. `apps/web/src/app/globals.css`
+13. `tasks/current.md`
+14. `docs/HANDOFF.md`
+
+新しい設計判断は発生していない（既存の`frameColorClass`をAPIスキーマ拡張の上で
+展開しただけ）ため`docs/DECISIONS.md`は更新していない。これで馬番バッジの枠色は
+出走前・確定後・デスクトップ・モバイルの全画面で統一された。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/api/src/pci/application/dto.py`
+3. `apps/web/src/lib/pace.ts`
+
+---
+
+## 2026-07-26 (5) (Claude Code) 馬番バッジの枠色を全画面で統一
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザーフィードバック）
+
+ユーザーがスマホ実機の画面4枚（サマリータブの展開恩恵馬TOP3、注目馬タブの
+展開恩恵馬TOP5、詳細タブの個別PAI根拠カード、および比較対象として隊列予想）を提示し、
+「隊列予想では各馬番ごとに枠色が着色されているが、他の箇所では同様の色が塗られていな
+かったり、表示形態が異なることがある。隊列予想のものと同じようにしてほしい」と
+フィードバックした。
+
+### 調査
+
+`FormationView.tsx`に`FRAME_CLASS`（JRA公式8枠の配色をTailwindクラスで表現した
+ローカル定数）が定義されており、`隊列予想`はこれを使って馬番バッジを枠色で描画していた。
+一方、以下3箇所は同じ情報（`horse.frame_no`）を持ちながら未使用・不統一だった。
+
+1. `MobileRaceForecastDashboard.tsx`の`BenefitRow`（サマリータブ・展開恩恵馬TOP3）:
+   `border-current/15 bg-white/10`という、カードの背景色に応じた半透明バッジで
+   枠色を反映していなかった。
+2. 同ファイルの`MobileExpandableHorseRow`（注目馬タブ・展開恩恵馬TOP5／評価を下げたい馬）:
+   `border-slate-200 bg-white text-slate-900`という常に同じ配色のバッジだった。
+3. `HorseFitTable.tsx`（詳細タブの判断根拠データ、`globals.css`の`.horse-no`使用）:
+   常に黒地（`#0f172a`固定）のバッジで、かつバッジ内テキストが`horseNumberLabel()`の
+   フル文言（「馬番16」）で、隊列予想の「番号のみ」というフォーマットとも異なっていた。
+
+なお`PaceAnalysisTable.tsx`（確定後分析のデスクトップ表、`.horse-no.sm`使用）にも
+同じ不統一があるが、こちらが使う`HorsePaceAnalysisSchema`（API契約）には`frame_no`が
+含まれておらず、バックエンドのdto/schema/OpenAPI再生成を伴う一段大きい変更になるため
+**今回は対象外とし、ユーザーへの確認待ちとして残した**。
+
+### 実施内容
+
+- `apps/web/src/lib/pace.ts`へ`frameColorClass(frameNo: number): string`を追加した。
+  JRA公式8枠の配色（1:白／2:黒／3:赤／4:青／5:黄／6:緑／7:橙／8:桃、
+  `FormationView.tsx`の`FRAME_CLASS`と同じTailwindクラス文字列）を1箇所で管理し、
+  `frame_no<=0`（枠順未確定）時は色を付けない中立クラス（`border-slate-200 bg-slate-100
+  text-slate-400`）を返す。
+- `FormationView.tsx`のローカル`FRAME_CLASS`定義を削除し、`frameColorClass()`を
+  import して3箇所の呼び出しを置き換えた（挙動は変えず、定義を一本化しただけ）。
+- `MobileRaceForecastDashboard.tsx`の`BenefitRow`・`MobileExpandableHorseRow`の
+  馬番バッジを`frameColorClass(horse.frame_no)`へ変更した。
+- `HorseFitTable.tsx`の馬番バッジ（`.horse-no`固定黒地）をTailwindの
+  `frameColorClass(h.frame_no)`ベースへ変更し、バッジ内テキストも隊列予想と同じ
+  「番号のみ」（未確定時は「登録」）へ変更した。「登録順N（馬番未確定）」という
+  文言は、確定時（frame_no>0）は行内テキストから外し、未確定時だけ残した
+  （確定時にも文言を付けるとPlaywrightでの390px確認で1行に収まらず不格好に
+  折り返すことを確認したため、確定時はバッジのみで表現する設計にした）。
+  `.horse-no`/`.horse-no.sm`のCSS定義自体は`PaceAnalysisTable.tsx`が引き続き使うため
+  削除していない。
+
+### 検証
+
+- 新規9 tests: `lib/pace.test.ts`に`frameColorClass`の単体テスト4件
+  （8枠それぞれ異なる配色・具体的な配色値・未確定時は中立・未定義枠番への安全な縮退）、
+  `MobileRaceForecastDashboard.test.tsx`に1件追加（既存2件のアサーションも
+  枠色チェックへ強化）、新規`HorseFitTable.test.tsx`2件。
+- Web 123 tests、typecheck、production buildすべて成功。
+- Playwright（`renderToStaticMarkup`＋ビルド済みTailwind CSS、`/opt/pw-browsers/chromium`）
+  で18頭・複数枠のモックデータを使い、390px幅でサマリータブ（黒/緑/白の3種のカード背景）・
+  注目馬タブ・詳細タブそれぞれのバッジが枠色で視認でき、横はみ出しが無いことを確認した。
+  一時プレビューファイルは確認後に削除済み。
+
+### 変更ファイル
+
+1. `apps/web/src/lib/pace.ts`
+2. `apps/web/src/lib/pace.test.ts`
+3. `apps/web/src/components/FormationView.tsx`
+4. `apps/web/src/components/MobileRaceForecastDashboard.tsx`
+5. `apps/web/src/components/MobileRaceForecastDashboard.test.tsx`
+6. `apps/web/src/components/HorseFitTable.tsx`
+7. `apps/web/src/components/HorseFitTable.test.tsx`（新規）
+8. `tasks/current.md`
+9. `docs/HANDOFF.md`
+
+新しい設計判断・仕様変更は発生していないため（既存の`FRAME_CLASS`の値をそのまま
+他画面へ展開しただけ）、`docs/DECISIONS.md`は更新していない。
+
+### 未対応・ユーザー確認待ち
+
+`PaceAnalysisTable.tsx`（確定後分析のデスクトップ表）も同じ枠色未対応だが、
+`HorsePaceAnalysisSchema`に`frame_no`が無いため、対応するには
+`HorsePaceAnalysisOutput`（dto.py）→`HorsePaceAnalysisSchema`（schemas.py）→
+`GetPaceAnalysisUseCase`（`race_query_use_cases.py`、`RaceEntry.frame_no`は既存）→
+OpenAPI再生成→api-client型再生成→フロント、という一段大きい変更が必要。
+ユーザーの意向を確認してから着手する。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/web/src/lib/pace.ts`
+3. `tasks/current.md`
+
+---
+
+## 2026-07-26 (4) (Claude Code) 開催日選択UIの改善（年表示・日付ストリップ絞り込み・月カレンダー展開）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+
+### 背景（ユーザーフィードバック）
+
+ユーザーが実機でアプリを操作した後、JRA-VAN公式スマホアプリの画面2枚（メイン画面の
+開催日チップ列、および「別日程で検索」押下後の年選択＋開催日一覧画面）を提示し、
+「レース開催日を選ぶ方法がかなり煩わしい。特にスマホ版で、何年何月何日のレースか
+わからない上、遡るためにたくさんスライドする必要がある」とフィードバックした。
+
+### 原因調査
+
+`apps/web/src/components/RaceDateCalendar.tsx`とデータ経路を確認し、2点を特定した。
+
+1. スマホ版見出し（`MobileDateStrip`）と各日付チップが、月日と曜日のみを表示し
+   **年を一切表示していなかった**（`7月26日（日）`のように）。
+2. `GET /api/v1/races/dates`（`ListRaceDatesUseCase`）は「全開催日一覧」を無制限に返す
+   設計で、フロント側もそれを丸ごと1本の横スクロール帯（`MobileDateStrip`）に並べていた。
+   開催日が半年〜1年分蓄積していれば、遡るほど並ぶチップ数が増え続け、スライド量が
+   際限なく増える構造だった。JRA-VANの参考画像は直近6件程度のチップ＋「別日程で検索」
+   （年選択＋開催日一覧表の別画面）という2段構えで、近傍と遠方を明確に分離していた。
+
+### ユーザーとの合意事項
+
+「遠い日付へのジャンプ手段」の実装方針についてAskUserQuestionで3案
+（PC版月カレンダー流用／JRA-VAN風専用画面新設／年月ドロップダウンのみ追加）を提示し、
+**「既存のPC版月カレンダーを流用」**（新規ページ・新規API不要、低リスク）を選択された。
+
+### 実施内容（`apps/web/src/components/RaceDateCalendar.tsx`）
+
+- スマホ見出しへ年を追加: `${active.getFullYear()}年${...}月${...}日（${...}）`。
+- `STRIP_WINDOW_BEFORE=4`/`STRIP_WINDOW_AFTER=1`を新設し、`MobileDateStrip`が
+  `availableDates`全件ではなく、選択中の日付を基準に「前4件＋本人＋後1件（最大6件）」だけを
+  スライスして表示するように変更（`activeIndex`を`availableDates.indexOf(activeDate)`で求め、
+  `slice(windowStart, windowEnd)`で切り出す。配列境界は`Math.max`/`Math.min`で自然にクランプ）。
+- ストリップの下（`md:hidden`領域）に「他の日程を探す」トグルボタンを追加。
+  `useState`の`showPicker`で開閉し、開くと既存のPC版月カレンダー（開催日ドット付き、
+  `calendarDays()`のグリッド）を**インラインで展開表示**する。従来はこのカレンダー全体が
+  `hidden ... md:block`でスマホでは常に非表示だった。トグルボタン自体はスクロール外の
+  常時表示要素とし（JRA-VANのようにチップ列の中に埋め込むと、選択日センタリングで
+  スクロールされた際に押しにくくなるため、意図的に列の外に配置した）。
+- 月カレンダーの年月ナビ行へ、`ChevronsLeft`/`ChevronsRight`（前年/翌年）を
+  既存の`ChevronLeft`/`ChevronRight`（前月/翌月）の外側に追加。半年以上前の日付へは
+  月送りのみだと同様に大量クリックが必要になるため。
+
+### 未確定のまま残した点
+
+- ストリップの窓幅（前4件＋後1件＝最大6件）はJRA-VANの参考画像の見た目（6チップ）に
+  合わせた値で、実データでの使用感検証はしていない。将来「まだ少し多い/少ない」と
+  感じた場合は`STRIP_WINDOW_BEFORE`/`STRIP_WINDOW_AFTER`の定数だけを調整すればよい。
+- 月カレンダー展開時、日付を選択した後にトグルを自動で閉じる仕様にはしていない
+  （選択後も同じ月内で別日を続けて選べるよう、意図的に開いたままにした）。
+
+### 変更ファイル
+
+1. `apps/web/src/components/RaceDateCalendar.tsx`
+2. `apps/web/src/components/RaceDateCalendar.test.tsx`（新規3 tests追加、既存2 tests更新）
+3. `tasks/current.md`
+4. `docs/HANDOFF.md`
+
+新しい設計判断のうち「PC版カレンダー流用」はユーザーとのAskUserQuestionで確定済みのため、
+`docs/DECISIONS.md`への追記は不要と判断した（軽微なUI実装方針であり、ADR相当の
+「後で覆すと高コストな決定」には該当しない）。
+
+### テスト実行コマンドと結果
+
+```bash
+cd apps/web && npm run test        # 116 passed（+3、既存2件更新）
+npm run typecheck                  # 成功
+npm run build                      # 成功（/ First Load JS 117kB）
+```
+
+Playwright（`renderToStaticMarkup`＋ビルド済みTailwind CSS、`/opt/pw-browsers/chromium`）で
+390px幅の折りたたみ・展開（`hidden`クラスをDOM操作で外して疑似再現）両状態と、
+実際のデスクトップサイドバー幅である272px（`page.tsx`の`grid-cols-[272px_...]`）を
+スクリーンショット確認。3状態とも`scrollWidth===clientWidth`一致（横はみ出し無し）、
+年月ナビ行の折り返し・クロップも無いことを確認した。一時プレビューファイルは確認後に削除済み。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `apps/web/src/components/RaceDateCalendar.tsx`
+3. `tasks/current.md`
+
+---
+
+## 2026-07-26 (3) (Claude Code) 実端末ロケテストの準備確認
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind
+- **このセッションはコード変更なし、ドキュメントのみ更新**
+
+### 背景
+
+前回セッションで「①スマホ主要導線の通し確認」が完了し、残る「②実端末ロケテスト」
+「③モバイルアクセシビリティ確認」は実機必須のため着手できなかった。ユーザーへ
+次の一手を確認したところ「実機ロケテストの準備確認」を選択されたため、実行自体は
+ユーザーの実機へ委ね、準備（スクリプトの整合性確認＋実機で使えるチェックリスト作成）
+だけをこのセッションで行った。
+
+### 実施内容
+
+1. **Quick Tunnelスクリプトの整合性確認**: `apps/web/scripts/run_location_test_tunnel.ps1`を
+   読み直し、直近のモバイルUI変更（`IngestStatusBanner`のモバイル要約化等）と衝突しないか
+   確認した。スクリプトは認証（Basic/Bearer）・トンネル起動・readinessの検証のみを行い、
+   画面内容への依存は「レースボード」という文字列の存在と、既知のエラー文言
+   （「レース一覧を取得できませんでした」「APIに接続できませんでした」）の不在確認だけ
+   だったため、モバイル固有の変更による更新は不要と判断した。
+2. **実装済みのアクセシビリティ/タップ領域の棚卸し**: 対象5コンポーネント
+   （`RaceDateCalendar`・`MobileRaceGroupedSection`・`MobileRaceNavigation`・
+   `MobileRaceForecastDashboard`・`MobilePaceAnalysisDashboard`）のソースを読み、
+   `aria-current`（日付ストリップ="date"、同一開催ナビ="page"）、
+   `role="tablist"`/`role="tab"`/`aria-selected`（競馬場タブ・詳細タブ）、
+   44px相当のタップ領域（`h-11`/`w-11`=44px、日付ストリップは`h-14 min-w-14`=56px）の
+   実装状況を具体的に確認した。
+3. **既知の制約を1点発見**: 詳細タブ（出走前4タブ・確定後3タブ）はどちらも
+   アクティブな1パネルだけをDOMへ描画する実装のため、非アクティブなタブボタンの
+   `aria-controls`が、その時点でDOM上に存在しないパネルIDを参照する
+   （例: `mobile-panel-formation`は`summary`タブ表示中は未マウント）。
+   スクリーンリーダーや自動監査ツール（axe等）が警告を出す可能性があるが、
+   実際の読み上げが破綻していなければ実害はないと判断し、**コードは変更していない**
+   （「実機で問題が確認されてから対応する」という本プロジェクトの既存の合意方針
+   ―④日付ストリップDOM削減が実機性能問題の確認待ちであるのと同じ考え方―に揃えた）。
+4. **チェックリストの作成**: 上記を`docs/LOCATION_TEST.md`§10
+   「開発者によるモバイル実機QA（横はみ出し・タップ領域・アクセシビリティ）」として
+   新規追加した。対象画面（トップ→同一開催ナビ→出走前4タブ→確定後3タブ）、
+   表示幅の目安（320/375/390/430px）、A横はみ出し／B タップ領域／Cスクロール位置／
+   Dキーボード操作／E aria-current・読み上げ順の5観点、既知の制約、記録方法を整理した。
+   第7節（参加者向けUXアンケート）とは別物であることを明記した。
+
+### 変更ファイル
+
+1. `docs/LOCATION_TEST.md`（§10新規追加）
+2. `tasks/current.md`（②③へ準備完了の参照を追加、チェックボックスは未実施のまま維持）
+3. `docs/HANDOFF.md`
+
+コード変更・新しい設計判断は無いため、ソースファイルと`docs/DECISIONS.md`は
+変更していない。
+
+### 未実施（範囲外・実機が必要）
+
+- 実際のiOS Safari/Android Chromeでの横はみ出し・タップ領域・スクロール位置確認
+- VoiceOver/TalkBackでの読み上げ確認
+- 友人からの指摘収集
+- 上記チェックリストに基づく実機QAの実行そのもの
+
+### テスト実行コマンドと結果
+
+ドキュメントのみの変更のため、テスト再実行は行っていない
+（直前セッションのWeb 113 passedから変更なし）。
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `docs/LOCATION_TEST.md`§10
+3. `tasks/current.md`
+
+---
+
+## 2026-07-26 (2) (Claude Code) スマホ主要導線の通し確認（静的レンダリング範囲）
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時点: origin/HEADと0 ahead/0 behind（前回セッションから新規コミットなし）
+- 最新コミット: 変更なし（**このセッションはコード変更なし、ドキュメントのみ更新**）
+
+### 実施内容
+
+`tasks/current.md`の検証タスク「P2 スマホ主要導線の通し確認」に着手した。
+
+- **環境確認**: このクラウド環境ではDocker daemonを起動できない
+  （`service docker start`が`ulimit: error setting limit (Operation not permitted)`で失敗、
+  非特権サンドボックスの制約）。実DB接続の開発サーバーでのクリック通し確認は不可と確認した。
+- **代替手法**: 主要導線を構成する各モバイルコンポーネント（`RaceDateCalendar`・
+  `MobileRaceGroupedSection`・`MobileRaceNavigation`・`MobileRaceForecastDashboard`・
+  `MobilePaceAnalysisDashboard`）を、既存`*.test.tsx`のfixtureを土台にした現実的な
+  モックデータで`renderToStaticMarkup`し、ビルド済みTailwind CSS（`.next/static/css/*.css`）を
+  適用した静的プレビューをPlaywright（`/opt/pw-browsers/chromium`）で390px幅スクリーンショット。
+  生成に使った一時テストファイル（`src/components/ZPreviewFlow.test.tsx`）は確認後に削除済み
+  （`git status`で残存無しを確認）。
+- **確認した導線**: レースボード（日付ストリップ→競馬場タブ→レース行）→同一開催ナビ→
+  レース詳細（ヒーロー→サマリータブ：展開恩恵馬TOP3・評価を下げたい馬・一覧へ戻るリンク）→
+  確定後分析（ヒーロー→サマリータブ：上位3頭・ひとこと振り返り）。
+- **機械的な横はみ出しチェック**: `document.documentElement.scrollWidth`と`clientWidth`が
+  ともに390で一致することをPlaywright上で確認（横スクロールが発生していない）。
+- **見かけ上の異常2点を調査し、いずれも自分のモックデータの不備と特定**（実装側の不具合ではない）:
+  1. レース行の展開ラベルが「判断材料が不足」と表示 → `beginnerPaceLabel()`
+     （`lib/pace.ts`）は「ハイ/平均/スロー」の3値のみを認識する設計で、モックに
+     独自の説明文字列を渡していたのが原因。正しい値で再現すると想定どおり表示された。
+  2. 確定後分析の「実際の流れ」バッジに`H`、各馬結果に`M`という文字 →
+     `PACE_SPEED_META`（`lib/pace.ts`）が持つ意図的な短縮記号（`symbol`フィールド）で、
+     常にフルの日本語ラベル（例:「Hハイ」＝symbol"H"+label"ハイ"）と併記される既存仕様。
+     内部の実数値露出ではなく`docs/PROJECT_RULES.md §5`の違反ではない。
+- **見つかった実装上の不具合は無し**。デフォルト表示（初期タブ）の範囲で、全パネルが
+  390px幅に収まり、テキストの意図しない欠けや崩れも無かった。
+
+### 未実施（範囲外・実機/実DBが必要）
+
+- 4タブ（サマリー/隊列/注目馬/詳細）の実際のクリック切り替え動作
+  （静的SSRレンダリングのため初期タブしか確認できていない。クライアント側JSでの
+  切り替えは今回検証していない）。
+- 実スクロール挙動、iOS Safari/Android Chrome実機、キーボード操作・スクリーンリーダー確認。
+  → `tasks/current.md`の「実端末ロケテスト」「モバイルアクセシビリティ確認」へ引き続き委ねる。
+
+### 変更ファイル
+
+1. `tasks/current.md`
+2. `docs/HANDOFF.md`
+
+コード変更・新しい設計判断は無いため、ソースファイルと`docs/DECISIONS.md`はいずれも
+変更していない。
+
+### テスト実行コマンドと結果
+
+```bash
+cd apps/web && npm run test   # 113 passed（変更なし。確認作業のみのため）
+```
+
+### Codexが最初に確認するファイル
+
+1. `docs/HANDOFF.md`（本節）
+2. `tasks/current.md`
+
+### Codexが最初に実行するコマンド
+
+```bash
+git fetch origin && git checkout claude/sweet-einstein-ilnaov && git pull origin claude/sweet-einstein-ilnaov
+git log --oneline -5
+git status   # クリーンであるはず（このセッションはコード変更なし）
+```
+
+---
+
+## 2026-07-26 (Claude Code) Codex引き継ぎ検証＋取り込み警告のモバイル要約化
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始時のローカルHEAD: `d2a74ff`（自分の前回セッションの最終コミット）
+- 作業開始時点でorigin: `d751bf8`（**117コミット先行**。`git pull --ff-only`で安全に追従）
 - 最新コミット: 本節と同じコミット（`git log -1 --oneline`で確認）
-- 目的: `tasks/current.md`最優先の「取り込み警告のモバイル要約化」を実装する。
 
-### 完了内容
+### Codex引き継ぎの検証結果（コード変更前に実施）
 
-- `IngestStatusBanner`の768px未満表示に、状態と異常種別ごとの件数チップを追加した。
-- 表示対象は直近失敗、成績未取込、馬場情報未反映、重複、更新遅れであり、
-  既存の`ingestStatusMeta()`の優先順位・headline・詳細内容は変更していない。
-- モバイルでは説明文を初期表示から外し、詳細、対象レース、再同期・馬場情報補完コマンドは
-  既存の`details`へ保持した。PCでは従来どおり説明文と「詳細と復旧手順」を表示する。
-- `IngestStatusBanner.test.tsx`へ、状態・件数チップと詳細表示維持を確認するテストを追加した。
+ユーザー指示により、実装前にCodexの117コミット分の作業を検証した。
+
+- **Git確認**: ローカルはorigin/claude/sweet-einstein-ilnaovより117コミット遅れていた
+  （0 ahead / 117 behind、working tree clean）。履歴を書き換えず`git pull --ff-only`で
+  fast-forward追従（安全: ローカルに独自コミットが無かったため）。
+- **完了内容の概要**（詳細はHANDOFF.md内の各日時セクション・`docs/DECISIONS.md`参照）:
+  RPCI予測モデルのv1→v4反復改善（各候補は必ず本番と独立期間比較し、改善しない場合は
+  正直に不採用として記録）、ability-v3/PAI course-aptitude、S3/L3内部永続化、
+  重複レースキーの安全な統合（dry-run既定・署名検証付き削除ガード）、Windows取り込みの
+  堅牢化（文字化け修正・readiness事前確認・Webhook集約秘匿）、モバイルUI全面改修、
+  限定ロケテスト基盤（Basic/Bearer認証・Cloudflare Quick Tunnel・公開前HTTP点検CLI）。
+- **テスト再実行**（このクラウド環境、Codexの記載件数と照合）: API 596 passed、
+  ingestion-worker 239 passed、Web 111 passed（新規追加前）。いずれもCodex記載と完全一致。
+  ruff/lint-imports/mypy --strict（API）/typecheck/build/OpenAPI同期/Alembicチェーン
+  （001→006単線）もすべて確認しclean。
+- **唯一の見かけ上の不一致（原因特定済み・対応不要）**: `python -m mypy src/ --strict`を
+  素の設定でこのLinux環境で実行すると`windows_client.py`で3件（`_software_id`/`_race_option`
+  の型を決定できない）エラーが出て、「ingestion-worker全体のRuff・mypy違反を解消した」という
+  記載と食い違うように見えた。原因は`if sys.platform != "win32": raise ...`というOS分岐を、
+  mypyがこの環境（Linux）のデフォルトプラットフォーム前提で解析し、以降の属性代入を
+  「到達不能コード」とみなして型を見失うという**mypyの`--platform`依存の環境差**。
+  `mypy --strict --platform win32`で実行すると24ファイル全体で0エラーになることを確認した。
+  Windows実行機（本番の実行環境）では自然に発生しない。**コードの不具合ではないため
+  対応不要**と判断し記録のみ残す。
+- 新規に監査したポイント: 新規認証コード（`middleware.ts`/`betaAccess.ts`）は定数時間比較・
+  設定不備時fail-closedで健全。重複レース統合スクリプト（`reconcile_duplicate_races.py`）は
+  既定dry-run・`--apply`必須・署名検証付き削除ガードで安全設計。新規コンポーネントの
+  `predicted_rpci`/`rpci_actual`等はすべて`paceSpeedFromIndex()`翻訳層経由で、UIへの
+  実数値露出なし（`docs/PROJECT_RULES.md §5`順守を確認）。
+- **重大な不整合はなし**と判断し、`tasks/current.md`最優先未完了タスクへ進んだ。
+
+### 今回完了した内容（取り込み警告のモバイル要約化、P1確定タスク）
+
+- `IngestStatusBanner.tsx`へ768px未満専用の要約行（アイコン(h-6 w-6)＋見出しのみ・
+  `truncate`付き1行、`md:hidden`）を追加した。768px以上は既存の見出し＋detail文の
+  2段表示（`hidden items-start gap-3 md:flex`）を維持する。外側のpaddingは
+  `p-3 md:p-4`とし、モバイルでの余白も詰めた。
+- 詳細（失敗一覧・成績未取込・馬場情報未反映・重複レース・復旧コマンド）を格納する
+  `<details>`は構造・内容とも変更していない（既存の折りたたみのまま両breakpointで表示）。
+- **最優先状態の選定順は独自に決めていない**: `ingestStatusMeta()`は既にif/else-ifの
+  優先度カスケード（失敗＞成績未取込＞馬場情報未反映＞重複レース＞鮮度低下＞正常）で
+  単一の`headline`/`tone`へ絞り込み済みのため、モバイル要約はその`meta.headline`を
+  そのまま使うだけで新しい優先順位判断は発生しない。件数も既存のheadline文字列に
+  埋め込み済みの値をそのまま使い、複数カテゴリを横断合算する新しい集計は行っていない
+  （その集計方法自体は前回セッションが「未確定」として残した論点で、今回も未確定のまま）。
+- `IngestStatusBanner.test.tsx`に2件追加（既存2件は無変更）:
+  「モバイル専用の要約行に見出しを常時表示し、detail文は含めない」
+  「PC表示（md:）は見出し・detail文とも従来どおり維持する」。
+- Playwright（`/opt/pw-browsers/chromium`）で実際にレンダリングした静的プレビュー
+  （`renderToStaticMarkup`＋ビルド済みTailwind CSS）を390px・1024pxでスクリーンショットし、
+  390pxで警告/正常/失敗の3状態とも1行に収まり横はみ出しが無いこと、1024pxで従来の
+  見出し＋detail文の2段表示が保たれることを目視確認した（一時ファイルは確認後に削除）。
 
 ### 変更ファイル
 
 1. `apps/web/src/components/IngestStatusBanner.tsx`
 2. `apps/web/src/components/IngestStatusBanner.test.tsx`
 3. `tasks/current.md`
-4. `docs/DECISIONS.md`
-5. `docs/HANDOFF.md`
+4. `docs/HANDOFF.md`
 
-### テスト結果
+新しい設計判断・仕様変更は発生していないため`docs/DECISIONS.md`は更新していない
+（`ingestStatusMeta()`のロジックは無変更、既存の優先順位をそのまま流用したため）。
 
-```text
-IngestStatusBanner: 3 passed
-Web: 16 files / 112 tests passed
-Web typecheck: passed
-Web production build: passed
-Web lint: package.jsonにlintスクリプトがないため実行不可
+### テスト実行コマンドと結果
+
+```bash
+cd apps/web
+npm run test          # 113 passed（16 files、+2）
+npm run typecheck     # 成功
+npm run build         # 成功（5ページ）
 ```
 
-### 未完了・次の具体的作業
+lint: 引き続き`apps/web/package.json`に`lint`スクリプトが無く実行不可（既知・Codex記載どおり）。
 
-- 確定済みのスマホ実装タスクはない。次はP2検証タスクを実施する。
-- 390px相当で、レースボード→日付切替→競馬場切替→レース詳細→同一開催ナビ→
-  サマリー・隊列・注目馬・詳細タブ→一覧へ戻る、の主要導線を通し確認する。
-- `apps/web/src/components/IngestStatusBanner.tsx`は、320px・375px・430px、iOS Safari、
-  Android Chromeで状態チップの折返しと詳細の操作性を確認する。
-- 日付ストリップのDOM削減は、実端末で描画・スクロール遅延を確認した場合だけ検討する。
+### 未完了・次に実施する具体的な手順
 
-### 仮実装・未確定仕様
+- **P2（未実施）**: 390px等での主要導線通し確認、iOS Safari/Android Chrome実機確認、
+  アクセシビリティ確認（`tasks/current.md`「検証タスク」参照）。
+- **P3（条件付き）**: 日付ストリップのDOM削減。実機で性能問題が出るまで着手しない。
+- **未確定のまま**: モバイル警告で複数カテゴリが同時に該当する場合の「合算件数」の
+  集計方法（`ingestStatusMeta()`は現状1カテゴリしか同時に返さない設計のため、
+  合算が必要かどうか自体を含めユーザー確認が必要）。
+- **条件待ち**: 予想照合30件到達時の初回レビュー、ダート確定100件+ハイ20件到達時の
+  RPCI v4監視レビュー（いずれも閾値未到達、`tasks/current.md`参照）。
 
-- モバイル境界は既存方針どおりTailwindの`md`（768px）。
-- 警告の状態チップは、各異常種別のAPI件数とフラグをそのまま並べる。複数異常時に
-  どれを最優先と見なすかの順序は`ingestStatusMeta()`の既存優先順位に従う。
-- 320px・375px・430pxで許容するチップの折返し数、実端末でのバナー初期高さは未確定。
+### Codexが最初に確認するファイル
 
-### 既知の問題
+1. `docs/HANDOFF.md`（本節）
+2. `tasks/current.md`
+3. `apps/web/src/components/IngestStatusBanner.tsx`
+4. `apps/web/src/components/IngestStatusBanner.test.tsx`
 
-- `apps/web/package.json`に`lint`スクリプトとESLint依存がなく、Web lintは実行できない。
-- この環境では一時Next.jsサーバーが待受開始前にタイムアウトしたため、今回の390pxブラウザ確認は未実施。
-- Cloudflare Quick Tunnelは停止済み。実端末確認時は
-  `apps/web/scripts/run_location_test_tunnel.ps1`で新しいURLを発行する必要がある。
+### Codexが最初に実行するコマンド
 
-### Claude Codeが最初に確認するファイル
-
-1. `tasks/current.md`
-2. `apps/web/src/components/IngestStatusBanner.tsx`
-3. `apps/web/src/components/IngestStatusBanner.test.tsx`
-4. `docs/DECISIONS.md`
-
-### Claude Codeが最初に実行するコマンド
-
-```cmd
-cd C:\Users\yuuta\PCI_app
-git pull --ff-only origin claude/sweet-einstein-ilnaov
-npm.cmd test --workspace=@pci/web
-npm.cmd run typecheck --workspace=@pci/web
+```bash
+git fetch origin && git checkout claude/sweet-einstein-ilnaov && git pull origin claude/sweet-einstein-ilnaov
+git log --oneline -5
+git status   # クリーンであるはず
+cd apps/web && npm run test && npm run typecheck && npm run build
 ```
+
+---
 
 ## 2026-07-26 01:31 JST OpenAI Codex 更新
 

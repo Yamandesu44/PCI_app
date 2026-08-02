@@ -87,6 +87,15 @@ class TestGetPaceAnalysisUseCase:
             assert h.pci is not None
         assert out.reasons  # 説明可能性
 
+    def test_horses_include_frame_no_for_frame_color_badges(self) -> None:
+        """馬番バッジの枠色表示（隊列予想と同じ配色）に使うため frame_no を含む。"""
+        repo = FakeRaceRepository()
+        _seed_confirmed(repo)
+        out = GetPaceAnalysisUseCase(repo).execute(CONFIRMED)
+
+        by_horse_no = {h.horse_no: h.frame_no for h in out.horses}
+        assert by_horse_no == {1: 1, 2: 2, 3: 3}
+
     def test_horses_sorted_by_finish_and_marked_pci3(self) -> None:
         repo = FakeRaceRepository()
         _seed_confirmed(repo)

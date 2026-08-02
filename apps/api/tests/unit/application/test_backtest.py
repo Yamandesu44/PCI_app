@@ -32,16 +32,20 @@ from pci.application.backtest import (
     ability_weight_comparisons_to_dict,
     build_actual_style_advantage_breakdown,
     collect_actual_style_advantage_samples,
+    collect_pace_style_matrix,
     compare_ability_weight_reports,
     compare_pai_weight_reports,
     compare_rule_weight_reports,
+    compare_style_advantage_profiles,
     format_ability_weight_comparison,
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
+    format_pace_style_matrix,
     format_pai_weight_comparison,
     format_report,
     format_rule_weight_comparison,
     format_style_advantage_attribution,
+    format_style_advantage_profile_comparison,
     group_races_by_track,
     pai_weight_comparisons_to_dict,
     report_to_dict,
@@ -201,7 +205,102 @@ class TestSummarizeStyleAdvantage:
             "disadvantaged_lift": 0.0,
             "rate_gap": 1.0,
             "point_biserial": result.point_biserial,
+            "bands": [
+                {"label": "不利", "lo": 0.0, "hi": 35.0, "n": 1, "good_runs": 0, "good_rate": 0.0},
+                {
+                    "label": "やや不利",
+                    "lo": 35.0,
+                    "hi": 45.0,
+                    "n": 1,
+                    "good_runs": 0,
+                    "good_rate": 0.0,
+                },
+                {"label": "互角", "lo": 45.0, "hi": 55.0, "n": 0, "good_runs": 0, "good_rate": 0.0},
+                {
+                    "label": "やや有利",
+                    "lo": 55.0,
+                    "hi": 65.0,
+                    "n": 1,
+                    "good_runs": 1,
+                    "good_rate": 1.0,
+                },
+                {
+                    "label": "有利",
+                    "lo": 65.0,
+                    "hi": 100.0,
+                    "n": 1,
+                    "good_runs": 1,
+                    "good_rate": 1.0,
+                },
+            ],
+            # 脚質を持たないサンプルは脚質グループ集計の対象外。
+            "style_groups": [],
         }
+
+    def test_style_groups_split_front_runners_from_closers(self) -> None:
+        """同じ帯でも前付けと差し追込を分けて集計することを検証する。
+
+        「有利」帯にはスロー想定で加点された前付け馬とハイ想定で加点された
+        差し追込馬が混ざるため、分けないと相殺されて非単調の原因を追えない。
+        """
+        samples = [
+            # 前付けの「有利」は好走、差し追込の「有利」は凡走という食い違いを作る
+            StyleAdvantageSample("R1", 1, 70.0, True, RunningStyleLabel.ESCAPE),
+            StyleAdvantageSample("R1", 2, 70.0, True, RunningStyleLabel.FRONT),
+            StyleAdvantageSample("R1", 3, 70.0, False, RunningStyleLabel.STALKER),
+            StyleAdvantageSample("R1", 4, 70.0, False, RunningStyleLabel.CLOSER),
+            StyleAdvantageSample("R1", 5, 20.0, False, RunningStyleLabel.FLEXIBLE),
+        ]
+
+        result = summarize_style_advantage(samples)
+
+        assert result is not None
+        by_label = {group.label: group for group in result.style_groups}
+        assert set(by_label) == {"前付け（逃げ・先行）", "差し追込", "自在"}
+        # 自在は前付けにも差し追込にも入らず、独立したグループになる
+        assert by_label["前付け（逃げ・先行）"].n == 2
+        assert by_label["差し追込"].n == 2
+        assert by_label["自在"].n == 1
+        assert by_label["前付け（逃げ・先行）"].baseline_rate == 1.0
+        assert by_label["差し追込"].baseline_rate == 0.0
+        # 全体の帯では両者が混ざり、有利帯の好走率は50%に相殺される
+        overall_advantage = next(band for band in result.bands if band.label == "有利")
+        assert overall_advantage.n == 4
+        assert overall_advantage.good_rate == 0.5
+
+    def test_bands_use_the_same_boundaries_as_the_web_labels(self) -> None:
+        """帯の境界が web の`styleVerdict`と一致することを固定する。
+
+        ここがずれると「画面で有利と出ている馬の実績」を測っていることに
+        ならなくなるため、境界値そのものを検証する。
+        """
+        # styleVerdict: >=65 有利 / >=55 やや有利 / >45 互角 / >35 やや不利 / それ以下 不利
+        boundary_samples = [
+            StyleAdvantageSample("R1", 1, 65.0, False),  # 有利（下端を含む）
+            StyleAdvantageSample("R1", 2, 55.0, False),  # やや有利（下端を含む）
+            StyleAdvantageSample("R1", 3, 45.1, False),  # 互角（45ちょうどは含まない）
+            StyleAdvantageSample("R1", 4, 45.0, False),  # やや不利（45ちょうどはこちら）
+            StyleAdvantageSample("R1", 5, 35.1, False),  # やや不利
+            StyleAdvantageSample("R1", 6, 35.0, False),  # 不利（35ちょうどはこちら）
+        ]
+
+        result = summarize_style_advantage(boundary_samples)
+
+        assert result is not None
+        by_label = {band.label: band.n for band in result.bands}
+        assert by_label == {"有利": 1, "やや有利": 1, "互角": 1, "やや不利": 2, "不利": 1}
+
+    def test_band_totals_match_overall_sample_count(self) -> None:
+        samples = [
+            StyleAdvantageSample("R1", i, float(score), score > 50)
+            for i, score in enumerate((5, 20, 36, 44, 50, 58, 64, 70, 95), start=1)
+        ]
+
+        result = summarize_style_advantage(samples)
+
+        assert result is not None
+        assert sum(band.n for band in result.bands) == result.n
+        assert sum(band.good_runs for band in result.bands) == sum(1 for s in samples if s.good_run)
 
     def test_collects_actual_pace_and_confirmed_styles(self) -> None:
         repo = FakeRaceRepository()
@@ -242,6 +341,216 @@ class TestSummarizeStyleAdvantage:
         assert result.advantaged_rate == 1.0
         assert result.disadvantaged_rate == 0.0
         assert "診断専用" in format_actual_style_advantage_validation(result)
+
+
+class TestStyleAdvantageProfileComparison:
+    @staticmethod
+    def _seed(repo: FakeRaceRepository, race_key: str, rpci_actual: float) -> Race:
+        race = Race(
+            race_key=RaceKey(race_key),
+            race_date=datetime.date(2026, 1, 15),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=5,
+            status=RaceStatus.RESULT,
+            rpci_actual=rpci_actual,
+        )
+        repo.save_race(race)
+        styles = (
+            RunningStyleLabel.ESCAPE,
+            RunningStyleLabel.FRONT,
+            RunningStyleLabel.STALKER,
+            RunningStyleLabel.CLOSER,
+            RunningStyleLabel.FLEXIBLE,
+        )
+        for horse_no, style in enumerate(styles, start=1):
+            repo.save_entry(
+                RaceEntry(
+                    race_key=race.race_key,
+                    horse_no=horse_no,
+                    frame_no=horse_no,
+                    ketto_num=f"H{race_key}{horse_no}",
+                    weight=480.0,
+                    jockey_code="J001",
+                    trainer_code="T001",
+                    finish_pos=horse_no,
+                    running_style=str(style),
+                )
+            )
+        return race
+
+    def test_current_profile_leaves_flexible_unscored(self) -> None:
+        repo = FakeRaceRepository()
+        race = self._seed(repo, "2026011505010101", 55.0)
+
+        results = compare_style_advantage_profiles([race], repo)
+
+        by_name = {r.profile.name: r for r in results}
+        current = by_name["current"].lift
+        assert current is not None
+        # 自在は現行では採点されないため、サンプルに現れない。
+        assert all(s.label != "自在" for s in current.style_groups)
+        assert current.n == 4
+
+    def test_flexible_profile_scores_the_extra_style(self) -> None:
+        repo = FakeRaceRepository()
+        race = self._seed(repo, "2026011505010102", 55.0)
+
+        results = compare_style_advantage_profiles([race], repo)
+
+        by_name = {r.profile.name: r for r in results}
+        flexible = by_name["flexible-only"].lift
+        assert flexible is not None
+        # 自在の1頭が加わり、現行の4頭から5頭になる。
+        assert flexible.n == 5
+
+    def test_comparison_output_lists_every_candidate(self) -> None:
+        repo = FakeRaceRepository()
+        races = [
+            self._seed(repo, "2026011505010103", 55.0),
+            self._seed(repo, "2026011505010104", 45.0),
+        ]
+
+        text = format_style_advantage_profile_comparison(
+            compare_style_advantage_profiles(races, repo)
+        )
+
+        for name in ("current", "closer-weak", "flexible-only", "measured"):
+            assert name in text
+        assert "自動採用しません" in text
+
+
+class TestPaceStyleMatrix:
+    @staticmethod
+    def _seed(
+        repo: FakeRaceRepository,
+        race_key: str,
+        rpci_actual: float,
+        entries: tuple[tuple[int, RunningStyleLabel, int], ...],
+        track_type: str = "芝",
+    ) -> Race:
+        race = Race(
+            race_key=RaceKey(race_key),
+            race_date=datetime.date(2026, 1, 15),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type=track_type,
+            field_size=len(entries),
+            status=RaceStatus.RESULT,
+            rpci_actual=rpci_actual,
+        )
+        repo.save_race(race)
+        for horse_no, style, finish in entries:
+            repo.save_entry(
+                RaceEntry(
+                    race_key=race.race_key,
+                    horse_no=horse_no,
+                    frame_no=horse_no,
+                    ketto_num=f"H{race_key}{horse_no}",
+                    weight=480.0,
+                    jockey_code="J001",
+                    trainer_code="T001",
+                    finish_pos=finish,
+                    running_style=str(style),
+                )
+            )
+        return race
+
+    def test_empty_returns_none(self) -> None:
+        assert collect_pace_style_matrix([], FakeRaceRepository()) is None
+
+    def test_splits_good_run_rate_by_pace_and_style(self) -> None:
+        """有利度スコアを介さず、素の「脚質×ペース」好走率を集計する。"""
+        repo = FakeRaceRepository()
+        # 芝の閾値は 49.0/51.0。55.0=スロー、45.0=ハイ。
+        slow = self._seed(
+            repo,
+            "2026011505010101",
+            55.0,
+            ((1, RunningStyleLabel.ESCAPE, 1), (2, RunningStyleLabel.CLOSER, 8)),
+        )
+        high = self._seed(
+            repo,
+            "2026011505010102",
+            45.0,
+            ((1, RunningStyleLabel.ESCAPE, 9), (2, RunningStyleLabel.CLOSER, 2)),
+        )
+
+        matrix = collect_pace_style_matrix([slow, high], repo)
+
+        assert matrix is not None
+        assert matrix.n_races == 2
+        assert matrix.n_horses == 4
+        by_style = {row.style: row for row in matrix.rows}
+        escape_cells = {cell.pace_label: cell for cell in by_style["逃げ"].cells}
+        closer_cells = {cell.pace_label: cell for cell in by_style["追込"].cells}
+        # 逃げはスローで好走、ハイで凡走。追込はその逆。
+        assert escape_cells["スロー"].good_rate == 1.0
+        assert escape_cells["ハイ"].good_rate == 0.0
+        assert closer_cells["スロー"].good_rate == 0.0
+        assert closer_cells["ハイ"].good_rate == 1.0
+
+    def test_includes_flexible_style_excluded_from_advantage_scoring(self) -> None:
+        """自在は有利度スコアの対象外だが、この一次集計には含める。
+
+        出走の3割超を占め、前が苦しくなった分の受け皿になっている可能性があるため、
+        ルールを作り直す際の判断材料として欠かせない。
+        """
+        repo = FakeRaceRepository()
+        race = self._seed(
+            repo,
+            "2026011505010103",
+            45.0,
+            ((1, RunningStyleLabel.FLEXIBLE, 1), (2, RunningStyleLabel.ESCAPE, 5)),
+        )
+
+        matrix = collect_pace_style_matrix([race], repo)
+
+        assert matrix is not None
+        by_style = {row.style: row for row in matrix.rows}
+        assert by_style["自在"].n == 1
+        assert by_style["自在"].good_rate == 1.0
+
+    def test_uses_dirt_thresholds_for_dirt_races(self) -> None:
+        """ペース区分はコース別閾値（classify_pace）に従う。
+
+        芝閾値(49/51)を流用するとダートの大半がハイに寄り、集計が無意味になる。
+        """
+        repo = FakeRaceRepository()
+        # 45.0 は芝ならハイだが、ダート閾値(40/46)では平均。
+        race = self._seed(
+            repo,
+            "2026011505010104",
+            45.0,
+            ((1, RunningStyleLabel.ESCAPE, 1),),
+            track_type="ダート",
+        )
+
+        matrix = collect_pace_style_matrix([race], repo)
+
+        assert matrix is not None
+        by_style = {row.style: row for row in matrix.rows}
+        cells = {cell.pace_label: cell for cell in by_style["逃げ"].cells}
+        assert cells["平均"].n == 1
+        assert cells["ハイ"].n == 0
+
+    def test_format_renders_all_styles_and_pace_columns(self) -> None:
+        repo = FakeRaceRepository()
+        race = self._seed(
+            repo,
+            "2026011505010105",
+            55.0,
+            ((1, RunningStyleLabel.ESCAPE, 1), (2, RunningStyleLabel.CLOSER, 8)),
+        )
+
+        text = format_pace_style_matrix(collect_pace_style_matrix([race], repo))
+
+        assert "逃げ" in text
+        assert "追込" in text
+        assert "ハイ" in text
+        assert "スロー" in text
+        assert format_pace_style_matrix(None) == "実績ペース×脚質: 有効サンプルなし"
 
 
 class TestActualStyleAdvantageBreakdown:
