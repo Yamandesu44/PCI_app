@@ -24,6 +24,8 @@
    `focus-visible`リングを追加し、キーボード操作時の現在位置を視認しやすくした。
 9. スマホヘッダーのアイコンだけになる2リンクへ明示的な読み上げ名を付け、操作領域を
    44×44pxへ拡張した。フォーカスリングも主要導線と同じ表示へ統一した。
+10. OSの`prefers-reduced-motion`設定が有効な場合、スムーズスクロール、CSS遷移、
+    アニメーションを最小化するグローバルスタイルと回帰テストを追加した。
 
 ### 対象ファイル
 
@@ -31,6 +33,8 @@
 - `apps/web/src/components/MobileTabList.test.tsx`
 - `apps/web/src/components/AppHeader.tsx`
 - `apps/web/src/components/AppHeader.test.tsx`
+- `apps/web/src/app/globals.css`
+- `apps/web/src/app/globals.test.ts`
 - `apps/web/src/components/FormationView.tsx`
 - `apps/web/src/components/FormationView.test.tsx`
 - `apps/web/src/components/RaceDateCalendar.tsx`
@@ -59,7 +63,7 @@
 
 ### テスト・実行結果
 
-- `npm.cmd test --workspace=@pci/web`: 21 files / 142 tests passed
+- `npm.cmd test --workspace=@pci/web`: 22 files / 143 tests passed
 - `npm.cmd run typecheck --workspace=@pci/web`: 成功
 - `npm.cmd run build --workspace=@pci/web`: 成功
 - 型チェックとbuildを同時実行した初回だけ、buildが`.next/types`を更新中に型チェックが参照して
@@ -74,6 +78,8 @@
   詳細タブはサマリーから隊列へ移動後も選択状態と表示内容が同期し、文書幅375pxで横はみ出しなし。
 - 390px実ブラウザ: ヘッダーの「予想検証」「レース一覧」がアクセシブル名付きリンクとして認識され、
   両方とも44×44px。キーボードフォーカスリングを確認し、文書幅375pxで横はみ出しなし。
+- 本番ビルドの圧縮CSSに`@media (prefers-reduced-motion:reduce)`、`scroll-behavior:auto`、
+  アニメーション・遷移時間の最小化が保持されることを確認した。
 
 ### Claude Codeが最初に確認するファイル
 
