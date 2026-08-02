@@ -1,5 +1,105 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-02 (OpenAI Codex → Claude Code) ダートRPCI再学習評価完了
+
+- 更新日時: 2026-08-02 11:00 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `1248dd4`
+- 作業完了コミット: 本セクション、`tasks/current.md`、`docs/DECISIONS.md`を含むコミット
+- 今回の目的: ラップ由来へ統一したデータでダートRPCI候補を再学習し、現行v4と同条件で採用判断する。
+
+### 完了した内容
+
+1. **学習データの残存不整合を解消した。**
+   - 初回`v5_full`来歴は旧フォールバック式0.3%混在だった。
+   - mykeibadbは2022-01-01〜2026-05-31のS3/L3を100%保持していた。
+   - アプリDBでは2025-06-28〜2025-07-20にS3/L3欠損76件があり、すべて旧形式の重複キーだった。
+   - 4週末（各70レース、計280レース）を`ingestion.batch --step results`で再同期した。
+   - `ingestion.reconcile_duplicate_races --apply --expected-groups 77`で安全ガード付き統合を実施。
+   - 最終状態はS3/L3欠損0件、対象期間の重複0組。旧キー76件を削除した。
+2. **全期間候補を再学習した。**
+   - 対象7,431レース、期間2022-01-05〜2026-05-31、`feature-set=v4`。
+   - `lap_derived_ratio=1.0`、テストMAE 2.330、RMSE 3.020、バイアス -0.550。
+3. **データ統合後の同一226レースで再比較した。**
+
+| 指標 | 現行v4 | 候補v5_full |
+|---|---:|---:|
+| MAE | 4.592 | **3.881** |
+| バイアス | **+2.571** | +2.628 |
+| 展開ラベル的中率 | 71.7% | **79.2%** |
+| ハイ再現率 | 88.7% | **95.7%** |
+| 平均再現率 | **77.4%** | 66.0% |
+| スロー再現率 | 32.8% | **58.6%** |
+| PAI最上位帯リフト | 1.18x | **1.26x** |
+| 有利−不利の好走率差 | +1.4% | **+2.6%** |
+
+4. **採用を見送った。**
+   - 事前基準の主指標だったバイアスが`+2.571→+2.628`と縮小しなかった。
+   - MAE・分類・PAI・展開有利度は有望だが、評価後に基準を変更せず、既定
+     `rpci_lgbm_dirt_v4.txt` / `lgbm-dirt-v4-lap-history`を維持した。
+   - 候補モデルはコミットしていない。Windows実行機には
+     `apps/api/models/rpci_lgbm_dirt_v5_full.txt`と来歴JSONが比較用に残っている。
+5. **再学習世代の追跡を実装した。**
+   - `scripts/train_rpci_lgbm.py`へ`--model-version`を追加し、来歴JSONへ保存する。
+   - `lgbm_forecaster.py`は来歴JSONの`model_version`を優先し、来歴がない旧モデルは
+     特徴量セットから従来世代を決める。
+   - これにより同じv4特徴量の再学習候補もバックテスト上で別世代として識別できる。
+
+### 対象ファイル
+
+- `apps/api/scripts/train_rpci_lgbm.py`
+- `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+- `apps/api/tests/unit/infrastructure/pace/test_lgbm_forecaster.py`
+- `apps/api/tests/unit/test_train_rpci_lgbm.py`
+- `tasks/current.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- `v5_full`は不採用候補で、本番モデルではない。MAEなどの副指標を優先して採用基準を変える場合は
+  新しい独立期間で再検証し、別ADRとして明示すること。
+- バイアス`+2.571`は現行v4にも残る。単純な学習件数拡大では解消しなかった。
+- `MODEL_VERSION_DIRT_V5`は来歴付き候補を識別するため定義したが、既定パスはv4のまま。
+- 次候補のダート固有特徴量は未確定。`tasks/backlog.md:161`の着手条件を先に再確認すること。
+- Windows実行機のDBは重複統合済みだが、これはGit管理外の実データ変更である。
+
+### テスト結果
+
+- API関連4ファイル: **78 passed**
+- API単体・契約: **622 passed**
+- `ruff check src tests scripts`: pass
+- `mypy src --strict --python-version 3.12`: 0 issues（65 files）
+- pytestはサンドボックスの`.pytest_cache`書き込み拒否警告1件のみ。テスト結果への影響なし。
+- 実データ再同期: 4週末、各70レース成功、失敗0。
+- 重複統合後診断: S3/L3欠損0、重複0組。
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`先頭の「ダートRPCI再学習候補を評価」
+2. `docs/DECISIONS.md`末尾のADR-2026-08-02
+3. `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`の
+   `_model_version_from_provenance()`と`SplitLightGBMRpciForecaster`
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short --branch
+cd apps\api
+$env:PYTHONPATH='src'
+.venv\Scripts\python.exe -m pytest tests/unit/infrastructure/pace/test_lgbm_forecaster.py tests/unit/test_train_rpci_lgbm.py -q
+```
+
+### 次に実施する具体的な手順
+
+1. 新規のダート特徴量へ進む前に、`tasks/backlog.md:161`の着手条件をユーザーと確認する。
+2. 着手する場合は`train_rpci_lgbm.py`のv4を直接変更せず、新しい特徴量セットとして分離し、
+   同じ2026-06-01以降226レースでv4・v5_full候補と比較する。
+3. 別優先なら、既知P0の`apps/ingestion-worker/src/ingestion/batch.py`で
+   `main()`が`ingest_results()`の`sent_fail`を終了コードへ反映しない問題を、失敗テストから修正する。
+
 ## 2026-08-02 (Claude Code → OpenAI Codex) 引き継ぎ ★最初にここを読む
 
 - 作業担当: Claude Code

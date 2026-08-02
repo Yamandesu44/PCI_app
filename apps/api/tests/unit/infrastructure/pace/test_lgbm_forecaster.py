@@ -24,6 +24,7 @@ from pci.infrastructure.pace.lgbm_forecaster import (
     MODEL_VERSION_DIRT_V2,
     MODEL_VERSION_DIRT_V3,
     MODEL_VERSION_DIRT_V4,
+    MODEL_VERSION_DIRT_V5,
     MODEL_VERSION_TURF,
     MODEL_VERSION_TURF_V2,
     MODEL_VERSION_TURF_V3,
@@ -350,6 +351,49 @@ class TestSplitLightGBMRpciForecaster:
 
         assert turf.model_version == MODEL_VERSION_TURF_V4
         assert dirt.model_version == MODEL_VERSION_DIRT_V4
+
+    def test_training_provenance_overrides_feature_generation(self, tmp_path: Path) -> None:
+        turf = tmp_path / "turf.txt"
+        dirt = tmp_path / "dirt.txt"
+        turf.write_text("dummy")
+        dirt.write_text("dummy")
+        dirt.with_suffix(".txt.meta.json").write_text(
+            '{"model_version": "lgbm-dirt-v5-lap-history"}',
+            encoding="utf-8",
+        )
+        mock_booster = MagicMock()
+        mock_booster.predict.return_value = [43.0]
+        mock_booster.num_feature.return_value = len(FEATURE_NAMES_V4)
+
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            return_value=mock_booster,
+        ):
+            forecaster = SplitLightGBMRpciForecaster(turf, dirt)
+
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.model_version == MODEL_VERSION_DIRT_V5
+
+    def test_invalid_training_provenance_falls_back_to_feature_generation(
+        self, tmp_path: Path
+    ) -> None:
+        turf = tmp_path / "turf.txt"
+        dirt = tmp_path / "dirt.txt"
+        turf.write_text("dummy")
+        dirt.write_text("dummy")
+        dirt.with_suffix(".txt.meta.json").write_text("[]", encoding="utf-8")
+        mock_booster = MagicMock()
+        mock_booster.predict.return_value = [43.0]
+        mock_booster.num_feature.return_value = len(FEATURE_NAMES_V4)
+
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            return_value=mock_booster,
+        ):
+            forecaster = SplitLightGBMRpciForecaster(turf, dirt)
+
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.model_version == MODEL_VERSION_DIRT_V4
 
     def test_empty_field_raises(self) -> None:
         forecaster = self._make_split_forecaster()

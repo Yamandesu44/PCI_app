@@ -232,6 +232,7 @@ class TestTrainingProvenance:
         args = argparse.Namespace(
             feature_set="v4",
             label_balance="none",
+            model_version="lgbm-dirt-v5-lap-history",
             before_date=datetime.date(2026, 6, 1),
             limit=2000,
             rpci_min=20.0,
@@ -256,6 +257,7 @@ class TestTrainingProvenance:
         assert payload["date_from"] == "2026-01-01"
         assert payload["date_to"] == "2026-01-04"
         assert payload["track_type"] == "dirt"
+        assert payload["model_version"] == "lgbm-dirt-v5-lap-history"
 
     def test_flags_training_data_that_still_contains_the_old_formula(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]

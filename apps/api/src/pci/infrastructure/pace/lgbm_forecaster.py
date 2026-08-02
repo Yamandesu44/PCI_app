@@ -10,6 +10,7 @@ RpciForecaster プロトコルを満たし、ForecastRaceUseCase に DI で注�
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,7 @@ MODEL_VERSION_DIRT_V3 = "lgbm-dirt-v3-history"
 MODEL_VERSION_V4 = "lgbm-v4-lap-history"
 MODEL_VERSION_TURF_V4 = "lgbm-turf-v4-lap-history"
 MODEL_VERSION_DIRT_V4 = "lgbm-dirt-v4-lap-history"
+MODEL_VERSION_DIRT_V5 = "lgbm-dirt-v5-lap-history"
 
 # Path(__file__) = src/pci/infrastructure/pace/lgbm_forecaster.py
 # .parent × 5   = apps/api/
@@ -112,6 +114,23 @@ def _load_lgb_booster(model_path: str | Path) -> Any:
     return lgb.Booster(model_str=model_text)
 
 
+def _model_version_from_provenance(model_path: str | Path, fallback: str) -> str:
+    """学習来歴に記録された世代を返し、旧モデルは特徴量世代へフォールバックする。"""
+    meta_path = Path(model_path).with_suffix(Path(model_path).suffix + ".meta.json")
+    if not meta_path.exists():
+        return fallback
+    try:
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _logger.warning("RPCIモデルの学習来歴を読み込めません: %s", exc)
+        return fallback
+    if not isinstance(payload, dict):
+        _logger.warning("RPCIモデルの学習来歴がJSONオブジェクトではありません: %s", meta_path)
+        return fallback
+    version = payload.get("model_version")
+    return version if isinstance(version, str) and version else fallback
+
+
 def _make_forecast(
     predict_fn: Any,
     context: RaceContext,
@@ -169,18 +188,30 @@ class LightGBMRpciForecaster:
         booster = _load_lgb_booster(model_path)
         self._predict = booster.predict
         self._feature_names = _feature_names_for_booster(booster)
+        fallback_version = _version_for_feature_names(
+            self._feature_names,
+            MODEL_VERSION,
+            MODEL_VERSION_V2,
+            MODEL_VERSION_V3,
+            MODEL_VERSION_V4,
+        )
+        self._model_version = _model_version_from_provenance(model_path, fallback_version)
 
     def forecast(self, context: RaceContext) -> RpciForecast:
         feature_names = getattr(self, "_feature_names", FEATURE_NAMES)
         return _make_forecast(
             self._predict,
             context,
-            _version_for_feature_names(
-                feature_names,
-                MODEL_VERSION,
-                MODEL_VERSION_V2,
-                MODEL_VERSION_V3,
-                MODEL_VERSION_V4,
+            getattr(
+                self,
+                "_model_version",
+                _version_for_feature_names(
+                    feature_names,
+                    MODEL_VERSION,
+                    MODEL_VERSION_V2,
+                    MODEL_VERSION_V3,
+                    MODEL_VERSION_V4,
+                ),
             ),
             feature_names,
         )
@@ -204,6 +235,26 @@ class SplitLightGBMRpciForecaster:
         self._dirt_predict = dirt_booster.predict
         self._turf_feature_names = _feature_names_for_booster(turf_booster)
         self._dirt_feature_names = _feature_names_for_booster(dirt_booster)
+        self._turf_model_version = _model_version_from_provenance(
+            turf_model_path,
+            _version_for_feature_names(
+                self._turf_feature_names,
+                MODEL_VERSION_TURF,
+                MODEL_VERSION_TURF_V2,
+                MODEL_VERSION_TURF_V3,
+                MODEL_VERSION_TURF_V4,
+            ),
+        )
+        self._dirt_model_version = _model_version_from_provenance(
+            dirt_model_path,
+            _version_for_feature_names(
+                self._dirt_feature_names,
+                MODEL_VERSION_DIRT,
+                MODEL_VERSION_DIRT_V2,
+                MODEL_VERSION_DIRT_V3,
+                MODEL_VERSION_DIRT_V4,
+            ),
+        )
 
     def forecast(self, context: RaceContext) -> RpciForecast:
         if context.track_type == "ダート":
@@ -211,12 +262,16 @@ class SplitLightGBMRpciForecaster:
             return _make_forecast(
                 self._dirt_predict,
                 context,
-                _version_for_feature_names(
-                    feature_names,
-                    MODEL_VERSION_DIRT,
-                    MODEL_VERSION_DIRT_V2,
-                    MODEL_VERSION_DIRT_V3,
-                    MODEL_VERSION_DIRT_V4,
+                getattr(
+                    self,
+                    "_dirt_model_version",
+                    _version_for_feature_names(
+                        feature_names,
+                        MODEL_VERSION_DIRT,
+                        MODEL_VERSION_DIRT_V2,
+                        MODEL_VERSION_DIRT_V3,
+                        MODEL_VERSION_DIRT_V4,
+                    ),
                 ),
                 feature_names,
             )
@@ -224,12 +279,16 @@ class SplitLightGBMRpciForecaster:
         return _make_forecast(
             self._turf_predict,
             context,
-            _version_for_feature_names(
-                feature_names,
-                MODEL_VERSION_TURF,
-                MODEL_VERSION_TURF_V2,
-                MODEL_VERSION_TURF_V3,
-                MODEL_VERSION_TURF_V4,
+            getattr(
+                self,
+                "_turf_model_version",
+                _version_for_feature_names(
+                    feature_names,
+                    MODEL_VERSION_TURF,
+                    MODEL_VERSION_TURF_V2,
+                    MODEL_VERSION_TURF_V3,
+                    MODEL_VERSION_TURF_V4,
+                ),
             ),
             feature_names,
         )

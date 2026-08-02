@@ -326,6 +326,11 @@ def _parse_args() -> argparse.Namespace:
         default="v1",
         help="特徴量定義。v4は対象日より前の前付けペース・前後半3F履歴も追加（default: v1）",
     )
+    p.add_argument(
+        "--model-version",
+        default=None,
+        help="学習来歴へ保存するモデル世代（例: lgbm-dirt-v5-lap-history）",
+    )
     args = p.parse_args()
     if (args.label_balance != "none" or args.feature_set != "v1") and args.output is None:
         p.error(
@@ -510,6 +515,7 @@ def _write_training_provenance(
     lap_flags = [int(row[feature_count + 2]) for row in rows]
     payload = {
         "model_file": model_path.name,
+        "model_version": getattr(args, "model_version", None),
         "trained_at": datetime.datetime.now(datetime.UTC).isoformat(),
         "track_type": track_type,
         "feature_set": args.feature_set,
