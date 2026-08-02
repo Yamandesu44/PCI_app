@@ -40,7 +40,7 @@ export function MobileRaceNavigation({ navigation }: MobileRaceNavigationProps) 
           href={navigation.previous.href}
           aria-label={`前のレース ${navigation.previous.label}`}
           title={`前のレース ${navigation.previous.label}`}
-          className="flex w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
+          className="flex w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
         >
           <ChevronLeft className="h-5 w-5" aria-hidden />
         </Link>
@@ -73,7 +73,7 @@ export function MobileRaceNavigation({ navigation }: MobileRaceNavigationProps) 
               key={item.raceKey}
               href={item.href}
               aria-label={`${item.label}へ移動`}
-              className="flex h-9 min-w-10 snap-center items-center justify-center rounded px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              className="flex h-9 min-w-10 snap-center items-center justify-center rounded px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
             >
               {raceNumberOnly(item.label)}
             </Link>
@@ -86,7 +86,7 @@ export function MobileRaceNavigation({ navigation }: MobileRaceNavigationProps) 
           href={navigation.next.href}
           aria-label={`次のレース ${navigation.next.label}`}
           title={`次のレース ${navigation.next.label}`}
-          className="flex w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
+          className="flex w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
         >
           <ChevronRight className="h-5 w-5" aria-hidden />
         </Link>

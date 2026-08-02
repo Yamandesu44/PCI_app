@@ -77,7 +77,7 @@ export function MobileTabList<T extends string>({
               aria-controls={`${panelIdPrefix}-${tab.id}`}
               onClick={() => onTabChange(tab.id)}
               onKeyDown={(event) => handleKeyDown(event, index)}
-              className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-r border-slate-200 text-[11px] font-semibold last:border-r-0 ${
+              className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-r border-slate-200 text-[11px] font-semibold last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500 ${
                 isActive ? "bg-slate-950 text-white" : "bg-white text-slate-500"
               }`}
             >

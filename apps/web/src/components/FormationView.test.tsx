@@ -54,6 +54,7 @@ describe("MobileFormationBoard", () => {
     expect(markup).toContain("後方");
     expect(markup).not.toContain("data-mobile-formation-detail");
     expect(markup).not.toContain("前へ行く可能性が高いです。");
+    expect(markup).toContain("focus-visible:ring-inset");
   });
 });
 

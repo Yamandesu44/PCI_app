@@ -28,6 +28,7 @@ describe("RaceDateCalendar", () => {
     expect(markup).toContain("data-mobile-date-strip");
     expect(markup).toContain('<nav data-mobile-date-strip="true"');
     expect(markup).toContain('aria-label="開催日の選択"');
+    expect(markup).toContain("focus-visible:ring-2");
     // 選択日(2026-07-25, index 6)の前4件+本人+後1件 = 6件（全8件は並べない）。
     expect(markup.match(/data-mobile-date-item/g)).toHaveLength(6);
     expect(markup).toContain('aria-current="date"');

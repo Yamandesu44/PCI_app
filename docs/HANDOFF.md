@@ -20,6 +20,8 @@
 5. 非選択タブ用の空の`hidden`パネルを追加し、すべての`aria-controls`参照先を常時実在させた。
 6. `FormationView.headingId`を追加し、モバイル・デスクトップ間の見出しID重複を解消した。
 7. 開催日ストリップをナビゲーションランドマーク化し、競馬場タブへ左右矢印・Home・End操作を追加した。
+8. 開催日、競馬場、レース行、詳細タブ、隊列内の馬、同一開催レース移動へ明示的な
+   `focus-visible`リングを追加し、キーボード操作時の現在位置を視認しやすくした。
 
 ### 対象ファイル
 
@@ -31,6 +33,8 @@
 - `apps/web/src/components/RaceDateCalendar.test.tsx`
 - `apps/web/src/components/MobileRaceGroupedSection.tsx`
 - `apps/web/src/components/MobileRaceGroupedSection.test.tsx`
+- `apps/web/src/components/MobileRaceNavigation.tsx`
+- `apps/web/src/components/MobileRaceNavigation.test.tsx`
 - `apps/web/src/components/MobileRaceForecastDashboard.tsx`
 - `apps/web/src/components/MobileRaceForecastDashboard.test.tsx`
 - `apps/web/src/components/MobilePaceAnalysisDashboard.tsx`
@@ -54,12 +58,16 @@
 - `npm.cmd test --workspace=@pci/web`: 20 files / 141 tests passed
 - `npm.cmd run typecheck --workspace=@pci/web`: 成功
 - `npm.cmd run build --workspace=@pci/web`: 成功
+- 型チェックとbuildを同時実行した初回だけ、buildが`.next/types`を更新中に型チェックが参照して
+  `TS6053`となった。build→型チェックの順次再実行では両方成功しており、コード起因の失敗ではない。
 - Webワークスペースに`lint`スクリプトは未定義。Next.js buildもlintをスキップする既存設定。
 - 390px実ブラウザ: `innerWidth=390`、文書幅375、横はみ出しなし。矢印キーで
   `mobile-tab-summary`から`mobile-tab-formation`へフォーカス・選択が同期。
 - 隊列表示後も全4タブの参照先が存在し、表示パネルは1件、重複IDは0件。
 - ホーム390px実ブラウザ: 開催日ナビゲーションを認識。競馬場タブは札幌から新潟へ
   矢印キーで移動し、`tabIndex`・`aria-selected`・レース一覧が同期。横はみ出しなし。
+- 390px実ブラウザ: 競馬場タブと詳細タブで緑色2pxの内側フォーカスリングを実測。
+  詳細タブはサマリーから隊列へ移動後も選択状態と表示内容が同期し、文書幅375pxで横はみ出しなし。
 
 ### Claude Codeが最初に確認するファイル
 

@@ -112,7 +112,7 @@ function MobileDateStrip({
             </>
           );
           const className = [
-            "flex h-14 min-w-14 snap-center flex-col items-center justify-center rounded-md border text-center transition-colors",
+            "flex h-14 min-w-14 snap-center flex-col items-center justify-center rounded-md border text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1",
             isSelected
               ? "border-emerald-700 bg-emerald-700 text-white shadow-sm"
               : isToday
@@ -210,7 +210,7 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
           data-mobile-date-picker-toggle
           onClick={() => setShowPicker((v) => !v)}
           aria-expanded={showPicker}
-          className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+          className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
         >
           {showPicker ? "閉じる" : "他の日程を探す"}
           <ChevronDown
@@ -239,7 +239,7 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
           <button
             type="button"
             onClick={prevYear}
-            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             aria-label="前年"
           >
             <ChevronsLeft className="h-4 w-4" />
@@ -247,7 +247,7 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
           <button
             type="button"
             onClick={prevMonth}
-            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             aria-label="前月"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -258,7 +258,7 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
           <button
             type="button"
             onClick={nextMonth}
-            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             aria-label="翌月"
           >
             <ChevronRight className="h-4 w-4" />
@@ -266,7 +266,7 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
           <button
             type="button"
             onClick={nextYear}
-            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             aria-label="翌年"
           >
             <ChevronsRight className="h-4 w-4" />
@@ -299,7 +299,7 @@ export function RaceDateCalendar({ dates, selectedDate, performanceDays }: Props
                 <Link
                   href={`/?date=${key}&performance_days=${performanceDays}`}
                   className={[
-                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition",
+                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1",
                     isSelected
                       ? "bg-emerald-700 text-white shadow-sm"
                       : isToday
