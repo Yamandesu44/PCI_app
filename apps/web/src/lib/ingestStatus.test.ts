@@ -53,6 +53,7 @@ describe("ingestStatusMeta", () => {
     );
     expect(meta.visible).toBe(true);
     expect(meta.tone).toBe("warning");
+    expect(meta.color).toBe("#92400e");
     expect(meta.headline).toContain("1件");
     expect(meta.incompleteRaces).toEqual([
       {

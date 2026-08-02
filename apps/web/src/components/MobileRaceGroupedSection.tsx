@@ -158,7 +158,7 @@ function MobileRaceDateGroup({
         <h3 className="m-0 text-sm font-semibold text-slate-950">
           {formatRaceDate(dateGroup.raceDate)}
         </h3>
-        <span className="text-xs font-medium text-slate-500">
+        <span className="text-xs font-medium text-slate-600">
           {activeVenue.items.length}R
         </span>
       </div>
@@ -186,7 +186,7 @@ function MobileRaceDateGroup({
                 "min-w-0 rounded px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500",
                 selected
                   ? "bg-white text-slate-950 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800",
+                  : "text-slate-600 hover:text-slate-900",
               ].join(" ")}
             >
               <span className="block truncate">{venue.venueName}</span>

@@ -51,7 +51,7 @@ export interface IngestStatusMeta {
 
 const TONE_COLOR: Record<IngestStatusTone, string> = {
   ok: "#16a34a",
-  warning: "#d97706",
+  warning: "#92400e",
   error: "#dc2626",
 };
 

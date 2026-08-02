@@ -308,9 +308,9 @@ function RaceGroupedSection({
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="m-0 text-lg font-semibold tracking-normal text-slate-950">{title}</h2>
-          <p className="m-0 mt-1 text-sm text-slate-500">{description}</p>
+          <p className="m-0 mt-1 text-sm text-slate-600">{description}</p>
         </div>
-        <span className="text-sm font-medium text-slate-500">{items.length}件</span>
+        <span className="text-sm font-medium text-slate-600">{items.length}件</span>
       </div>
 
       {items.length === 0 ? (
@@ -334,7 +334,7 @@ function RaceGroupedSection({
                   <h3 className="m-0 text-base font-semibold tracking-normal text-slate-950">
                     {formatRaceDate(dateGroup.raceDate)}
                   </h3>
-                  <span className="text-xs font-semibold text-slate-500">
+                  <span className="text-xs font-semibold text-slate-600">
                     {dateGroup.venues.reduce((sum, venue) => sum + venue.items.length, 0)}R
                   </span>
                 </div>
@@ -346,7 +346,7 @@ function RaceGroupedSection({
                         <h4 className="m-0 text-sm font-semibold text-slate-900">
                           {venueGroup.venueName}
                         </h4>
-                        <span className="text-xs font-medium text-slate-500">
+                        <span className="text-xs font-medium text-slate-600">
                           {venueGroup.items.length}件
                         </span>
                       </div>

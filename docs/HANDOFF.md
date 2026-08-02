@@ -26,6 +26,9 @@
    44×44pxへ拡張した。フォーカスリングも主要導線と同じ表示へ統一した。
 10. OSの`prefers-reduced-motion`設定が有効な場合、スムーズスクロール、CSS遷移、
     アニメーションを最小化するグローバルスタイルと回帰テストを追加した。
+11. 390px幅で表示中テキストのコントラストを監査し、取り込み警告の見出し色を
+    `#92400e`、ページ直下と非選択競馬場タブの補助文字を`slate-600`へ変更した。
+    白いカード上で基準を満たす`slate-500`は維持し、情報階層を崩さないようにした。
 
 ### 対象ファイル
 
@@ -49,6 +52,9 @@
 - `apps/web/src/components/MobilePaceAnalysisDashboard.test.tsx`
 - `apps/web/src/components/IngestStatusBanner.tsx`
 - `apps/web/src/components/IngestRecoveryCommand.tsx`
+- `apps/web/src/lib/ingestStatus.ts`
+- `apps/web/src/lib/ingestStatus.test.ts`
+- `apps/web/src/app/page.tsx`
 - `tasks/current.md`
 - `docs/LOCATION_TEST.md`
 - `docs/DECISIONS.md`
@@ -80,6 +86,8 @@
   両方とも44×44px。キーボードフォーカスリングを確認し、文書幅375pxで横はみ出しなし。
 - 本番ビルドの圧縮CSSに`@media (prefers-reduced-motion:reduce)`、`scroll-behavior:auto`、
   アニメーション・遷移時間の最小化が保持されることを確認した。
+- ホーム390px実ブラウザで、表示領域内の直接テキストノードを対象に前景色と最寄りの
+  単色背景を監査した。警告見出し、一覧補助文字、競馬場タブを修正後、4.5:1未満の検出は0件。
 
 ### Claude Codeが最初に確認するファイル
 
