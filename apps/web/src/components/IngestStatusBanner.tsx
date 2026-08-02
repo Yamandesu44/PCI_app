@@ -104,12 +104,12 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
               <div className="mt-3 space-y-4 border-t border-slate-200/80 pt-3">
                 {meta.failures.length > 0 ? (
                   <section aria-labelledby="ingest-failures-heading">
-                    <h3
+                    <p
                       id="ingest-failures-heading"
                       className="m-0 text-xs font-semibold text-slate-800"
                     >
                       失敗の詳細（{meta.failures.length}件）
-                    </h3>
+                    </p>
                     <ul className="m-0 mt-2 list-none space-y-1.5 p-0">
                       {meta.failures.map((failure, i) => (
                         <li key={i} className="rounded border border-slate-200 bg-white p-2 text-xs">
@@ -126,12 +126,12 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
 
                 {meta.incompleteRaces.length > 0 ? (
                   <section aria-labelledby="incomplete-races-heading">
-                    <h3
+                    <p
                       id="incomplete-races-heading"
                       className="m-0 text-xs font-semibold text-slate-800"
                     >
                       成績未取込の対象（{meta.incompleteRaces.length}件）
-                    </h3>
+                    </p>
                     <ul className="m-0 mt-2 grid list-none gap-1.5 p-0 sm:grid-cols-2">
                       {meta.incompleteRaces.map((race) => (
                         <li key={race.raceKey}>
@@ -155,12 +155,12 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
 
                 {meta.missingTrackConditionRaces.length > 0 ? (
                   <section aria-labelledby="missing-track-condition-heading">
-                    <h3
+                    <p
                       id="missing-track-condition-heading"
                       className="m-0 text-xs font-semibold text-slate-800"
                     >
                       馬場情報未反映の対象（{meta.missingTrackConditionRaces.length}件）
-                    </h3>
+                    </p>
                     <ul className="m-0 mt-2 grid list-none gap-1.5 p-0 sm:grid-cols-2">
                       {meta.missingTrackConditionRaces.map((race) => (
                         <li key={race.raceKey}>
@@ -188,12 +188,12 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
 
                 {meta.duplicateRaceGroups.length > 0 ? (
                   <section aria-labelledby="duplicate-races-heading">
-                    <h3
+                    <p
                       id="duplicate-races-heading"
                       className="m-0 text-xs font-semibold text-slate-800"
                     >
                       重複レース（{meta.duplicateRaceGroups.length}組）
-                    </h3>
+                    </p>
                     <ul className="m-0 mt-2 grid list-none gap-1.5 p-0 sm:grid-cols-2">
                       {meta.duplicateRaceGroups.map((group) => (
                         <li
@@ -226,12 +226,12 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
 
                 {meta.recoveryCommand ? (
                   <section aria-labelledby="resync-command-heading">
-                    <h3
+                    <p
                       id="resync-command-heading"
                       className="m-0 text-xs font-semibold text-slate-800"
                     >
                       再同期コマンド
-                    </h3>
+                    </p>
                     <p className="m-0 mt-1 text-xs text-slate-500">リポジトリ直下で実行</p>
                     <IngestRecoveryCommand command={meta.recoveryCommand} />
                   </section>
@@ -239,12 +239,12 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
 
                 {meta.metadataRecoveryCommand ? (
                   <section aria-labelledby="metadata-command-heading">
-                    <h3
+                    <p
                       id="metadata-command-heading"
                       className="m-0 text-xs font-semibold text-slate-800"
                     >
                       馬場情報の補完コマンド
-                    </h3>
+                    </p>
                     <p className="m-0 mt-1 text-xs text-slate-500">リポジトリ直下で実行</p>
                     <IngestRecoveryCommand command={meta.metadataRecoveryCommand} />
                   </section>

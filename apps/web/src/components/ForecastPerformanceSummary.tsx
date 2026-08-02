@@ -218,6 +218,7 @@ export function ForecastPerformanceSummary({
           />
         </summary>
         <div className="border-t border-slate-100 px-4 pb-5 pt-4">
+          <h2 className="sr-only">予想検証の詳細</h2>
           <p className="mb-3 text-xs leading-5 text-slate-600">
             事前の展開想定と実際の流れを比較しています。
           </p>

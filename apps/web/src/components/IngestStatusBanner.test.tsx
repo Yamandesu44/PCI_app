@@ -68,6 +68,9 @@ describe("IngestStatusBanner", () => {
     expect(markup).toContain("flex min-h-11 items-center justify-between");
     expect(markup).toContain("break-words");
     expect(markup).not.toContain("break-all");
+    expect(markup).toContain('<p id="ingest-failures-heading"');
+    expect(markup).toContain('<p id="incomplete-races-heading"');
+    expect(markup).not.toContain('<h3 id="ingest-failures-heading"');
   });
 
   it("正常時は不要な詳細開閉を表示しない", () => {

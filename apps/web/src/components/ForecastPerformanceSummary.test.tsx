@@ -39,6 +39,7 @@ describe("ForecastPerformanceSummary", () => {
     expect(markup).toContain("展開一致 63%");
     expect(markup).toContain("検証 48件");
     expect(markup).toContain("カバー 40%");
+    expect(markup).toContain('<h2 class="sr-only">予想検証の詳細</h2>');
   });
 
   it("期間切替と詳細指標を折りたたみ内にも維持する", () => {
