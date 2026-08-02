@@ -1,5 +1,20 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-08-03 完了: Codex — 同期プリフライトのWindows実地確認とUTF-8回帰修正
+
+- [x] `run_mykeibadb_full_sync.ps1 -PreflightOnly`をWindows実行機で動かし、
+  FastAPI／PostgreSQLと読み取り元MySQL（83テーブル）の疎通確認がexit 0で完了することを確認した。
+- [x] 新しいMySQL疎通チェックのPython出力だけ文字化けする回帰を発見し、同期ラッパーへ
+  Windows PowerShell 5.1向けUTF-8入出力設定を追加した。
+- [x] PowerShellスクリプトを既存規約のCRLFへ正規化し、日本語コメント直後の初期化が
+  Windows PowerShell 5.1で欠落しないことを実行確認した。
+- [x] UTF-8設定の静的回帰テストを追加した。
+- [x] ingestion-worker 250 tests、ruff、mypy strictを完了した。
+
+### 次の候補
+
+- [ ] iOS VoiceOverとAndroid TalkBackで、詳細タブの選択状態と読み上げ順を実機確認する。
+
 ## 2026-08-02 完了: Codex — モバイル詳細タブのキーボード操作と警告要約を改善
 
 - [x] 出走前・確定後で重複していたモバイル詳細タブを`MobileTabList`へ共通化した。
@@ -132,8 +147,8 @@
   stderrで終了エラーにならないよう`$ErrorActionPreference`を一時的にContinueへ。
 - [x] `MANUAL_SYNC_GUIDE.md`を更新（単独実行コマンド、§6.1へservices.msc手順）。
 - [x] ingestion 249 tests（新規10件）・ruff pass。新規ファイルはmypy --strict 0エラー。
-- [ ] **未実施**: PowerShellがこの環境に無いため`-PreflightOnly`の実動作は未確認。
-  次にWindows実行機を触るときに確認する。
+- [x] Windows実行機で`-PreflightOnly`を実行し、API／PostgreSQLと読み取り元MySQLの
+  両方を確認してexit 0で終了することを確認した（2026-08-03、Codex）。
 
 ## 2026-07-26 (14) ✅ 完了: Claude Code — ADR-0010採用（style-advantage-v4）
 

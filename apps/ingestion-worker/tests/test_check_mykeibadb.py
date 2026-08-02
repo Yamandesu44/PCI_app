@@ -18,6 +18,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from ingestion.check_mykeibadb import _classify, check  # noqa: E402
 
 
+def test_full_sync_wrapper_forces_utf8_for_python_output() -> None:
+    script = (
+        Path(__file__).parents[1] / "scripts" / "run_mykeibadb_full_sync.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert '$env:PYTHONIOENCODING = "utf-8"' in script
+    assert '$env:PYTHONUTF8 = "1"' in script
+    assert "[Console]::OutputEncoding = $Utf8NoBom" in script
+
+
 class _FakeCursor:
     def __init__(self, tables: list[tuple[str, ...]]) -> None:
         self._tables = tables

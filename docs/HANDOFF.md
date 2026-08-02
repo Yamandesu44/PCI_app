@@ -1,5 +1,65 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 同期プリフライトのWindows実地確認完了
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `46735fb`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 未確認だった`run_mykeibadb_full_sync.ps1 -PreflightOnly`をWindowsで実行し、
+  読み取り元MySQL疎通チェックを含む同期開始前検証を完了する。
+
+### 完了した内容
+
+1. Windows実行機の既存`.env`とPython仮想環境を使い、現在の作業ツリーにある
+   `run_mykeibadb_full_sync.ps1 -PreflightOnly`を実行した。
+2. FastAPI／PostgreSQL readinessと、mykeibadb MySQLの83テーブル確認がexit 0で完了した。
+3. `check_mykeibadb.py`の日本語出力だけ文字化けする回帰を発見し、同期ラッパーへ
+   `PYTHONIOENCODING=utf-8`、`PYTHONUTF8=1`、PowerShellコンソールのUTF-8設定を追加した。
+4. PowerShell 5.1互換のためスクリプト全体をCRLFへ揃え、修正後の実行で日本語表示と
+   `Preflight-only check completed.`を確認した。mykeibadb.exeや同期処理は起動していない。
+5. 同期ラッパーのUTF-8設定が残ることを`test_check_mykeibadb.py`で回帰テスト化した。
+
+### 対象ファイル
+
+- `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`
+- `apps/ingestion-worker/tests/test_check_mykeibadb.py`
+- `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`
+- `tasks/current.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・未確定仕様・既知事項
+
+- DB接続設定と秘密値は既存のGit管理外`.env`を利用し、出力・文書・コミットには含めていない。
+- ingestion-worker仮想環境のmypyは`librt.internal`欠損で起動不能。コード検証は従来の
+  グローバルPython 3.12環境で再実行し、25 source filesで0 issuesを確認した。
+- VoiceOver／TalkBack実機確認と、2026-08-03以降のダート候補再評価条件は引き続き未完了。
+
+### テスト・実行結果
+
+- `run_mykeibadb_full_sync.ps1 -PreflightOnly`: exit 0
+  - FastAPI／PostgreSQL: ready
+  - mykeibadb MySQL: 接続成功、83テーブル
+  - 日本語コンソール出力: 修正後は文字化けなし
+- `pytest apps/ingestion-worker/tests -q`: 250 passed
+- `ruff check apps/ingestion-worker/src apps/ingestion-worker/tests`: pass
+- `mypy src --strict --python-version 3.12`: 25 source files、0 issues
+- pytestのキャッシュ書き込み警告1件はサンドボックス権限によるもので、テスト結果への影響なし。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`のUTF-8初期化
+2. `apps/ingestion-worker/tests/test_check_mykeibadb.py`のラッパー回帰テスト
+3. `tasks/current.md`先頭の次候補
+
+### 次に実施する具体的な手順
+
+1. `docs/LOCATION_TEST.md`第10節に従い、iOS VoiceOverで詳細タブの選択状態と読み上げ順を記録する。
+2. Android TalkBackでも同じ遷移を確認し、端末・OS・ブラウザ・読み上げ結果を`tasks/current.md`へ残す。
+3. 2026-08-03以降の確定ダートが100件かつ各展開ラベル20件へ達するまでは現行v4を維持する。
+
 ## 2026-08-02 (OpenAI Codex → Claude Code) モバイル詳細タブのアクセシビリティ改善完了
 
 - 更新日時: 2026-08-02 JST
@@ -427,8 +487,8 @@ $env:PYTHONPATH='src'
 6. **2025年のみ取り込みが不完全。** ラップ保有率が芝94.8%・ダート97.6%（約77レース）。
    同年だけ脚質未設定%も突出（芝5.5%）しており、成績が正しく取り込まれていないレース群が
    存在する。別途追跡が必要。
-7. **`-PreflightOnly`の実動作が未確認。** PowerShellがクラウド環境に無いため未実行。
-   括弧・try/finally/catchの対応は目視確認済み。次にWindows実行機を触るとき確認すること。
+7. **`-PreflightOnly`の実動作は確認済み。** 2026-08-03にWindows実行機でAPI／PostgreSQLと
+   読み取り元MySQL（83テーブル）を確認し、exit 0で終了した。
 
 ### 🧪 仮実装・未確定仕様
 
@@ -526,12 +586,12 @@ $env:PYTHONPATH='src'
 - ingestion 249 tests（新規10件）、ruff 全pass。
 - `mypy src/ --strict`: 新規ファイルは0エラー。既存の`windows_client.py`に3件の
   エラーが残るが、これは本変更以前から存在する（stashして確認済み）。
-- PowerShellはこの環境に無いため未実行。括弧・try/finally/catchの対応は目視確認済み。
-  **次にWindows実行機を触るとき、`-PreflightOnly`で動作確認すること。**
+- PowerShell実動作は2026-08-03にWindows実行機で確認済み。初回確認でPython日本語出力の
+  文字化けを検出し、同期ラッパーのUTF-8設定追加後に再実行して解消を確認した。
 
 ### 未確認・次にやること
 
-- `-PreflightOnly`での実動作確認（Windows実行機）。
+- `-PreflightOnly`での実動作確認は2026-08-03に完了。
 - 関連する既知の穴として、`batch.py`の`results`送信失敗が
   exit 0 に埋もれる問題が未修正のまま残っている（2026-07-26 (13)の調査で判明）。
   今回の変更はこれとは別件。

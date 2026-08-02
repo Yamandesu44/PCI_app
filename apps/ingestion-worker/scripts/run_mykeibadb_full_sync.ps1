@@ -62,6 +62,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Windows PowerShell 5.1でも、直接呼び出すPython疎通チェックをUTF-8として扱う。
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $Utf8NoBom
+[Console]::OutputEncoding = $Utf8NoBom
+$OutputEncoding = $Utf8NoBom
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+
 $WorkerDir = Split-Path $PSScriptRoot -Parent
 $LogDir    = Join-Path $WorkerDir "logs"
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }

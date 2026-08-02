@@ -67,7 +67,9 @@ Alembic・FastAPI、読み取り元ならMySQL80サービスやパスワード�
 
 ログは `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log` に出力される。
 Windowsのコンソール、Python標準出力、保存ログはUTF-8へ統一されている。
-日本語が文字化けする場合は、最新の`sync_mykeibadb.bat`または`run_batch.ps1`経由で実行する。
+`run_mykeibadb_full_sync.ps1`から直接呼ぶ事前疎通チェックも同じ設定を使う。
+日本語が文字化けする場合は、最新の`sync_mykeibadb.bat`、`run_batch.ps1`、
+`run_mykeibadb_full_sync.ps1`のいずれかを利用する。
 
 Webhookの設定と到達だけを確認する場合は、取り込みを実行せず次のコマンドを使用する。
 
