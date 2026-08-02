@@ -104,4 +104,17 @@ describe("RaceDateCalendar", () => {
     expect(markup).toContain('aria-label="前月"');
     expect(markup).toContain('aria-label="翌月"');
   });
+
+  it("スマホの日程探索操作に44px以上のタップ領域を確保する", () => {
+    const markup = renderToStaticMarkup(
+      <RaceDateCalendar
+        dates={dates}
+        selectedDate="2026-07-25"
+        performanceDays={90}
+      />,
+    );
+
+    expect(markup).toContain("min-h-11");
+    expect(markup.match(/h-11 w-11/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
+  });
 });
