@@ -65,6 +65,7 @@ describe("IngestStatusBanner", () => {
     expect(markup).toContain("詳細と復旧手順");
     expect(markup).toContain("成績未取込の対象");
     expect(markup).toContain("再同期コマンド");
+    expect(markup).toContain("flex min-h-11 items-center justify-between");
     expect(markup).toContain("break-words");
     expect(markup).not.toContain("break-all");
   });

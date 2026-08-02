@@ -183,7 +183,7 @@ function MobileRaceDateGroup({
               onClick={() => setSelectedVenue(venue.jyoCd)}
               onKeyDown={(event) => handleVenueKeyDown(event, index)}
               className={[
-                "min-w-0 rounded px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500",
+                "min-h-11 min-w-0 rounded px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500",
                 selected
                   ? "bg-white text-slate-950 shadow-sm"
                   : "text-slate-600 hover:text-slate-900",

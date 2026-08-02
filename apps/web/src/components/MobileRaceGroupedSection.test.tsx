@@ -80,6 +80,7 @@ describe("MobileRaceGroupedSection", () => {
     expect(markup.match(/tabindex="0"/g)).toHaveLength(1);
     expect(markup.match(/tabindex="-1"/g)).toHaveLength(2);
     expect(markup).toContain("focus-visible:ring-inset");
+    expect(markup).toContain("min-h-11 min-w-0 rounded");
     expect(markup).toContain("text-slate-600 hover:text-slate-900");
     expect(markup.match(/data-mobile-race-row/g)).toHaveLength(2);
     expect(markup).toContain('aria-selected="true"');

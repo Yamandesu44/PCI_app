@@ -21,7 +21,7 @@ export function ForecastRecentMisses({
 
   return (
     <details className="group mt-5 border-t border-slate-100 pt-5">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 text-left">
         <div>
           <h3 className="text-sm font-bold text-slate-900">直近の不一致レース</h3>
           <p className="mt-1 text-xs text-slate-500">
@@ -64,7 +64,7 @@ export function ForecastRecentMisses({
       </div>
       <div className="mt-3 flex justify-end">
         <Link
-          className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+          className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
           href={`/forecast-review?days=${periodDays}`}
         >
           <ListFilter className="h-4 w-4" aria-hidden />

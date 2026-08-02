@@ -33,21 +33,21 @@ export function MobileRaceNavigation({ navigation }: MobileRaceNavigationProps) 
   return (
     <nav
       aria-label="同じ競馬場のレース移動"
-      className="mt-3 flex h-11 min-w-0 items-stretch gap-2 md:hidden"
+      className="mt-3 flex h-12 min-w-0 items-stretch gap-2 md:hidden"
     >
       {navigation.previous ? (
         <Link
           href={navigation.previous.href}
           aria-label={`前のレース ${navigation.previous.label}`}
           title={`前のレース ${navigation.previous.label}`}
-          className="flex w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+          className="flex w-12 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
         >
           <ChevronLeft className="h-5 w-5" aria-hidden />
         </Link>
       ) : (
         <span
           aria-hidden
-          className="flex w-11 shrink-0 items-center justify-center rounded-md border border-slate-100 bg-slate-50 text-slate-300"
+          className="flex w-12 shrink-0 items-center justify-center rounded-md border border-slate-100 bg-slate-50 text-slate-300"
         >
           <ChevronLeft className="h-5 w-5" />
         </span>
@@ -64,7 +64,7 @@ export function MobileRaceNavigation({ navigation }: MobileRaceNavigationProps) 
               key={item.raceKey}
               ref={currentRef}
               aria-current="page"
-              className="flex h-9 min-w-10 snap-center items-center justify-center rounded bg-slate-950 px-2 text-xs font-bold text-white"
+              className="flex h-11 min-w-11 snap-center items-center justify-center rounded bg-slate-950 px-2 text-xs font-bold text-white"
             >
               {raceNumberOnly(item.label)}
             </span>
@@ -73,7 +73,7 @@ export function MobileRaceNavigation({ navigation }: MobileRaceNavigationProps) 
               key={item.raceKey}
               href={item.href}
               aria-label={`${item.label}へ移動`}
-              className="flex h-9 min-w-10 snap-center items-center justify-center rounded px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+              className="flex h-11 min-w-11 snap-center items-center justify-center rounded px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
             >
               {raceNumberOnly(item.label)}
             </Link>
@@ -86,14 +86,14 @@ export function MobileRaceNavigation({ navigation }: MobileRaceNavigationProps) 
           href={navigation.next.href}
           aria-label={`次のレース ${navigation.next.label}`}
           title={`次のレース ${navigation.next.label}`}
-          className="flex w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+          className="flex w-12 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
         >
           <ChevronRight className="h-5 w-5" aria-hidden />
         </Link>
       ) : (
         <span
           aria-hidden
-          className="flex w-11 shrink-0 items-center justify-center rounded-md border border-slate-100 bg-slate-50 text-slate-300"
+          className="flex w-12 shrink-0 items-center justify-center rounded-md border border-slate-100 bg-slate-50 text-slate-300"
         >
           <ChevronRight className="h-5 w-5" />
         </span>

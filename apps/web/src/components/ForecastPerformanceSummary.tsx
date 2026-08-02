@@ -61,7 +61,7 @@ function PeriodSelector({
               href={periodHref(days)}
               aria-current={isSelected ? "page" : undefined}
               className={[
-                "rounded px-3 py-1.5 text-xs font-semibold transition",
+                "inline-flex min-h-11 items-center rounded px-3 text-xs font-semibold transition",
                 isSelected
                   ? "bg-slate-950 text-white shadow-sm"
                   : "text-slate-600 hover:bg-white hover:text-slate-950",

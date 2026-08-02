@@ -51,6 +51,8 @@ describe("MobileRaceNavigation", () => {
     expect(markup).toContain('aria-label="前のレース 10R"');
     expect(markup).toContain('aria-label="次のレース 12R"');
     expect(markup).toContain('href="/races/2026072504020112/forecast"');
+    expect(markup).toContain("h-11 min-w-11");
+    expect(markup).toContain("h-12 min-w-0");
     expect(markup).toContain("focus-visible:ring-inset");
   });
 

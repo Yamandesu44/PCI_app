@@ -11,6 +11,7 @@ describe("AppHeader", () => {
     expect(markup).toContain('aria-label="予想検証"');
     expect(markup).toContain('aria-label="レース一覧"');
     expect(markup.match(/h-11 w-11/g)).toHaveLength(2);
+    expect(markup).toContain("group flex min-h-11 items-center");
     expect(markup).toContain("focus-visible:ring-inset");
   });
 });

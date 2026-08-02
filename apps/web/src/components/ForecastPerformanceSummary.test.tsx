@@ -52,6 +52,7 @@ describe("ForecastPerformanceSummary", () => {
     expect(markup).toContain(
       'href="/?performance_days=30&amp;date=2026-07-25"',
     );
+    expect(markup).toContain("inline-flex min-h-11 items-center");
     expect(markup).toContain("事前予想の検証カバー率");
     expect(markup).toContain("全体");
     expect(markup).not.toContain("RPCI");

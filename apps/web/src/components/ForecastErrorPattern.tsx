@@ -28,7 +28,7 @@ export function ForecastErrorPattern({
 
   return (
     <details className="group mt-5 border-t border-slate-100 pt-5">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 text-left">
         <div>
           <h3 className="text-sm font-bold text-slate-900">外れ方の傾向</h3>
           <p className="mt-1 text-xs text-slate-500">

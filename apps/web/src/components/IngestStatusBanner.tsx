@@ -137,7 +137,7 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                         <li key={race.raceKey}>
                           <Link
                             href={race.href}
-                            className="flex items-center justify-between rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-amber-300 hover:text-slate-950"
+                            className="flex min-h-11 items-center justify-between rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-amber-300 hover:text-slate-950"
                           >
                             <span className="font-semibold">{race.label}</span>
                             <span className="ml-3 text-slate-500">{race.condition}</span>
@@ -166,7 +166,7 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                         <li key={race.raceKey}>
                           <Link
                             href={race.href}
-                            className="flex items-center justify-between rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-amber-300 hover:text-slate-950"
+                            className="flex min-h-11 items-center justify-between rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-amber-300 hover:text-slate-950"
                           >
                             <span className="font-semibold">{race.label}</span>
                             <span className="ml-3 text-slate-500">{race.condition}</span>

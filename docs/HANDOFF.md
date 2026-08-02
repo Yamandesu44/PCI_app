@@ -32,6 +32,8 @@
 12. 月カレンダーの「他の日程を探す」、前年・前月・翌月・翌年、開催日の操作領域を
     44px以上へ統一した。日付ストリップは既に選択日前4件・後1件へ絞られていたため、
     `tasks/current.md`の古い未完了記録も実コードに合わせて完了へ訂正した。
+13. 390px幅のホームと確定後詳細を一括監査し、残っていたヘッダーロゴ、取り込み対象レース、
+    検証期間切替、検証詳細の折りたたみ、競馬場タブ、同一開催R移動を44px以上へ拡張した。
 
 ### 対象ファイル
 
@@ -55,6 +57,12 @@
 - `apps/web/src/components/MobilePaceAnalysisDashboard.test.tsx`
 - `apps/web/src/components/IngestStatusBanner.tsx`
 - `apps/web/src/components/IngestRecoveryCommand.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+- `apps/web/src/components/ForecastErrorPattern.tsx`
+- `apps/web/src/components/ForecastErrorPattern.test.tsx`
+- `apps/web/src/components/ForecastRecentMisses.tsx`
+- `apps/web/src/components/ForecastRecentMisses.test.tsx`
 - `apps/web/src/lib/ingestStatus.ts`
 - `apps/web/src/lib/ingestStatus.test.ts`
 - `apps/web/src/app/page.tsx`
@@ -72,7 +80,7 @@
 
 ### テスト・実行結果
 
-- `npm.cmd test --workspace=@pci/web`: 22 files / 144 tests passed
+- `npm.cmd test --workspace=@pci/web`: 24 files / 146 tests passed
 - `npm.cmd run typecheck --workspace=@pci/web`: 成功
 - `npm.cmd run build --workspace=@pci/web`: 成功
 - 型チェックとbuildを同時実行した初回だけ、buildが`.next/types`を更新中に型チェックが参照して
@@ -93,6 +101,8 @@
   単色背景を監査した。警告見出し、一覧補助文字、競馬場タブを修正後、4.5:1未満の検出は0件。
 - ホーム390px実ブラウザで月カレンダーを開き、「閉じる」は72×44px、年月移動4件と
   開催日は44×44px、`innerWidth=390`・文書幅375pxで横はみ出しなしと確認した。
+- ホームと札幌11R確定後詳細を390px実ブラウザで再監査し、表示中のリンク・ボタン・タブ・
+  `summary`に44px未満の操作対象は0件。両画面とも`innerWidth=390`・文書幅375px。
 
 ### Claude Codeが最初に確認するファイル
 
