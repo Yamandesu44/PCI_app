@@ -1,5 +1,80 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-02 10:07 JST OpenAI Codex 更新
+
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `d751bf8`
+- 最新コミット: 本節と同じコミット（`git log -1 --oneline`で確認）
+- 目的: `tasks/current.md`最優先の「取り込み警告のモバイル要約化」を実装する。
+
+### 完了内容
+
+- `IngestStatusBanner`の768px未満表示に、状態と異常種別ごとの件数チップを追加した。
+- 表示対象は直近失敗、成績未取込、馬場情報未反映、重複、更新遅れであり、
+  既存の`ingestStatusMeta()`の優先順位・headline・詳細内容は変更していない。
+- モバイルでは説明文を初期表示から外し、詳細、対象レース、再同期・馬場情報補完コマンドは
+  既存の`details`へ保持した。PCでは従来どおり説明文と「詳細と復旧手順」を表示する。
+- `IngestStatusBanner.test.tsx`へ、状態・件数チップと詳細表示維持を確認するテストを追加した。
+
+### 変更ファイル
+
+1. `apps/web/src/components/IngestStatusBanner.tsx`
+2. `apps/web/src/components/IngestStatusBanner.test.tsx`
+3. `tasks/current.md`
+4. `docs/DECISIONS.md`
+5. `docs/HANDOFF.md`
+
+### テスト結果
+
+```text
+IngestStatusBanner: 3 passed
+Web: 16 files / 112 tests passed
+Web typecheck: passed
+Web production build: passed
+Web lint: package.jsonにlintスクリプトがないため実行不可
+```
+
+### 未完了・次の具体的作業
+
+- 確定済みのスマホ実装タスクはない。次はP2検証タスクを実施する。
+- 390px相当で、レースボード→日付切替→競馬場切替→レース詳細→同一開催ナビ→
+  サマリー・隊列・注目馬・詳細タブ→一覧へ戻る、の主要導線を通し確認する。
+- `apps/web/src/components/IngestStatusBanner.tsx`は、320px・375px・430px、iOS Safari、
+  Android Chromeで状態チップの折返しと詳細の操作性を確認する。
+- 日付ストリップのDOM削減は、実端末で描画・スクロール遅延を確認した場合だけ検討する。
+
+### 仮実装・未確定仕様
+
+- モバイル境界は既存方針どおりTailwindの`md`（768px）。
+- 警告の状態チップは、各異常種別のAPI件数とフラグをそのまま並べる。複数異常時に
+  どれを最優先と見なすかの順序は`ingestStatusMeta()`の既存優先順位に従う。
+- 320px・375px・430pxで許容するチップの折返し数、実端末でのバナー初期高さは未確定。
+
+### 既知の問題
+
+- `apps/web/package.json`に`lint`スクリプトとESLint依存がなく、Web lintは実行できない。
+- この環境では一時Next.jsサーバーが待受開始前にタイムアウトしたため、今回の390pxブラウザ確認は未実施。
+- Cloudflare Quick Tunnelは停止済み。実端末確認時は
+  `apps/web/scripts/run_location_test_tunnel.ps1`で新しいURLを発行する必要がある。
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`
+2. `apps/web/src/components/IngestStatusBanner.tsx`
+3. `apps/web/src/components/IngestStatusBanner.test.tsx`
+4. `docs/DECISIONS.md`
+
+### Claude Codeが最初に実行するコマンド
+
+```cmd
+cd C:\Users\yuuta\PCI_app
+git pull --ff-only origin claude/sweet-einstein-ilnaov
+npm.cmd test --workspace=@pci/web
+npm.cmd run typecheck --workspace=@pci/web
+```
+
 ## 2026-07-26 01:31 JST OpenAI Codex 更新
 
 - 作業担当: OpenAI Codex
