@@ -1,5 +1,59 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-02 (Claude Code) 同期プリフライトへ「読み取り元MySQL」の疎通確認を追加
+
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+
+### 背景（実際に発生した事象）
+
+ユーザーが手動同期を実行したところ、MySQL80サービスが停止していたため失敗した。
+問題は失敗したこと自体ではなく、**原因に辿り着くまでの遠回り**だった。
+
+1. プリフライトが「API と PostgreSQL は ready」と表示して通過
+2. `mykeibadb.exe` が7秒で **exit 0**（MySQLが無いので実際には何もできていない）
+3. `batch.py` が接続拒否で落ち、30秒・60秒待って3回リトライ
+
+プリフライトが確認していたのは**書き込み先だけ**で、肝心の**読み取り元**を
+見ていなかった。「準備OK」と出た直後に接続拒否で落ちるため、かえって紛らわしい。
+
+### 実施内容
+
+- `src/ingestion/check_mykeibadb.py`（新規）
+  - `batch.py`と同じ`MyKeibaDbConfig.from_env()`で実際に接続し、
+    `SHOW TABLES`まで確認する。設定の解釈がズレない。
+  - TCPポート疎通ではなく実接続にしたのは、サービス停止（§6.1）だけでなく
+    認証失敗（§6.2）・DB名違いも同じ入口で捕まえるため。
+    エラーコード（2003/1045/1698/1049）で分類し、MANUAL_SYNC_GUIDEの該当節へ誘導する。
+  - テーブル0件も失敗扱い。初回取り込みが走っていない空DBを「正常」と誤判定しないため。
+  - pymysqlは任意extra（`.[mysql]`）なので、importは関数内で行い未インストール時は
+    インストールコマンドを表示する。
+- `scripts/run_mykeibadb_full_sync.ps1`
+  - `Test-MykeibadbReadiness`を追加し、`mykeibadb.exe`起動前に実行する。
+  - `2>&1`で拾ったstderrをPowerShellが終了エラーにしないよう、
+    呼び出し中だけ`$ErrorActionPreference`をContinueへ落とす
+    （`run_batch.ps1`が既に同じ対処をしている既知の罠）。
+- `MANUAL_SYNC_GUIDE.md`
+  - プリフライトが読み取り元も見ることを明記し、単独実行コマンドを追加。
+  - §6.1へ「services.msc から起動するのが最速」を追記
+    （PATHに依存しないため、MySQL Workbenchが`Unable to execute command chcp`で
+    使えない状態でも起動できる。これはWorkbench側のPATH問題で、MySQL本体とは別件）。
+
+### 検証
+
+- ingestion 249 tests（新規10件）、ruff 全pass。
+- `mypy src/ --strict`: 新規ファイルは0エラー。既存の`windows_client.py`に3件の
+  エラーが残るが、これは本変更以前から存在する（stashして確認済み）。
+- PowerShellはこの環境に無いため未実行。括弧・try/finally/catchの対応は目視確認済み。
+  **次にWindows実行機を触るとき、`-PreflightOnly`で動作確認すること。**
+
+### 未確認・次にやること
+
+- `-PreflightOnly`での実動作確認（Windows実行機）。
+- 関連する既知の穴として、`batch.py`の`results`送信失敗が
+  exit 0 に埋もれる問題が未修正のまま残っている（2026-07-26 (13)の調査で判明）。
+  今回の変更はこれとは別件。
+
 ## 2026-07-26 (14) (Claude Code) ✅ ADR-0010 採用 — style-advantage-v4（後方脚質は採点しない）
 
 - 作業担当: Claude Code（実DB検証はユーザーがWindows実行機で実施）

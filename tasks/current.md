@@ -1,5 +1,20 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-08-02 完了: Claude Code — 同期プリフライトへ読み取り元MySQLの疎通確認を追加
+
+- [x] 事象: MySQL80停止時、プリフライトは「ready」で通過し、`mykeibadb.exe`が
+  exit 0を返し、`batch.py`が3回リトライして初めて接続拒否が判明していた。
+  プリフライトが書き込み先しか見ていなかったのが原因。
+- [x] `ingestion/check_mykeibadb.py`を新規追加。`batch.py`と同じ設定で実接続し、
+  `SHOW TABLES`まで確認。エラーコードでサービス停止/認証失敗/DB名違いを分類し、
+  MANUAL_SYNC_GUIDEの該当節へ誘導する。テーブル0件も失敗扱い。
+- [x] `run_mykeibadb_full_sync.ps1`のプリフライトへ組み込み（`mykeibadb.exe`起動前）。
+  stderrで終了エラーにならないよう`$ErrorActionPreference`を一時的にContinueへ。
+- [x] `MANUAL_SYNC_GUIDE.md`を更新（単独実行コマンド、§6.1へservices.msc手順）。
+- [x] ingestion 249 tests（新規10件）・ruff pass。新規ファイルはmypy --strict 0エラー。
+- [ ] **未実施**: PowerShellがこの環境に無いため`-PreflightOnly`の実動作は未確認。
+  次にWindows実行機を触るときに確認する。
+
 ## 2026-07-26 (14) ✅ 完了: Claude Code — ADR-0010採用（style-advantage-v4）
 
 - [x] 独立2期間×芝ダートの4条件で候補を比較し、**`back-neutral`（差し・追込を常に互角）を採用**。

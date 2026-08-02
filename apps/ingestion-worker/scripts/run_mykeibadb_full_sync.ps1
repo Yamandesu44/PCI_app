@@ -106,6 +106,29 @@ function Test-IngestApiReadiness {
     return $false
 }
 
+function Test-MykeibadbReadiness {
+    # 読み取り元(MySQL)が落ちていると、mykeibadb.exe は何もできないまま exit 0 を返し、
+    # batch.py がリトライを繰り返した末に接続拒否で落ちる。ここで先に止める。
+    param([Parameter(Mandatory)][string]$PythonExe)
+
+    Write-Log "Preflight: checking source mykeibadb (MySQL) connectivity"
+    # run_batch.ps1 と同じ理由: 2>&1 で拾った stderr を PowerShell が終了エラーに
+    # しないよう、この呼び出しの間だけ Continue へ落とす。
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $PythonExe -m ingestion.check_mykeibadb 2>&1 | ForEach-Object {
+            Write-Log $_.ToString()
+        }
+    } finally {
+        $ErrorActionPreference = $prevEAP
+    }
+    if ($LASTEXITCODE -eq 0) { return $true }
+
+    Write-Log "Sync aborted: the source database is unreachable."
+    return $false
+}
+
 # --- Load .env (expands MYKEIBADB_EXE_PATH etc. into process env vars) ---
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
@@ -124,6 +147,14 @@ if (-not $ApiBaseUrl) { $ApiBaseUrl = "http://localhost:8000" }
 Write-Log "=== run_mykeibadb_full_sync.ps1 start ==="
 
 if (-not (Test-IngestApiReadiness -BaseUrl $ApiBaseUrl)) {
+    Write-Log "Sync aborted before mykeibadb.exe was started."
+    exit 1
+}
+
+$Venv = Join-Path $WorkerDir ".venv\Scripts\python.exe"
+$Python = if (Test-Path $Venv) { $Venv } else { "python" }
+
+if (-not (Test-MykeibadbReadiness -PythonExe $Python)) {
     Write-Log "Sync aborted before mykeibadb.exe was started."
     exit 1
 }
