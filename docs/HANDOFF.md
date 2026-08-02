@@ -22,11 +22,15 @@
 7. 開催日ストリップをナビゲーションランドマーク化し、競馬場タブへ左右矢印・Home・End操作を追加した。
 8. 開催日、競馬場、レース行、詳細タブ、隊列内の馬、同一開催レース移動へ明示的な
    `focus-visible`リングを追加し、キーボード操作時の現在位置を視認しやすくした。
+9. スマホヘッダーのアイコンだけになる2リンクへ明示的な読み上げ名を付け、操作領域を
+   44×44pxへ拡張した。フォーカスリングも主要導線と同じ表示へ統一した。
 
 ### 対象ファイル
 
 - `apps/web/src/components/MobileTabList.tsx`
 - `apps/web/src/components/MobileTabList.test.tsx`
+- `apps/web/src/components/AppHeader.tsx`
+- `apps/web/src/components/AppHeader.test.tsx`
 - `apps/web/src/components/FormationView.tsx`
 - `apps/web/src/components/FormationView.test.tsx`
 - `apps/web/src/components/RaceDateCalendar.tsx`
@@ -55,7 +59,7 @@
 
 ### テスト・実行結果
 
-- `npm.cmd test --workspace=@pci/web`: 20 files / 141 tests passed
+- `npm.cmd test --workspace=@pci/web`: 21 files / 142 tests passed
 - `npm.cmd run typecheck --workspace=@pci/web`: 成功
 - `npm.cmd run build --workspace=@pci/web`: 成功
 - 型チェックとbuildを同時実行した初回だけ、buildが`.next/types`を更新中に型チェックが参照して
@@ -68,6 +72,8 @@
   矢印キーで移動し、`tabIndex`・`aria-selected`・レース一覧が同期。横はみ出しなし。
 - 390px実ブラウザ: 競馬場タブと詳細タブで緑色2pxの内側フォーカスリングを実測。
   詳細タブはサマリーから隊列へ移動後も選択状態と表示内容が同期し、文書幅375pxで横はみ出しなし。
+- 390px実ブラウザ: ヘッダーの「予想検証」「レース一覧」がアクセシブル名付きリンクとして認識され、
+  両方とも44×44px。キーボードフォーカスリングを確認し、文書幅375pxで横はみ出しなし。
 
 ### Claude Codeが最初に確認するファイル
 

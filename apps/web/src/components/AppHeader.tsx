@@ -19,14 +19,18 @@ export function AppHeader() {
         <nav className="flex items-center gap-2" aria-label="メインナビゲーション">
           <Link
             href="/forecast-review"
-            className="flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+            aria-label="予想検証"
+            title="予想検証"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500 sm:h-9 sm:w-auto sm:gap-2 sm:px-3"
           >
             <BarChart3 className="h-4 w-4" aria-hidden />
             <span className="hidden sm:inline">予想検証</span>
           </Link>
           <Link
             href="/"
-            className="flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+            aria-label="レース一覧"
+            title="レース一覧"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500 sm:h-9 sm:w-auto sm:gap-2 sm:px-3"
           >
             <CalendarDays className="h-4 w-4" aria-hidden />
             <span className="hidden sm:inline">レース一覧</span>
