@@ -1,5 +1,64 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-08-02 ⏳ 進行中（Codexへ引き継ぎ）: ダートRPCIモデルの再学習
+
+**状態: ユーザーのWindows実行機で学習を実行中。結果ログ待ち。**
+
+### なぜやっているか
+
+ダート想定RPCIのバイアスが **+3.373** 残っている。ダート中立点43.0に対し閾値帯は
+40〜46（幅6pt）なので、判定が系統的にスロー側へずれる。原因はほぼ確実に、
+現行ダートモデルの学習データに**旧式の`rpci_actual`が混ざっている**こと
+（学習は2026-06-01以前＝バックフィル前のデータ）。
+
+全期間がラップ由来へ統一された今なら、再学習で解消する見込みが高い。
+解消すれば**展開有利度・PAI・統合順位がまとめて改善する**（現在、展開有利度は
+本番条件で+1.7%しかなく、オラクル条件の+8.5〜10.2%との差は予測誤差が食っている）。
+
+### 実行中のコマンド（ユーザー側）
+
+```cmd
+cd C:\Users\yuuta\PCI_app\apps\api
+
+REM 候補1: 現行と同条件（直近2,000件）
+.venv\Scripts\python.exe -m scripts.train_rpci_lgbm --track-type dirt --feature-set v4 ^
+  --before-date 2026-06-01 --limit 2000 --output models\rpci_lgbm_dirt_v5_2000.txt
+
+REM 候補2: 全期間（データ統一の恩恵を最大化）
+.venv\Scripts\python.exe -m scripts.train_rpci_lgbm --track-type dirt --feature-set v4 ^
+  --before-date 2026-06-01 --limit 20000 --output models\rpci_lgbm_dirt_v5_full.txt
+```
+
+現行の`--limit 2000`は**データが混在していた時期に決まった設定**。混在下では過去を
+増やすほど旧式の混入が増えるため絞るのが正解だったが、統一後は逆に多いほど良い
+可能性がある。両方試して比べる。**本番モデルは`--output`指定のため上書きされない。**
+
+### [ ] Codexが次にやること
+
+1. **学習ログを確認する。** 見るのは2点。
+   - `lap_derived_ratio` が **1.0** か（1.0未満なら学習データにまだ旧式が混ざっている＝
+     バックフィルが不完全。その場合は再学習ではなくバックフィルの追跡へ戻る）
+   - テストセットの MAE / バイアス（現行: MAE 4.529 / バイアス +3.373）
+2. **期間外で現行と比較する。**
+   ```cmd
+   .venv\Scripts\python.exe -m scripts.backtest_forecast --date-from 2026-06-01 ^
+     --track-type ダート --limit 300 --dirt-model-path models\rpci_lgbm_dirt_v5_2000.txt
+   .venv\Scripts\python.exe -m scripts.backtest_forecast --date-from 2026-06-01 ^
+     --track-type ダート --limit 300 --dirt-model-path models\rpci_lgbm_dirt_v5_full.txt
+   ```
+   `--dirt-model-path`を付けない同条件の実行が現行モデルの基準値になる。
+3. **採用判断。** ADR-2026-07-24（ダートRPCI v4）と同じ基準で、**バイアスの縮小**を主指標、
+   MAEと展開ラベル的中率を副指標とする。改善すれば`models/rpci_lgbm_dirt_v4.txt`を
+   差し替え、ADRへ追記する。**単一期間・単一指標だけの改善では採用しない。**
+
+### 補足
+
+- 学習来歴JSON（`<model>.txt.meta.json`）が今回から出力される。採用時は
+  モデルと一緒にコミットすること（`lap_derived_ratio`が後日の検証根拠になる）。
+- 再学習で改善しなかった場合、ボトルネックはモデルではなく特徴量側の可能性が高い。
+  その場合は無理に係数をいじらず、`tasks/backlog.md` の「ダート特徴量追加・
+  学習データ拡張」（保留中）の再検討へ回す。
+
 ## 2026-08-02 完了: Claude Code — 同期プリフライトへ読み取り元MySQLの疎通確認を追加
 
 - [x] 事象: MySQL80停止時、プリフライトは「ready」で通過し、`mykeibadb.exe`が
