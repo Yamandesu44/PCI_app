@@ -724,6 +724,8 @@ def main() -> None:
         if len(chunks) > 1:
             _log.info("--- 日付レンジ分割: %d チャンク ---", len(chunks))
 
+        result_sent_ok = 0
+        result_sent_fail = 0
         for chunk_from, chunk_to in chunks:
             if len(chunks) > 1:
                 _log.info("--- 取り込み範囲 %s→%s ---", chunk_from, chunk_to)
@@ -734,19 +736,27 @@ def main() -> None:
 
             if args.step in ("all", "results"):
                 _log.info("--- 確定成績取り込み ---")
-                ingest_results(
+                result_summary = ingest_results(
                     client,
                     api,
                     chunk_from,
                     chunk_to,
                     race_keys=incomplete_race_keys,
                 )
+                result_sent_ok += result_summary.sent_ok
+                result_sent_fail += result_summary.sent_fail
 
             if includes_race_metadata(args.step, args.mode):
                 if not isinstance(client, RaceMetadataProvider):
                     raise RuntimeError("選択したデータソースはレース補足情報に対応していません。")
                 _log.info("--- 馬場状態・天候バックフィル ---")
                 ingest_race_metadata(client, api, chunk_from, chunk_to)
+
+        if result_sent_fail > 0:
+            raise RuntimeError(
+                "確定成績のAPI送信に失敗しました: "
+                f"成功 {result_sent_ok} レース / 失敗 {result_sent_fail} レース"
+            )
 
         _log.info("=== ingestion-worker 完了 ===")
         api.log_batch(

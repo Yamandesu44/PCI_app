@@ -1,5 +1,18 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-08-03 完了: Codex — 確定成績の部分送信失敗を終了コードへ反映
+
+- [x] `ingest_results()`が返す成功・失敗件数を`main()`で全日付チャンク分集計するようにした。
+- [x] レース単位の処理継続は維持し、全チャンク終了後に失敗が1件以上あれば
+  RuntimeErrorへ集約して、取り込みログ`status=error`と終了コード1へ反映するよう修正した。
+- [x] `run_batch.ps1`が非ゼロ終了を検出できるため、既存の最大3回再試行と最終失敗通知へ接続された。
+- [x] API送信失敗を模擬し、終了コード1・エラー取り込みログ・失敗件数を確認する回帰テストを追加した。
+- [x] ingestion-worker 251 tests、ruff、mypy strictを完了した。
+
+### 次の候補
+
+- [ ] iOS VoiceOverとAndroid TalkBackで、詳細タブの選択状態と読み上げ順を実機確認する。
+
 ## 2026-08-03 完了: Codex — 同期プリフライトのWindows実地確認とUTF-8回帰修正
 
 - [x] `run_mykeibadb_full_sync.ps1 -PreflightOnly`をWindows実行機で動かし、

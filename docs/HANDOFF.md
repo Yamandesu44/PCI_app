@@ -1,5 +1,61 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 確定成績の部分送信失敗伝播を修正
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `c3e0048`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: `ingest_results()`のAPI送信失敗が`main()`で破棄され、同期がexit 0・
+  `status=ok`と誤判定される既知P0不具合を解消する。
+
+### 完了した内容
+
+1. 各日付チャンクの`IngestResultsSummary.sent_ok`／`sent_fail`を`main()`で集計するようにした。
+2. レース単位の例外捕捉と後続処理は維持し、全チャンクの処理後に失敗が1件以上あれば
+   成功・失敗件数を含むRuntimeErrorを発生させるようにした。
+3. 既存のトップレベル例外処理を通じて`ingest_log.status=error`、失敗通知、終了コード1へ伝播する。
+   `INGEST_NOTIFICATION_OWNER=wrapper`時は従来どおり`run_batch.ps1`が再試行後に1回だけ通知する。
+4. `record_results()`失敗を模擬した`main()`回帰テストを追加し、SystemExit(1)、
+   `status=error`、エラー文中の失敗件数を確認した。
+
+### 対象ファイル
+
+- `apps/ingestion-worker/src/ingestion/batch.py`
+- `apps/ingestion-worker/tests/test_batch_e2e.py`
+- `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`
+- `tasks/current.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・未確定仕様・既知事項
+
+- 送信失敗があっても同じ実行内の残りレース・日付チャンク・馬場情報処理は継続し、最後に失敗とする。
+  部分成功したデータはAPIの既存upsertにより、ラッパー再試行時も安全に再送できる。
+- パース不能レコードは従来どおり警告として扱う。本変更の失敗判定はAPI送信・旧キー削除失敗が対象。
+- VoiceOver／TalkBack実機確認とダート候補の標本蓄積待ちは引き続き未完了。
+
+### テスト・実行結果
+
+- `pytest tests/test_batch_e2e.py -q`: 53 passed
+- `pytest -q`: 251 passed
+- `ruff check src tests`: pass
+- `mypy src --strict --python-version 3.12`: 25 source files、0 issues
+- pytestのキャッシュ書き込み警告1件はサンドボックス権限によるもので、結果への影響なし。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/ingestion-worker/src/ingestion/batch.py`の`result_sent_ok`／`result_sent_fail`集計
+2. `apps/ingestion-worker/tests/test_batch_e2e.py::TestIngestResults::test_main_exits_nonzero_when_result_delivery_fails`
+3. `tasks/current.md`先頭の次候補
+
+### 次に実施する具体的な手順
+
+1. 次回通常同期で`results=0`を確認し、失敗時は`run_batch.ps1`が再試行することをログで確認する。
+2. `docs/LOCATION_TEST.md`第10節に従い、iOS VoiceOver／Android TalkBackの実機確認を行う。
+3. 2026-08-03以降の確定ダートが100件かつ各展開ラベル20件に達するまで現行v4を維持する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 同期プリフライトのWindows実地確認完了
 
 - 更新日時: 2026-08-03 JST
@@ -422,8 +478,7 @@ $env:PYTHONPATH='src'
 1. 新規のダート特徴量へ進む前に、`tasks/backlog.md:161`の着手条件をユーザーと確認する。
 2. 着手する場合は`train_rpci_lgbm.py`のv4を直接変更せず、新しい特徴量セットとして分離し、
    同じ2026-06-01以降226レースでv4・v5_full候補と比較する。
-3. 別優先なら、既知P0の`apps/ingestion-worker/src/ingestion/batch.py`で
-   `main()`が`ingest_results()`の`sent_fail`を終了コードへ反映しない問題を、失敗テストから修正する。
+3. 既知P0だった`main()`の`sent_fail`終了コード未反映は、2026-08-03に失敗回帰テストから修正済み。
 
 ## 2026-08-02 (Claude Code → OpenAI Codex) 引き継ぎ ★最初にここを読む
 
@@ -481,9 +536,8 @@ $env:PYTHONPATH='src'
    `style_advantage`は表示専用で統合順位には入っていないため、今回の修正は効いていない。
 4. **ダートは現行でも前付けの帯別好走率が単調にならない。** 係数ではなくダート固有の
    別要因。ADR-0010の対象外として切り離してある。
-5. **`batch.py`の`results`送信失敗が exit 0 に埋もれる。** 7月に9日間気づけなかった事象の
-   構造が未修正のまま。`ingest_results()`の戻り値を`main()`が受け取っていない
-   （`batch.py:735-743` vs `:503-507`）。今回のMySQL停止と同じ「失敗が見えない」系。
+5. **`batch.py`の`results`送信失敗がexit 0に埋もれる問題は修正済み。** 2026-08-03に
+   `main()`へ成功・失敗件数の集計と非ゼロ終了を追加し、失敗回帰テストで確認した。
 6. **2025年のみ取り込みが不完全。** ラップ保有率が芝94.8%・ダート97.6%（約77レース）。
    同年だけ脚質未設定%も突出（芝5.5%）しており、成績が正しく取り込まれていないレース群が
    存在する。別途追跡が必要。
@@ -592,9 +646,8 @@ $env:PYTHONPATH='src'
 ### 未確認・次にやること
 
 - `-PreflightOnly`での実動作確認は2026-08-03に完了。
-- 関連する既知の穴として、`batch.py`の`results`送信失敗が
-  exit 0 に埋もれる問題が未修正のまま残っている（2026-07-26 (13)の調査で判明）。
-  今回の変更はこれとは別件。
+- 関連する既知の穴だった`batch.py`の`results`送信失敗のexit 0埋没は、
+  2026-08-03に終了コード1へ伝播するよう修正済み。
 
 ## 2026-07-26 (14) (Claude Code) ✅ ADR-0010 採用 — style-advantage-v4（後方脚質は採点しない）
 

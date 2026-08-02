@@ -163,6 +163,8 @@ Get-ScheduledTaskInfo -TaskName "PCI_Sync_Mykeibadb"
 ```
 
 `entries=0 results=0` の `0` は「exit code 0 = 成功」という意味（`1` なら失敗）。
+確定成績を一部でもAPIへ送信できなかった場合は、残りの対象を処理したあと`results=1`となり、
+`run_batch.ps1`の再試行と最終失敗通知が実行される。
 
 ### 取り込みログテーブル（DB）
 バッチの成功/失敗履歴は PostgreSQL の `ingest_log` テーブルに残る。API サーバー側で

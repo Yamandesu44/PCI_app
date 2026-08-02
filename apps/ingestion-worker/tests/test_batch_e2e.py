@@ -23,6 +23,7 @@ from ingestion.batch import (
     ingest_race_metadata,
     ingest_results,
     iter_date_chunks,
+    main,
     precompute_forecasts,
 )
 from ingestion.client.fixture_client import (
@@ -490,6 +491,35 @@ class TestIngestResults:
         record = api.record_results.call_args[0][0]
         for r in record.results:
             assert r.corner_4 is None
+
+    def test_main_exits_nonzero_when_result_delivery_fails(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        api = _mock_api()
+        api.record_results.side_effect = RuntimeError("result sync failed")
+        monkeypatch.setattr("ingestion.batch.IngestApiClient", lambda **_: api)
+        monkeypatch.setattr("ingestion.batch._build_client", lambda *_args, **_kwargs: _client())
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "batch.py",
+                "--mode",
+                "fixture",
+                "--date",
+                "20260618",
+                "--step",
+                "results",
+            ],
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 1
+        assert api.log_batch.call_args.kwargs["status"] == "error"
+        assert "失敗 1 レース" in api.log_batch.call_args.kwargs["error_msg"]
 
 
 # ---------------------------------------------------------------------------
