@@ -57,8 +57,13 @@ describe("MobilePaceAnalysisDashboard", () => {
 
     expect(markup).toContain('aria-label="確定後分析の表示切り替え"');
     expect(markup.match(/role="tab"/g)).toHaveLength(3);
+    expect(markup.match(/role="tabpanel"/g)).toHaveLength(3);
     expect(markup.match(/tabindex="0"/g)).toHaveLength(1);
     expect(markup.match(/tabindex="-1"/g)).toHaveLength(2);
+    for (const panel of ["summary", "review", "results"]) {
+      expect(markup).toContain(`aria-controls="mobile-analysis-panel-${panel}"`);
+      expect(markup).toContain(`id="mobile-analysis-panel-${panel}"`);
+    }
     expect(markup).toContain("上位3頭");
     expect(markup.match(/data-mobile-pace-result/g)).toHaveLength(3);
     expect(markup).not.toContain("テスト馬4");

@@ -57,34 +57,48 @@ export function MobileTabList<T extends string>({
   };
 
   return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className={`grid h-12 ${columnsClassName} overflow-hidden rounded-md border border-slate-200 bg-slate-50`}
-    >
-      {tabs.map((tab, index) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            id={`${tabIdPrefix}-${tab.id}`}
-            type="button"
-            role="tab"
-            tabIndex={isActive ? 0 : -1}
-            aria-selected={isActive}
-            aria-controls={`${panelIdPrefix}-${tab.id}`}
-            onClick={() => onTabChange(tab.id)}
-            onKeyDown={(event) => handleKeyDown(event, index)}
-            className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-r border-slate-200 text-[11px] font-semibold last:border-r-0 ${
-              isActive ? "bg-slate-950 text-white" : "bg-white text-slate-500"
-            }`}
-          >
-            <Icon className="h-4 w-4" aria-hidden />
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div
+        role="tablist"
+        aria-label={ariaLabel}
+        className={`grid h-12 ${columnsClassName} overflow-hidden rounded-md border border-slate-200 bg-slate-50`}
+      >
+        {tabs.map((tab, index) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              id={`${tabIdPrefix}-${tab.id}`}
+              type="button"
+              role="tab"
+              tabIndex={isActive ? 0 : -1}
+              aria-selected={isActive}
+              aria-controls={`${panelIdPrefix}-${tab.id}`}
+              onClick={() => onTabChange(tab.id)}
+              onKeyDown={(event) => handleKeyDown(event, index)}
+              className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-r border-slate-200 text-[11px] font-semibold last:border-r-0 ${
+                isActive ? "bg-slate-950 text-white" : "bg-white text-slate-500"
+              }`}
+            >
+              <Icon className="h-4 w-4" aria-hidden />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tabs
+        .filter((tab) => tab.id !== activeTab)
+        .map((tab) => (
+          <div
+            key={`${tab.id}-panel-placeholder`}
+            id={`${panelIdPrefix}-${tab.id}`}
+            role="tabpanel"
+            aria-labelledby={`${tabIdPrefix}-${tab.id}`}
+            hidden
+          />
+        ))}
+    </>
   );
 }

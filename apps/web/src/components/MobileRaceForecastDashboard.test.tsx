@@ -51,8 +51,13 @@ describe("MobileRaceForecastDashboard", () => {
 
     expect(markup).toContain('role="tablist"');
     expect(markup.match(/role="tab"/g)).toHaveLength(4);
+    expect(markup.match(/role="tabpanel"/g)).toHaveLength(4);
     expect(markup.match(/tabindex="0"/g)).toHaveLength(1);
     expect(markup.match(/tabindex="-1"/g)).toHaveLength(3);
+    for (const panel of ["summary", "formation", "horses", "detail"]) {
+      expect(markup).toContain(`aria-controls="mobile-panel-${panel}"`);
+      expect(markup).toContain(`id="mobile-panel-${panel}"`);
+    }
     expect(markup).toContain("展開恩恵馬 TOP3");
     expect(markup.match(/data-mobile-benefit/g)).toHaveLength(3);
     expect(markup).not.toContain("テスト馬4");

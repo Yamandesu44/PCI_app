@@ -65,4 +65,14 @@ describe("FormationView", () => {
     expect(markup).toContain("前へ行く可能性が高いです。");
     expect(markup).toContain("好位で運ぶ見込みです。");
   });
+
+  it("同一画面に複数表示する場合は見出しIDを分離できる", () => {
+    const markup = renderToStaticMarkup(
+      <FormationView formation={formation} headingId="mobile-formation-heading" />,
+    );
+
+    expect(markup).toContain('aria-labelledby="mobile-formation-heading"');
+    expect(markup).toContain('id="mobile-formation-heading"');
+    expect(markup).not.toContain('id="formation-heading"');
+  });
 });

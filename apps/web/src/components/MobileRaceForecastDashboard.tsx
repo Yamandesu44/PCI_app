@@ -346,7 +346,10 @@ export function MobileRaceForecastDashboard({
 
         {activeTab === "formation" ? (
           forecast.formation ? (
-            <FormationView formation={forecast.formation} />
+            <FormationView
+              formation={forecast.formation}
+              headingId="mobile-formation-heading"
+            />
           ) : (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
               隊列予想は枠順確定後に表示されます。

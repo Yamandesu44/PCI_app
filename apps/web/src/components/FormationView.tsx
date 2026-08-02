@@ -129,9 +129,15 @@ export function MobileFormationBoard({ formation }: { formation: Formation }) {
 }
 
 /** 枠順確定後の序盤隊列を、先頭から後方まで4ゾーンで表示する。 */
-export function FormationView({ formation }: { formation: Formation }) {
+export function FormationView({
+  formation,
+  headingId = "formation-heading",
+}: {
+  formation: Formation;
+  headingId?: string;
+}) {
   return (
-    <section aria-labelledby="formation-heading">
+    <section aria-labelledby={headingId}>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2 md:mb-4 md:gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -139,7 +145,7 @@ export function FormationView({ formation }: { formation: Formation }) {
               <Route className="h-4 w-4" aria-hidden />
             </span>
             <h2
-              id="formation-heading"
+              id={headingId}
               className="m-0 text-base font-semibold tracking-normal text-slate-950 md:text-lg"
             >
               隊列予想
