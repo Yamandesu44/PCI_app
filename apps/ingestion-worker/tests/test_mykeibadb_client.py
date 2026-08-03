@@ -441,7 +441,7 @@ def test_iter_se_records_parses_results_from_wmykeibadb_columns() -> None:
     assert entry.weight == 480.0
 
     # 確定成績（着順・タイム・上り3F・コーナー通過順位）
-    result = parse_se_result(record)
+    result = parse_se_result(record, synthetic_result_fields=True)
     assert result is not None
     assert result.finish_pos == 1
     assert result.race_time_s == 94.4
@@ -585,7 +585,12 @@ def test_iter_se_records_roundtrips_popularity_and_prize() -> None:
     client = MyKeibaDbClient(connection=_PrizeConnection())
     record = next(client.iter_se_records("20260712", "20260712"))
 
-    result = parse_se_result(record)
+    jvlink_result = parse_se_result(record)
+    assert jvlink_result is not None
+    assert jvlink_result.popularity is None
+    assert jvlink_result.prize_money is None
+
+    result = parse_se_result(record, synthetic_result_fields=True)
     assert result is not None
     assert result.popularity == 3
     assert result.prize_money == 12000000

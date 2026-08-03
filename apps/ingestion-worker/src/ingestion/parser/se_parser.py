@@ -125,7 +125,9 @@ def parse_se_entry(record: str) -> EntryRecord | None:
     )
 
 
-def parse_se_result(record: str) -> ResultRecord | None:
+def parse_se_result(
+    record: str, *, synthetic_result_fields: bool = False
+) -> ResultRecord | None:
     """SE レコード（確定後）を ResultRecord に変換する。
 
     DataKubun が "4"/"7" の場合のみ変換。着順 "00"(未確定)/"99"(中止/失格) は None。
@@ -182,13 +184,13 @@ def parse_se_result(record: str) -> ResultRecord | None:
         corner_3=_corner_pos(raw, 360, 362),
         corner_4=_corner_pos(raw, 362, 364),
         body_weight=_body_weight(raw),
-        popularity=_popularity(raw),
-        prize_money=_prize_money(raw),
+        popularity=_popularity(raw) if synthetic_result_fields else None,
+        prize_money=_prize_money(raw) if synthetic_result_fields else None,
     )
 
 
 # 人気・本賞金（Phase2・ability-v2 用）。mykeibadb 合成の予約オフセット（jv_spec 参照）から
-# 読む。jvlink 実レコードには書かれておらず妥当性チェックで弾く（未検証領域のため）。
+# 読む。jvlink実レコードでは別フィールドとの偶然一致を避けるため、呼出側で解析を無効にする。
 _POPULARITY_MAX = 28  # 単勝人気順の上限（フルゲート18頭＋除外等の余裕）
 
 

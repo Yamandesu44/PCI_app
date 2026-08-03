@@ -51,3 +51,11 @@ class RaceMetadataProvider(Protocol):
     def race_metadata(self, race_key: str) -> RaceMetadataRecord | None: ...
 
     def iter_race_metadata(self, date_from: str, date_to: str) -> Iterator[RaceMetadataRecord]: ...
+
+
+@runtime_checkable
+class SyntheticResultFieldsProvider(Protocol):
+    """mykeibadb合成SEの予約拡張を持つデータソース。"""
+
+    @property
+    def has_synthetic_result_fields(self) -> bool: ...

@@ -1,5 +1,57 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 実JV-Link予約位置の検証と安全な縮退
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `ab37eb9`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: mykeibadb合成専用の人気・本賞金予約位置が、実JV-Linkでも安全か検証する。
+
+### 完了した内容
+
+1. `ingestion.diagnose_jv_result_offsets`を追加し、実SEとmykeibadbをレースキー・馬番で照合した。
+2. 64bit MySQLと32bit JV-Link COMを最小一時JSONで橋渡しし、生レコードや馬名を保存しなかった。
+3. 2026-07-18〜19の50件で、予約位置は人気1/50、本賞金0/50と確認した。
+4. 人気・本賞金の実位置は80%以上支持候補がなく、推測によるオフセット変更を見送った。
+5. `SyntheticResultFieldsProvider`を追加し、予約拡張はmykeibadb合成時だけ解析するようにした。
+6. 診断一時JSONは実行後に削除した。
+
+### 対象ファイル
+
+- `apps/ingestion-worker/src/ingestion/diagnose_jv_result_offsets.py`
+- `apps/ingestion-worker/src/ingestion/client/base.py`
+- `apps/ingestion-worker/src/ingestion/client/mykeibadb_client.py`
+- `apps/ingestion-worker/src/ingestion/parser/se_parser.py`
+- `apps/ingestion-worker/src/ingestion/parser/jv_spec.py`
+- `apps/ingestion-worker/src/ingestion/batch.py`
+- `apps/ingestion-worker/tests/test_diagnose_jv_result_offsets.py`
+- `apps/ingestion-worker/tests/test_mykeibadb_client.py`
+- `tasks/current.md`, `tasks/backlog.md`, `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md`
+
+### 仮実装・未確定仕様・既知事項
+
+- 人気・本賞金の実JV-Link位置は未確定。最多候補は人気`[372:374]`14/50、
+  本賞金`[374:380]`または`[374:382]`13/50で、採用根拠として不足する。
+- 既存の確定着順`[334:336]`も同じ対応で0/50だったため、血統登録番号を追加アンカーにした
+  SE全体の再校正が必要。現行の正式運用はmykeibadb列分解データなので影響しない。
+- 32bit PythonにはPyMySQLがないため、`--export-references`と`--reference-file`の二段階を使う。
+
+### テスト・実測結果
+
+- worker全テスト: 260 passed（pytestキャッシュ書込警告1件のみ）
+- Ruff: passed
+- strict mypy: 26 source files、passed
+- 実COM診断: 50件照合、予約人気1件、予約本賞金0件、80%以上支持候補なし
+
+### 次に実施する具体的な手順
+
+1. 診断JSONへ血統登録番号を追加し、実SE`[30:40]`との一致率で同一馬対応を検証する。
+2. 対応が成立した母集団だけで確定着順・人気・本賞金候補を再集計し、複数レースで一意なら`jv_spec.py`を更新する。
+3. 枠順確定後に通常同期を実行し、8月8〜9日の18レースを確定出馬表で再予想する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 同期先APIを実行単位で切替
 
 - 更新日時: 2026-08-03 JST

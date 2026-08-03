@@ -25,7 +25,7 @@ import sys
 import httpx
 from dotenv import load_dotenv
 
-from ingestion.client.base import JvLinkClient, RaceMetadataProvider
+from ingestion.client.base import JvLinkClient, RaceMetadataProvider, SyntheticResultFieldsProvider
 from ingestion.client.fixture_client import FixtureJvLinkClient
 from ingestion.ingest_api import IngestApiClient
 from ingestion.models import (
@@ -319,6 +319,9 @@ def ingest_results(
     duplicate_guards: dict[str, tuple[DuplicateDeleteGuard, ...]] | None = None,
 ) -> IngestResultsSummary:
     """SE レコード（DataKubun=4/7）+ RA レコード（DataKubun=7）から確定成績を取り込む。"""
+    synthetic_result_fields = (
+        isinstance(client, SyntheticResultFieldsProvider) and client.has_synthetic_result_fields
+    )
     # race_key → RaceResultRecord のバッファ
     race_results: dict[str, RaceResultRecord] = {}
     target_by_identity: dict[str, set[str]] = {}
@@ -384,7 +387,7 @@ def ingest_results(
                 else:
                     snapshot.entries.append(entry)
 
-            result = parse_se_result(rec)
+            result = parse_se_result(rec, synthetic_result_fields=synthetic_result_fields)
             if result is None:
                 continue
             parsed_results += 1

@@ -113,6 +113,31 @@ py -3.12-32 -m ingestion.locate_corners raw_dump\dumped_se_result.txt 4 4 5 4
 - `RA_RECORD_BYTES`/`SE_RECORD_BYTES`（レコード総長）が変わっていないかも
   `verify_layout` の「レコード長」アンカーで確認する。
 
+#### 人気・本賞金をmykeibadbと照合する
+
+JV-Link COMは32bit Python、mykeibadbは64bit仮想環境を使う場合、最小照合JSONを介して診断する。
+JSONに生レコードや馬名は含めず、完了後に削除する。
+
+```powershell
+$env:PYTHONPATH="$PWD\src"
+$ref = Join-Path $env:TEMP "pci_jv_offset_refs.json"
+
+# 64bit環境でmykeibadbの照合値を準備
+.venv\Scripts\python.exe -m ingestion.diagnose_jv_result_offsets `
+  --date 20260718 --date-to 20260719 --export-references $ref
+
+# 32bit環境で実JV-Link SEと照合
+py -3.12-32 -m ingestion.diagnose_jv_result_offsets `
+  --date 20260718 --date-to 20260719 --race-option 1 `
+  --max-samples 50 --reference-file $ref
+
+Remove-Item -LiteralPath $ref
+```
+
+2026-08-03の50件診断では、mykeibadb合成予約位置の一致は人気1件・本賞金0件で、
+実位置の80%以上支持候補も得られなかった。この結果だけで位置を変更せず、血統登録番号を
+追加アンカーにして同一馬対応を再検証する。予約位置はmykeibadb合成時だけ解析する。
+
 ### 2.6 パーサ・テストを更新する
 
 - `ra_parser.py`/`se_parser.py` が対応フィールドを読んでいれば、その読み出し

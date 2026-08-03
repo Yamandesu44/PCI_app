@@ -148,6 +148,11 @@ class MyKeibaDbClient:
     def excluded_race_keys(self) -> frozenset[str]:
         return self._config.excluded_race_keys
 
+    @property
+    def has_synthetic_result_fields(self) -> bool:
+        """人気・本賞金を合成SEの予約領域へ格納することを示す。"""
+        return True
+
     def fetch_special_entries(self, date_from: str, date_to: str) -> list[RaceEntriesRecord]:
         connection = self._connection or self._connect()
         race_table = self._find_table(connection, _RACE_TABLE_CANDIDATES)

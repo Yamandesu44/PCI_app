@@ -192,7 +192,7 @@ SE_FIELDS: tuple[FieldSpec, ...] = (
     # 実 JV-Data の Ninki/Honsyokin の byte 位置は未特定（§9-8 と同じ未検証領域）。
     # ここは **mykeibadb 合成専用の予約オフセット**（末尾の未マップ領域 531〜553 内）で、
     # _build_se_record が mykeibadb 列から書き、parse_se_result が読む往復専用。
-    # jvlink（実 COM）モードでは書かれず、読み側は妥当性（人気1〜28・賞金は数値）で弾く。
+    # jvlink（実 COM）モードでは書かれず、データソース判定で解析自体を無効にする。
     FieldSpec("Ninki", 541, 2, "num", _T, "単勝人気順（mykeibadb合成予約・未検証）"),
     FieldSpec("Honsyokin", 543, 9, "num", _T, "獲得本賞金（mykeibadb合成予約・未検証）"),
 )
