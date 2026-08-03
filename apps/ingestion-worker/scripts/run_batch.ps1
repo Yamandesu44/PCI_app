@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Ingestion batch runner wrapper (retry + failure notification).
 
@@ -27,6 +27,9 @@
 .PARAMETER ChunkDays
     Split long date ranges into chunks of this many days (default: 0 = disabled).
 
+.PARAMETER ApiBaseUrl
+    .envの読み込み後、この実行に限りAPI_BASE_URLを上書きする。
+
 .PARAMETER TestNotification
     Send one harmless test notification and exit without running ingestion.
 
@@ -35,6 +38,7 @@
     .\run_batch.ps1 -Step results -Date 20260628
     .\run_batch.ps1 -Step entries -Mode mykeibadb -Date 20260629 -DateTo 20260720
     .\run_batch.ps1 -Step race-metadata -Mode mykeibadb -Date 20250723 -DateTo 20260723 -ChunkDays 7
+    .\run_batch.ps1 -Step forecasts -Mode mykeibadb -ApiBaseUrl http://127.0.0.1:8998
 #>
 param(
     [string]$Step = "",
@@ -43,6 +47,7 @@ param(
     [string]$DateTo = "",
     [int]$ChunkDays = 0,
     [int]$MaxRetries = 3,
+    [string]$ApiBaseUrl = "",
     [switch]$TestNotification
 )
 
@@ -111,6 +116,16 @@ function Send-WebhookNotification {
         Write-Log "failed to send webhook notification: $safeError"
         return $false
     }
+}
+
+if ($ApiBaseUrl) {
+    $parsedApiUrl = $null
+    if (-not [Uri]::TryCreate($ApiBaseUrl, [UriKind]::Absolute, [ref]$parsedApiUrl) -or
+        $parsedApiUrl.Scheme -notin @("http", "https") -or
+        $parsedApiUrl.UserInfo) {
+        throw "-ApiBaseUrlには認証情報を含まないHTTP(S) URLを指定してください。"
+    }
+    $env:API_BASE_URL = $ApiBaseUrl.TrimEnd("/")
 }
 
 $rangeLabel = if ($DateTo) { "$Date to $DateTo" } else { $Date }

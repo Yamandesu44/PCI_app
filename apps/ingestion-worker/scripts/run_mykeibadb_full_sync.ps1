@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Full mykeibadb sync (mykeibadb.exe -> batch.py).
 
@@ -46,16 +46,23 @@
     Check whether the API and PostgreSQL are ready, then exit without
     running mykeibadb.exe or any ingestion steps.
 
+.PARAMETER ApiBaseUrl
+    事前疎通と全取り込み工程のAPI_BASE_URLを上書きする。
+
 .EXAMPLE
     .\run_mykeibadb_full_sync.ps1
 
 .EXAMPLE
     .\run_mykeibadb_full_sync.ps1 -PreflightOnly
+
+.EXAMPLE
+    .\run_mykeibadb_full_sync.ps1 -ApiBaseUrl http://127.0.0.1:8998
 #>
 param(
     [int]$TimeoutSeconds = 600,
     [int]$DaysBack = 10,
     [int]$DaysForward = 14,
+    [string]$ApiBaseUrl = "",
     [switch]$PreflightOnly
 )
 
@@ -149,8 +156,18 @@ if (Test-Path $EnvFile) {
 }
 
 $MykeibadbExe = [System.Environment]::GetEnvironmentVariable("MYKEIBADB_EXE_PATH", "Process")
-$ApiBaseUrl = [System.Environment]::GetEnvironmentVariable("API_BASE_URL", "Process")
+if (-not $ApiBaseUrl) {
+    $ApiBaseUrl = [System.Environment]::GetEnvironmentVariable("API_BASE_URL", "Process")
+}
 if (-not $ApiBaseUrl) { $ApiBaseUrl = "http://localhost:8000" }
+$parsedApiUrl = $null
+if (-not [Uri]::TryCreate($ApiBaseUrl, [UriKind]::Absolute, [ref]$parsedApiUrl) -or
+    $parsedApiUrl.Scheme -notin @("http", "https") -or
+    $parsedApiUrl.UserInfo) {
+    throw "-ApiBaseUrlには認証情報を含まないHTTP(S) URLを指定してください。"
+}
+$ApiBaseUrl = $ApiBaseUrl.TrimEnd("/")
+$env:API_BASE_URL = $ApiBaseUrl
 
 Write-Log "=== run_mykeibadb_full_sync.ps1 start ==="
 
@@ -202,23 +219,23 @@ $DateFrom = (Get-Date).AddDays(-$DaysBack).ToString("yyyyMMdd")
 $DateTo   = (Get-Date).AddDays($DaysForward).ToString("yyyyMMdd")
 
 Write-Log "--- entries sync (batch.py --mode mykeibadb --step entries, $DateFrom to $DateTo) ---"
-& $RunBatch -Step entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+& $RunBatch -Step entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo -ApiBaseUrl $ApiBaseUrl
 $entriesExit = $LASTEXITCODE
 
 Write-Log "--- race-metadata sync (batch.py --mode mykeibadb --step race-metadata, $DateFrom to $DateTo) ---"
-& $RunBatch -Step race-metadata -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+& $RunBatch -Step race-metadata -Mode mykeibadb -Date $DateFrom -DateTo $DateTo -ApiBaseUrl $ApiBaseUrl
 $metadataExit = $LASTEXITCODE
 
 Write-Log "--- results sync (batch.py --mode mykeibadb --step results, $DateFrom to $DateTo) ---"
-& $RunBatch -Step results -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+& $RunBatch -Step results -Mode mykeibadb -Date $DateFrom -DateTo $DateTo -ApiBaseUrl $ApiBaseUrl
 $resultsExit = $LASTEXITCODE
 
 Write-Log "--- special-entries sync (batch.py --mode mykeibadb --step special-entries, $DateFrom to $DateTo) ---"
-& $RunBatch -Step special-entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+& $RunBatch -Step special-entries -Mode mykeibadb -Date $DateFrom -DateTo $DateTo -ApiBaseUrl $ApiBaseUrl
 $specialEntriesExit = $LASTEXITCODE
 
 Write-Log "--- forecast precompute (batch.py --step forecasts, $DateFrom to $DateTo) ---"
-& $RunBatch -Step forecasts -Mode mykeibadb -Date $DateFrom -DateTo $DateTo
+& $RunBatch -Step forecasts -Mode mykeibadb -Date $DateFrom -DateTo $DateTo -ApiBaseUrl $ApiBaseUrl
 $forecastsExit = $LASTEXITCODE
 
 Write-Log "=== run_mykeibadb_full_sync.ps1 end (entries=$entriesExit race-metadata=$metadataExit results=$resultsExit special-entries=$specialEntriesExit forecasts=$forecastsExit) ==="

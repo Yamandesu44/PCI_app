@@ -43,6 +43,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_mykeibadb_full_sync.ps1 -
 失敗時はログに原因別の対処が表示される（書き込み先ならDocker Desktop・DBコンテナ・
 Alembic・FastAPI、読み取り元ならMySQL80サービスやパスワード設定）。
 
+8000番を安全に再利用できず、最新版APIを一時的に別ポート（例: 8998）で起動した場合は、
+`.env`を変更せず、その実行だけ接続先を上書きできる。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_mykeibadb_full_sync.ps1 -ApiBaseUrl http://127.0.0.1:8998
+```
+
+接続だけ確認する場合は末尾に`-PreflightOnly`を付ける。指定したURLは出走表、馬場情報、
+確定成績、特別登録、予想生成の全工程へ引き継がれる。URLへユーザー名やパスワードを含めない。
+
 読み取り元だけを個別に確認したい場合は次を実行する。
 
 ```powershell
@@ -60,10 +70,11 @@ Alembic・FastAPI、読み取り元ならMySQL80サービスやパスワード�
 
 1. `mykeibadb.exe` 実行（JV-Link → ローカルMySQL、最大10分待機）
 2. `batch.py --mode mykeibadb --step entries`（過去10日〜未来14日分の出走表）
-3. `batch.py --mode mykeibadb --step results`（同期間の確定成績）
-4. `batch.py --mode mykeibadb --step special-entries`（同期間の重賞等特別登録。
+3. `batch.py --mode mykeibadb --step race-metadata`（同期間の馬場状態・天候）
+4. `batch.py --mode mykeibadb --step results`（同期間の確定成績）
+5. `batch.py --mode mykeibadb --step special-entries`（同期間の重賞等特別登録。
    2026-07-13まで自動実行から漏れていた。詳細は`docs/DECISIONS.md`参照）
-5. `batch.py --step forecasts`（今日以降の出走前レース予想を事前生成）
+6. `batch.py --step forecasts`（今日以降の出走前レース予想を事前生成）
 
 ログは `apps\ingestion-worker\logs\<日付>-mykeibadb-sync.log` に出力される。
 Windowsのコンソール、Python標準出力、保存ログはUTF-8へ統一されている。

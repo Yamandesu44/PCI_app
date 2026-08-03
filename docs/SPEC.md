@@ -332,6 +332,9 @@
 - ✅ Windows全同期の開始前に`API_BASE_URL/ready`でFastAPIとPostgreSQLを確認する。
   利用不能時は`mykeibadb.exe`起動前に中止し、`-PreflightOnly`でデータ更新を伴わない単独確認を行える
   （2026-07-25）。
+- ✅ Windows全同期と単体バッチは`-ApiBaseUrl`で、その実行だけAPI接続先を上書きできる。
+  明示値は`.env`より優先され、全同期ではentries、race-metadata、results、special-entries、forecastsの
+  全工程へ同じURLを渡す。認証情報を含むURLとHTTP(S)以外は拒否する（2026-08-03）。
 - ✅ Windows同期のコンソール、Python標準出力、保存ログをUTF-8へ統一し、日本語の進捗・エラーを
   文字化けさせず確認できる（2026-07-25）。
 - 🔎 JV-Data バイトオフセットは実データ校正済みだが、JV-Link バージョン差で要再確認。（jv_spec.py, se_parser.py）

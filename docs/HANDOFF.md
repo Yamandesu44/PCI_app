@@ -1,5 +1,63 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 同期先APIを実行単位で切替
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `30c6cb1`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 8000番を安全に再利用できない場合も、`.env`を変更せず最新版APIへ同期する。
+
+### 完了した内容
+
+1. `run_batch.ps1`へ`-ApiBaseUrl`を追加し、`.env`読込後に明示値を適用した。
+2. `run_mykeibadb_full_sync.ps1`へ同オプションを追加し、事前疎通と全5バッチ工程へ転送した。
+3. HTTP(S)絶対URLだけを許可し、URL内の認証情報を拒否した。
+4. Windows PowerShell 5.1で日本語を解析できるよう、変更した両スクリプトをUTF-8 BOM付きに統一した。
+5. 最新APIを8998番へ一時起動し、事前疎通と予想18件の生成を実DBで確認した。
+
+### 対象ファイル
+
+- `apps/ingestion-worker/scripts/run_batch.ps1`
+- `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`
+- `apps/ingestion-worker/tests/test_check_mykeibadb.py`
+- `apps/ingestion-worker/MANUAL_SYNC_GUIDE.md`
+- `docs/SPEC.md`
+- `docs/DECISIONS.md`
+- `tasks/current.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 8998番は一時起動例であり固定の代替ポートではない。既定の`API_BASE_URL`は変更していない。
+- `apps/ingestion-worker/.venv`のmypyは環境内の`librt.internal`欠落により解析開始前に失敗した。
+  同じPython 3.12のシステム環境ではstrict mypyが成功しており、今回のコード型エラーではない。
+- 枠順確定後の18レース再同期と、8月8〜9日確定後の信頼度照合件数確認は未完了。
+- VoiceOver／TalkBackの実機読み上げ確認は未完了。
+
+### テスト実行コマンドと結果
+
+- `python -m pytest -q`: 253 passed（pytestキャッシュ書込警告1件のみ）
+- `python -m ruff check src tests`: passed
+- システムPython 3.12の`python -m mypy src --strict`: passed（25 source files）
+- PowerShell構文解析・UTF-8 BOM確認: passed
+- `run_mykeibadb_full_sync.ps1 -PreflightOnly -ApiBaseUrl http://127.0.0.1:8998`: passed
+- `run_batch.ps1 -Step forecasts -Mode mykeibadb -ApiBaseUrl http://127.0.0.1:8998`: 対象18、生成18、スキップ0
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`の`ApiBaseUrl`解決と全5工程への転送
+2. `apps/ingestion-worker/scripts/run_batch.ps1`の`.env`読込後のURL検証・上書き
+3. `apps/ingestion-worker/tests/test_check_mykeibadb.py`のAPI上書き回帰テスト
+
+### 次に実施する具体的な手順
+
+1. 枠順確定後、`run_mykeibadb_full_sync.ps1`を通常実行し、18レースの予想を確定出馬表で再生成する。
+2. 8月8〜9日の結果確定後にresults同期を行い、`GET /api/v1/forecast-performance?days=180`で芝・ダート件数増加を確認する。
+3. iOS VoiceOverとAndroid TalkBackで、予想検証サマリーと詳細タブの読み上げ順を確認する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 所有PID不明のAPI待受を安全に検出
 
 - 更新日時: 2026-08-03 JST

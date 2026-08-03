@@ -28,6 +28,27 @@ def test_full_sync_wrapper_forces_utf8_for_python_output() -> None:
     assert "[Console]::OutputEncoding = $Utf8NoBom" in script
 
 
+def test_full_sync_api_override_is_forwarded_to_every_batch_step() -> None:
+    script = (
+        Path(__file__).parents[1] / "scripts" / "run_mykeibadb_full_sync.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert '[string]$ApiBaseUrl = ""' in script
+    assert script.count("-ApiBaseUrl $ApiBaseUrl") == 5
+    assert "$env:API_BASE_URL = $ApiBaseUrl" in script
+
+
+def test_batch_api_override_wins_after_env_loading() -> None:
+    script = (
+        Path(__file__).parents[1] / "scripts" / "run_batch.ps1"
+    ).read_text(encoding="utf-8")
+
+    env_load = script.index("if (Test-Path $EnvFile)")
+    override = script.index('$env:API_BASE_URL = $ApiBaseUrl.TrimEnd("/")')
+    assert override > env_load
+    assert "認証情報を含まないHTTP(S) URL" in script
+
+
 class _FakeCursor:
     def __init__(self, tables: list[tuple[str, ...]]) -> None:
         self._tables = tables
