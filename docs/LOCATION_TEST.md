@@ -147,6 +147,19 @@ npm.cmd run build
 起動後は`http://localhost:8000/ready`、レース一覧、代表3レースの詳細を確認する。
 代表レースは芝短距離、ダート中距離、枠順確定後の多頭数レースを各1件選ぶ。
 
+ローカルFastAPIを最新コードで安全に再起動する場合は、ルートから次を実行する。
+8000番が別アプリに使われている場合は、そのプロセスを停止せず中断する。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\api\scripts\restart_local_api.ps1
+```
+
+起動状態だけを確認し、プロセスを変更しない場合は`-CheckOnly`を付ける。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\api\scripts\restart_local_api.ps1 -CheckOnly
+```
+
 追加で次を確認する。
 
 - 未認証Webアクセスが401、正しい共有認証が200

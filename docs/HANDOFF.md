@@ -1,5 +1,59 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) ローカルFastAPIの安全な再起動と最新版診断
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `5f06d96`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 旧FastAPIプロセスによる反映漏れを、安全に検出・再起動できるようにする。
+
+### 完了した内容
+
+1. `apps/api/scripts/restart_local_api.ps1`を追加した。
+2. 既存Uvicornだけを停止し、別プロセスのポート利用時は`BLOCKED`で中断する。
+3. `-CheckOnly`で`STOPPED`、`BLOCKED`、`NOT_READY`、`STALE`、`READY`を診断する。
+4. 最新コードを8998番へ一時起動し、実DBでreadinessと新しい予想検証API契約を確認した。
+5. 新方式件数は芝0、ダート0、目標各100、`confidence_review_ready=false`だった。
+6. `docs/LOCATION_TEST.md`へ通常の再起動・確認コマンドを追加した。
+
+### 対象ファイル
+
+- `apps/api/scripts/restart_local_api.ps1`
+- `docs/LOCATION_TEST.md`
+- `tasks/current.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- スクリプトはWindows専用。Uvicornのコマンドライン識別に`pci.presentation.app:app`を使用する。
+- Bearer認証で予想検証APIを取得できない場合、`-CheckOnly`はreadinessだけを確認し契約確認を省略する。
+- 新方式の予想は0件のため、信頼度3区分の精度再評価は実施していない。
+- 既存63件は旧方式の履歴であり、新方式の件数へ混在させない。
+
+### テスト実行コマンドと結果
+
+- PowerShell構文解析: passed
+- 停止状態診断: `STOPPED` / exit 1を確認
+- 別プロセス保護: `BLOCKED` / exit 2、対象プロセスの継続を確認
+- 最新API＋実DB診断: `READY` / exit 0を確認
+- 最新API＋実DB件数: 芝0、ダート0、目標100、ready=false
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/scripts/restart_local_api.ps1`の`Test-PciApiProcess`
+2. 同スクリプトの`-CheckOnly`分岐と`requiredFields`
+3. `tasks/current.md`冒頭の新方式予想蓄積タスク
+
+### 次に実施する具体的な手順
+
+1. `apps/api/scripts/restart_local_api.ps1`でFastAPIを最新コードへ再起動する。
+2. 通常同期と事前予想生成を実行し、`GET /api/v1/forecast-performance?days=180`の芝・ダート件数を確認する。
+3. 両コース各100件到達後、信頼度3区分の母数と一致率を再評価する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) モバイル予想検証サマリーのフォーカスを可視化
 
 - 更新日時: 2026-08-03 JST
