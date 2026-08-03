@@ -1,5 +1,58 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 所有PID不明のAPI待受を安全に検出
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `0e8df93`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: Windowsで待受だけが残る状態を停止中と誤判定せず、安全に復旧案内する。
+
+### 完了した内容
+
+1. `Get-ApiListenerProcess`を、接続とプロセスを返す`Get-ApiListenerState`へ置き換えた。
+2. 待受あり・所有プロセスなしを`ORPHANED`、終了コード6として診断する。
+3. 通常再起動では2秒待って再照会し、残留時は停止・起動をせず例外で中断する。
+4. Uvicorn所有者、別プロセス、停止状態に関する既存の安全判定を維持した。
+5. `docs/LOCATION_TEST.md`へ待機・再診断・Windows再起動の復旧手順を追記した。
+
+### 対象ファイル
+
+- `apps/api/scripts/restart_local_api.ps1`
+- `docs/LOCATION_TEST.md`
+- `tasks/current.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 再照会待ち2秒は、実機で観測した短時間の残留を吸収する暫定的な運用値。
+- 入れ子PowerShellで所有者照会を模擬したテストでは、`ORPHANED`分岐へ入り対象プロセスを保護したが、
+  外側から観測した終了コードは1へ正規化された。通常の`-File`実行ではコード上の6を返す。
+- Windows以外のローカル起動は本スクリプトの対象外。
+
+### テスト実行コマンドと結果
+
+- UTF-8 BOM・PowerShell構文解析: passed
+- STOPPED: exit 1、passed
+- BLOCKED: 別プロセスを継続したまま検出、passed
+- ORPHANED: 所有者照会欠落を模擬し、対象プロセスを継続したまま検出、passed
+- READY: 最新API＋実DB＋予想検証API契約、passed
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/scripts/restart_local_api.ps1`の`Get-ApiListenerState`
+2. 同スクリプトの`ORPHANED`分岐と再照会ループ
+3. `docs/LOCATION_TEST.md`の`ORPHANED`復旧手順
+
+### 次に実施する具体的な手順
+
+1. 実運用cloneを最新コミットへ更新し、`restart_local_api.ps1 -CheckOnly`を通常の8000番で実行する。
+2. 枠順確定後の通常同期で、8月8〜9日の18レースを確定出馬表へ更新する。
+3. 結果同期後、新方式の芝・ダート照合件数が増えたことを確認する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 通常同期と新方式の事前予想生成を再開
 
 - 更新日時: 2026-08-03 JST

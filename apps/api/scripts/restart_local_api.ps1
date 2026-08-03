@@ -17,16 +17,22 @@ else {
 $pythonPath = Join-Path $apiRoot ".venv\Scripts\python.exe"
 $envPath = Join-Path $apiRoot ".env"
 
-function Get-ApiListenerProcess {
+function Get-ApiListenerState {
     param([int]$TargetPort)
 
     $connection = Get-NetTCPConnection -LocalPort $TargetPort -State Listen -ErrorAction SilentlyContinue |
         Select-Object -First 1
-    if ($null -eq $connection) {
-        return $null
+    $process = $null
+    if ($null -ne $connection) {
+        $process = Get-CimInstance Win32_Process `
+            -Filter "ProcessId = $($connection.OwningProcess)" `
+            -ErrorAction SilentlyContinue
     }
 
-    return Get-CimInstance Win32_Process -Filter "ProcessId = $($connection.OwningProcess)"
+    return [pscustomobject]@{
+        Connection = $connection
+        Process = $process
+    }
 }
 
 function Test-PciApiProcess {
@@ -48,12 +54,18 @@ if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) {
     throw "API設定ファイルが見つかりません: $envPath`n.env.exampleを基に.envを用意してください。"
 }
 
-$listenerProcess = Get-ApiListenerProcess -TargetPort $Port
+$listenerState = Get-ApiListenerState -TargetPort $Port
+$listenerProcess = $null
 if ($CheckOnly) {
-    if ($null -eq $listenerProcess) {
+    if ($null -eq $listenerState.Connection) {
         Write-Output "STOPPED FastAPIは $BindAddress`:$Port で待受していません。"
         exit 1
     }
+    if ($null -eq $listenerState.Process) {
+        Write-Output "ORPHANED ポート$Portは待受中ですが所有プロセスを確認できません。Windowsのソケット解放を待ってから再実行してください。"
+        exit 6
+    }
+    $listenerProcess = $listenerState.Process
     if (-not (Test-PciApiProcess -Process $listenerProcess)) {
         Write-Output "BLOCKED ポート$Portは別のプロセスが使用しています (PID=$($listenerProcess.ProcessId))。"
         exit 2
@@ -98,6 +110,23 @@ if ($CheckOnly) {
     exit 0
 }
 
+if ($null -ne $listenerState.Connection) {
+    if ($null -eq $listenerState.Process) {
+        Start-Sleep -Seconds 2
+        $listenerState = Get-ApiListenerState -TargetPort $Port
+        if ($null -ne $listenerState.Connection -and $null -eq $listenerState.Process) {
+            throw "ポート$Portは待受中ですが所有プロセスを確認できません。停止操作は行いません。Windowsのソケット解放を待ってから再実行してください。"
+        }
+    }
+
+    if ($null -eq $listenerState.Connection) {
+        $listenerProcess = $null
+    }
+    else {
+        $listenerProcess = $listenerState.Process
+    }
+}
+
 if ($null -ne $listenerProcess) {
     if (-not (Test-PciApiProcess -Process $listenerProcess)) {
         throw "ポート$Portは別のプロセスが使用しています (PID=$($listenerProcess.ProcessId))。停止せずに中断します。"
@@ -109,10 +138,10 @@ if ($null -ne $listenerProcess) {
     $deadline = (Get-Date).AddSeconds(10)
     do {
         Start-Sleep -Milliseconds 200
-        $listenerProcess = Get-ApiListenerProcess -TargetPort $Port
-    } while ($null -ne $listenerProcess -and (Get-Date) -lt $deadline)
+        $listenerState = Get-ApiListenerState -TargetPort $Port
+    } while ($null -ne $listenerState.Connection -and (Get-Date) -lt $deadline)
 
-    if ($null -ne $listenerProcess) {
+    if ($null -ne $listenerState.Connection) {
         throw "ポート$Portの解放を10秒以内に確認できませんでした。"
     }
 }

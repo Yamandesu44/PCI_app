@@ -160,6 +160,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\api\scripts\restart
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps\api\scripts\restart_local_api.ps1 -CheckOnly
 ```
 
+`ORPHANED`が表示された場合は、ポートの待受情報はあるものの所有PIDを確認できない状態である。
+スクリプトは停止操作を行わないため、数秒待って`-CheckOnly`を再実行する。それでも続く場合は
+Windowsを再起動してソケット状態を解消し、別プロセスをPID指定で強制終了しないこと。
+
 追加で次を確認する。
 
 - 未認証Webアクセスが401、正しい共有認証が200
