@@ -49,6 +49,12 @@ describe("ForecastPerformanceSummary", () => {
     expect(markup).toContain("検証 48件");
     expect(markup).toContain("カバー 40%");
     expect(markup).toContain("新指標 芝11/100 ダ7/100");
+    expect(markup).toContain(
+      "新しい読みやすさ指標は、芝11件、目標100件。ダート7件、目標100件です。展開一致63%。検証48件。カバー率40%。予想検証の詳細を開く",
+    );
+    expect(markup).toContain("min-w-0 flex-1");
+    expect(markup).toContain("block truncate text-[10px]");
+    expect(markup).toContain("shrink-0 text-right");
     expect(markup).toContain('<h2 class="sr-only">予想検証の詳細</h2>');
   });
 
@@ -110,6 +116,27 @@ describe("ForecastPerformanceSummary", () => {
 
     expect(markup).toContain("再評価可能");
     expect(markup).toContain("新指標 再評価可能");
+    expect(markup).toContain(
+      "新しい読みやすさ指標は再評価可能です。展開一致63%。検証48件。カバー率40%。予想検証の詳細を開く",
+    );
     expect(markup).not.toContain("残り 芝");
+  });
+
+  it("検証データがない場合も読み上げ名で蓄積中と伝える", () => {
+    const emptyPerformance = {
+      ...performance,
+      sample_size: 0,
+      coverage_rate: 0,
+    } as unknown as ForecastPerformance;
+    const markup = renderToStaticMarkup(
+      <ForecastPerformanceSummary
+        performance={emptyPerformance}
+        selectedDate="2026-07-25"
+      />,
+    );
+
+    expect(markup).toContain(
+      "事前予想を蓄積中です。検証0件。カバー率0%。予想検証の詳細を開く",
+    );
   });
 });

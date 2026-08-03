@@ -199,6 +199,12 @@ export function ForecastPerformanceSummary({
   const confidenceReviewReady = performance.confidence_review_ready ?? (
     turfConfidenceCount >= reviewTarget && dirtConfidenceCount >= reviewTarget
   );
+  const mobileConfidenceLabel = confidenceReviewReady
+    ? "新しい読みやすさ指標は再評価可能です"
+    : `新しい読みやすさ指標は、芝${turfConfidenceCount}件、目標${reviewTarget}件。ダート${dirtConfidenceCount}件、目標${reviewTarget}件です`;
+  const mobilePerformanceLabel = performance.sample_size > 0
+    ? `展開一致${rateLabel(overall?.hit_rate)}。検証${performance.sample_size}件。カバー率${coverage}%`
+    : `事前予想を蓄積中です。検証${performance.sample_size}件。カバー率${coverage}%`;
 
   return (
     <>
@@ -206,7 +212,10 @@ export function ForecastPerformanceSummary({
         data-mobile-performance-summary
         className="group mb-4 border-y border-slate-200 bg-white md:hidden"
       >
-        <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-3 py-3 [&::-webkit-details-marker]:hidden">
+        <summary
+          aria-label={`${mobileConfidenceLabel}。${mobilePerformanceLabel}。予想検証の詳細を開く`}
+          className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-3 py-3 [&::-webkit-details-marker]:hidden"
+        >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
             <Activity className="h-4 w-4" aria-hidden />
           </span>

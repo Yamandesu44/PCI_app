@@ -1,5 +1,57 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) モバイル予想検証サマリーの読み上げを明確化
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `d15cbf3`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 390px向け短縮表示を維持しながら、読み上げ機能へ状態・数値・操作を明確に伝える。
+
+### 完了した内容
+
+1. 閉じたモバイルサマリーの`summary`へ、状態に応じた読み上げ名を追加した。
+2. 未達時は芝・ダートの現在件数と目標件数、到達時は再評価可能であることを伝える。
+3. 展開一致、検証件数、カバー率、詳細を開く操作まで一続きで伝える。
+4. 未蓄積状態を含む5つのコンポーネント回帰テストを整備した。
+5. 視覚表示の高さ、短縮表記、API契約、デスクトップ表示は変更していない。
+
+### 対象ファイル
+
+- `apps/web/src/components/ForecastPerformanceSummary.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+- `tasks/current.md`
+- `docs/SPEC.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 読み上げ文言は自動テスト済みだが、VoiceOver／TalkBackでの声・間・開閉状態の通知は実機未確認。
+- 視覚上の10px略記と文字拡大時の収まりも、引き続き実機確認が必要。
+- `confidence_review_ready=true`到達後の実データ再評価は未完了。
+
+### テスト実行コマンドと結果
+
+- `npm test --workspace=@pci/web -- ForecastPerformanceSummary.test.tsx`: 5 passed
+- `npm run typecheck --workspace=@pci/web`: passed
+- `npm test --workspace=@pci/web`: 149 passed
+- `npm run build --workspace=@pci/web`: passed
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/ForecastPerformanceSummary.tsx`の`mobileConfidenceLabel`
+2. 同ファイルの`mobilePerformanceLabel`と`summary[aria-label]`
+3. `apps/web/src/components/ForecastPerformanceSummary.test.tsx`の読み上げ名テスト
+
+### 次に実施する具体的な手順
+
+1. iOS VoiceOverとAndroid TalkBackで閉状態、開状態、詳細タブの順に読み上げを実機確認する。
+2. 文字サイズを最大付近へ変更し、390px前後で上段ラベルと右側指標が重ならないことを確認する。
+3. `confidence_review_ready=true`到達後、180日APIの信頼度3区分を芝・ダート別に再評価する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) モバイル予想検証サマリーへ再評価進捗を表示
 
 - 更新日時: 2026-08-03 JST
