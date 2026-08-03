@@ -1,5 +1,73 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 信頼度指標の再評価到達を自動判定
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `842c256`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 新方式の芝・ダート各100件到達をAPIで一元判定し、再評価の開始時期を見落とさないようにする。
+
+### 完了した内容
+
+1. `GetForecastPerformanceUseCase`へ`_CONFIDENCE_REVIEW_TARGET_PER_TRACK=100`を追加した。
+2. `ForecastPerformanceOutput/Schema`へ`confidence_review_target`と`confidence_review_ready`を追加した。
+3. 芝・ダート双方が目標以上の場合だけreadyとなる単体テストとAPI契約テストを追加した。
+4. Webは未達時に「残り 芝X件・ダートY件」、到達時に「再評価可能」を表示する。
+5. 旧API応答では目標100件と取得済み件数から補完し、画面の停止を防ぐ。
+6. OpenAPI JSONとapi-client型を再生成した。DBスキーマと保存データは変更していない。
+
+### 対象ファイル
+
+- `apps/api/src/pci/application/dto.py`
+- `apps/api/src/pci/application/forecast_performance_use_cases.py`
+- `apps/api/src/pci/presentation/schemas.py`
+- `apps/api/tests/unit/application/test_forecast_performance_use_cases.py`
+- `apps/api/tests/contract/test_status_api.py`
+- `packages/api-client/openapi.json`
+- `packages/api-client/src/schema.d.ts`
+- `apps/web/src/components/ForecastConfidenceCalibration.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+- `tasks/current.md`
+- `docs/SPEC.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 100件は現行の再評価開始条件であり、精度保証の基準ではない。
+- 判定は選択した30/90/180日の期間内にある新方式の照合済み予想を対象とする。
+- VoiceOver／TalkBack実機確認と、ready到達後の実データ再評価は未完了。
+
+### テスト実行コマンドと結果
+
+- 対象APIテスト: 22 passed（芝100件・ダート99件の未達境界を含む）
+- 対象Ruff: passed
+- 対象mypy strict: 3 source files、問題なし
+- api-client generate / typecheck: passed
+- Web: 148 passed
+- Web typecheck / production build: passed
+- API非統合: 640 passed, 30 deselected
+- API Ruff: passed
+- API mypy strict: 65 source files、問題なし
+- import-linter: 2 contracts kept, 0 broken
+- pytestのキャッシュ作成権限に関する警告が1件出たが、テスト結果への影響はない。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/application/forecast_performance_use_cases.py`の`confidence_review_ready`
+2. `apps/web/src/components/ForecastConfidenceCalibration.tsx`の`isReviewReady`
+3. `apps/api/tests/unit/application/test_forecast_performance_use_cases.py`の100件到達テスト
+
+### 次に実施する具体的な手順
+
+1. 通常同期と予想事前生成を継続し、予想検証画面の残り件数を確認する。
+2. `confidence_review_ready=true`になったら、180日APIの信頼度3区分を芝・ダート別に再評価する。
+3. iOS VoiceOver／Android TalkBackで詳細タブの選択状態と読み上げ順を実機確認する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 信頼度指標のコース別蓄積進捗を可視化
 
 - 更新日時: 2026-08-03 JST

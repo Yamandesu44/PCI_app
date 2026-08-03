@@ -6,7 +6,7 @@ const BAR_COLORS: Record<string, string> = {
   caution: "bg-amber-500",
 };
 
-const CONFIDENCE_REVIEW_TARGET = 100;
+const DEFAULT_CONFIDENCE_REVIEW_TARGET = 100;
 
 function percentLabel(value: number | null | undefined): string {
   return value == null ? "集計なし" : `${Math.round(value * 100)}%`;
@@ -15,12 +15,21 @@ function percentLabel(value: number | null | undefined): string {
 export function ForecastConfidenceCalibration({
   groups,
   cohortGroups = [],
+  reviewTarget = DEFAULT_CONFIDENCE_REVIEW_TARGET,
+  reviewReady,
 }: {
   groups: ForecastPerformanceGroup[];
   cohortGroups?: ForecastPerformanceGroup[];
+  reviewTarget?: number;
+  reviewReady?: boolean;
 }) {
   const turfCount = cohortGroups.find((group) => group.key === "turf")?.sample_size ?? 0;
   const dirtCount = cohortGroups.find((group) => group.key === "dirt")?.sample_size ?? 0;
+  const isReviewReady = reviewReady ?? (
+    turfCount >= reviewTarget && dirtCount >= reviewTarget
+  );
+  const turfRemaining = Math.max(reviewTarget - turfCount, 0);
+  const dirtRemaining = Math.max(reviewTarget - dirtCount, 0);
 
   return (
     <div className="mt-5 border-t border-slate-100 pt-5">
@@ -30,13 +39,17 @@ export function ForecastConfidenceCalibration({
       </p>
       <p
         className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold tabular-nums text-slate-700"
-        aria-label={`新指標の蓄積状況 芝${turfCount}件、ダート${dirtCount}件、各${CONFIDENCE_REVIEW_TARGET}件で再評価`}
+        aria-label={`新指標の蓄積状況 芝${turfCount}件、ダート${dirtCount}件、各${reviewTarget}件で再評価`}
       >
-        <span>芝 {turfCount}/{CONFIDENCE_REVIEW_TARGET}</span>
-        <span>ダート {dirtCount}/{CONFIDENCE_REVIEW_TARGET}</span>
-        <span className="font-normal text-slate-500">
-          各{CONFIDENCE_REVIEW_TARGET}件で再評価
-        </span>
+        <span>芝 {turfCount}/{reviewTarget}</span>
+        <span>ダート {dirtCount}/{reviewTarget}</span>
+        {isReviewReady ? (
+          <span className="text-emerald-700">再評価可能</span>
+        ) : (
+          <span className="font-normal text-slate-500">
+            残り 芝{turfRemaining}件・ダート{dirtRemaining}件
+          </span>
+        )}
       </p>
 
       <dl className="mt-4 grid gap-4">

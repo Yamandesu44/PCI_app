@@ -152,6 +152,8 @@ function PerformanceMetrics({
             <ForecastConfidenceCalibration
               groups={performance.confidence_groups}
               cohortGroups={performance.confidence_cohort_groups ?? []}
+              reviewTarget={performance.confidence_review_target ?? 100}
+              reviewReady={performance.confidence_review_ready}
             />
             {hasWeeklyTrend ? (
               <ForecastPerformanceTrendLazy points={performance.weekly_trend} />

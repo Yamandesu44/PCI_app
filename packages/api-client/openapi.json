@@ -734,6 +734,15 @@
             "title": "Confidence Groups",
             "type": "array"
           },
+          "confidence_review_ready": {
+            "title": "Confidence Review Ready",
+            "type": "boolean"
+          },
+          "confidence_review_target": {
+            "minimum": 1.0,
+            "title": "Confidence Review Target",
+            "type": "integer"
+          },
           "coverage_rate": {
             "anyOf": [
               {
@@ -831,6 +840,8 @@
           "eligible_race_count",
           "sample_size",
           "hit_count",
+          "confidence_review_target",
+          "confidence_review_ready",
           "previous_period"
         ],
         "title": "ForecastPerformanceSchema",

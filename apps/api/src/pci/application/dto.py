@@ -446,6 +446,8 @@ class ForecastPerformanceOutput:
     coverage_rate: float | None
     hit_count: int
     hit_rate: float | None
+    confidence_review_target: int
+    confidence_review_ready: bool
     previous_period: ForecastPerformanceComparisonOutput
     groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
     confidence_groups: list[ForecastPerformanceGroupOutput] = field(

@@ -12,6 +12,8 @@ const performance = {
   eligible_race_count: 120,
   sample_size: 48,
   coverage_rate: 0.4,
+  confidence_review_target: 100,
+  confidence_review_ready: false,
   groups: [
     { key: "overall", label: "全体", hit_rate: 0.625, sample_size: 48 },
     { key: "turf", label: "芝", hit_rate: 0.6, sample_size: 30 },
@@ -66,11 +68,17 @@ describe("ForecastPerformanceSummary", () => {
     expect(markup).toContain("新しい読みやすさ指標で保存された予想のみを集計");
     expect(markup).toContain("芝 11/100");
     expect(markup).toContain("ダート 7/100");
+    expect(markup).toContain("残り 芝89件・ダート93件");
     expect(markup).not.toContain("RPCI");
   });
 
   it("旧API応答でコース別件数がなくても表示を継続する", () => {
-    const { confidence_cohort_groups: _unused, ...legacyPerformance } = performance;
+    const {
+      confidence_cohort_groups: _unusedGroups,
+      confidence_review_target: _unusedTarget,
+      confidence_review_ready: _unusedReady,
+      ...legacyPerformance
+    } = performance;
     const markup = renderToStaticMarkup(
       <ForecastPerformanceSummary
         performance={legacyPerformance as ForecastPerformance}
@@ -80,5 +88,26 @@ describe("ForecastPerformanceSummary", () => {
 
     expect(markup).toContain("芝 0/100");
     expect(markup).toContain("ダート 0/100");
+  });
+
+  it("芝とダートが目標へ達したら再評価可能と表示する", () => {
+    const readyPerformance = {
+      ...performance,
+      confidence_review_ready: true,
+      confidence_cohort_groups: [
+        { key: "overall", label: "全体", hit_rate: 0.7, sample_size: 205 },
+        { key: "turf", label: "芝", hit_rate: 0.7, sample_size: 105 },
+        { key: "dirt", label: "ダート", hit_rate: 0.7, sample_size: 100 },
+      ],
+    } as unknown as ForecastPerformance;
+    const markup = renderToStaticMarkup(
+      <ForecastPerformanceSummary
+        performance={readyPerformance}
+        selectedDate="2026-07-25"
+      />,
+    );
+
+    expect(markup).toContain("再評価可能");
+    expect(markup).not.toContain("残り 芝");
   });
 });

@@ -73,6 +73,8 @@ def test_forecast_performance_contract_hides_internal_values(
         "coverage_rate",
         "hit_count",
         "hit_rate",
+        "confidence_review_target",
+        "confidence_review_ready",
         "groups",
         "previous_period",
         "confidence_groups",
@@ -86,6 +88,8 @@ def test_forecast_performance_contract_hides_internal_values(
     assert body["sample_size"] == 0
     assert body["coverage_rate"] is None
     assert body["hit_rate"] is None
+    assert body["confidence_review_target"] == 100
+    assert body["confidence_review_ready"] is False
     assert [group["key"] for group in body["groups"]] == [
         "overall",
         "turf",

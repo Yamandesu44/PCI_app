@@ -27,6 +27,7 @@ _DEFAULT_PERIOD_DAYS = 90
 _ALLOWED_PERIOD_DAYS = frozenset({30, 90, 180})
 _TREND_WEEKS = 8
 _RECENT_MISS_LIMIT = 5
+_CONFIDENCE_REVIEW_TARGET_PER_TRACK = 100
 _JRA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=9), name="JST")
 _GROUPS = (
     ("overall", "全体", None),
@@ -124,6 +125,14 @@ class GetForecastPerformanceUseCase:
             )
             for key, label, track_type in _GROUPS
         ]
+        confidence_cohort_by_key = {
+            group.key: group for group in confidence_cohort_groups
+        }
+        confidence_review_ready = all(
+            confidence_cohort_by_key[key].sample_size
+            >= _CONFIDENCE_REVIEW_TARGET_PER_TRACK
+            for key in ("turf", "dirt")
+        )
         pace_matrix = _build_pace_matrix(period_records)
         weekly_trend = _build_weekly_trend(records, date_to)
         recent_misses = _build_recent_misses(period_records)
@@ -141,6 +150,8 @@ class GetForecastPerformanceUseCase:
             ),
             hit_count=overall.hit_count,
             hit_rate=overall.hit_rate,
+            confidence_review_target=_CONFIDENCE_REVIEW_TARGET_PER_TRACK,
+            confidence_review_ready=confidence_review_ready,
             groups=groups,
             previous_period=ForecastPerformanceComparisonOutput(
                 date_from=previous_date_from.isoformat(),

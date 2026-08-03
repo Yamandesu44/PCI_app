@@ -581,6 +581,8 @@ class ForecastPerformanceSchema(BaseModel):
     coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     hit_count: int = Field(ge=0)
     hit_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence_review_target: int = Field(ge=1)
+    confidence_review_ready: bool
     previous_period: ForecastPerformanceComparisonSchema
     groups: list[ForecastPerformanceGroupSchema] = []
     confidence_groups: list[ForecastPerformanceGroupSchema] = []
@@ -602,6 +604,8 @@ class ForecastPerformanceSchema(BaseModel):
             coverage_rate=dto.coverage_rate,
             hit_count=dto.hit_count,
             hit_rate=dto.hit_rate,
+            confidence_review_target=dto.confidence_review_target,
+            confidence_review_ready=dto.confidence_review_ready,
             groups=[
                 ForecastPerformanceGroupSchema(**vars(group))
                 for group in dto.groups

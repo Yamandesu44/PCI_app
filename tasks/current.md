@@ -1,5 +1,19 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-08-03 完了: Codex — 信頼度指標の再評価到達を自動判定
+
+- [x] 100件基準をAPIの`_CONFIDENCE_REVIEW_TARGET_PER_TRACK`へ移し、方針の正本を一元化した。
+- [x] 予想検証APIへ`confidence_review_target`と`confidence_review_ready`を追加した。
+- [x] 芝・ダート双方が100件以上の場合だけ再評価可能とする回帰テストを追加した。
+- [x] Webは未達時にコース別の残り件数、到達時に「再評価可能」を自動表示するようにした。
+- [x] 旧APIでは目標100件と件数から画面側で補完し、更新ずれでも画面を継続表示する。
+- [x] OpenAPI・api-client型、API全体検査、Web148テスト・型チェック・本番ビルドを完了した。
+
+### 次の候補
+
+- [ ] `confidence_review_ready=true`になった時点で、3区分の母数と一致率を再評価する。
+- [ ] iOS VoiceOverとAndroid TalkBackで、詳細タブの選択状態と読み上げ順を実機確認する。
+
 ## 2026-08-03 完了: Codex — 新しい信頼度指標のコース別蓄積進捗を可視化
 
 - [x] 予想検証APIへ`confidence_cohort_groups`を追加し、新方式の全体・芝・ダート件数と一致率を返した。

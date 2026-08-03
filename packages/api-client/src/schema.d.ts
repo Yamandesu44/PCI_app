@@ -771,6 +771,10 @@ export interface components {
              * @default []
              */
             confidence_groups: components["schemas"]["ForecastPerformanceGroupSchema"][];
+            /** Confidence Review Ready */
+            confidence_review_ready: boolean;
+            /** Confidence Review Target */
+            confidence_review_target: number;
             /** Coverage Rate */
             coverage_rate?: number | null;
             /** Date From */

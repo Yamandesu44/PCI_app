@@ -81,6 +81,8 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
     assert output.coverage_rate == 0.6
     assert output.hit_count == 2
     assert output.hit_rate == 0.667
+    assert output.confidence_review_target == 100
+    assert output.confidence_review_ready is False
     assert [(group.key, group.sample_size, group.hit_rate) for group in output.groups] == [
         ("overall", 3, 0.667),
         ("turf", 2, 0.5),
@@ -210,6 +212,39 @@ def test_confidence_groups_exclude_legacy_fixed_confidence() -> None:
         (group.key, group.sample_size)
         for group in output.confidence_cohort_groups
     ] == [("overall", 1), ("turf", 1), ("dirt", 0)]
+
+
+def test_confidence_review_is_ready_after_each_track_reaches_target() -> None:
+    repo = FakeMartRepository()
+    race_date = datetime.date(2026, 7, 20)
+    repo.prediction_evaluations = [
+        _record(f"turf-{index}", race_date, "芝", "平均", 50.0)
+        for index in range(100)
+    ] + [
+        _record(f"dirt-{index}", race_date, "ダート", "平均", 43.0)
+        for index in range(100)
+    ]
+
+    output = GetForecastPerformanceUseCase(repo).execute(now=NOW)
+
+    assert output.confidence_review_ready is True
+    assert output.confidence_review_target == 100
+
+
+def test_confidence_review_waits_when_one_track_is_below_target() -> None:
+    repo = FakeMartRepository()
+    race_date = datetime.date(2026, 7, 20)
+    repo.prediction_evaluations = [
+        _record(f"turf-{index}", race_date, "芝", "平均", 50.0)
+        for index in range(100)
+    ] + [
+        _record(f"dirt-{index}", race_date, "ダート", "平均", 43.0)
+        for index in range(99)
+    ]
+
+    output = GetForecastPerformanceUseCase(repo).execute(now=NOW)
+
+    assert output.confidence_review_ready is False
 
 
 def test_recent_misses_are_limited_and_sorted_by_latest_race() -> None:
