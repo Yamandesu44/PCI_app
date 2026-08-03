@@ -1,5 +1,66 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) LightGBM予想の固定信頼度を解消
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `18b9ab1`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: LightGBM予想の`confidence=0.75`固定により、信頼度別検証が機能しない状態を解消する。
+
+### 完了した内容
+
+1. `lgbm_forecaster._make_forecast()`の固定値0.75を原因として特定した。
+2. `_classification_margin_confidence()`を追加し、芝・ダート別の既存展開閾値からの距離を
+   0.40〜0.90の表示用読みやすさへ変換した。
+3. 分類境界では0.40、平均区分の中央または境界から半帯域以上離れた予測では0.90となる。
+4. `classification_margin`理由を追加し、的中確率ではないことをコードと仕様へ明記した。
+5. 予測RPCI、展開ラベル、モデルファイル、API契約、保存済み事前予想は変更していない。
+
+### 対象ファイル
+
+- `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+- `apps/api/tests/unit/infrastructure/pace/test_lgbm_forecaster.py`
+- `tasks/current.md`
+- `docs/SPEC.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 0.40〜0.90への線形変換は表示用の暫定指標で、実績に対して校正された的中確率ではない。
+- 2026-08-03以前に保存済みの予想は0.75のまま残る。履歴の意味を変えないため遡及更新しない。
+- 新旧方式が検証期間内に混在する間は、信頼度区分別集計をモデル固有の校正結果として扱わない。
+- 新方式の芝・ダート各100件到達後に、3区分の母数と一致率を再評価する。
+
+### テスト実行コマンドと結果
+
+- `python -m pytest tests/unit/infrastructure/pace/test_lgbm_forecaster.py tests/unit/application/test_forecast_performance_use_cases.py -q`
+  - 68 passed
+- `python -m pytest -m "not integration" -q`
+  - 637 passed, 30 deselected
+- `python -m ruff check src tests`
+  - passed
+- `python -m mypy src --strict --python-version 3.12`
+  - 65 source files、問題なし
+- `lint-imports`
+  - 2 contracts kept, 0 broken
+- pytestのキャッシュ作成時に作業領域の権限制限による警告が1件出たが、テスト結果への影響はない。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`の`_classification_margin_confidence()`
+2. `apps/api/tests/unit/infrastructure/pace/test_lgbm_forecaster.py`の`test_confidence_*`
+3. `docs/DECISIONS.md`の2026-08-03読みやすさ指標に関する判断
+
+### 次に実施する具体的な手順
+
+1. 通常の予想事前生成を継続し、新方式の`classification_margin`理由を持つ保存済み予想を蓄積する。
+2. 芝・ダート各100件到達後、`GET /api/v1/forecast-performance?days=180`で3区分の母数と一致率を比較する。
+3. 区分が偏る場合は、的中率に合わせた確率校正ではなく表示境界0.50/0.70の見直しから検討する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 事前予想63件の初回不一致傾向レビュー
 
 - 更新日時: 2026-08-03 JST

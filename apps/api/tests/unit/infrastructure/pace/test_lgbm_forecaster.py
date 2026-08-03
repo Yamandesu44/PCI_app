@@ -33,6 +33,7 @@ from pci.infrastructure.pace.lgbm_forecaster import (
     MODEL_VERSION_TURF_V5_FEATURES,
     LightGBMRpciForecaster,
     SplitLightGBMRpciForecaster,
+    _classification_margin_confidence,
     _feature_names_for_booster,
     _version_for_feature_names,
     build_features,
@@ -296,6 +297,37 @@ class TestLightGBMRpciForecaster:
         codes = {r.code for r in result.reasons}
         assert "lgbm_features" in codes
         assert "forecast" in codes
+        assert "classification_margin" in codes
+
+    @pytest.mark.parametrize(
+        ("rpci", "track_type", "expected"),
+        [
+            (49.0, "芝", 0.4),
+            (50.0, "芝", 0.9),
+            (48.5, "芝", 0.65),
+            (40.0, "ダート", 0.4),
+            (43.0, "ダート", 0.9),
+            (38.5, "ダート", 0.65),
+        ],
+    )
+    def test_confidence_uses_distance_from_pace_boundary(
+        self,
+        rpci: float,
+        track_type: str,
+        expected: float,
+    ) -> None:
+        assert _classification_margin_confidence(rpci, track_type) == expected
+
+    def test_forecast_confidence_is_not_fixed(self) -> None:
+        boundary = self._make_forecaster(49.0).forecast(
+            _ctx((FRONT,) * 10, track_type="芝")
+        )
+        center = self._make_forecaster(50.0).forecast(
+            _ctx((FRONT,) * 10, track_type="芝")
+        )
+
+        assert boundary.confidence == 0.4
+        assert center.confidence == 0.9
 
     def test_empty_field_raises(self) -> None:
         forecaster = self._make_forecaster()

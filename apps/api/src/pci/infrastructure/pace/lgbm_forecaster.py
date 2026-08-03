@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from pci.domain.pace.rpci_forecast import (
+    DEFAULT_WEIGHTS,
     RaceContext,
     RpciForecast,
     RpciForecaster,
@@ -47,6 +48,9 @@ _MODELS_DIR = Path(__file__).parent.parent.parent.parent.parent / "models"
 _DEFAULT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_v1.txt"
 _DEFAULT_TURF_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_turf_v1.txt"
 _DEFAULT_DIRT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_dirt_v4.txt"
+
+_CONFIDENCE_MIN = 0.4
+_CONFIDENCE_MAX = 0.9
 
 # 特徴量名（学習スクリプトと inference で順序を完全に一致させること）
 FEATURE_NAMES = [
@@ -154,6 +158,7 @@ def _make_forecast(
     raw = float(predict_fn([features])[0])
     rpci = round(min(max(raw, _RPCI_MIN), _RPCI_MAX), 1)
     label = classify_pace(rpci, context.track_type)
+    confidence = _classification_margin_confidence(rpci, context.track_type)
 
     escape = sum(1 for s in styles if s == RunningStyleLabel.ESCAPE)
     front = sum(1 for s in styles if s in _FRONT_STYLES)
@@ -173,12 +178,16 @@ def _make_forecast(
             code="forecast",
             description=f"想定RPCI={rpci} → 展開「{label}」（ML予測）",
         ),
+        Reason(
+            code="classification_margin",
+            description="展開区分の境界からの余裕を、予想の読みやすさとして評価",
+        ),
     ]
 
     return RpciForecast(
         value=rpci,
         label=label,
-        confidence=0.75,
+        confidence=confidence,
         model_version=version,
         reasons=tuple(reasons),
     )
@@ -326,6 +335,32 @@ def _feature_names_for_booster(booster: Any) -> list[str]:
         f"{len(FEATURE_NAMES_V3)}, {len(FEATURE_NAMES_V4)}, "
         f"{len(FEATURE_NAMES_V5)}）"
     )
+
+
+def _classification_margin_confidence(rpci: float, track_type: str) -> float:
+    """展開区分の境界からの距離を、表示用の読みやすさへ変換する。
+
+    的中確率の校正値ではない。区分境界では低く、平均区分の中央または
+    外側区分で境界から十分離れた予測ほど高くする。
+    """
+    if track_type == "ダート":
+        high = DEFAULT_WEIGHTS.dirt_high_threshold
+        slow = DEFAULT_WEIGHTS.dirt_slow_threshold
+    else:
+        high = DEFAULT_WEIGHTS.high_threshold
+        slow = DEFAULT_WEIGHTS.slow_threshold
+
+    half_band = (slow - high) / 2
+    if high <= rpci <= slow:
+        boundary_margin = min(rpci - high, slow - rpci)
+    else:
+        boundary_margin = min(abs(rpci - high), abs(rpci - slow))
+
+    normalized_margin = min(max(boundary_margin / half_band, 0.0), 1.0)
+    confidence = _CONFIDENCE_MIN + normalized_margin * (
+        _CONFIDENCE_MAX - _CONFIDENCE_MIN
+    )
+    return round(confidence, 2)
 
 
 def _version_for_feature_names(
