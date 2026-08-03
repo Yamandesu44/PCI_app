@@ -19,7 +19,7 @@ export function ForecastConfidenceCalibration({
     <div className="mt-5 border-t border-slate-100 pt-5">
       <h3 className="text-sm font-bold text-slate-900">信頼度別の一致率</h3>
       <p className="mt-1 text-xs text-slate-500">
-        画面に表示する信頼度区分ごとの検証結果
+        新しい読みやすさ指標で保存された予想のみを集計
       </p>
 
       <dl className="mt-4 grid gap-4">

@@ -23,6 +23,7 @@ def _record(
     predicted_label: str,
     actual_rpci: float,
     confidence: float = 0.7,
+    confidence_method: str = "classification-margin-v1",
 ) -> PredictionEvaluationRecord:
     return PredictionEvaluationRecord(
         race_key=race_key,
@@ -35,6 +36,7 @@ def _record(
         actual_rpci=actual_rpci,
         confidence=confidence,
         model_version="rule-v4",
+        confidence_method=confidence_method,
     )
 
 
@@ -170,6 +172,35 @@ def test_empty_period_returns_null_rate() -> None:
     assert len(output.weekly_trend) == 8
     assert all(point.hit_rate is None for point in output.weekly_trend)
     assert output.recent_misses == []
+
+
+def test_confidence_groups_exclude_legacy_fixed_confidence() -> None:
+    repo = FakeMartRepository()
+    repo.prediction_evaluations = [
+        _record(
+            "2026072005010101",
+            datetime.date(2026, 7, 20),
+            "芝",
+            "スロー",
+            55.0,
+            0.75,
+            confidence_method="legacy",
+        ),
+        _record(
+            "2026071905010102",
+            datetime.date(2026, 7, 19),
+            "芝",
+            "平均",
+            50.0,
+            0.9,
+        ),
+    ]
+
+    output = GetForecastPerformanceUseCase(repo).execute(now=NOW)
+
+    assert output.sample_size == 2
+    assert sum(group.sample_size for group in output.confidence_groups) == 1
+    assert output.confidence_groups[0].sample_size == 1
 
 
 def test_recent_misses_are_limited_and_sorted_by_latest_race() -> None:

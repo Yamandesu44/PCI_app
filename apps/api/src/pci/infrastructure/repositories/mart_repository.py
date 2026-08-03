@@ -17,7 +17,11 @@ from pci.domain.pace.mart_repository import (
     PredictionEvaluationRecord,
     RaceBoardForecastRecord,
 )
-from pci.domain.pace.rpci_forecast import RpciForecast
+from pci.domain.pace.rpci_forecast import (
+    CLASSIFICATION_MARGIN_CONFIDENCE_METHOD,
+    CLASSIFICATION_MARGIN_REASON_CODE,
+    RpciForecast,
+)
 from pci.domain.racing.race import RaceStatus, TrackType
 from pci.infrastructure.database.models import (
     HorseModel,
@@ -28,6 +32,7 @@ from pci.infrastructure.database.models import (
 )
 
 _JRA_PLACE_CODES = tuple(f"{code:02d}" for code in range(1, 11))
+_LEGACY_CONFIDENCE_METHOD = "legacy"
 
 
 class SqlAlchemyMartRepository:
@@ -203,6 +208,7 @@ class SqlAlchemyMartRepository:
                     actual_rpci=race.rpci_actual,
                     confidence=prediction.confidence,
                     model_version=prediction.model_version,
+                    confidence_method=_confidence_method(prediction.factors),
                 )
             )
         return result
@@ -226,3 +232,13 @@ class SqlAlchemyMartRepository:
             )
         )
         return int(count or 0)
+
+
+def _confidence_method(factors: list[dict[str, object]]) -> str:
+    """保存済み根拠から信頼度の算出方式を識別する。"""
+    if any(
+        factor.get("code") == CLASSIFICATION_MARGIN_REASON_CODE
+        for factor in factors
+    ):
+        return CLASSIFICATION_MARGIN_CONFIDENCE_METHOD
+    return _LEGACY_CONFIDENCE_METHOD

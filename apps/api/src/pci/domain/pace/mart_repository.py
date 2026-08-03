@@ -53,6 +53,7 @@ class PredictionEvaluationRecord:
     actual_rpci: float
     confidence: float
     model_version: str
+    confidence_method: str = "legacy"
 
 
 class MartRepository(Protocol):

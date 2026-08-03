@@ -1,5 +1,73 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 信頼度別検証から旧固定値を分離
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `4325b0e`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 新しい読みやすさ指標の検証へ旧固定0.75が混在する状態を、履歴改変なしで解消する。
+
+### 完了した内容
+
+1. `PredictionEvaluationRecord`へ`confidence_method`を追加した。
+2. `SqlAlchemyMartRepository.find_prediction_evaluations()`で、保存済み`factors`の
+   `classification_margin`から`classification-margin-v1`を識別するようにした。
+3. `GetForecastPerformanceUseCase`の全体集計は維持し、`confidence_groups`だけを新方式へ限定した。
+4. 旧固定値が全体集計には残り、信頼度別集計から除外される単体テストを追加した。
+5. Webの信頼度別欄へ「新しい読みやすさ指標で保存された予想のみを集計」と明示した。
+6. DBスキーマ、APIレスポンス形状、保存済み予想は変更していない。
+
+### 対象ファイル
+
+- `apps/api/src/pci/domain/pace/mart_repository.py`
+- `apps/api/src/pci/domain/pace/rpci_forecast.py`
+- `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`
+- `apps/api/src/pci/infrastructure/repositories/mart_repository.py`
+- `apps/api/src/pci/application/forecast_performance_use_cases.py`
+- `apps/api/tests/unit/application/test_forecast_performance_use_cases.py`
+- `apps/api/tests/integration/test_mart_repository.py`
+- `apps/web/src/components/ForecastConfidenceCalibration.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+- `tasks/current.md`
+- `docs/SPEC.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 算出方式は専用DB列ではなく、保存済み根拠コードから識別する。現行1方式では十分だが、
+  複数方式を併用する場合は専用列またはAPIの方式別集計が必要になる。
+- 新方式の照合済み予想がない期間は、信頼度3区分がすべて「集計なし」と表示される。これは意図した状態。
+- VoiceOver／TalkBackの実機確認と、新方式の芝・ダート各100件到達後の再評価は未完了。
+
+### テスト実行コマンドと結果
+
+- `pytest tests/unit/application/test_forecast_performance_use_cases.py -q`: 11 passed
+- `pytest tests/integration/test_mart_repository.py -q`: 4 passed
+- `pytest -m "not integration" -q`: 638 passed, 30 deselected
+- `ruff check src tests`: passed
+- `mypy src --strict --python-version 3.12`: 65 source files、問題なし
+- `lint-imports`: 2 contracts kept, 0 broken
+- `npm test --workspace=@pci/web`: 146 passed
+- `npm run typecheck --workspace=@pci/web`: passed
+- `npm run build --workspace=@pci/web`: passed
+- pytestのキャッシュ作成時に作業領域の権限制限による警告が1件出たが、テスト結果への影響はない。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/infrastructure/repositories/mart_repository.py`の`_confidence_method()`
+2. `apps/api/src/pci/application/forecast_performance_use_cases.py`の`confidence_records`
+3. `apps/api/tests/unit/application/test_forecast_performance_use_cases.py`の旧方式除外テスト
+
+### 次に実施する具体的な手順
+
+1. 通常の予想事前生成を継続し、`classification_margin`を持つ事前予想を蓄積する。
+2. 芝・ダート各100件到達後、180日予想検証APIで信頼度3区分の母数と一致率を確認する。
+3. iOS VoiceOver／Android TalkBackで詳細タブの選択状態と読み上げ順を実機確認する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) LightGBM予想の固定信頼度を解消
 
 - 更新日時: 2026-08-03 JST

@@ -228,7 +228,13 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
                 predicted_rpci=55.0,
                 pace_label="スロー",
                 confidence=0.72,
-                factors=[],
+                factors=[
+                    {
+                        "code": "classification_margin",
+                        "description": "テスト用",
+                        "contribution": None,
+                    }
+                ],
                 generated_at=datetime.datetime(
                     2026, 7, 20, 8, 0, tzinfo=datetime.UTC
                 ),
@@ -278,6 +284,7 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
     assert records[0].jyo_cd == "05"
     assert records[0].distance_m == 1600
     assert records[0].race_class == "テスト特別"
+    assert records[0].confidence_method == "classification-margin-v1"
 
 
 def test_entry_draw_change_invalidates_saved_forecast(db_session: Session) -> None:

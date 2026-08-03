@@ -19,7 +19,9 @@ const performance = {
   ],
   previous_period: { groups: [] },
   weekly_trend: [],
-  confidence_groups: [],
+  confidence_groups: [
+    { key: "strong", label: "読みやすい", hit_rate: 0.7, sample_size: 10 },
+  ],
   pace_matrix: [],
   recent_misses: [],
 } as unknown as ForecastPerformance;
@@ -56,6 +58,7 @@ describe("ForecastPerformanceSummary", () => {
     expect(markup).toContain("inline-flex min-h-11 items-center");
     expect(markup).toContain("事前予想の検証カバー率");
     expect(markup).toContain("全体");
+    expect(markup).toContain("新しい読みやすさ指標で保存された予想のみを集計");
     expect(markup).not.toContain("RPCI");
   });
 });

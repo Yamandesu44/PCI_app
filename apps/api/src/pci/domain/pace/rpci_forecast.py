@@ -40,6 +40,8 @@ from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
 MODEL_VERSION = "rule-v4"
+CLASSIFICATION_MARGIN_REASON_CODE = "classification_margin"
+CLASSIFICATION_MARGIN_CONFIDENCE_METHOD = "classification-margin-v1"
 
 
 class PaceLabel(StrEnum):

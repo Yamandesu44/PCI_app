@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from pci.domain.pace.rpci_forecast import (
+    CLASSIFICATION_MARGIN_REASON_CODE,
     DEFAULT_WEIGHTS,
     RaceContext,
     RpciForecast,
@@ -179,7 +180,7 @@ def _make_forecast(
             description=f"想定RPCI={rpci} → 展開「{label}」（ML予測）",
         ),
         Reason(
-            code="classification_margin",
+            code=CLASSIFICATION_MARGIN_REASON_CODE,
             description="展開区分の境界からの余裕を、予想の読みやすさとして評価",
         ),
     ]

@@ -18,7 +18,10 @@ from pci.domain.pace.mart_repository import (
     MartRepository,
     PredictionEvaluationRecord,
 )
-from pci.domain.pace.rpci_forecast import classify_pace
+from pci.domain.pace.rpci_forecast import (
+    CLASSIFICATION_MARGIN_CONFIDENCE_METHOD,
+    classify_pace,
+)
 
 _DEFAULT_PERIOD_DAYS = 90
 _ALLOWED_PERIOD_DAYS = frozenset({30, 90, 180})
@@ -97,9 +100,14 @@ class GetForecastPerformanceUseCase:
             )
             for key, label, track_type in _GROUPS
         ]
+        confidence_records = [
+            record
+            for record in period_records
+            if record.confidence_method == CLASSIFICATION_MARGIN_CONFIDENCE_METHOD
+        ]
         confidence_groups = [
             _summarize_confidence(
-                period_records,
+                confidence_records,
                 key=key,
                 label=label,
                 minimum=minimum,
