@@ -214,7 +214,7 @@ export function ForecastPerformanceSummary({
       >
         <summary
           aria-label={`${mobileConfidenceLabel}。${mobilePerformanceLabel}。予想検証の詳細を開く`}
-          className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-3 py-3 [&::-webkit-details-marker]:hidden"
+          className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600 [&::-webkit-details-marker]:hidden"
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
             <Activity className="h-4 w-4" aria-hidden />

@@ -1,5 +1,56 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) モバイル予想検証サマリーのフォーカスを可視化
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `aa6c681`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 再評価条件が未達の間に、モバイル検証サマリーのキーボード操作位置を明確にする。
+
+### 完了した内容
+
+1. 稼働中の180日APIを確認し、照合63件、カバー率3.8%であることを再確認した。
+2. 稼働中APIは新しい進捗フィールドを返しておらず、最新APIプロセスへの再起動が必要と判定した。
+3. モバイルの`summary`へ`focus-visible`時の2px内側リングを追加した。
+4. 既存の高さ、余白、短縮表示、読み上げ名は変更していない。
+
+### 対象ファイル
+
+- `apps/web/src/components/ForecastPerformanceSummary.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+- `tasks/current.md`
+- `docs/SPEC.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 稼働中APIは`confidence_review_target`、`confidence_review_ready`、`confidence_cohort_groups`が欠落した旧プロセス。
+- DB内の新方式コース別件数は、最新APIを再起動してから確認する必要がある。
+- 高コントラストモード、VoiceOver、TalkBackでの実機確認は未完了。
+
+### テスト実行コマンドと結果
+
+- `npm test --workspace=@pci/web -- ForecastPerformanceSummary.test.tsx`: 5 passed
+- `npm run typecheck --workspace=@pci/web`: passed
+- `npm test --workspace=@pci/web`: 149 passed
+- `npm run build --workspace=@pci/web`: passed
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/ForecastPerformanceSummary.tsx`のモバイル`summary`クラス
+2. `apps/web/src/components/ForecastPerformanceSummary.test.tsx`のフォーカスリング検証
+3. `tasks/current.md`冒頭の次候補
+
+### 次に実施する具体的な手順
+
+1. ローカルのFastAPIを最新コミットで再起動し、`GET /api/v1/forecast-performance?days=180`の新3フィールドを確認する。
+2. キーボードのTabキーでモバイルサマリーへ移動し、リング、Enter/Spaceでの開閉、状態通知を確認する。
+3. 芝・ダート各100件到達後、信頼度3区分の母数と一致率を再評価する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) モバイル予想検証サマリーの読み上げを明確化
 
 - 更新日時: 2026-08-03 JST

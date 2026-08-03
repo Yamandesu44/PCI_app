@@ -55,6 +55,9 @@ describe("ForecastPerformanceSummary", () => {
     expect(markup).toContain("min-w-0 flex-1");
     expect(markup).toContain("block truncate text-[10px]");
     expect(markup).toContain("shrink-0 text-right");
+    expect(markup).toContain(
+      "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600",
+    );
     expect(markup).toContain('<h2 class="sr-only">予想検証の詳細</h2>');
   });
 
