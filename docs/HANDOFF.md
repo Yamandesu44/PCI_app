@@ -1,5 +1,65 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 通常同期と新方式の事前予想生成を再開
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `5cbf12c`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 0件だった新方式の予想について、未来出馬表を同期して事前保存を開始する。
+
+### 完了した内容
+
+1. mykeibadb MySQLの接続を確認し、83テーブルを読めることを確認した。
+2. mykeibadb.exeでJV-Link差分を取得し、exit 0を確認した。
+3. 2026-07-24〜2026-08-17についてentries、race-metadata、results、special-entriesを順に同期した。
+4. 出馬表144レース、確定成績140レースをAPIへ正常送信した。確定成績の失敗は0件だった。
+5. 8月8〜9日の特別登録18レースを取り込み、事前予想18件を生成した。
+6. 生成直後の新方式照合件数は芝0・ダート0。レース確定後の結果同期で照合対象になる。
+
+### 対象ファイル
+
+- `tasks/current.md`
+- `docs/HANDOFF.md`
+
+### 実行した運用対象
+
+- 読み取り元: mykeibadb MySQL
+- 書き込み先: PCI App PostgreSQL
+- 対象期間: 2026-07-24〜2026-08-17
+- 事前予想対象: 2026-08-08〜2026-08-09の18レース
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 特別登録段階の予想を含むため、枠順確定後のentries同期で同じレースを再生成する必要がある。
+- 信頼度3区分の再評価は、芝・ダート各100件へ到達するまで実施しない。
+- Windowsの8000番に所有PID不在の待受情報が残ったため、今回は最新APIを8998番へ一時起動した。
+- APIプロセスとmykeibadb.exeは処理終了後に残っていない。
+
+### 実行結果
+
+- mykeibadb接続診断: passed（83テーブル）
+- mykeibadb.exe: exit 0
+- entries: RA 144レース、送信成功
+- results: 140レース成功、0レース失敗
+- special-entries: 18レース登録
+- forecasts: 対象18、生成18、スキップ0
+- confidence cohort: 芝0、ダート0、目標各100、ready=false
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/application/forecast_precompute_use_cases.py`の対象条件
+2. `apps/ingestion-worker/scripts/run_mykeibadb_full_sync.ps1`のforecast工程
+3. `tasks/current.md`冒頭の結果同期後確認タスク
+
+### 次に実施する具体的な手順
+
+1. 枠順確定後に通常同期を再実行し、18レースの確定出馬表で予想を上書きする。
+2. 8月8〜9日の結果確定後にresults同期を実行する。
+3. `GET /api/v1/forecast-performance?days=180`で芝・ダート件数が増えたことを確認する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) ローカルFastAPIの安全な再起動と最新版診断
 
 - 更新日時: 2026-08-03 JST
