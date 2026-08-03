@@ -188,6 +188,17 @@ export function ForecastPerformanceSummary({
     0,
     Math.min(100, Math.round((performance.coverage_rate ?? 0) * 100)),
   );
+  const reviewTarget = performance.confidence_review_target ?? 100;
+  const confidenceCohorts = performance.confidence_cohort_groups ?? [];
+  const turfConfidenceCount = confidenceCohorts.find(
+    (group) => group.key === "turf",
+  )?.sample_size ?? 0;
+  const dirtConfidenceCount = confidenceCohorts.find(
+    (group) => group.key === "dirt",
+  )?.sample_size ?? 0;
+  const confidenceReviewReady = performance.confidence_review_ready ?? (
+    turfConfidenceCount >= reviewTarget && dirtConfidenceCount >= reviewTarget
+  );
 
   return (
     <>
@@ -200,8 +211,10 @@ export function ForecastPerformanceSummary({
             <Activity className="h-4 w-4" aria-hidden />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-xs font-semibold text-emerald-700">
-              直近{performance.period_days}日の予想検証
+            <span className="block truncate text-[10px] font-semibold text-emerald-700">
+              {confidenceReviewReady
+                ? "新指標 再評価可能"
+                : `新指標 芝${turfConfidenceCount}/${reviewTarget} ダ${dirtConfidenceCount}/${reviewTarget}`}
             </span>
             <span className="mt-0.5 block truncate text-sm font-semibold text-slate-950">
               {performance.sample_size > 0

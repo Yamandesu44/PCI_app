@@ -1,5 +1,56 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) モバイル予想検証サマリーへ再評価進捗を表示
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `a97a25c`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: スマホで詳細を開かなくても、新しい信頼度指標の再評価時期を判断可能にする。
+
+### 完了した内容
+
+1. `ForecastPerformanceSummary`の閉じたモバイル行へコース別進捗を追加した。
+2. 未達時は`新指標 芝X/目標 ダY/目標`、到達時は`新指標 再評価可能`を表示する。
+3. 展開一致率、検証件数、カバー率、64px以上の操作領域を維持した。
+4. 旧API応答時も既存フォールバックで0/100から表示を継続する。
+5. API契約、DB、デスクトップ表示は変更していない。
+
+### 対象ファイル
+
+- `apps/web/src/components/ForecastPerformanceSummary.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+- `tasks/current.md`
+- `docs/SPEC.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 10pxの略記は390px前後での横収まりを優先した。実機の文字拡大表示は未確認。
+- VoiceOver／TalkBack実機確認と、ready到達後の実データ再評価は未完了。
+
+### テスト実行コマンドと結果
+
+- `npm test --workspace=@pci/web -- ForecastPerformanceSummary.test.tsx`: 4 passed
+- `npm run typecheck --workspace=@pci/web`: passed
+- `npm test --workspace=@pci/web`: 148 passed
+- `npm run build --workspace=@pci/web`: passed
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/web/src/components/ForecastPerformanceSummary.tsx`の`confidenceReviewReady`
+2. 同ファイルの`data-mobile-performance-summary`内上段ラベル
+3. `apps/web/src/components/ForecastPerformanceSummary.test.tsx`の閉状態・readyテスト
+
+### 次に実施する具体的な手順
+
+1. 実機または390pxブラウザで長い件数表示が見切れないことを確認する。
+2. `confidence_review_ready=true`になったら、180日APIで信頼度3区分を再評価する。
+3. iOS VoiceOver／Android TalkBackで詳細タブの選択状態と読み上げ順を実機確認する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 信頼度指標の再評価到達を自動判定
 
 - 更新日時: 2026-08-03 JST

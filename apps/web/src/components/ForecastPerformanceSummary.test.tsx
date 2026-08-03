@@ -48,6 +48,7 @@ describe("ForecastPerformanceSummary", () => {
     expect(markup).toContain("展開一致 63%");
     expect(markup).toContain("検証 48件");
     expect(markup).toContain("カバー 40%");
+    expect(markup).toContain("新指標 芝11/100 ダ7/100");
     expect(markup).toContain('<h2 class="sr-only">予想検証の詳細</h2>');
   });
 
@@ -108,6 +109,7 @@ describe("ForecastPerformanceSummary", () => {
     );
 
     expect(markup).toContain("再評価可能");
+    expect(markup).toContain("新指標 再評価可能");
     expect(markup).not.toContain("残り 芝");
   });
 });
