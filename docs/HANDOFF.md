@@ -1,5 +1,90 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 17:56 JST (OpenAI Codex → Claude Code) 作業区切り
+
+- 更新日時: 2026-08-03 17:56 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 引き継ぎ準備開始時の最新コミット: `5385ac5 fix(ingestion): isolate synthetic result fields`
+- 今回の作業目的: 実JV-Link SEレコードの人気・本賞金位置を安全に検証し、未確認の固定長位置を正式経路へ混入させずに作業を区切る。
+
+### 完了した内容
+
+1. `diagnose_jv_result_offsets.py`でmykeibadb参照値と実JV-Link SEを照合する二段階診断を実装した。
+2. `SyntheticResultFieldsProvider`でmykeibadb合成レコードだけに予約拡張位置の解析を許可し、JV-Linkとfixtureの既定値を無効にした。
+3. 2026-07-18〜19の50件を実測し、既存予約位置が実JV-Linkに適用できないことを確認した。
+4. 差分を自己レビューし、デバッグコード、追跡対象外の生レコード、一時JSONが残っていないことを確認した。
+5. ingestion-workerの全テスト、Ruff、strict mypyを再実行した。
+
+### 未完了の内容・作業が止まっている箇所
+
+- 実JV-Link SEの人気・本賞金・確定着順の固定長位置は未確定である。
+- `diagnose_jv_result_offsets.py`の参照JSONには血統登録番号がなく、レースキーと馬番だけでは「対応馬の不一致」と「SE配置差」を切り分けられないため、ここで停止している。
+- 枠順確定後の18レース再同期、8月8〜9日分の結果同期後の新方式コホート再評価、iOS VoiceOver／Android TalkBackの実機確認は運用日または実機待ちである。
+
+### 次に実施する具体的な手順
+
+1. `apps/ingestion-worker/src/ingestion/diagnose_jv_result_offsets.py`の`_load_references()`、`save_references()`、`load_references()`と照合サンプルへ血統登録番号を追加し、同番号を最優先アンカーにする。
+2. `apps/ingestion-worker/tests/test_diagnose_jv_result_offsets.py`へ、血統登録番号一致、番号不一致の除外、旧参照JSONの扱いを検証するテストを追加する。
+3. 64bit環境の`--export-references`と32bit環境の`--reference-file`を再実行し、同一馬対応が確認できた場合だけ`apps/ingestion-worker/src/ingestion/parser/jv_spec.py`の確定着順・人気・本賞金位置を更新する。
+
+### 対象ファイル
+
+- `apps/ingestion-worker/src/ingestion/diagnose_jv_result_offsets.py`
+- `apps/ingestion-worker/src/ingestion/client/base.py`
+- `apps/ingestion-worker/src/ingestion/client/mykeibadb_client.py`
+- `apps/ingestion-worker/src/ingestion/parser/se_parser.py`
+- `apps/ingestion-worker/src/ingestion/parser/jv_spec.py`
+- `apps/ingestion-worker/src/ingestion/batch.py`
+- `apps/ingestion-worker/tests/test_diagnose_jv_result_offsets.py`
+- `apps/ingestion-worker/tests/test_mykeibadb_client.py`
+
+### 仮実装・暫定値・未確定仕様
+
+- 候補採用の支持率80%は診断用の暫定基準であり、JV-Data仕様として確定していない。
+- 実測50件は診断時の上限であり、プロダクトロジックの閾値ではない。
+- 人気`[372:374]`（14/50）、本賞金`[374:380]`または`[374:382]`（13/50）は低支持候補にすぎず、採用していない。
+- mykeibadb合成レコードの予約位置は内部互換用であり、実JV-Linkの仕様とは扱わない。
+
+### 既知の不具合・注意事項
+
+- 現在のレースキー・馬番対応では、既存の確定着順`[334:336]`も0/50だった。血統登録番号による再照合なしに固定長位置を変更してはならない。
+- 32bit JV-Link用PythonにはPyMySQLがないため、MySQL参照値の書き出しとCOM診断を一プロセスでは実行できない。
+- pytest終了時に`.pytest_cache`への書き込み権限警告（WinError 5）が1件出るが、テスト失敗ではない。
+- 正式運用のmykeibadb列分解経路は今回の未確定位置を使用しないため、現行アプリの結果取り込みには影響しない。
+
+### テスト実行コマンドと結果
+
+`apps/ingestion-worker`で実行:
+
+```powershell
+$env:PYTHONPATH='src'; C:\Users\yuuta\AppData\Local\Programs\Python\Python312\python.exe -m pytest -q
+$env:PYTHONPATH='src'; C:\Users\yuuta\AppData\Local\Programs\Python\Python312\python.exe -m ruff check src tests
+$env:PYTHONPATH='src'; C:\Users\yuuta\AppData\Local\Programs\Python\Python312\python.exe -m mypy src --strict --python-version 3.12
+```
+
+- pytest: 260 passed、キャッシュ書き込み権限警告1件
+- Ruff: All checks passed
+- strict mypy: 26 source files、Success: no issues found
+- build: ingestion-workerには独立したbuildスクリプトがないため未実行。テスト、型チェック、lintで検証した。
+
+### Claude Codeが最初に確認するファイル
+
+1. `tasks/current.md`の最上段
+2. 本セクションと直下の「実JV-Link予約位置の検証と安全な縮退」
+3. `apps/ingestion-worker/src/ingestion/diagnose_jv_result_offsets.py`
+4. `apps/ingestion-worker/tests/test_diagnose_jv_result_offsets.py`
+5. `docs/DECISIONS.md`の実JV-Link固定長位置に関する最新決定
+
+### Claude Codeが最初に実行するコマンド
+
+```powershell
+git status --short
+git log -1 --oneline
+cd apps\ingestion-worker; $env:PYTHONPATH='src'; python -m pytest tests\test_diagnose_jv_result_offsets.py tests\test_mykeibadb_client.py -q
+```
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 実JV-Link予約位置の検証と安全な縮退
 
 - 更新日時: 2026-08-03 JST

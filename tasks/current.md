@@ -1,5 +1,25 @@
 # tasks/current.md — 進行中タスク
 
+## 2026-08-03 引き継ぎ準備完了: OpenAI Codex → Claude Code
+
+- [x] `5385ac5`以降のGit差分と実装範囲を自己レビューした。
+- [x] 診断用一時JSON、生JV-Linkレコード、不要なデバッグコードが残っていないことを確認した。
+- [x] ingestion-worker全260テスト、Ruff、strict mypyを再実行した。
+- [x] `docs/HANDOFF.md`へ停止位置、暫定値、既知課題、具体的な再開手順を記録した。
+- [x] `docs/DECISIONS.md`の既存決定で今回の設計判断が記録済みであることを確認した。
+
+### Claude Codeの最優先タスク
+
+- [ ] `diagnose_jv_result_offsets.py`の`_load_references()`、`save_references()`、`load_references()`へ血統登録番号を追加し、実JV-Link SEの同一馬対応を再検証する。
+- [ ] `test_diagnose_jv_result_offsets.py`へ血統登録番号一致・不一致・旧JSON互換のテストを追加する。
+- [ ] 同一馬対応と複数レースでの一意な固定長位置を確認できた場合だけ、`jv_spec.py`を更新してworker全テストを再実行する。
+
+### 運用待ちタスク
+
+- [ ] 枠順確定後、通常同期を再実行して18レースの事前予想を確定出馬表で更新する。
+- [ ] 8月8〜9日分の結果同期後、新方式の芝・ダート照合件数と一致率を再評価する。
+- [ ] iOS VoiceOverとAndroid TalkBackでサマリー・詳細タブの読み上げ順を実機確認する。
+
 ## 2026-08-03 完了: Codex — 実JV-Linkの人気・本賞金予約位置を検証
 
 - [x] 実SEとmykeibadbの同一レース・馬番を最大50件照合する診断CLIを追加した。
