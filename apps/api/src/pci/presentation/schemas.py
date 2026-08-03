@@ -584,6 +584,7 @@ class ForecastPerformanceSchema(BaseModel):
     previous_period: ForecastPerformanceComparisonSchema
     groups: list[ForecastPerformanceGroupSchema] = []
     confidence_groups: list[ForecastPerformanceGroupSchema] = []
+    confidence_cohort_groups: list[ForecastPerformanceGroupSchema] = []
     pace_matrix: list[ForecastPaceMatrixRowSchema] = []
     weekly_trend: list[ForecastPerformanceTrendPointSchema] = []
     recent_misses: list[ForecastMissSchema] = []
@@ -616,6 +617,10 @@ class ForecastPerformanceSchema(BaseModel):
             confidence_groups=[
                 ForecastPerformanceGroupSchema(**vars(group))
                 for group in dto.confidence_groups
+            ],
+            confidence_cohort_groups=[
+                ForecastPerformanceGroupSchema(**vars(group))
+                for group in dto.confidence_cohort_groups
             ],
             pace_matrix=[
                 ForecastPaceMatrixRowSchema(

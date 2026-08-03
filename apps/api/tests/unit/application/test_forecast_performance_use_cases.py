@@ -115,6 +115,10 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
     ]
     assert all("rpci" not in vars(group) for group in output.confidence_groups)
     assert [
+        (group.key, group.sample_size)
+        for group in output.confidence_cohort_groups
+    ] == [("overall", 3), ("turf", 2), ("dirt", 1)]
+    assert [
         (
             row.predicted_key,
             row.sample_size,
@@ -163,6 +167,7 @@ def test_empty_period_returns_null_rate() -> None:
         for group in output.previous_period.groups
     )
     assert all(group.hit_rate is None for group in output.confidence_groups)
+    assert all(group.sample_size == 0 for group in output.confidence_cohort_groups)
     assert all(row.sample_size == 0 for row in output.pace_matrix)
     assert all(
         cell.rate is None
@@ -201,6 +206,10 @@ def test_confidence_groups_exclude_legacy_fixed_confidence() -> None:
     assert output.sample_size == 2
     assert sum(group.sample_size for group in output.confidence_groups) == 1
     assert output.confidence_groups[0].sample_size == 1
+    assert [
+        (group.key, group.sample_size)
+        for group in output.confidence_cohort_groups
+    ] == [("overall", 1), ("turf", 1), ("dirt", 0)]
 
 
 def test_recent_misses_are_limited_and_sorted_by_latest_race() -> None:

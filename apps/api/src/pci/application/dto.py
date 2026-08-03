@@ -451,6 +451,9 @@ class ForecastPerformanceOutput:
     confidence_groups: list[ForecastPerformanceGroupOutput] = field(
         default_factory=list
     )
+    confidence_cohort_groups: list[ForecastPerformanceGroupOutput] = field(
+        default_factory=list
+    )
     pace_matrix: list[ForecastPaceMatrixRowOutput] = field(default_factory=list)
     weekly_trend: list[ForecastPerformanceTrendPointOutput] = field(
         default_factory=list

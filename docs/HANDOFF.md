@@ -1,5 +1,74 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) 信頼度指標のコース別蓄積進捗を可視化
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `f2f79f9`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 新方式の再評価条件「芝・ダート各100件」への到達状況を、手動SQLなしで確認可能にする。
+
+### 完了した内容
+
+1. `ForecastPerformanceOutput`と`ForecastPerformanceSchema`へ`confidence_cohort_groups`を追加した。
+2. `GetForecastPerformanceUseCase`で、新方式のレコードを全体・芝・ダートに集計した。
+3. `ForecastConfidenceCalibration`へ芝・ダートの`現在件数/100`を表示した。
+   旧APIプロセスで新フィールドが欠けても0/100へフォールバックし、画面を継続表示する。
+4. 旧固定0.75はコース別件数へ含めず、全体一致率には残す既存方針を維持した。
+5. OpenAPI JSONとapi-clientの`schema.d.ts`を正規生成手順で更新した。
+6. DBスキーマと保存済みデータは変更していない。
+
+### 対象ファイル
+
+- `apps/api/src/pci/application/dto.py`
+- `apps/api/src/pci/application/forecast_performance_use_cases.py`
+- `apps/api/src/pci/presentation/schemas.py`
+- `apps/api/tests/unit/application/test_forecast_performance_use_cases.py`
+- `apps/api/tests/contract/test_status_api.py`
+- `packages/api-client/openapi.json`
+- `packages/api-client/src/schema.d.ts`
+- `apps/web/src/components/ForecastConfidenceCalibration.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.tsx`
+- `apps/web/src/components/ForecastPerformanceSummary.test.tsx`
+- `tasks/current.md`
+- `docs/SPEC.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・暫定値・未確定仕様・既知事項
+
+- 再評価基準100件は`CONFIDENCE_REVIEW_TARGET`としてWebに保持する。APIは観測値だけを返す。
+- 新方式の予想がない期間は芝・ダートとも0/100と表示される。
+- VoiceOver／TalkBack実機確認と、各100件到達後の精度再評価は未完了。
+
+### テスト実行コマンドと結果
+
+- 対象APIテスト: 20 passed
+- 対象Ruff: passed
+- 対象mypy strict: 3 source files、問題なし
+- api-client generate / typecheck: passed
+- Web: 147 passed（旧API応答の0/100フォールバックを含む）
+- Web typecheck / production build: passed
+- API非統合: 638 passed, 30 deselected
+- API Ruff: passed
+- API mypy strict: 65 source files、問題なし
+- import-linter: 2 contracts kept, 0 broken
+- 初回Webテストはesbuildの作業領域アクセス拒否で起動せず、制限外で同一コマンドを再実行して成功した。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/application/forecast_performance_use_cases.py`の`confidence_cohort_groups`
+2. `apps/web/src/components/ForecastConfidenceCalibration.tsx`の`CONFIDENCE_REVIEW_TARGET`
+3. `apps/api/tests/contract/test_status_api.py`の予想検証API契約
+
+### 次に実施する具体的な手順
+
+1. 通常の予想事前生成を継続し、画面の芝・ダート件数を確認する。
+2. 両方が100件へ到達したら180日APIで信頼度3区分の母数・一致率を比較し、`docs/DECISIONS.md`へ記録する。
+3. iOS VoiceOver／Android TalkBackで詳細タブの選択状態と読み上げ順を実機確認する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) 信頼度別検証から旧固定値を分離
 
 - 更新日時: 2026-08-03 JST

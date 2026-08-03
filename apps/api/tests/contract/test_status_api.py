@@ -76,6 +76,7 @@ def test_forecast_performance_contract_hides_internal_values(
         "groups",
         "previous_period",
         "confidence_groups",
+        "confidence_cohort_groups",
         "pace_matrix",
         "weekly_trend",
         "recent_misses",
@@ -106,6 +107,11 @@ def test_forecast_performance_contract_hides_internal_values(
         "strong",
         "normal",
         "caution",
+    ]
+    assert [group["key"] for group in body["confidence_cohort_groups"]] == [
+        "overall",
+        "turf",
+        "dirt",
     ]
     assert [row["predicted_key"] for row in body["pace_matrix"]] == [
         "high",

@@ -115,6 +115,15 @@ class GetForecastPerformanceUseCase:
             )
             for key, label, minimum, maximum in _CONFIDENCE_GROUPS
         ]
+        confidence_cohort_groups = [
+            _summarize(
+                confidence_records,
+                key=key,
+                label=label,
+                track_type=track_type,
+            )
+            for key, label, track_type in _GROUPS
+        ]
         pace_matrix = _build_pace_matrix(period_records)
         weekly_trend = _build_weekly_trend(records, date_to)
         recent_misses = _build_recent_misses(period_records)
@@ -139,6 +148,7 @@ class GetForecastPerformanceUseCase:
                 groups=previous_groups,
             ),
             confidence_groups=confidence_groups,
+            confidence_cohort_groups=confidence_cohort_groups,
             pace_matrix=pace_matrix,
             weekly_trend=weekly_trend,
             recent_misses=recent_misses,

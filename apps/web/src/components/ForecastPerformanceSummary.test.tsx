@@ -22,6 +22,11 @@ const performance = {
   confidence_groups: [
     { key: "strong", label: "読みやすい", hit_rate: 0.7, sample_size: 10 },
   ],
+  confidence_cohort_groups: [
+    { key: "overall", label: "全体", hit_rate: 0.7, sample_size: 18 },
+    { key: "turf", label: "芝", hit_rate: 0.7, sample_size: 11 },
+    { key: "dirt", label: "ダート", hit_rate: 0.7, sample_size: 7 },
+  ],
   pace_matrix: [],
   recent_misses: [],
 } as unknown as ForecastPerformance;
@@ -59,6 +64,21 @@ describe("ForecastPerformanceSummary", () => {
     expect(markup).toContain("事前予想の検証カバー率");
     expect(markup).toContain("全体");
     expect(markup).toContain("新しい読みやすさ指標で保存された予想のみを集計");
+    expect(markup).toContain("芝 11/100");
+    expect(markup).toContain("ダート 7/100");
     expect(markup).not.toContain("RPCI");
+  });
+
+  it("旧API応答でコース別件数がなくても表示を継続する", () => {
+    const { confidence_cohort_groups: _unused, ...legacyPerformance } = performance;
+    const markup = renderToStaticMarkup(
+      <ForecastPerformanceSummary
+        performance={legacyPerformance as ForecastPerformance}
+        selectedDate="2026-07-25"
+      />,
+    );
+
+    expect(markup).toContain("芝 0/100");
+    expect(markup).toContain("ダート 0/100");
   });
 });

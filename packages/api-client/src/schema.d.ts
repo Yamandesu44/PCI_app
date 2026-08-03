@@ -762,6 +762,11 @@ export interface components {
          */
         ForecastPerformanceSchema: {
             /**
+             * Confidence Cohort Groups
+             * @default []
+             */
+            confidence_cohort_groups: components["schemas"]["ForecastPerformanceGroupSchema"][];
+            /**
              * Confidence Groups
              * @default []
              */
