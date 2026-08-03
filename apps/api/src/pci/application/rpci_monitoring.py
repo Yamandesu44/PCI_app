@@ -32,7 +32,7 @@ class RpciMonitoringPolicy:
 
     expected_model_version: str = DIRT_V4_MODEL_VERSION
     minimum_races: int = 100
-    minimum_high_races: int = 20
+    minimum_races_per_label: int = 20
     maximum_mae: float = 5.94
     minimum_label_accuracy: float = 0.60
     minimum_high_recall: float = 0.60
@@ -61,6 +61,8 @@ class RpciMonitoringResult:
     model_version: str
     race_count: int
     high_race_count: int
+    average_race_count: int
+    slow_race_count: int
     checks: tuple[RpciMonitoringCheck, ...]
     reasons: tuple[str, ...]
 
@@ -77,6 +79,8 @@ def evaluate_dirt_v4_monitoring(
             model_version="",
             race_count=0,
             high_race_count=0,
+            average_race_count=0,
+            slow_race_count=0,
             checks=(),
             reasons=("対象期間に評価可能な確定ダートレースがありません。",),
         )
@@ -84,12 +88,20 @@ def evaluate_dirt_v4_monitoring(
     high_race_count = sum(
         sample.actual_label == PaceLabel.HIGH for sample in report.rpci_samples
     )
+    average_race_count = sum(
+        sample.actual_label == PaceLabel.AVERAGE for sample in report.rpci_samples
+    )
+    slow_race_count = sum(
+        sample.actual_label == PaceLabel.SLOW for sample in report.rpci_samples
+    )
     if report.model_version != policy.expected_model_version:
         return RpciMonitoringResult(
             status=RpciMonitoringStatus.MODEL_MISMATCH,
             model_version=report.model_version,
             race_count=report.rpci.n,
             high_race_count=high_race_count,
+            average_race_count=average_race_count,
+            slow_race_count=slow_race_count,
             checks=(),
             reasons=(
                 "監視対象と異なるモデルが使われています。"
@@ -97,21 +109,32 @@ def evaluate_dirt_v4_monitoring(
             ),
         )
 
-    if report.rpci.n < policy.minimum_races or high_race_count < policy.minimum_high_races:
+    label_counts = (
+        ("ハイ", high_race_count),
+        ("平均", average_race_count),
+        ("スロー", slow_race_count),
+    )
+    insufficient_labels = tuple(
+        (label, count) for label, count in label_counts if count < policy.minimum_races_per_label
+    )
+    if report.rpci.n < policy.minimum_races or insufficient_labels:
         reasons: list[str] = []
         if report.rpci.n < policy.minimum_races:
             reasons.append(
                 f"全体レース数が判定開始条件の{policy.minimum_races}件に未達です。"
             )
-        if high_race_count < policy.minimum_high_races:
+        for label, _count in insufficient_labels:
             reasons.append(
-                f"ハイ実績レース数が判定開始条件の{policy.minimum_high_races}件に未達です。"
+                f"{label}実績レース数が判定開始条件の"
+                f"{policy.minimum_races_per_label}件に未達です。"
             )
         return RpciMonitoringResult(
             status=RpciMonitoringStatus.ACCUMULATING,
             model_version=report.model_version,
             race_count=report.rpci.n,
             high_race_count=high_race_count,
+            average_race_count=average_race_count,
+            slow_race_count=slow_race_count,
             checks=(),
             reasons=tuple(reasons),
         )
@@ -154,6 +177,8 @@ def evaluate_dirt_v4_monitoring(
             model_version=report.model_version,
             race_count=report.rpci.n,
             high_race_count=high_race_count,
+            average_race_count=average_race_count,
+            slow_race_count=slow_race_count,
             checks=checks,
             reasons=(
                 f"品質条件を外れた指標: {', '.join(failed)}",
@@ -165,6 +190,8 @@ def evaluate_dirt_v4_monitoring(
         model_version=report.model_version,
         race_count=report.rpci.n,
         high_race_count=high_race_count,
+        average_race_count=average_race_count,
+        slow_race_count=slow_race_count,
         checks=checks,
         reasons=("すべての品質条件を満たしています。",),
     )
@@ -177,7 +204,9 @@ def format_dirt_v4_monitoring(result: RpciMonitoringResult) -> str:
         "ダートRPCI v4 期間外品質監視",
         f"状態: {result.status}",
         f"モデル: {result.model_version or '(データなし)'}",
-        f"評価レース: {result.race_count}件 / ハイ実績: {result.high_race_count}件",
+        f"評価レース: {result.race_count}件 / "
+        f"実績内訳: ハイ{result.high_race_count}件・平均{result.average_race_count}件・"
+        f"スロー{result.slow_race_count}件",
     ]
     if result.checks:
         lines.append("品質条件:")
@@ -199,6 +228,8 @@ def dirt_v4_monitoring_to_dict(result: RpciMonitoringResult) -> dict[str, Any]:
         "model_version": result.model_version,
         "race_count": result.race_count,
         "high_race_count": result.high_race_count,
+        "average_race_count": result.average_race_count,
+        "slow_race_count": result.slow_race_count,
         "checks": [
             {
                 "metric": check.metric,

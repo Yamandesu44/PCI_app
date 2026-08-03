@@ -15,6 +15,7 @@ def _report(
     *,
     n: int = 100,
     high_n: int = 20,
+    slow_n: int = 20,
     mae: float = 4.75,
     bias: float = 2.619,
     label_accuracy: float = 0.726,
@@ -41,7 +42,18 @@ def _report(
             actual_label=PaceLabel.AVERAGE,
             track_type="ダート",
         )
-        for i in range(n - high_n)
+        for i in range(n - high_n - slow_n)
+    )
+    samples.extend(
+        RpciSample(
+            race_key=f"20260703050101{i:02d}",
+            predicted=46.0,
+            actual=46.0,
+            predicted_label=PaceLabel.SLOW,
+            actual_label=PaceLabel.SLOW,
+            track_type="ダート",
+        )
+        for i in range(slow_n)
     )
     return BacktestReport(
         model_version=model_version,
@@ -68,12 +80,30 @@ def test_no_report_is_no_data() -> None:
     assert result.race_count == 0
 
 
-def test_accumulates_until_total_and_high_samples_are_sufficient() -> None:
-    result = evaluate_dirt_v4_monitoring(_report(n=99, high_n=19))
+def test_accumulates_until_total_and_each_label_samples_are_sufficient() -> None:
+    result = evaluate_dirt_v4_monitoring(_report(n=99, high_n=19, slow_n=19))
 
     assert result.status == RpciMonitoringStatus.ACCUMULATING
-    assert len(result.reasons) == 2
+    assert len(result.reasons) == 3
     assert result.checks == ()
+
+
+def test_accumulates_when_slow_samples_are_insufficient_despite_total_and_high() -> None:
+    result = evaluate_dirt_v4_monitoring(_report(n=100, high_n=20, slow_n=19))
+
+    assert result.status == RpciMonitoringStatus.ACCUMULATING
+    assert result.high_race_count == 20
+    assert result.average_race_count == 61
+    assert result.slow_race_count == 19
+    assert result.reasons == ("スロー実績レース数が判定開始条件の20件に未達です。",)
+
+
+def test_accumulates_when_average_samples_are_insufficient() -> None:
+    result = evaluate_dirt_v4_monitoring(_report(n=100, high_n=41, slow_n=40))
+
+    assert result.status == RpciMonitoringStatus.ACCUMULATING
+    assert result.average_race_count == 19
+    assert result.reasons == ("平均実績レース数が判定開始条件の20件に未達です。",)
 
 
 def test_healthy_when_all_quality_conditions_pass() -> None:
@@ -81,8 +111,12 @@ def test_healthy_when_all_quality_conditions_pass() -> None:
 
     assert result.status == RpciMonitoringStatus.HEALTHY
     assert all(check.passed for check in result.checks)
-    assert dirt_v4_monitoring_to_dict(result)["status"] == "healthy"
-    assert "[OK] mae" in format_dirt_v4_monitoring(result)
+    payload = dirt_v4_monitoring_to_dict(result)
+    assert payload["status"] == "healthy"
+    assert payload["average_race_count"] == 60
+    formatted = format_dirt_v4_monitoring(result)
+    assert "ハイ20件・平均60件・スロー20件" in formatted
+    assert "[OK] mae" in formatted
 
 
 def test_requests_retraining_review_when_any_condition_fails() -> None:

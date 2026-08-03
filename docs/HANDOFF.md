@@ -1,5 +1,65 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-03 (OpenAI Codex → Claude Code) ダートRPCI監視の3ラベル最低件数を実装
+
+- 更新日時: 2026-08-03 JST
+- 作業担当: OpenAI Codex
+- 引き継ぎ先: Claude Code
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 作業開始コミット: `c3ecfdf`
+- 作業完了コミット: 本セクションを含むコミット
+- 今回の目的: 完全未使用期間での次回採用評価条件を、ADRどおり
+  「全体100件かつ実績ハイ・平均・スロー各20件」として機械判定する。
+
+### 完了した内容
+
+1. 2026-08-03以降の確定ダートを実DBで監視し、現時点は0件・`no_data`と確認した。
+2. `RpciMonitoringPolicy`の最低条件をハイ20件だけから、3ラベル各20件へ変更した。
+3. 監視結果へ平均・スロー件数を追加し、CLIとJSONで3ラベルの内訳を確認可能にした。
+4. 全体100件・ハイ20件を満たしても平均またはスローが19件なら`accumulating`となる
+   回帰テストを追加した。
+5. 現行v4モデル、候補モデル、DBデータ、予測値は変更していない。
+
+### 対象ファイル
+
+- `apps/api/src/pci/application/rpci_monitoring.py`
+- `apps/api/tests/unit/application/test_rpci_monitoring.py`
+- `docs/SPEC.md`
+- `tasks/backlog.md`
+- `tasks/current.md`
+- `docs/HANDOFF.md`
+
+### 仮実装・未確定仕様・既知事項
+
+- 最低件数は`docs/DECISIONS.md`の2026-08-02 ADRで確定済み。新しい暫定値はない。
+- 2026-08-03以降の評価対象は現時点で0件のため、候補v6の採否は引き続き保留する。
+- VoiceOver／TalkBackの実機確認は未完了。
+
+### テスト・実行結果
+
+- 実DB `backtest_forecast --date-from 2026-08-03 --track-type ダート --monitor-dirt-v4`:
+  0件、`no_data`。
+- 対象pytest: 13 passed
+- API非統合pytest: 630 passed、30 deselected
+- API全体Ruff: pass
+- API全体mypy strict（Python 3.12）: 65 source files、0 issues
+- import-linter: 2 contracts kept、0 broken
+- pytestのキャッシュ書き込み警告1件はサンドボックス権限によるもので、結果への影響なし。
+- `python -m lint_imports`は環境にモジュールがなく起動できなかったため、同じAPI仮想環境の
+  `lint-imports.exe`を直接実行して依存方向を検証した。
+
+### Claude Codeが最初に確認するファイル
+
+1. `apps/api/src/pci/application/rpci_monitoring.py`の`insufficient_labels`判定
+2. `apps/api/tests/unit/application/test_rpci_monitoring.py`
+3. `tasks/current.md`先頭の次候補
+
+### 次に実施する具体的な手順
+
+1. 次回同期後に2026-08-03以降を`--monitor-dirt-v4`で確認する。
+2. 全体100件・3ラベル各20件のいずれかが未達なら、現行v4を維持して評価を保留する。
+3. 条件到達後のみ、同じ完全未使用期間で現行v4と開催月候補v6を比較する。
+
 ## 2026-08-03 (OpenAI Codex → Claude Code) ラップ原本・アプリDBの再診断とタスク整理
 
 - 更新日時: 2026-08-03 JST
