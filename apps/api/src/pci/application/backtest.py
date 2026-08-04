@@ -268,6 +268,112 @@ class StyleAdvantageBand:
 
 
 @dataclass(frozen=True)
+class ClampImpact:
+    """予測値のクランプが誤差へどれだけ効いているかの内訳。
+
+    想定RPCIは安全弁として[rpci_min, rpci_max]へ丸められる（domain: RuleWeights、
+    infra: lgbm_forecaster が同じ値を持つ）。実績がこの範囲の外側にあるレースでは
+    予測が構造的に届かないため、モデルを差し替えても消えない系統誤差が残る。
+    「バイアスがモデル起因か、クランプ起因か」を切り分けるために内訳を出す。
+    """
+
+    n: int
+    lower: float
+    upper: float
+    at_lower_n: int
+    at_lower_bias: float
+    at_lower_actual_mean: float
+    at_upper_n: int
+    at_upper_bias: float
+    interior_n: int
+    interior_bias: float
+    interior_mae: float
+
+    @property
+    def at_lower_share(self) -> float:
+        return self.at_lower_n / self.n if self.n else 0.0
+
+    @property
+    def bias_from_lower(self) -> float:
+        """全体バイアスのうち、下限に張り付いた群が寄与している量。"""
+        return self.at_lower_n * self.at_lower_bias / self.n if self.n else 0.0
+
+    @property
+    def bias_from_upper(self) -> float:
+        return self.at_upper_n * self.at_upper_bias / self.n if self.n else 0.0
+
+
+def summarize_clamp_impact(
+    samples: list[RpciSample],
+    rule_weights: RuleWeights = DEFAULT_RULE_WEIGHTS,
+) -> ClampImpact | None:
+    """予測がクランプ端に張り付いた群と、内側の群とで誤差を分けて集計する。"""
+    if not samples:
+        return None
+    lower, upper = rule_weights.rpci_min, rule_weights.rpci_max
+    # 予測値は小数1桁へ丸めてから返るため、端値との比較は微小誤差だけ見れば足りる。
+    at_lower = [s for s in samples if s.predicted <= lower + 1e-9]
+    at_upper = [s for s in samples if s.predicted >= upper - 1e-9]
+    interior = [
+        s for s in samples if lower + 1e-9 < s.predicted < upper - 1e-9
+    ]
+
+    def _bias(group: list[RpciSample]) -> float:
+        return sum(s.predicted - s.actual for s in group) / len(group) if group else 0.0
+
+    def _mae(group: list[RpciSample]) -> float:
+        return sum(abs(s.predicted - s.actual) for s in group) / len(group) if group else 0.0
+
+    return ClampImpact(
+        n=len(samples),
+        lower=lower,
+        upper=upper,
+        at_lower_n=len(at_lower),
+        at_lower_bias=round(_bias(at_lower), 3),
+        at_lower_actual_mean=round(
+            sum(s.actual for s in at_lower) / len(at_lower), 2
+        )
+        if at_lower
+        else 0.0,
+        at_upper_n=len(at_upper),
+        at_upper_bias=round(_bias(at_upper), 3),
+        interior_n=len(interior),
+        interior_bias=round(_bias(interior), 3),
+        interior_mae=round(_mae(interior), 3),
+    )
+
+
+def format_clamp_impact(impact: ClampImpact | None) -> str:
+    """クランプ影響の内訳をCLI向けに整形する。端に張り付きが無ければ空文字。"""
+    if impact is None or (impact.at_lower_n == 0 and impact.at_upper_n == 0):
+        return ""
+    lines = [
+        "",
+        f"■ 予測値クランプ[{impact.lower:.0f}, {impact.upper:.0f}]の影響",
+        f"  内側      : {impact.interior_n:5,d}件  バイアス {impact.interior_bias:+.3f}"
+        f"  MAE {impact.interior_mae:.3f}",
+    ]
+    if impact.at_lower_n:
+        lines.append(
+            f"  下限張付き: {impact.at_lower_n:5,d}件"
+            f"（{impact.at_lower_share:.1%}） バイアス {impact.at_lower_bias:+.3f}"
+            f"  実績平均 {impact.at_lower_actual_mean:.1f}"
+        )
+    if impact.at_upper_n:
+        lines.append(
+            f"  上限張付き: {impact.at_upper_n:5,d}件  バイアス {impact.at_upper_bias:+.3f}"
+        )
+    lines.append(
+        f"  → 全体バイアスへの寄与: 下限 {impact.bias_from_lower:+.3f}"
+        f" / 上限 {impact.bias_from_upper:+.3f}"
+    )
+    lines.append(
+        "  ※ 内側のバイアスが小さいのに全体が偏るなら、原因はモデルではなくクランプ幅。"
+    )
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True)
 class StyleAdvantageProfile:
     """実DB比較に使う脚質別有利度の候補係数。本番設定は書き換えない。"""
 
@@ -1610,6 +1716,10 @@ def format_report(report: BacktestReport) -> str:
         lines.append(f"  展開ラベル的中率: {r.label_accuracy:.1%}")
         for label, acc in r.per_label_accuracy.items():
             lines.append(f"    - 実績「{label}」の再現率: {acc:.1%}")
+        # 端に張り付きが無ければ空文字が返るので、通常時は出力を汚さない。
+        clamp_text = format_clamp_impact(summarize_clamp_impact(report.rpci_samples))
+        if clamp_text:
+            lines.append(clamp_text)
     else:
         lines.append("\n■ 想定RPCI: 有効サンプルなし")
 

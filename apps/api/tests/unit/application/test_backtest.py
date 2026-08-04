@@ -16,6 +16,7 @@ from pci.application.backtest import (
     DEFAULT_ABILITY_WEIGHT_PROFILES,
     DEFAULT_PAI_WEIGHT_PROFILES,
     DEFAULT_RULE_WEIGHT_PROFILES,
+    DEFAULT_RULE_WEIGHTS,
     BacktestReport,
     ForecastBacktester,
     HorseSample,
@@ -40,6 +41,7 @@ from pci.application.backtest import (
     format_ability_weight_comparison,
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
+    format_clamp_impact,
     format_pace_style_matrix,
     format_pai_weight_comparison,
     format_report,
@@ -53,6 +55,7 @@ from pci.application.backtest import (
     style_advantage_attribution_to_dict,
     style_advantage_breakdown_to_dict,
     style_advantage_lift_to_dict,
+    summarize_clamp_impact,
     summarize_integrated_accuracy,
     summarize_pai_lift,
     summarize_rpci,
@@ -341,6 +344,84 @@ class TestSummarizeStyleAdvantage:
         assert result.advantaged_rate == 1.0
         assert result.disadvantaged_rate == 0.0
         assert "診断専用" in format_actual_style_advantage_validation(result)
+
+
+class TestClampImpact:
+    """予測値クランプが系統バイアスの原因かを切り分ける診断。
+
+    2026-08-02: ダートのバイアス+2.5がv4/v5どちらでも動かなかった。モデルではなく
+    クランプ下限35.0（旧フォールバック式時代の値）が原因という仮説を測るために追加。
+    """
+
+    @staticmethod
+    def _sample(predicted: float, actual: float) -> RpciSample:
+        return RpciSample(
+            race_key="2026060105010101",
+            predicted=predicted,
+            actual=actual,
+            predicted_label=HIGH,
+            actual_label=HIGH,
+        )
+
+    def test_empty_returns_none(self) -> None:
+        assert summarize_clamp_impact([]) is None
+
+    def test_separates_clamped_and_interior_groups(self) -> None:
+        impact = summarize_clamp_impact(
+            [
+                self._sample(35.0, 28.0),  # 下限張付き（実績が下限より低い）
+                self._sample(35.0, 30.0),  # 同上
+                self._sample(50.0, 50.0),  # 内側・誤差なし
+                self._sample(65.0, 68.0),  # 上限張付き
+            ]
+        )
+
+        assert impact is not None
+        assert impact.at_lower_n == 2
+        assert impact.at_upper_n == 1
+        assert impact.interior_n == 1
+        assert impact.at_lower_bias == 6.0  # ((35-28)+(35-30))/2
+        assert impact.interior_bias == 0.0
+        assert impact.at_lower_actual_mean == 29.0
+
+    def test_quantifies_how_much_of_the_total_bias_the_clamp_explains(self) -> None:
+        """内側が無バイアスでも、下限張付きだけで全体が偏ることを示せる。"""
+        samples = [self._sample(50.0, 50.0) for _ in range(8)]
+        samples += [self._sample(35.0, 25.0) for _ in range(2)]
+
+        impact = summarize_clamp_impact(samples)
+
+        assert impact is not None
+        assert impact.interior_bias == 0.0
+        # 全体バイアス = 2件×10.0 / 10件 = +2.0。これを下限群が全部説明する。
+        assert impact.bias_from_lower == pytest.approx(2.0)
+        assert impact.bias_from_upper == 0.0
+        assert impact.at_lower_share == pytest.approx(0.2)
+
+    def test_format_is_empty_when_nothing_is_clamped(self) -> None:
+        """端に張り付きが無ければ通常出力を汚さない。"""
+        impact = summarize_clamp_impact([self._sample(50.0, 49.0)])
+
+        assert format_clamp_impact(impact) == ""
+        assert format_clamp_impact(None) == ""
+
+    def test_format_reports_the_contribution(self) -> None:
+        samples = [self._sample(50.0, 50.0) for _ in range(8)]
+        samples += [self._sample(35.0, 25.0) for _ in range(2)]
+
+        text = format_clamp_impact(summarize_clamp_impact(samples))
+
+        assert "下限張付き" in text
+        assert "全体バイアスへの寄与" in text
+        assert "原因はモデルではなくクランプ幅" in text
+
+    def test_uses_the_domain_clamp_bounds(self) -> None:
+        """境界値はドメインのRuleWeightsを正とする（infra側の重複定義に追随しない）。"""
+        impact = summarize_clamp_impact([self._sample(50.0, 50.0)])
+
+        assert impact is not None
+        assert impact.lower == DEFAULT_RULE_WEIGHTS.rpci_min
+        assert impact.upper == DEFAULT_RULE_WEIGHTS.rpci_max
 
 
 class TestStyleAdvantageProfileComparison:
