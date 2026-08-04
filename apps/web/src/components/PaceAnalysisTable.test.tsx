@@ -36,10 +36,10 @@ describe("PaceAnalysisTable", () => {
   });
 
   it("ペース傾向はダート専用閾値で判定する（trackType未考慮だと誤判定になる回帰テスト）", () => {
-    // pci=44はダートとしては平均域（40〜46）だが、芝の閾値（49未満でハイ）を
+    // pci=46.5はダートとしては平均域（44.8〜48.2）だが、芝の閾値（49.7未満でハイ）を
     // 誤って使うと「ハイ」と表示されてしまう。
     const markup = renderToStaticMarkup(
-      <PaceAnalysisTable horses={[horse({ pci: 44 })]} trackType="ダート" />,
+      <PaceAnalysisTable horses={[horse({ pci: 46.5 })]} trackType="ダート" />,
     );
 
     expect(markup).toContain(">平均<");

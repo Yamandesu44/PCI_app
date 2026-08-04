@@ -64,7 +64,7 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
             datetime.date(2026, 7, 18),
             "ダート",
             "平均",
-            43.0,
+            46.5,  # ダート平均帯(44.8〜48.2)。pci-v3の閾値再較正に合わせた
             0.31,
         ),
         _record("2026042405010104", datetime.date(2026, 4, 24), "芝", "ハイ", 45.0),

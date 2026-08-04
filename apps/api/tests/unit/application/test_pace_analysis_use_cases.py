@@ -77,7 +77,7 @@ class TestGetPaceAnalysisUseCase:
         out = GetPaceAnalysisUseCase(repo).execute(CONFIRMED)
 
         assert out.race_key == CONFIRMED
-        assert out.formula_version == "pci-v2"
+        assert out.formula_version == "pci-v3"
         assert out.field_size == 3
         assert out.sample_size == 3
         assert out.rpci_actual is not None

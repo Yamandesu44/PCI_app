@@ -114,12 +114,21 @@ class TestFormulaSamples:
         assert round(samples[0].diff, 1) == 1.0
 
     def test_label_change_is_detected(self) -> None:
-        """芝は>51.0でスロー。50.6=平均 → 51.6=スロー で区分が変わる。"""
-        samples, _ = _dr._build_samples([_REAL])
+        """区分変化を検出できること。端数距離1300mは平均→スローへ変わる。"""
+        odd = _dr._LapRow("2023020405010302", "2023-02-04", "ダート", 1300, 31.3, 36.8, 81.5)
 
-        assert samples[0].current_label == "平均"
+        samples, _ = _dr._build_samples([odd])
+
+        assert samples[0].current_label == "ハイ"
         assert samples[0].target_label == "スロー"
         assert samples[0].label_changed is True
+
+    def test_no_change_is_reported_when_the_label_survives(self) -> None:
+        """芝1800mの実例は差1.0だが、新閾値(49.7/54.0)では両方とも平均で変わらない。"""
+        samples, _ = _dr._build_samples([_REAL])
+
+        assert round(samples[0].diff, 1) == 1.0
+        assert samples[0].label_changed is False
 
     def test_invalid_values_are_skipped_not_counted(self) -> None:
         """上がり3F ≧ 走破タイム のような値は比較へ混ぜない。"""

@@ -28,7 +28,7 @@ _rc = _load()
 
 class TestLabelShares:
     def test_turf_shares_use_the_turf_thresholds(self) -> None:
-        # 芝: <49.0 ハイ / >51.0 スロー
+        # 芝: <49.7 ハイ / >54.0 スロー
         shares = _rc._label_shares([40.0, 50.0, 60.0, 60.0], "芝")
 
         assert shares["ハイ"] == 0.25
@@ -36,8 +36,8 @@ class TestLabelShares:
         assert shares["スロー"] == 0.5
 
     def test_dirt_shares_use_the_dirt_thresholds(self) -> None:
-        # ダート: <40.0 ハイ / >46.0 スロー
-        shares = _rc._label_shares([35.0, 43.0, 50.0, 50.0], "ダート")
+        # ダート: <44.8 ハイ / >48.2 スロー
+        shares = _rc._label_shares([40.0, 46.0, 50.0, 50.0], "ダート")
 
         assert shares["ハイ"] == 0.25
         assert shares["平均"] == 0.25

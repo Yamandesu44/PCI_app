@@ -133,7 +133,7 @@ class TestReviewComment:
             ReviewCommentInput(
                 rpci_actual=53.0,
                 pci3_actual=52.0,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=10,
                 sample_size=8,
                 horses=(ReviewHorseRef(1, 1, "先行", 54.0),),
@@ -148,7 +148,7 @@ class TestReviewComment:
             ReviewCommentInput(
                 rpci_actual=46.0,
                 pci3_actual=45.0,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=12,
                 sample_size=10,
                 horses=(ReviewHorseRef(5, 1, "差し", 44.0),),
@@ -162,7 +162,7 @@ class TestReviewComment:
             ReviewCommentInput(
                 rpci_actual=50.0,
                 pci3_actual=50.0,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=8,
                 sample_size=8,
                 horses=(
@@ -180,7 +180,7 @@ class TestReviewComment:
             ReviewCommentInput(
                 rpci_actual=None,
                 pci3_actual=None,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=5,
                 sample_size=0,
                 horses=(),
@@ -196,7 +196,7 @@ class TestReviewComment:
             ReviewCommentInput(
                 rpci_actual=50.0,
                 pci3_actual=None,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=3,
                 sample_size=2,
                 horses=(ReviewHorseRef(1, 1, "先行", 50.0),),
@@ -211,7 +211,7 @@ class TestReviewComment:
             ReviewCommentInput(
                 rpci_actual=48.0,
                 pci3_actual=48.0,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=8,
                 sample_size=8,
                 horses=(ReviewHorseRef(4, 1, "追込", 54.0),),
@@ -222,7 +222,7 @@ class TestReviewComment:
             ReviewCommentInput(
                 rpci_actual=54.0,
                 pci3_actual=54.0,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=8,
                 sample_size=8,
                 horses=(ReviewHorseRef(2, 1, "逃げ", 47.0),),
@@ -237,7 +237,7 @@ class TestReviewComment:
             ReviewCommentInput(
                 rpci_actual=50.0,
                 pci3_actual=50.0,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=8,
                 sample_size=8,
                 horses=(ReviewHorseRef(1, None, "先行", 50.0),),
@@ -256,7 +256,7 @@ class TestForecastAccuracyInReview:
         return ReviewCommentInput(
             rpci_actual=52.0,
             pci3_actual=52.0,
-            formula_version="pci-v2",
+            formula_version="pci-v3",
             field_size=8,
             sample_size=8,
             horses=(ReviewHorseRef(1, 1, "先行", 52.0),),
@@ -271,7 +271,7 @@ class TestForecastAccuracyInReview:
             ReviewCommentInput(
                 rpci_actual=52.0,
                 pci3_actual=52.0,
-                formula_version="pci-v2",
+                formula_version="pci-v3",
                 field_size=8,
                 sample_size=8,
                 horses=(ReviewHorseRef(1, 1, "先行", 52.0),),

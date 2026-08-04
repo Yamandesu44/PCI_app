@@ -54,31 +54,31 @@ describe("fitTone", () => {
 });
 
 describe("paceSpeedFromIndex", () => {
-  it("芝はバックエンドのclassify_pace()と同じ閾値（49/51）で3段階に分類する", () => {
-    expect(paceSpeedFromIndex(48.9, "芝").label).toBe("ハイ");
-    expect(paceSpeedFromIndex(49, "芝").label).toBe("平均");
-    expect(paceSpeedFromIndex(51, "芝").label).toBe("平均");
-    expect(paceSpeedFromIndex(51.1, "芝").label).toBe("スロー");
+  it("芝はバックエンドのclassify_pace()と同じ閾値（49.7/54.0）で3段階に分類する", () => {
+    expect(paceSpeedFromIndex(49.6, "芝").label).toBe("ハイ");
+    expect(paceSpeedFromIndex(49.7, "芝").label).toBe("平均");
+    expect(paceSpeedFromIndex(54, "芝").label).toBe("平均");
+    expect(paceSpeedFromIndex(54.1, "芝").label).toBe("スロー");
   });
 
-  it("ダートはバックエンドのclassify_pace()と同じ専用閾値（40/46）で3段階に分類する", () => {
-    expect(paceSpeedFromIndex(39.9, "ダート").label).toBe("ハイ");
-    expect(paceSpeedFromIndex(40, "ダート").label).toBe("平均");
-    expect(paceSpeedFromIndex(46, "ダート").label).toBe("平均");
-    expect(paceSpeedFromIndex(46.1, "ダート").label).toBe("スロー");
+  it("ダートはバックエンドのclassify_pace()と同じ専用閾値（44.8/48.2）で3段階に分類する", () => {
+    expect(paceSpeedFromIndex(44.7, "ダート").label).toBe("ハイ");
+    expect(paceSpeedFromIndex(44.8, "ダート").label).toBe("平均");
+    expect(paceSpeedFromIndex(48.2, "ダート").label).toBe("平均");
+    expect(paceSpeedFromIndex(48.3, "ダート").label).toBe("スロー");
   });
 
   it("同じ数値でも芝とダートで異なるラベルになる（track_typeを渡さないと誤判定になる不具合の回帰テスト）", () => {
-    // 実際に発生した不具合: ダートの想定RPCIが44（ダートとしては平均域）なのに、
+    // 実際に発生した不具合: ダートの想定RPCIがダートとしては平均域なのに、
     // track_typeを渡さず芝の閾値で判定すると「ハイ」（かなり速い流れ）と誤表示されていた。
-    expect(paceSpeedFromIndex(44, "ダート").label).toBe("平均");
-    expect(paceSpeedFromIndex(44, "芝").label).toBe("ハイ");
+    expect(paceSpeedFromIndex(46.5, "ダート").label).toBe("平均");
+    expect(paceSpeedFromIndex(46.5, "芝").label).toBe("ハイ");
   });
 
   it("track_type未指定・想定外の値は芝の閾値へ安全に縮退する", () => {
-    expect(paceSpeedFromIndex(48.9, null).label).toBe("ハイ");
-    expect(paceSpeedFromIndex(48.9, undefined).label).toBe("ハイ");
-    expect(paceSpeedFromIndex(48.9, "障害").label).toBe("ハイ");
+    expect(paceSpeedFromIndex(49.6, null).label).toBe("ハイ");
+    expect(paceSpeedFromIndex(49.6, undefined).label).toBe("ハイ");
+    expect(paceSpeedFromIndex(49.6, "障害").label).toBe("ハイ");
   });
 
   it("null/undefinedは判定不可にする", () => {

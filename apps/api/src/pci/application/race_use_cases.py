@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 
 from pci.application.dto import EntryInput, RaceInfo, RaceResultOutput, ResultInput
-from pci.domain.pace.pci import aggregate_rpci, calculate_pci, calculate_rpci_from_lap
+from pci.domain.pace.pci import aggregate_rpci, calculate_pci, calculate_rpci_target
 from pci.domain.pace.running_style import classify_running_style
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -338,16 +338,19 @@ class RecordRaceResultUseCase:
             pci_values.append(pci_val)
             finish_positions.append(r.finish_pos)
 
-        # TARGET 準拠 RPCI: RA の S3(前半3F)/L3(後半3F) 比から算出。
-        # RPCI = S3/L3 × 100 − 50（距離非依存の前後ペース指数）。
-        # S3/L3 どちらか未取得時は全馬 PCI 平均にフォールバックする。
+        # pci-v3: 個馬PCIと同じ式をレース自身へ適用する（TARGET のレースPCI と一致）。
+        # 必要なのはレース走破タイム（＝勝ち馬のタイム）・レース後半3F・距離。
+        # 後半3F が未取得、または勝ち馬タイムが取れない場合は全馬 PCI 平均へフォールバックする。
+        # race_s3f は RPCI 算出には使わなくなったが、ML の履歴特徴量で参照するため保存は続ける。
         stored_s3f = race_s3f if race_s3f is not None else race.race_s3f
         stored_l3f = race_l3f if race_l3f is not None else race.race_l3f
+        winner_time = _winner_race_time(results)
         race_rpci: float | None = None
-        if stored_s3f is not None and stored_l3f is not None:
-            race_rpci = calculate_rpci_from_lap(
-                Furlong3Time(stored_s3f),
+        if stored_l3f is not None and winner_time is not None:
+            race_rpci = calculate_rpci_target(
+                RaceTime(winner_time),
                 Furlong3Time(stored_l3f),
+                Distance(race.distance_m),
             )
 
         rpci_result = aggregate_rpci(pci_values, finish_positions, race_rpci=race_rpci)
@@ -412,6 +415,18 @@ class RecordRaceResultUseCase:
             },
         )
 
+
+
+def _winner_race_time(results: list[ResultInput]) -> float | None:
+    """レース走破タイム（＝1着馬のタイム）を返す。
+
+    同着1着は同タイムなので、どれを採っても同じ。1着が取れない（全馬取消・
+    競走中止など）場合は None を返し、呼び出し側がフォールバックする。
+    """
+    for r in results:
+        if r.finish_pos == 1 and r.race_time_s is not None:
+            return float(r.race_time_s)
+    return None
 
 def _resolve_running_style(entry: RaceEntry, repo: RaceRepository) -> str | None:
     """直近5走の4角通過順位から脚質ラベルを返す。データ不足時は None。"""

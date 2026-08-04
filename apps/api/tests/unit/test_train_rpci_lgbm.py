@@ -107,7 +107,7 @@ def test_no_label_balance_returns_unit_weights() -> None:
 
 
 def test_sqrt_inverse_balance_upweights_rare_label() -> None:
-    actuals = np.array([39.0, 43.0, 43.0, 43.0, 43.0])
+    actuals = np.array([39.0, 46.0, 46.0, 46.0, 46.0])  # ハイ1件 / 平均4件
     features = np.array([[1600.0, 1.0]] * len(actuals))
 
     weights = _build_label_sample_weights(
@@ -143,7 +143,7 @@ def test_sqrt_inverse_balance_uses_track_specific_groups() -> None:
 
 
 def test_inverse_balance_equalizes_label_total_weights() -> None:
-    actuals = np.array([39.0, 43.0, 43.0, 43.0])
+    actuals = np.array([39.0, 46.0, 46.0, 46.0])  # ハイ1件 / 平均3件
     features = np.array([[1600.0, 1.0]] * len(actuals))
 
     weights = _build_label_sample_weights(

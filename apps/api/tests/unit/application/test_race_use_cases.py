@@ -350,7 +350,7 @@ class TestRecordRaceResultUseCase:
         output = RecordRaceResultUseCase(repo).execute(RACE_KEY, RESULTS)
 
         assert output.rpci > 0
-        assert output.formula_version == "pci-v2"
+        assert output.formula_version == "pci-v3"
 
     def test_pci3_is_average_of_top3(self) -> None:
         repo = self._setup_repo()
@@ -423,7 +423,9 @@ class TestRecordRaceResultUseCase:
         assert race is not None
         assert race.race_s3f == 35.0
         assert race.race_l3f == 37.0
-        assert output.rpci == pytest.approx(35.0 / 37.0 * 100 - 50, abs=0.15)
+        # pci-v3: 勝ち馬タイム94.4 / L3 37.0 / 1600m。S3は保存されるがRPCIには使わない。
+        expected = (94.4 - 37.0) / ((1600 - 600) / 200) / (37.0 / 3) * 100 - 50
+        assert output.rpci == pytest.approx(expected, abs=0.15)
 
     def test_running_style_skipped_for_empty_ketto_num(self) -> None:
         """ketto_num="" の馬（出走表未登録）は脚質判定をスキップし None になる。"""

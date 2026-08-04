@@ -144,7 +144,7 @@ def test_pace_analysis_through_real_db(client: TestClient, db_session: Session) 
     assert resp.status_code == 200
     body = resp.json()
     assert body["race_key"] == RACE_KEY
-    assert body["formula_version"] == "pci-v2"
+    assert body["formula_version"] == "pci-v3"
     assert body["sample_size"] == 1
     assert body["rpci_actual"] == pytest.approx(53.5)
     assert len(body["horses"]) == 1

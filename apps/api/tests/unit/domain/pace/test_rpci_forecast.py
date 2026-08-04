@@ -137,13 +137,13 @@ class TestRuleBasedForecast:
             )
 
     def test_dirt_uses_dirt_thresholds(self) -> None:
-        """ダートは専用閾値（ハイ<40/スロー>46）を使い、スロー判定ができる（rule-v4）。"""
-        # ダート実績平均 43 は芝閾値 49 では全員ハイになるが、
-        # ダート専用閾値では平均帯（40〜46）に収まる
-        assert classify_pace(43.0, "ダート") == PaceLabel.AVERAGE
-        # RPCI=48 は芝だとハイ（<49）・ダートだとスロー（>46）
-        assert classify_pace(48.0, "ダート") == PaceLabel.SLOW
-        assert classify_pace(48.0, "芝") == PaceLabel.HIGH
+        """ダートは専用閾値（ハイ<44.8/スロー>48.2）を使う（pci-v3で3分位へ再較正）。"""
+        # ダート実績中央値 46.5 は芝閾値 49.7 では全員ハイになるが、
+        # ダート専用閾値では平均帯（44.8〜48.2）に収まる
+        assert classify_pace(46.5, "ダート") == PaceLabel.AVERAGE
+        # RPCI=49 は芝だとハイ（<49.7）・ダートだとスロー（>48.2）
+        assert classify_pace(49.0, "ダート") == PaceLabel.SLOW
+        assert classify_pace(49.0, "芝") == PaceLabel.HIGH
 
     def test_dirt_all_closers_can_give_slow_label(self) -> None:
         """ダート差し追込フィールドで専用閾値によりスロー判定が取れる（rule-v4）。"""
@@ -164,7 +164,7 @@ class TestEvaluateForecastAccuracy:
 
     def test_label_hit_when_labels_match(self) -> None:
         result = evaluate_forecast_accuracy(
-            predicted_rpci=53.0, predicted_label=PaceLabel.SLOW, actual_rpci=54.0
+            predicted_rpci=55.0, predicted_label=PaceLabel.SLOW, actual_rpci=56.0
         )
         assert result.actual_label == PaceLabel.SLOW
         assert result.label_hit is True
@@ -180,11 +180,11 @@ class TestEvaluateForecastAccuracy:
 
     def test_uses_track_type_specific_thresholds(self) -> None:
         """ダートは芝と異なる閾値（classify_pace と同じ基準）で判定する。"""
-        # 43.0 は芝なら HIGH(<49) だが、ダートは高閾値40のため AVERAGE
+        # 46.5 は芝なら HIGH(<49.7) だが、ダートは高閾値44.8のため AVERAGE
         result = evaluate_forecast_accuracy(
-            predicted_rpci=43.0,
+            predicted_rpci=46.5,
             predicted_label=PaceLabel.AVERAGE,
-            actual_rpci=43.0,
+            actual_rpci=46.5,
             track_type="ダート",
         )
         assert result.actual_label == PaceLabel.AVERAGE

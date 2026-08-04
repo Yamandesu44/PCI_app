@@ -25,13 +25,13 @@ from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.pci import (
     FORMULA_VERSION,
     aggregate_rpci,
-    calculate_rpci_from_lap,
+    calculate_rpci_target,
 )
 from pci.domain.pace.rpci_forecast import PaceLabel, classify_pace
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.racing.repository import RaceRepository
-from pci.domain.shared.measurements import Furlong3Time
+from pci.domain.shared.measurements import Distance, Furlong3Time, RaceTime
 from pci.domain.shared.race_key import RaceKey
 from pci.domain.shared.reason import Reason
 
@@ -272,11 +272,21 @@ class GetPaceAnalysisUseCase:
 
         # レースラップを渡さないと常にフォールバック値になり、取り込み時に保存した
         # races.rpci_actual と食い違う（同じ画面でヘッダーと本文の流れが割れる）。
+        # pci-v3: 個馬PCIと同じ式をレース自身へ適用する（取り込み側と同一の算出）。
+        winner_time = next(
+            (
+                e.race_time_s
+                for e in entries
+                if e.finish_pos == 1 and e.race_time_s is not None
+            ),
+            None,
+        )
         race_rpci: float | None = None
-        if race.race_s3f is not None and race.race_l3f is not None:
-            race_rpci = calculate_rpci_from_lap(
-                Furlong3Time(race.race_s3f),
+        if race.race_l3f is not None and winner_time is not None:
+            race_rpci = calculate_rpci_target(
+                RaceTime(winner_time),
                 Furlong3Time(race.race_l3f),
+                Distance(race.distance_m),
             )
 
         pci_values = [pci for pci, _ in completed]

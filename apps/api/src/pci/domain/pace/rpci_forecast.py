@@ -134,12 +134,12 @@ class RuleWeights:
     track_heavy_adjust: float = -0.5
     track_bad_adjust: float = -0.8
     # 展開3分類の閾値（芝）
-    high_threshold: float = 49.0
-    slow_threshold: float = 51.0
+    high_threshold: float = 49.7
+    slow_threshold: float = 54.0
     # 展開3分類の閾値（ダート・rule-v4）
     # 芝平均 53.1 と異なりダート平均 43.0 → ハイ中心のため専用閾値で3分類を均等化
-    dirt_high_threshold: float = 40.0
-    dirt_slow_threshold: float = 46.0
+    dirt_high_threshold: float = 44.8
+    dirt_slow_threshold: float = 48.2
     # RPCI の現実的なクランプ範囲（安全弁）
     rpci_min: float = 35.0
     rpci_max: float = 65.0

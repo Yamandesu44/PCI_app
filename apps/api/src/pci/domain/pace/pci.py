@@ -15,7 +15,9 @@ from dataclasses import dataclass
 from pci.domain.shared.measurements import Distance, Furlong3Time, RaceTime
 from pci.domain.shared.reason import Reason
 
-FORMULA_VERSION = "pci-v2"
+# pci-v3: レースRPCIを「個馬PCIと同じ式をレース自身へ適用」へ修正（ADR-2026-08-04）。
+# 個馬PCI・PCI3の式は pci-v2 から不変。
+FORMULA_VERSION = "pci-v3"
 
 
 @dataclass(frozen=True)
@@ -45,7 +47,7 @@ def calculate_pci(
 ) -> PciResult:
     """PCI を計算して返す。
 
-    TARGET公式と一致する計算式（pci-v2）:
+    TARGET公式と一致する計算式（pci-v2 から不変）:
         Ave-3F   = (走破タイム - 上がり3F) × 600 ÷ (距離 - 600)
         PCI      = Ave-3F ÷ 上がり3F × 100 − 50
 
@@ -110,7 +112,7 @@ def calculate_rpci_from_lap(
     race_s3f: Furlong3Time,
     race_l3f: Furlong3Time,
 ) -> float:
-    """前半3F / 後半3F 比から RPCI（レースPCI）を算出する【現行本番・要再検証】。
+    """前半3F / 後半3F 比から RPCI を算出する【廃止済み・pci-v2 までの式】。
 
         synthetic_time = S3 + L3  →  仮想1200m(6F)として射影
         RPCI = calculate_pci(S3+L3, L3, distance=1200)
@@ -125,9 +127,12 @@ def calculate_rpci_from_lap(
             この式               → 50.6  ✗
             calculate_rpci_target → 51.6  ✓（同レースの個馬PCIもTARGETと完全一致）
 
-        置き換えには全レース再計算・ペース区分閾値の再較正・RPCIモデル再学習が伴うため、
-        影響実測（scripts/diagnose_rpci.py --compare-rpci-formula）を経てから判断する。
-        それまで本番はこの式を使い続ける（ADR-0004: 式変更は根拠とゴールデンテスト必須）。
+        誤り2: 前半3Fを常に600m扱いする。JRAのハロンタイムは距離が200mで割り切れない
+        場合だけ先頭区間が端数になる（1300m = 100m + 200m×6）ため、端数距離では
+        前半3Fが実際は500m。実測1,829件で平均+17.252・区分変化97.3%と誤っていた。
+
+        pci-v3 で calculate_rpci_target へ置き換えた（ADR-2026-08-04）。
+        本関数は移行前の値を再現・比較するためだけに残す。新規に呼ばないこと。
     """
     return calculate_pci(
         race_time=RaceTime(race_s3f.seconds + race_l3f.seconds),
@@ -141,7 +146,7 @@ def calculate_rpci_target(
     race_l3f: Furlong3Time,
     distance: Distance,
 ) -> float:
-    """TARGET のレースPCI と一致する RPCI を算出する【候補・本番未接続】。
+    """TARGET のレースPCI と一致する RPCI を算出する【pci-v3 本番】。
 
     個馬 PCI と同じ式をレース自身へ適用するだけ:
         Ave-3F = (レース走破タイム − レース後半3F) × 600 ÷ (距離 − 600)
@@ -152,8 +157,9 @@ def calculate_rpci_target(
         race_l3f:  レースラップの後半3F（勝ち馬の上がり3Fではない）
         distance:  レース距離(m)
 
-    現行の calculate_rpci_from_lap と違い中間区間を落とさないため、
-    1200m超でも TARGET と一致する。採否は影響実測後に判断する。
+    旧 calculate_rpci_from_lap と違い、中間区間を落とさず前半3Fの距離も仮定しないため、
+    どの距離でも TARGET と一致する。race_l3f はレースラップの後半3Fで、端数区間は
+    先頭にあるため常に600mを覆う。
     """
     return calculate_pci(
         race_time=race_time,
@@ -172,9 +178,9 @@ def aggregate_rpci(
     Args:
         pci_values:       各馬の PCI 値（finish_positions と同順）
         finish_positions: 各馬の着順（pci_values と同順）
-        race_rpci:        レースラップ由来の RPCI（TARGET 準拠）。指定時はこれを
-                          RPCI として採用する。None の場合は全完走馬 PCI の平均で
-                          暫定算出する（レースラップ未取得時のフォールバック）。
+        race_rpci:        レース自身から算出した RPCI（calculate_rpci_target）。
+                          指定時はこれを RPCI として採用する。None の場合は
+                          全完走馬 PCI の平均で暫定算出する（ラップ未取得時のフォールバック）。
 
     Returns:
         RpciResult（rpci, pci3, formula_version, sample_size, reasons）

@@ -69,10 +69,10 @@ class TestBuildStyleAdvantage:
         assert all(entry.score == 50.0 for entry in advantage.entries)
 
     def test_dirt_uses_dirt_neutral(self) -> None:
-        """ダートはRPCI 43が中立。芝の中立50を渡すと大きくスロー扱いになる。"""
+        """ダートはRPCI 46.5が中立。芝の中立51.85を渡すと大きくスロー扱いになる。"""
         even = build_style_advantage(neutral_rpci("ダート"), "ダート", ())
         assert all(entry.score == 50.0 for entry in even.entries)
-        slow_on_dirt = build_style_advantage(50.0, "ダート", ())
+        slow_on_dirt = build_style_advantage(neutral_rpci("芝"), "ダート", ())
         assert _scores(slow_on_dirt)[FRONT] > 70
 
     def test_escape_crowd_penalizes_escape_only(self) -> None:
@@ -217,10 +217,11 @@ class TestFlexibleScoring:
 
         v4は後方を採点しないが、比較検証のために旧挙動を作れる必要がある。
         """
-        v4 = _scores(build_style_advantage(46.0, "ダート", (ESCAPE, FRONT, STALKER, CLOSER)))
+        # 中立(46.5)より上＝スロー側。旧v3はここで後方を有利、前方を不利と採点していた。
+        v4 = _scores(build_style_advantage(49.5, "ダート", (ESCAPE, FRONT, STALKER, CLOSER)))
         v3 = _scores(
             build_style_advantage(
-                46.0,
+                49.5,
                 "ダート",
                 (ESCAPE, FRONT, STALKER, CLOSER),
                 weights=StyleAdvantageWeights(stalker_gain=1.0, closer_gain=1.2),

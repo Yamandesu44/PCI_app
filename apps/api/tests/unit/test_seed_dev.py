@@ -102,7 +102,7 @@ class TestConfirmedPci:
         pci_values = self._pci_list()
         finish_positions = [row[3] for row in _CONFIRMED_RESULTS]
         result = aggregate_rpci(pci_values, finish_positions)
-        assert result.formula_version == "pci-v2"
+        assert result.formula_version == "pci-v3"
 
 
 class TestUpcomingRunningStyles:

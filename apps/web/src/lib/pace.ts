@@ -132,10 +132,10 @@ export function sanitizeBeginnerComment(text: string): string {
 // apps/api の classify_pace()（domain/pace/rpci_forecast.py）と同じ閾値。
 // ダートは実績分布（平均43.0）が芝（53.1）と大きく異なるため専用閾値を使う。
 // 値を変える場合は必ずバックエンド側（RuleWeights）も合わせて変更すること。
-const TURF_HIGH_THRESHOLD = 49.0;
-const TURF_SLOW_THRESHOLD = 51.0;
-const DIRT_HIGH_THRESHOLD = 40.0;
-const DIRT_SLOW_THRESHOLD = 46.0;
+const TURF_HIGH_THRESHOLD = 49.7;
+const TURF_SLOW_THRESHOLD = 54.0;
+const DIRT_HIGH_THRESHOLD = 44.8;
+const DIRT_SLOW_THRESHOLD = 48.2;
 
 /**
  * PCI/RPCI/PCI3の実数値を、非専門家向けの3段階ペース速度へ変換する。

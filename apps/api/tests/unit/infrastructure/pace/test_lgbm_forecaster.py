@@ -273,12 +273,12 @@ class TestLightGBMRpciForecaster:
         assert result.value == 52.0
 
     def test_label_correct_for_turf(self) -> None:
-        forecaster = self._make_forecaster(53.0)
+        forecaster = self._make_forecaster(55.0)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="芝"))
         assert result.label == PaceLabel.SLOW
 
     def test_label_correct_for_dirt(self) -> None:
-        forecaster = self._make_forecaster(43.0)
+        forecaster = self._make_forecaster(46.5)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
         assert result.label == PaceLabel.AVERAGE
 
@@ -303,12 +303,12 @@ class TestLightGBMRpciForecaster:
     @pytest.mark.parametrize(
         ("rpci", "track_type", "expected"),
         [
-            (49.0, "芝", 0.4),
-            (50.0, "芝", 0.9),
-            (48.5, "芝", 0.65),
-            (40.0, "ダート", 0.4),
-            (43.0, "ダート", 0.9),
-            (38.5, "ダート", 0.65),
+            (49.7, "芝", 0.4),  # 境界
+            (51.85, "芝", 0.9),  # 平均帯の中央
+            (50.775, "芝", 0.65),  # 境界と中央の中間
+            (44.8, "ダート", 0.4),
+            (46.5, "ダート", 0.9),
+            (43.95, "ダート", 0.65),
         ],
     )
     def test_confidence_uses_distance_from_pace_boundary(
@@ -320,15 +320,18 @@ class TestLightGBMRpciForecaster:
         assert _classification_margin_confidence(rpci, track_type) == expected
 
     def test_forecast_confidence_is_not_fixed(self) -> None:
-        boundary = self._make_forecaster(49.0).forecast(
+        boundary = self._make_forecaster(49.7).forecast(
             _ctx((FRONT,) * 10, track_type="芝")
         )
-        center = self._make_forecaster(50.0).forecast(
+        center = self._make_forecaster(51.85).forecast(
             _ctx((FRONT,) * 10, track_type="芝")
         )
 
+        # 予測値は小数1桁へ丸められるため、平均帯の中央(51.85)はぴったり再現できない。
+        # このテストの主旨は「信頼度が固定値でない」ことなので、境界との差で確認する。
         assert boundary.confidence == 0.4
-        assert center.confidence == 0.9
+        assert center.confidence >= 0.85
+        assert center.confidence > boundary.confidence
 
     def test_empty_field_raises(self) -> None:
         forecaster = self._make_forecaster()
@@ -389,12 +392,12 @@ class TestSplitLightGBMRpciForecaster:
         assert result.model_version == MODEL_VERSION_DIRT
 
     def test_turf_label(self) -> None:
-        forecaster = self._make_split_forecaster(turf_value=53.0)
+        forecaster = self._make_split_forecaster(turf_value=55.0)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="芝"))
         assert result.label == PaceLabel.SLOW
 
     def test_dirt_label_average(self) -> None:
-        forecaster = self._make_split_forecaster(dirt_value=43.0)
+        forecaster = self._make_split_forecaster(dirt_value=46.5)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
         assert result.label == PaceLabel.AVERAGE
 
