@@ -290,7 +290,7 @@ class TestLightGBMRpciForecaster:
     def test_rpci_clamped_at_min(self) -> None:
         forecaster = self._make_forecaster(10.0)
         result = forecaster.forecast(_ctx((ESCAPE,) * 10))
-        assert result.value == 35.0
+        assert result.value == 20.0
 
     def test_reasons_present(self) -> None:
         forecaster = self._make_forecaster(50.0)
@@ -671,15 +671,24 @@ class TestRpciClamp:
                 return SplitLightGBMRpciForecaster(turf, dirt)
             return SplitLightGBMRpciForecaster(turf, dirt, clamp)
 
-    def test_production_default_is_unchanged(self) -> None:
-        assert DEFAULT_RPCI_CLAMP == (35.0, 65.0)
+    def test_floor_matches_the_training_label_range(self) -> None:
+        """下限は学習ラベル範囲の下端（train_rpci_lgbm.py の --rpci-min 既定）と一致させる。"""
+        assert DEFAULT_RPCI_CLAMP == (20.0, 65.0)
 
-    def test_low_prediction_is_truncated_at_the_production_floor(
+    def test_production_floor_no_longer_truncates_realistic_dirt_pace(
         self, tmp_path: Path
     ) -> None:
+        """ダート実分布（最小20.9）に届く予測を、旧下限35.0のように切り捨てない。"""
         forecaster = self._forecaster(tmp_path, raw=28.4)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
-        assert result.value == 35.0
+        assert result.value == 28.4
+
+    def test_production_floor_still_bounds_implausible_output(
+        self, tmp_path: Path
+    ) -> None:
+        forecaster = self._forecaster(tmp_path, raw=5.0)
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.value == 20.0
 
     def test_widened_clamp_lets_the_model_predict_low(self, tmp_path: Path) -> None:
         forecaster = self._forecaster(tmp_path, raw=28.4, clamp=(20.0, 90.0))

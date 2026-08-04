@@ -1710,7 +1710,9 @@ def format_report(
 ) -> str:
     """バックテスト結果を人間可読のテキストへ整形する（CLI 出力用）。
 
-    clamp は実際に予測へ適用された安全弁。省略時は本番既定で判定する。
+    clamp は実際に予測へ適用された安全弁。application 層からは予測器の実装値を
+    参照できないため、省略時はクランプ内訳を出さない（誤った境界で判定するより、
+    黙っているほうが安全）。CLI は常に実際の値を渡す。
     """
     lines: list[str] = []
     lines.append("=" * 60)
@@ -1729,11 +1731,12 @@ def format_report(
         for label, acc in r.per_label_accuracy.items():
             lines.append(f"    - 実績「{label}」の再現率: {acc:.1%}")
         # 端に張り付きが無ければ空文字が返るので、通常時は出力を汚さない。
-        clamp_text = format_clamp_impact(
-            summarize_clamp_impact(report.rpci_samples, clamp=clamp)
-        )
-        if clamp_text:
-            lines.append(clamp_text)
+        if clamp is not None:
+            clamp_text = format_clamp_impact(
+                summarize_clamp_impact(report.rpci_samples, clamp=clamp)
+            )
+            if clamp_text:
+                lines.append(clamp_text)
     else:
         lines.append("\n■ 想定RPCI: 有効サンプルなし")
 

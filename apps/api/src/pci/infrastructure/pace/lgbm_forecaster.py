@@ -103,7 +103,12 @@ FEATURE_NAMES_V5 = FEATURE_NAMES_V4 + [
 _FRONT_STYLES = (RunningStyleLabel.ESCAPE, RunningStyleLabel.FRONT)
 _CLOSER_STYLES = (RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER)
 _CONDITION_ORD: dict[str, int] = {"良": 0, "稍重": 1, "重": 2, "不良": 3}
-_RPCI_MIN = 35.0
+# 下限は学習ラベルの下限（train_rpci_lgbm.py の --rpci-min 既定）に合わせる。
+# 旧値35.0は ratio 由来の rpci_actual（平均が高い）時代のもので、レースラップ由来へ
+# 統一した後のダート実分布（平均41.9・最小20.9）に対して高すぎ、2026-06以降の
+# ダート予測の29.6〜44.0%を切り捨てて系統バイアス+2.5の大半を作っていた。
+# 実測: v5でバイアス+2.508→+0.012 / MAE 3.835→2.356、芝は張り付きゼロで影響なし。
+_RPCI_MIN = 20.0
 _RPCI_MAX = 65.0
 # 本番の安全弁。較正を実測する CLI から参照するため公開している。
 DEFAULT_RPCI_CLAMP: tuple[float, float] = (_RPCI_MIN, _RPCI_MAX)

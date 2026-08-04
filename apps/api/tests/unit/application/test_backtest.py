@@ -445,6 +445,22 @@ class TestClampImpact:
         assert impact.at_upper_n == 0
         assert format_clamp_impact(impact) == ""
 
+    def test_format_report_stays_silent_without_an_explicit_clamp(self) -> None:
+        """安全弁が不明なまま推測で判定するくらいなら、内訳を出さない。"""
+        samples = [self._sample(35.0, 28.0), self._sample(50.0, 50.0)]
+        report = BacktestReport(
+            model_version="test",
+            n_races=2,
+            n_horses=0,
+            skipped=0,
+            rpci=summarize_rpci(samples),
+            pai=None,
+            rpci_samples=samples,
+        )
+
+        assert "予測値クランプ" not in format_report(report)
+        assert "予測値クランプ" in format_report(report, clamp=(35.0, 65.0))
+
     def test_format_report_honours_the_clamp_argument(self) -> None:
         """レポート整形も実際に適用した安全弁で判定する。"""
         report = BacktestReport(
@@ -457,7 +473,7 @@ class TestClampImpact:
             rpci_samples=[self._sample(35.0, 28.0), self._sample(50.0, 50.0)],
         )
 
-        assert "予測値クランプ" in format_report(report)
+        assert "予測値クランプ" in format_report(report, clamp=(35.0, 65.0))
         assert "予測値クランプ" not in format_report(report, clamp=(20.0, 90.0))
 
 
