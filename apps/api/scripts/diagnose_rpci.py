@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import NamedTuple
 
 sys.path.insert(0, "src")
 
@@ -261,21 +262,62 @@ def _print_track_year_rpci_source(session: Session, month_from: int, month_to: i
     )
 
 
-def _print_rpci_formula_comparison(session: Session) -> None:
-    """現行のRPCI式と、TARGET のレースPCI に一致する式の乖離を実測する。
+class _LapRow(NamedTuple):
+    """RPCI式の比較に必要な、1レース分の実測値。"""
 
-    現行 `calculate_rpci_from_lap` は前半3Fと後半3Fだけを仮想1200mへ射影するため、
-    中間区間を捨てている。TARGET は個馬PCIと同じ式をレース自身へ適用しており、
-    1200m超では系統的に乖離する（1200m戦では両式が一致する）。
+    race_key: str
+    race_date: str
+    track_type: str
+    distance_m: int
+    s3f: float
+    l3f: float
+    winner_time: float
 
-    置き換えは全レース再計算・ペース区分閾値の再較正・RPCIモデル再学習を伴うため、
-    まず「どれだけ動くか」「区分が変わるレースがどれだけあるか」を測る。
+    @property
+    def implied_mid_pace(self) -> float | None:
+        """S3・L3・走破タイムから逆算した中間区間の平均ペース(秒/F)。
+
+        3者が同じレースの値なら 中間時間 = 走破タイム − S3 − L3、区間距離は 距離−1200m。
+        1200m以下は S3 と L3 が重なるため検査できない（None）。
+        """
+        if self.distance_m <= 1200:
+            return None
+        return (self.winner_time - self.s3f - self.l3f) / ((self.distance_m - 1200) / 200.0)
+
+
+class _FormulaSample(NamedTuple):
+    """1レースにおける新旧RPCI式の比較結果。"""
+
+    row: _LapRow
+    current: float
+    target: float
+    current_label: str
+    target_label: str
+
+    @property
+    def diff(self) -> float:
+        return self.target - self.current
+
+    @property
+    def label_changed(self) -> bool:
+        return self.current_label != self.target_label
+
+
+# JRAの200m平均は概ね11〜14秒。両端(S3/L3)が11〜12秒/Fのレースで中間だけ15秒/F超は
+# 競走として起こらないため、そのようなレースは3者が同一レースの値ではないと判断する。
+_PLAUSIBLE_MID_LO = 9.0
+_PLAUSIBLE_MID_HI = 15.0
+
+
+def _percentile(sorted_values: list[float], q: float) -> float:
+    return sorted_values[min(len(sorted_values) - 1, int(len(sorted_values) * q))]
+
+
+def _fetch_lap_rows(session: Session) -> list[_LapRow]:
+    """レースラップと勝ち馬タイムが揃う確定レースを取得する。
+
     レース走破タイムは勝ち馬のタイムを使う（TARGET のレースPCI と同じ定義）。
     """
-    print("\n" + "=" * 78)
-    print("■ RPCI式の乖離実測: 現行(S3/L3を1200m射影) vs TARGET一致式(レース全体)")
-    print("=" * 78)
-
     rows = session.execute(
         text(
             """
@@ -294,91 +336,182 @@ def _print_rpci_formula_comparison(session: Session) -> None:
             """
         )
     ).fetchall()
+    return [
+        _LapRow(str(k), str(d), str(tt), int(dist), float(s3), float(l3), float(wt))
+        for k, d, tt, dist, s3, l3, wt in rows
+    ]
 
-    if not rows:
-        print("  レースラップと勝ち馬タイムが揃うレースがありません。")
-        return
 
-    samples: list[tuple[str, int, float, float, str, str]] = []
+def _print_lap_integrity(rows: list[_LapRow]) -> list[_LapRow]:
+    """S3・L3・走破タイムが同一レースとして整合するか検査し、整合分だけ返す。
+
+    式の比較は「3者が同じレースの値である」ことが前提。前提が崩れたレースを混ぜると、
+    式の乖離ではなくデータ不整合を測ってしまう。
+    """
+    print("\n" + "=" * 78)
+    print("■ 前提チェック: S3・L3・走破タイムが同一レースとして整合するか")
+    print("=" * 78)
+
+    checkable = [(r.implied_mid_pace, r) for r in rows if r.implied_mid_pace is not None]
+    if not checkable:
+        print("  1200m超のレースがなく、検査できません。")
+        return rows
+
+    paces = sorted(p for p, _ in checkable if p is not None)
+    n = len(paces)
+    print(f"  検査対象（1200m超）: {n:,}件")
+    print(
+        f"  中間区間の逆算ペース(秒/F)  最小 {paces[0]:.2f}"
+        f"  5% {_percentile(paces, 0.05):.2f}  中央 {_percentile(paces, 0.50):.2f}"
+        f"  95% {_percentile(paces, 0.95):.2f}  最大 {paces[-1]:.2f}"
+    )
+
+    broken = [
+        (p, r)
+        for p, r in checkable
+        if p is not None and not _PLAUSIBLE_MID_LO <= p <= _PLAUSIBLE_MID_HI
+    ]
+    ok_count = n - len(broken)
+    print(
+        f"  整合（{_PLAUSIBLE_MID_LO:.0f}〜{_PLAUSIBLE_MID_HI:.0f}秒/F）: {ok_count:,}件"
+        f"（{ok_count / n:.1%}） / 不整合: {len(broken):,}件（{len(broken) / n:.1%}）"
+    )
+
+    if broken:
+        print("\n  不整合レースの例（逆算ペースが極端な順に10件）")
+        print(
+            f"    {'レースキー':<18}{'日付':<12}{'距離':>8}{'S3':>7}{'L3':>7}"
+            f"{'勝ちタイム':>11}{'中間秒/F':>10}"
+        )
+        for p, r in sorted(broken, key=lambda x: -abs(x[0] - 12.0))[:10]:
+            print(
+                f"    {r.race_key:<18}{r.race_date:<12}{r.distance_m:>7}m"
+                f"{r.s3f:>7.1f}{r.l3f:>7.1f}{r.winner_time:>11.1f}{p:>10.2f}"
+            )
+        print(
+            "\n  ※ 中間だけが両端と大きく異なるのは競走として起こらない。"
+            "\n  ※ S3/L3 と勝ちタイムのどちらかが別レース由来か誤読の疑いがある。"
+            "\n  ※ 以降の式比較はこれらを除外して集計する。"
+        )
+
+    broken_keys = {r.race_key for _, r in broken}
+    return [r for r in rows if r.race_key not in broken_keys]
+
+
+def _build_samples(rows: list[_LapRow]) -> tuple[list[_FormulaSample], int]:
+    samples: list[_FormulaSample] = []
     skipped = 0
-    for _key, _date, track_type, distance_m, s3f, l3f, winner_time in rows:
+    for r in rows:
         try:
-            current = calculate_rpci_from_lap(Furlong3Time(s3f), Furlong3Time(l3f))
+            current = calculate_rpci_from_lap(Furlong3Time(r.s3f), Furlong3Time(r.l3f))
             target = calculate_rpci_target(
-                RaceTime(winner_time), Furlong3Time(l3f), Distance(distance_m)
+                RaceTime(r.winner_time), Furlong3Time(r.l3f), Distance(r.distance_m)
             )
         except ValueError:
-            # 上がり3F ≧ 走破タイム 等の不整合データは比較対象から外す。
+            # 上がり3F ≧ 走破タイム 等、VOの検証を通らない値は比較対象から外す。
             skipped += 1
             continue
         samples.append(
-            (
-                track_type,
-                distance_m,
-                current,
-                target,
-                str(classify_pace(current, track_type)),
-                str(classify_pace(target, track_type)),
+            _FormulaSample(
+                row=r,
+                current=current,
+                target=target,
+                current_label=str(classify_pace(current, r.track_type)),
+                target_label=str(classify_pace(target, r.track_type)),
             )
         )
+    return samples, skipped
 
-    if not samples:
-        print("  比較可能なレースがありません。")
-        return
 
+def _print_group_table(
+    title: str, groups: list[tuple[str, list[_FormulaSample]]]
+) -> None:
+    print(f"\n  {title}")
+    print(f"    {'区分':<12}{'件数':>8}{'平均差':>10}{'絶対差平均':>12}{'区分変化':>10}")
+    for label, grp in groups:
+        if not grp:
+            continue
+        diffs = [s.diff for s in grp]
+        changed = sum(1 for s in grp if s.label_changed)
+        print(
+            f"    {label:<12}{len(grp):>8,}{sum(diffs) / len(grp):>+10.3f}"
+            f"{sum(abs(d) for d in diffs) / len(grp):>12.3f}{changed / len(grp):>9.1%}"
+        )
+
+
+def _print_formula_diff(samples: list[_FormulaSample], skipped: int) -> None:
     n = len(samples)
-    diffs = [t - c for _, _, c, t, _, _ in samples]
+    diffs = [s.diff for s in samples]
     abs_diffs = sorted(abs(d) for d in diffs)
-    changed = [s for s in samples if s[4] != s[5]]
+    changed = [s for s in samples if s.label_changed]
 
-    def _pct(values: list[float], q: float) -> float:
-        return values[min(len(values) - 1, int(len(values) * q))]
-
-    print(f"  対象レース: {n:,}件（不整合でスキップ {skipped:,}件）")
+    print(f"  対象レース: {n:,}件（VO検証で除外 {skipped:,}件）")
     print(
         f"  差(TARGET式 − 現行式) 平均 {sum(diffs) / n:+.3f}"
         f"  絶対差 平均 {sum(abs_diffs) / n:.3f}"
     )
     print(
-        f"  絶対差 中央値 {_pct(abs_diffs, 0.50):.2f}"
-        f"  90%点 {_pct(abs_diffs, 0.90):.2f}"
-        f"  99%点 {_pct(abs_diffs, 0.99):.2f}"
+        f"  絶対差 中央値 {_percentile(abs_diffs, 0.50):.2f}"
+        f"  90%点 {_percentile(abs_diffs, 0.90):.2f}"
+        f"  99%点 {_percentile(abs_diffs, 0.99):.2f}"
         f"  最大 {abs_diffs[-1]:.2f}"
     )
     print(f"  ペース区分が変わるレース: {len(changed):,}件（{len(changed) / n:.1%}）")
 
-    print("\n  距離帯別（乖離は距離とともに拡大するはず）")
-    print(f"    {'距離帯':<12}{'件数':>8}{'平均差':>10}{'絶対差平均':>12}{'区分変化':>10}")
     bands = [(0, 1200), (1201, 1600), (1601, 2000), (2001, 2400), (2401, 9999)]
-    for lo, hi in bands:
-        band = [s for s in samples if lo <= s[1] <= hi]
-        if not band:
-            continue
-        bd = [t - c for _, _, c, t, _, _ in band]
-        bc = sum(1 for s in band if s[4] != s[5])
-        label = f"{lo}-{hi}m" if hi < 9999 else f"{lo}m以上"
-        print(
-            f"    {label:<12}{len(band):>8,}{sum(bd) / len(band):>+10.3f}"
-            f"{sum(abs(d) for d in bd) / len(band):>12.3f}{bc / len(band):>9.1%}"
-        )
-
-    print("\n  コース種別別")
-    print(f"    {'種別':<12}{'件数':>8}{'平均差':>10}{'絶対差平均':>12}{'区分変化':>10}")
-    for track in sorted({s[0] for s in samples}):
-        grp = [s for s in samples if s[0] == track]
-        gd = [t - c for _, _, c, t, _, _ in grp]
-        gc = sum(1 for s in grp if s[4] != s[5])
-        print(
-            f"    {track:<12}{len(grp):>8,}{sum(gd) / len(grp):>+10.3f}"
-            f"{sum(abs(d) for d in gd) / len(grp):>12.3f}{gc / len(grp):>9.1%}"
-        )
+    _print_group_table(
+        "距離帯別（1200m以下は構造上ほぼ一致するはず）",
+        [
+            (f"{lo}-{hi}m" if hi < 9999 else f"{lo}m以上",
+             [s for s in samples if lo <= s.row.distance_m <= hi])
+            for lo, hi in bands
+        ],
+    )
+    _print_group_table(
+        "コース種別別",
+        [
+            (track, [s for s in samples if s.row.track_type == track])
+            for track in sorted({s.row.track_type for s in samples})
+        ],
+    )
 
     print("\n  区分変化の内訳（現行 → TARGET式）")
     transitions: dict[str, int] = {}
     for s in changed:
-        transitions[f"{s[4]} → {s[5]}"] = transitions.get(f"{s[4]} → {s[5]}", 0) + 1
+        key = f"{s.current_label} → {s.target_label}"
+        transitions[key] = transitions.get(key, 0) + 1
     for name, count in sorted(transitions.items(), key=lambda kv: -kv[1]):
         print(f"    {name:<20}{count:>8,}件（全体の {count / n:.1%}）")
+
+
+def _print_rpci_formula_comparison(session: Session) -> None:
+    """現行のRPCI式と、TARGET のレースPCI に一致する式の乖離を実測する。
+
+    現行 `calculate_rpci_from_lap` は前半3Fと後半3Fだけを仮想1200mへ射影するため、
+    中間区間を捨てている。TARGET は個馬PCIと同じ式をレース自身へ適用しており、
+    1200m超では系統的に乖離する（1200m戦では両式が一致する）。
+
+    置き換えは全レース再計算・ペース区分閾値の再較正・RPCIモデル再学習を伴うため、
+    まず「どれだけ動くか」「区分が変わるレースがどれだけあるか」を測る。
+    ただし保存値そのものが壊れているレースを混ぜると式の差を測れないため、
+    先に S3・L3・走破タイムの整合を検査して切り分ける。
+    """
+    rows = _fetch_lap_rows(session)
+    if not rows:
+        print("\n  レースラップと勝ち馬タイムが揃うレースがありません。")
+        return
+
+    consistent = _print_lap_integrity(rows)
+
+    print("\n" + "=" * 78)
+    print("■ RPCI式の乖離実測: 現行(S3/L3を1200m射影) vs TARGET一致式(レース全体)")
+    print("=" * 78)
+
+    samples, skipped = _build_samples(consistent)
+    if not samples:
+        print("  比較可能なレースがありません。")
+        return
+    _print_formula_diff(samples, skipped)
 
     print(
         "\n  ※ 区分変化率が高いほど、式の置き換えには閾値の再較正とモデル再学習が要る。"
