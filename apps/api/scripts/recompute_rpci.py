@@ -118,15 +118,13 @@ def _label_shares(values: list[float], track_type: str) -> dict[str, float]:
     return {label: count / total for label, count in counts.items()}
 
 
-def _suggest_thresholds(values: list[float], shares: dict[str, float]) -> tuple[float, float]:
-    """現在のラベル構成比を保つ閾値を、新しい分布の分位点から求める。
-
-    「ハイ」「スロー」がどれだけ珍しいかという運用上の意味を、式の入れ替えで
-    変えないための案。絶対水準ではなく相対頻度を固定する。
-    """
+def _thresholds_for_shares(
+    values: list[float], high_share: float, slow_share: float
+) -> tuple[float, float]:
+    """指定した構成比になる閾値を、分布の分位点から求める。"""
     ordered = sorted(values)
-    high = _percentile(ordered, shares[str(PaceLabel.HIGH)])
-    slow = _percentile(ordered, 1.0 - shares[str(PaceLabel.SLOW)])
+    high = _percentile(ordered, high_share)
+    slow = _percentile(ordered, 1.0 - slow_share)
     return round(high, 1), round(slow, 1)
 
 
@@ -155,8 +153,6 @@ def _report(samples: list[_Recomputed]) -> None:
             if track == "ダート"
             else (DEFAULT_WEIGHTS.high_threshold, DEFAULT_WEIGHTS.slow_threshold)
         )
-        sug_hi, sug_sl = _suggest_thresholds(new_vals, old_shares)
-
         print(f"\n  ── {track}（{len(grp):,}件）")
         print(
             f"    分布   旧: 平均 {sum(old_vals) / len(grp):.2f}"
@@ -169,10 +165,45 @@ def _report(samples: list[_Recomputed]) -> None:
         for label in (PaceLabel.HIGH, PaceLabel.AVERAGE, PaceLabel.SLOW):
             key = str(label)
             print(f"    {key:<14}{old_shares[key]:>9.1%}{new_shares[key]:>13.1%}")
-        print(f"    現在の閾値: ハイ<{cur_hi} / スロー>{cur_sl}")
+        _print_threshold_candidates(new_vals, old_shares, (cur_hi, cur_sl))
+
+
+def _print_threshold_candidates(
+    new_values: list[float],
+    old_shares: dict[str, float],
+    current: tuple[float, float],
+) -> None:
+    """閾値の候補を、それぞれの結果ラベル構成比と並べて提示する。
+
+    どれを採るかは仕様判断なのでスクリプトでは決めない。特に「旧構成比を保つ」案は
+    旧構成比自体がバグの産物である点に注意が要る（端数距離1,829件が一律ハイ寄りへ
+    誤判定されていた。docs/DECISIONS.md ADR-2026-08-04）。
+    """
+    high_ratio = old_shares[str(PaceLabel.HIGH)]
+    slow_ratio = old_shares[str(PaceLabel.SLOW)]
+    candidates: list[tuple[str, tuple[float, float], str]] = [
+        ("現行据え置き", current, "式だけ直し閾値は変えない"),
+        (
+            "旧構成比を保つ",
+            _thresholds_for_shares(new_values, high_ratio, slow_ratio),
+            "※旧構成比はバグ由来の偏りを含む",
+        ),
+        ("3分位(各33%)", _thresholds_for_shares(new_values, 1 / 3, 1 / 3), "3ラベルを等頻度にする"),
+        ("イーブン基準50±2", (48.0, 52.0), "RPCI=50(前後同ペース)を意味の基準にする"),
+    ]
+
+    print(
+        f"    {'閾値候補':<18}{'ハイ<':>8}{'スロー>':>9}"
+        f"{'ハイ%':>8}{'平均%':>8}{'スロー%':>9}  補足"
+    )
+    for name, (hi, sl), note in candidates:
+        n = len(new_values)
+        high_n = sum(1 for v in new_values if v < hi)
+        slow_n = sum(1 for v in new_values if v > sl)
+        avg_n = n - high_n - slow_n
         print(
-            f"    構成比を保つ閾値案: ハイ<{sug_hi} / スロー>{sug_sl}"
-            "  ← 採用は別途 ADR で判断する"
+            f"    {name:<18}{hi:>8.1f}{sl:>9.1f}"
+            f"{high_n / n:>7.1%}{avg_n / n:>8.1%}{slow_n / n:>8.1%}  {note}"
         )
 
 

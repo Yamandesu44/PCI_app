@@ -44,30 +44,36 @@ class TestLabelShares:
         assert shares["スロー"] == 0.5
 
 
-class TestSuggestThresholds:
-    def test_shifted_distribution_keeps_the_label_mix(self) -> None:
-        """分布が一律にずれても、構成比を保つ閾値なら同じ割合を再現する。"""
+class TestThresholdsForShares:
+    def test_shifted_distribution_reproduces_the_requested_mix(self) -> None:
+        """分布が一律にずれても、指定した構成比になる閾値を返す。"""
         old = [float(v) for v in range(30, 70)]
         old_shares = _rc._label_shares(old, "芝")
         new = [v + 5.0 for v in old]  # 式の入れ替えで一律+5ずれた想定
 
-        high, slow = _rc._suggest_thresholds(new, old_shares)
+        high, slow = _rc._thresholds_for_shares(
+            new, old_shares["ハイ"], old_shares["スロー"]
+        )
 
         assert high > _rc.DEFAULT_WEIGHTS.high_threshold
         assert slow > _rc.DEFAULT_WEIGHTS.slow_threshold
-        reproduced = {
-            "ハイ": sum(1 for v in new if v < high) / len(new),
-            "スロー": sum(1 for v in new if v > slow) / len(new),
-        }
-        assert abs(reproduced["ハイ"] - old_shares["ハイ"]) <= 0.05
-        assert abs(reproduced["スロー"] - old_shares["スロー"]) <= 0.05
+        assert abs(sum(1 for v in new if v < high) / len(new) - old_shares["ハイ"]) <= 0.05
+        assert abs(sum(1 for v in new if v > slow) / len(new) - old_shares["スロー"]) <= 0.05
+
+    def test_terciles_split_the_distribution_evenly(self) -> None:
+        values = [float(v) for v in range(0, 300)]
+
+        high, slow = _rc._thresholds_for_shares(values, 1 / 3, 1 / 3)
+
+        assert abs(sum(1 for v in values if v < high) / len(values) - 1 / 3) <= 0.02
+        assert abs(sum(1 for v in values if v > slow) / len(values) - 1 / 3) <= 0.02
 
     def test_unchanged_distribution_reproduces_current_thresholds(self) -> None:
         """分布が動かなければ、提案も現行閾値の近傍に落ち着く。"""
         values = [float(v) for v in range(30, 70)]
         shares = _rc._label_shares(values, "芝")
 
-        high, slow = _rc._suggest_thresholds(values, shares)
+        high, slow = _rc._thresholds_for_shares(values, shares["ハイ"], shares["スロー"])
 
         assert abs(high - _rc.DEFAULT_WEIGHTS.high_threshold) <= 1.5
         assert abs(slow - _rc.DEFAULT_WEIGHTS.slow_threshold) <= 1.5
