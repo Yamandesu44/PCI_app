@@ -16,10 +16,10 @@ def _report(
     n: int = 100,
     high_n: int = 20,
     slow_n: int = 20,
-    mae: float = 2.356,
-    bias: float = 0.012,
-    label_accuracy: float = 0.786,
-    high_recall: float = 0.944,
+    mae: float = 2.372,
+    bias: float = 0.198,
+    label_accuracy: float = 0.490,
+    high_recall: float = 0.405,
     model_version: str = DIRT_MODEL_VERSION,
 ) -> BacktestReport:
     samples = [
@@ -121,7 +121,7 @@ def test_healthy_when_all_quality_conditions_pass() -> None:
 
 def test_requests_retraining_review_when_any_condition_fails() -> None:
     result = evaluate_dirt_monitoring(
-        _report(mae=3.0, bias=1.6, label_accuracy=0.59, high_recall=0.59)
+        _report(mae=3.0, bias=1.6, label_accuracy=0.38, high_recall=0.31)
     )
 
     assert result.status == RpciMonitoringStatus.RETRAINING_REVIEW

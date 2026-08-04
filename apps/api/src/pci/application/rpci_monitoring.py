@@ -16,7 +16,7 @@ from typing import Any
 from pci.application.backtest import BacktestReport
 from pci.domain.pace.rpci_forecast import PaceLabel
 
-DIRT_MODEL_VERSION = "lgbm-dirt-v5-lap-history"
+DIRT_MODEL_VERSION = "lgbm-dirt-v6-pci-v3"
 
 
 class RpciMonitoringStatus(StrEnum):
@@ -33,18 +33,25 @@ class RpciMonitoringStatus(StrEnum):
 class RpciMonitoringPolicy:
     """採用時評価から定めた運用上の監視条件。
 
-    既定値はダートv5の採用評価（2026-06-01以降257R・安全弁下限20.0）由来。
-    MAEはv4と同じ「採用時実績の1.25倍」（2.356×1.25）。バイアスだけは実績が+0.012と
-    ほぼ0で倍率が使えないため、展開ラベル判定が実際にずれ始める水準を絶対値で置く。
-    根拠は docs/DECISIONS.md ADR-2026-08-04（安全弁較正）と同日のv5採用ADR。
+    既定値はダートv6の採用評価（2026-06-01以降257R・pci-v3・閾値3分位）由来。
+    MAEは従来と同じ「採用時実績の1.25倍」（2.372×1.25）。バイアスは実績が+0.198と
+    ほぼ0で倍率が使えないため、絶対値で置く。
+
+    ラベル系の閾値が0.60から下がっているのは基準を緩めたのではなく、pci-v3で
+    展開3分類を3分位（各33%）へ再較正したため同じ数字が別の意味を持つようになったから。
+    旧閾値ではダートの58.2%が「ハイ」で、多数派に答えるだけで58.2%取れた。
+    3分位では多数派が34.6%しかなく、v6の実測49.0%はベースライン比+14.4ポイントにあたる。
+    加えて「平均」帯は3.4ポイント幅でMAE 2.372の1.4倍しかなく、判別の上限が構造的に低い。
+    実測の1.25分の1を下限とする（49.0%→0.39、ハイ再現率40.5%→0.32）。
+    根拠は docs/DECISIONS.md ADR-2026-08-04。
     """
 
     expected_model_version: str = DIRT_MODEL_VERSION
     minimum_races: int = 100
     minimum_races_per_label: int = 20
-    maximum_mae: float = 2.95
-    minimum_label_accuracy: float = 0.60
-    minimum_high_recall: float = 0.60
+    maximum_mae: float = 2.97
+    minimum_label_accuracy: float = 0.39
+    minimum_high_recall: float = 0.32
     maximum_absolute_bias: float = 1.5
 
 
