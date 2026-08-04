@@ -1,0 +1,23 @@
+{
+  "model_file": "rpci_lgbm_turf_v2.txt",
+  "model_version": "lgbm-turf-v2-pci-v3",
+  "trained_at": "2026-08-04T15:56:16.315803+00:00",
+  "track_type": "turf",
+  "feature_set": "v4",
+  "label_balance": "none",
+  "n_races": 7296,
+  "date_from": "2022-01-05",
+  "date_to": "2026-05-31",
+  "before_date": "2026-06-01",
+  "limit": 20000,
+  "rpci_range": [
+    20.0,
+    90.0
+  ],
+  "lap_derived_ratio": 1.0,
+  "test_metrics": {
+    "mae": 2.6465,
+    "rmse": 3.384,
+    "bias": -0.7856
+  }
+}
