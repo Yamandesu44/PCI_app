@@ -39,10 +39,31 @@ class TestImpliedMidPace:
         assert round(_REAL.implied_mid_pace, 2) == 11.97
 
     def test_short_race_is_not_checkable(self) -> None:
-        """1200m以下はS3とL3が重なるため検査できない。"""
+        """1200m以下は中間区間が無く検査できない。"""
         row = _dr._LapRow("k", "2026-08-02", "芝", 1200, 34.5, 35.8, 70.3)
 
         assert row.implied_mid_pace is None
+
+    def test_odd_distance_s3_covers_500m(self) -> None:
+        """1300m = 100m + 200m×6 なので、先頭3区間は600mではなく500m。"""
+        row = _dr._LapRow("k", "2023-02-04", "ダート", 1300, 31.3, 36.8, 81.5)
+
+        assert row.s3_distance_m == 500
+
+    def test_even_distance_s3_covers_600m(self) -> None:
+        assert _REAL.s3_distance_m == 600
+
+    def test_real_odd_distance_race_is_consistent(self) -> None:
+        """東京ダート1300mの実データは、S3=500mとして扱えば整合する。
+
+        S3を600mと誤って扱うと逆算中間が26.8秒/Fになり、正常なレースを
+        「データ不整合」と誤判定する（2026-08-04にこの誤判定を出した）。
+        """
+        row = _dr._LapRow("2023020405010302", "2023-02-04", "ダート", 1300, 31.3, 36.8, 81.5)
+
+        assert row.implied_mid_pace is not None
+        assert round(row.implied_mid_pace, 2) == 13.40
+        assert _dr._PLAUSIBLE_MID_LO <= row.implied_mid_pace <= _dr._PLAUSIBLE_MID_HI
 
     def test_inflated_race_time_shows_an_impossible_middle(self) -> None:
         """走破タイムだけずれると、中間区間が競走としてあり得ない値になる。"""
@@ -65,6 +86,14 @@ class TestIntegrityGate:
         kept = _dr._print_lap_integrity([_REAL, broken])
 
         assert [r.race_key for r in kept] == ["2026080201010411"]
+
+    def test_keeps_real_odd_distance_races(self) -> None:
+        """端数距離の正常レースを不整合として捨てない。"""
+        odd = _dr._LapRow("odd", "2023-02-04", "ダート", 1300, 31.3, 36.8, 81.5)
+
+        kept = _dr._print_lap_integrity([_REAL, odd])
+
+        assert {r.race_key for r in kept} == {"2026080201010411", "odd"}
 
     def test_keeps_short_races_that_cannot_be_checked(self) -> None:
         """検査できないものを不整合扱いにしない。"""
@@ -100,3 +129,18 @@ class TestFormulaSamples:
 
         assert samples == []
         assert skipped == 1
+
+
+class TestOddDistanceFormulaGap:
+    """端数距離では現行式が前半3Fの距離を誤り、距離帯とは別要因で大きく外れる。"""
+
+    def test_current_formula_misreads_the_front_pace_on_1300m(self) -> None:
+        odd = _dr._LapRow("2023020405010302", "2023-02-04", "ダート", 1300, 31.3, 36.8, 81.5)
+
+        samples, skipped = _dr._build_samples([odd])
+
+        assert skipped == 0
+        # 現行式はS3(500m)を600m扱いし、前半を実際より速い＝ハイ寄りと誤認する。
+        assert samples[0].current == 35.1
+        assert samples[0].target == 54.1
+        assert samples[0].label_changed is True

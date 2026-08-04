@@ -262,6 +262,11 @@ def _print_track_year_rpci_source(session: Session, month_from: int, month_to: i
     )
 
 
+def _first_segment_m(distance_m: int) -> int:
+    """ハロンタイムの先頭区間の距離(m)。200mで割り切れない距離だけ端数になる。"""
+    return distance_m % 200 or 200
+
+
 class _LapRow(NamedTuple):
     """RPCI式の比較に必要な、1レース分の実測値。"""
 
@@ -274,15 +279,26 @@ class _LapRow(NamedTuple):
     winner_time: float
 
     @property
+    def s3_distance_m(self) -> int:
+        """前半3F が実際にカバーする距離(m)。
+
+        JRAのハロンタイムは、距離が200mで割り切れない場合だけ先頭区間が端数になる
+        （1300m = 100m + 200m×6）。したがって先頭3区間の合計は常に600mではなく、
+        端数のある距離では500mになる。L3側は端数が先頭にあるため常に600m。
+        """
+        return _first_segment_m(self.distance_m) + 400
+
+    @property
     def implied_mid_pace(self) -> float | None:
         """S3・L3・走破タイムから逆算した中間区間の平均ペース(秒/F)。
 
-        3者が同じレースの値なら 中間時間 = 走破タイム − S3 − L3、区間距離は 距離−1200m。
-        1200m以下は S3 と L3 が重なるため検査できない（None）。
+        3者が同じレースの値なら 中間時間 = 走破タイム − S3 − L3 で、
+        その区間距離は 距離 − S3の距離 − 600m。中間区間が無い距離は検査できない（None）。
         """
-        if self.distance_m <= 1200:
+        mid_distance = self.distance_m - self.s3_distance_m - 600
+        if mid_distance <= 0:
             return None
-        return (self.winner_time - self.s3f - self.l3f) / ((self.distance_m - 1200) / 200.0)
+        return (self.winner_time - self.s3f - self.l3f) / (mid_distance / 200.0)
 
 
 class _FormulaSample(NamedTuple):
@@ -354,12 +370,12 @@ def _print_lap_integrity(rows: list[_LapRow]) -> list[_LapRow]:
 
     checkable = [(r.implied_mid_pace, r) for r in rows if r.implied_mid_pace is not None]
     if not checkable:
-        print("  1200m超のレースがなく、検査できません。")
+        print("  中間区間を持つレースがなく、検査できません。")
         return rows
 
     paces = sorted(p for p, _ in checkable if p is not None)
     n = len(paces)
-    print(f"  検査対象（1200m超）: {n:,}件")
+    print(f"  検査対象（中間区間を持つ距離）: {n:,}件")
     print(
         f"  中間区間の逆算ペース(秒/F)  最小 {paces[0]:.2f}"
         f"  5% {_percentile(paces, 0.05):.2f}  中央 {_percentile(paces, 0.50):.2f}"
@@ -460,7 +476,7 @@ def _print_formula_diff(samples: list[_FormulaSample], skipped: int) -> None:
 
     bands = [(0, 1200), (1201, 1600), (1601, 2000), (2001, 2400), (2401, 9999)]
     _print_group_table(
-        "距離帯別（1200m以下は構造上ほぼ一致するはず）",
+        "距離帯別（1200m以下は中間区間が無く、ほぼ一致するはず）",
         [
             (f"{lo}-{hi}m" if hi < 9999 else f"{lo}m以上",
              [s for s in samples if lo <= s.row.distance_m <= hi])
@@ -472,6 +488,21 @@ def _print_formula_diff(samples: list[_FormulaSample], skipped: int) -> None:
         [
             (track, [s for s in samples if s.row.track_type == track])
             for track in sorted({s.row.track_type for s in samples})
+        ],
+    )
+    # 現行式は前半3Fを常に600m扱いする。1300m等の端数距離では実際500mなので
+    # 前半を実際より速いと誤認し、距離帯とは別の要因で大きく外れる。
+    _print_group_table(
+        "先頭区間の端数別（現行式は前半3Fを常に600m扱いする）",
+        [
+            (
+                "端数なし(600m)",
+                [s for s in samples if s.row.s3_distance_m == 600],
+            ),
+            (
+                "端数あり(500m)",
+                [s for s in samples if s.row.s3_distance_m != 600],
+            ),
         ],
     )
 
