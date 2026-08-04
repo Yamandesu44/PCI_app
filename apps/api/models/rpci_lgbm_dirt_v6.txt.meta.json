@@ -1,0 +1,23 @@
+{
+  "model_file": "rpci_lgbm_dirt_v6.txt",
+  "model_version": "lgbm-dirt-v6-pci-v3",
+  "trained_at": "2026-08-04T15:34:40.411773+00:00",
+  "track_type": "dirt",
+  "feature_set": "v4",
+  "label_balance": "none",
+  "n_races": 7431,
+  "date_from": "2022-01-05",
+  "date_to": "2026-05-31",
+  "before_date": "2026-06-01",
+  "limit": 20000,
+  "rpci_range": [
+    20.0,
+    90.0
+  ],
+  "lap_derived_ratio": 1.0,
+  "test_metrics": {
+    "mae": 2.2487,
+    "rmse": 2.8417,
+    "bias": -0.5547
+  }
+}
