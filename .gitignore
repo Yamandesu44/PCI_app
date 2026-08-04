@@ -1,6 +1,8 @@
 # --- Secrets / 認証情報（絶対にコミットしない: JV-Link SID, DB接続文字列等） ---
 .env
 .env.*
+# 打ち間違い（.env] .env.bak .env~ 等）も拾う。実際に `.env]` が未追跡で残っていた。
+.env?*
 !.env.example
 !apps/web/.env.location-test.example
 *.pem

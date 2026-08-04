@@ -28,8 +28,8 @@ pci.application.backtest に集約。本スクリプトは DB 配線と対象選
     # ペース予測と脚質予測のどちらが脚質別有利度を悪化させるか切り分ける
     python -m scripts.backtest_forecast --track-type 芝 --diagnose-style-advantage
 
-    # 採用後のダートRPCI v4を監視する（既定で2026-07-25以降）
-    python -m scripts.backtest_forecast --monitor-dirt-v4 --limit 200
+    # 採用後の本番ダートRPCIモデルを監視する（既定で2026-08-04以降）
+    python -m scripts.backtest_forecast --monitor-dirt --limit 200
 
 対象は status="result" かつ rpci_actual を持つレース。1レースの予測は
 数百クエリを伴うため、既定は新しい順 200 レースに絞る（--limit で調整）。
@@ -40,7 +40,7 @@ lookahead は backtest 側でレース当日カットオフして防止する。
 （docs/adr/0005-rpci-forecast-strategy.md §5.4）、常に track 別の数値も確認できるようにしている。
 
 rpci_actual の有効範囲について:
-    予測器の出力は [35, 65] にクランプされる。しかし取り込みバグや S3F/L3F
+    予測器の出力は [20, 65] にクランプされる。しかし取り込みバグや S3F/L3F
     バイト位置の誤読により rpci_actual に数百〜数千の異常値が混入する場合がある。
     --rpci-min / --rpci-max でこれらを除外すると、正常データでの精度が得られる。
     異常値の割合は scripts/diagnose_rpci.py で確認できる。
@@ -100,9 +100,9 @@ from pci.application.backtest import (
 from pci.application.rpci_monitoring import (
     RpciMonitoringResult,
     RpciMonitoringStatus,
-    dirt_v4_monitoring_to_dict,
-    evaluate_dirt_v4_monitoring,
-    format_dirt_v4_monitoring,
+    dirt_monitoring_to_dict,
+    evaluate_dirt_monitoring,
+    format_dirt_monitoring,
 )
 from pci.config.settings import get_settings
 from pci.domain.pace.ability import AbilityScorer
@@ -121,7 +121,8 @@ from pci.infrastructure.pace.lgbm_forecaster import (
 )
 from pci.infrastructure.repositories.race_repository import SqlAlchemyRaceRepository
 
-_DIRT_V4_MONITORING_START = datetime.date(2026, 7, 25)
+# v5採用日。監視は採用後に確定したレースだけを対象にする。
+_DIRT_MONITORING_START = datetime.date(2026, 8, 4)
 
 
 def _parse_date(value: str) -> datetime.date:
@@ -212,9 +213,11 @@ def _parse_args() -> argparse.Namespace:
         help="PAIの検証用重み5候補を全体・芝・ダートで比較する",
     )
     p.add_argument(
-        "--monitor-dirt-v4",
+        "--monitor-dirt",
+        "--monitor-dirt-v4",  # 旧名。既存の運用手順書とCI設定を壊さないため残す
+        dest="monitor_dirt",
         action="store_true",
-        help="採用後のダートRPCI v4を品質条件と照合する",
+        help="採用後の本番ダートRPCIモデルを品質条件と照合する",
     )
     p.add_argument(
         "--fail-on-monitoring-review",
@@ -255,18 +258,18 @@ def _parse_args() -> argparse.Namespace:
     args = p.parse_args()
     if args.style_breakdown and not args.validate_style_advantage:
         p.error("--style-breakdown は --validate-style-advantage と組み合わせてください")
-    if args.fail_on_monitoring_review and not args.monitor_dirt_v4:
-        p.error("--fail-on-monitoring-review は --monitor-dirt-v4 と組み合わせてください")
-    if args.monitor_dirt_v4:
+    if args.fail_on_monitoring_review and not args.monitor_dirt:
+        p.error("--fail-on-monitoring-review は --monitor-dirt と組み合わせてください")
+    if args.monitor_dirt:
         if args.track_type not in (None, "ダート"):
-            p.error("--monitor-dirt-v4 はダート以外の --track-type と併用できません")
+            p.error("--monitor-dirt はダート以外の --track-type と併用できません")
         if args.sample_every != 1:
-            p.error("--monitor-dirt-v4 では --sample-every 1を使用してください")
+            p.error("--monitor-dirt では --sample-every 1を使用してください")
         if args.dirt_model_path is not None:
-            p.error("--monitor-dirt-v4 では本番ダートモデルを使用してください")
+            p.error("--monitor-dirt では本番ダートモデルを使用してください")
         args.track_type = "ダート"
         if args.date_from is None:
-            args.date_from = _DIRT_V4_MONITORING_START
+            args.date_from = _DIRT_MONITORING_START
     for path_arg in ("turf_model_path", "dirt_model_path"):
         value = getattr(args, path_arg)
         if value is not None and not Path(value).is_file():
@@ -323,13 +326,13 @@ def main() -> None:
     targets = _select_targets(session, args)
     if not targets:
         print("対象レースがありません（status=result かつ rpci_actual を持つレース）。")
-        if args.monitor_dirt_v4:
-            monitoring = evaluate_dirt_v4_monitoring(None)
-            print(f"\n{format_dirt_v4_monitoring(monitoring)}")
+        if args.monitor_dirt:
+            monitoring = evaluate_dirt_monitoring(None)
+            print(f"\n{format_dirt_monitoring(monitoring)}")
             if args.output:
                 _write_diagnostic_output(
                     args.output,
-                    {"rpci_monitoring": dirt_v4_monitoring_to_dict(monitoring)},
+                    {"rpci_monitoring": dirt_monitoring_to_dict(monitoring)},
                 )
         return
     filter_note = ""
@@ -422,9 +425,9 @@ def main() -> None:
     report = backtester.run(targets)
     print(format_report(report, clamp=clamp))
     monitoring: RpciMonitoringResult | None = None
-    if args.monitor_dirt_v4:
-        monitoring = evaluate_dirt_v4_monitoring(report)
-        print(f"\n{format_dirt_v4_monitoring(monitoring)}")
+    if args.monitor_dirt:
+        monitoring = evaluate_dirt_monitoring(report)
+        print(f"\n{format_dirt_monitoring(monitoring)}")
 
     track_reports: dict[str, BacktestReport] = {}
     if args.track_type is None:
@@ -588,7 +591,7 @@ def _write_output(
             pai_weight_comparisons
         )
     if monitoring is not None:
-        payload["rpci_monitoring"] = dirt_v4_monitoring_to_dict(monitoring)
+        payload["rpci_monitoring"] = dirt_monitoring_to_dict(monitoring)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     print(f"\n結果を {path} に保存しました。")

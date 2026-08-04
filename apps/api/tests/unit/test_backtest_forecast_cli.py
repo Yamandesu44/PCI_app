@@ -13,7 +13,7 @@ def test_monitoring_uses_safe_dirt_defaults(monkeypatch: pytest.MonkeyPatch) -> 
     args = _parse_args()
 
     assert args.track_type == "ダート"
-    assert args.date_from == datetime.date(2026, 7, 25)
+    assert args.date_from == datetime.date(2026, 8, 4)
     assert args.sample_every == 1
 
 
@@ -56,3 +56,22 @@ def test_fail_on_review_requires_monitoring(monkeypatch: pytest.MonkeyPatch) -> 
 
     with pytest.raises(SystemExit):
         _parse_args()
+
+
+def test_new_monitor_flag_name_works(monkeypatch: pytest.MonkeyPatch) -> None:
+    """世代名を外した`--monitor-dirt`が正式名。"""
+    monkeypatch.setattr(sys, "argv", ["backtest_forecast", "--monitor-dirt"])
+
+    args = _parse_args()
+
+    assert args.monitor_dirt is True
+    assert args.track_type == "ダート"
+
+
+def test_legacy_monitor_flag_is_still_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """旧名`--monitor-dirt-v4`は運用手順書に残るため受け付け続ける。"""
+    monkeypatch.setattr(sys, "argv", ["backtest_forecast", "--monitor-dirt-v4"])
+
+    args = _parse_args()
+
+    assert args.monitor_dirt is True

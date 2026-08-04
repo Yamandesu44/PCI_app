@@ -735,3 +735,26 @@ class TestRpciClamp:
             )
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
         assert result.value == 28.4
+
+
+class TestProductionModelPaths:
+    """本番既定モデルの世代を固定する（差し替え時にテストで気づけるように）。"""
+
+    def test_default_dirt_model_is_v5(self) -> None:
+        from pci.infrastructure.pace.lgbm_forecaster import _DEFAULT_DIRT_MODEL_PATH
+
+        assert _DEFAULT_DIRT_MODEL_PATH.name == "rpci_lgbm_dirt_v5.txt"
+        assert _DEFAULT_DIRT_MODEL_PATH.is_file()
+
+    def test_default_dirt_model_declares_its_generation(self) -> None:
+        """来歴JSONが無いと特徴量数(39)からv4へフォールバックし、mart層へ誤記録される。"""
+        import json
+
+        from pci.infrastructure.pace.lgbm_forecaster import _DEFAULT_DIRT_MODEL_PATH
+
+        meta = _DEFAULT_DIRT_MODEL_PATH.with_suffix(".txt.meta.json")
+        assert meta.is_file()
+        payload = json.loads(meta.read_text(encoding="utf-8"))
+        assert payload["model_version"] == "lgbm-dirt-v5-lap-history"
+        # 1.0未満は旧フォールバック式ラベルの混入を意味する。
+        assert payload["lap_derived_ratio"] == 1.0

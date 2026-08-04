@@ -1,7 +1,10 @@
-"""ダートRPCI v4の期間外品質を判定する。
+"""本番ダートRPCIモデルの期間外品質を判定する。
 
 採用時の独立評価を基準に、確定レースが十分に蓄積するまでは判定を保留する。
 条件を外れた場合も自動でモデルを置換せず、再学習候補の比較開始だけを促す。
+
+閾値は世代ごとに採用時評価から引き直す。世代名を関数名へ埋め込まないのは、
+モデル差し替えのたびに呼び出し側まで改名が波及するのを避けるため。
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ from typing import Any
 from pci.application.backtest import BacktestReport
 from pci.domain.pace.rpci_forecast import PaceLabel
 
-DIRT_V4_MODEL_VERSION = "lgbm-dirt-v4-lap-history"
+DIRT_MODEL_VERSION = "lgbm-dirt-v5-lap-history"
 
 
 class RpciMonitoringStatus(StrEnum):
@@ -28,18 +31,24 @@ class RpciMonitoringStatus(StrEnum):
 
 @dataclass(frozen=True)
 class RpciMonitoringPolicy:
-    """採用時評価から定めた運用上の監視条件。"""
+    """採用時評価から定めた運用上の監視条件。
 
-    expected_model_version: str = DIRT_V4_MODEL_VERSION
+    既定値はダートv5の採用評価（2026-06-01以降257R・安全弁下限20.0）由来。
+    MAEはv4と同じ「採用時実績の1.25倍」（2.356×1.25）。バイアスだけは実績が+0.012と
+    ほぼ0で倍率が使えないため、展開ラベル判定が実際にずれ始める水準を絶対値で置く。
+    根拠は docs/DECISIONS.md ADR-2026-08-04（安全弁較正）と同日のv5採用ADR。
+    """
+
+    expected_model_version: str = DIRT_MODEL_VERSION
     minimum_races: int = 100
     minimum_races_per_label: int = 20
-    maximum_mae: float = 5.94
+    maximum_mae: float = 2.95
     minimum_label_accuracy: float = 0.60
     minimum_high_recall: float = 0.60
-    maximum_absolute_bias: float = 4.62
+    maximum_absolute_bias: float = 1.5
 
 
-DEFAULT_DIRT_V4_POLICY = RpciMonitoringPolicy()
+DEFAULT_DIRT_POLICY = RpciMonitoringPolicy()
 
 
 @dataclass(frozen=True)
@@ -67,11 +76,11 @@ class RpciMonitoringResult:
     reasons: tuple[str, ...]
 
 
-def evaluate_dirt_v4_monitoring(
+def evaluate_dirt_monitoring(
     report: BacktestReport | None,
-    policy: RpciMonitoringPolicy = DEFAULT_DIRT_V4_POLICY,
+    policy: RpciMonitoringPolicy = DEFAULT_DIRT_POLICY,
 ) -> RpciMonitoringResult:
-    """バックテスト結果をダートv4の運用条件と照合する。"""
+    """バックテスト結果を本番ダートモデルの運用条件と照合する。"""
 
     if report is None or report.rpci is None:
         return RpciMonitoringResult(
@@ -197,11 +206,11 @@ def evaluate_dirt_v4_monitoring(
     )
 
 
-def format_dirt_v4_monitoring(result: RpciMonitoringResult) -> str:
+def format_dirt_monitoring(result: RpciMonitoringResult) -> str:
     """監視結果を運用者向けの日本語へ整形する。"""
 
     lines = [
-        "ダートRPCI v4 期間外品質監視",
+        "ダートRPCI 期間外品質監視",
         f"状態: {result.status}",
         f"モデル: {result.model_version or '(データなし)'}",
         f"評価レース: {result.race_count}件 / "
@@ -220,7 +229,7 @@ def format_dirt_v4_monitoring(result: RpciMonitoringResult) -> str:
     return "\n".join(lines)
 
 
-def dirt_v4_monitoring_to_dict(result: RpciMonitoringResult) -> dict[str, Any]:
+def dirt_monitoring_to_dict(result: RpciMonitoringResult) -> dict[str, Any]:
     """監視結果をJSON保存用の辞書へ変換する。"""
 
     return {

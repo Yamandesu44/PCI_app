@@ -100,7 +100,7 @@
   4条件を判定し、未達なら本番を自動変更せず再学習候補との同一期間比較を開始する。
 - [ ] **P1 ダートRPCI v4の初回期間外レビュー**。
   完全未使用の2026-08-03以降の確定ダートが100件、かつ実績ハイ・平均・スロー各20件へ到達した時点で
-  `--monitor-dirt-v4 --fail-on-monitoring-review`を実行し、結果を`docs/HANDOFF.md`へ記録する。
+  `--monitor-dirt --fail-on-monitoring-review`を実行し、結果を`docs/HANDOFF.md`へ記録する。
 - [x] ~~P1 展開＋絶対能力の統合順位予想（Phase1）~~ → **2026-07-21 実装済み**（ability-v1 ×
   integrated-v1、`docs/SPEC.md §3.6`・`docs/DECISIONS.md` 2026-07-21）。現データのみ・2軸分類。
 - [x] ~~P1 統合順位予想 Phase2: 人気・本賞金の永続化（ability-v2）~~ → **2026-07-21 実装済み**

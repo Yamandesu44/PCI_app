@@ -94,7 +94,7 @@
     この発見により見直しが必要**（局在ではなく式切替に伴う較正ずれの可能性が高い）。
   - 未確定: mykeibadbが2022〜2025年のラップを保持しているか（保持していれば全期間を
     バックフィルして式を統一したうえで再較正、していなければラップ由来分布に対して
-    ダート閾値40.0/46.0を較正し直す）。`--monitor-dirt-v4`の想定RPCIバイアス+4.071も
+    ダート閾値40.0/46.0を較正し直す）。`--monitor-dirt`の想定RPCIバイアス+4.071も
     この文脈で再評価する。判断するまでダート閾値・中立点は変更しない。
 - 🚨 **2026-07-26発見: 有利度は「前付け馬」にしか効いていない**（式統一後の全期間検証、
   `--validate-style-advantage`の脚質グループ別帯集計）。
@@ -496,7 +496,7 @@ ADR-0005 §5.2 の大規模バックテスト（芝 MAE 9.472/一致率76.0%/相
 - 実行コマンドは次のとおり。
 
 ```powershell
-python -m scripts.backtest_forecast --monitor-dirt-v4 --limit 200 `
+python -m scripts.backtest_forecast --monitor-dirt --limit 200 `
   --output results/dirt-v4-monitor.json --fail-on-monitoring-review
 ```
 

@@ -48,7 +48,7 @@ MODEL_VERSION_DIRT_V5_FEATURES = "lgbm-dirt-v5-month"
 _MODELS_DIR = Path(__file__).parent.parent.parent.parent.parent / "models"
 _DEFAULT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_v1.txt"
 _DEFAULT_TURF_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_turf_v1.txt"
-_DEFAULT_DIRT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_dirt_v4.txt"
+_DEFAULT_DIRT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_dirt_v5.txt"
 
 _CONFIDENCE_MIN = 0.4
 _CONFIDENCE_MAX = 0.9
