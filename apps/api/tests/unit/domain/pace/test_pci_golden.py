@@ -16,6 +16,7 @@ from pci.domain.pace.pci import (
     aggregate_rpci,
     calculate_pci,
     calculate_rpci_from_lap,
+    calculate_rpci_target,
 )
 from pci.domain.shared.measurements import Distance, Furlong3Time, RaceTime
 
@@ -194,3 +195,67 @@ def test_aggregate_rpci_pci3_unavailable_when_no_top3_finishers() -> None:
     assert result.pci3 is None
     codes = {r.code for r in result.reasons}
     assert "pci3_unavailable" in codes
+
+
+# ----- 実レース照合（TARGET frontier JV Ver6.20 の表示値） -----
+# 2026-08-02 1回札幌4日 11R 北海道新聞杯クイーンS 芝1800m
+#   LAP  12.3-11.2-11.7-12.0-12.0-11.9-11.6-11.7-11.7 （計 106.1）
+#   通過 35.2-47.2-59.2-71.1 / 上り 70.9-58.9-46.9-35.0
+#   TARGET表示: レースPCI 51.6 / PCI3 53.90 / 1着ココナッツブラウン PCI 55.6
+_SAPPORO_QUEEN_S_LAP = [12.3, 11.2, 11.7, 12.0, 12.0, 11.9, 11.6, 11.7, 11.7]
+_SAPPORO_QUEEN_S_TOTAL = 106.1
+_SAPPORO_QUEEN_S_S3 = 35.2
+_SAPPORO_QUEEN_S_L3 = 35.0
+_SAPPORO_QUEEN_S_DISTANCE = 1800
+
+
+def test_horse_pci_matches_target_on_a_real_race() -> None:
+    """個馬PCIはTARGET表示値と一致する（式の正しさの基準点）。"""
+    winner = calculate_pci(
+        RaceTime(_SAPPORO_QUEEN_S_TOTAL),
+        Furlong3Time(34.1),
+        Distance(_SAPPORO_QUEEN_S_DISTANCE),
+    )
+
+    assert winner.value == 55.6
+
+
+def test_target_rpci_formula_matches_target_on_a_real_race() -> None:
+    """候補式はTARGETのレースPCIと一致する。"""
+    rpci = calculate_rpci_target(
+        RaceTime(_SAPPORO_QUEEN_S_TOTAL),
+        Furlong3Time(_SAPPORO_QUEEN_S_L3),
+        Distance(_SAPPORO_QUEEN_S_DISTANCE),
+    )
+
+    assert rpci == 51.6
+
+
+def test_current_lap_formula_diverges_from_target_beyond_1200m() -> None:
+    """現行式がTARGETと乖離することを既知の事実として固定する。
+
+    直したら落ちるテストではなく、「乖離が存在する」という測定結果の記録。
+    採用式を入れ替える際はこのテストごと更新すること（ADR-0004）。
+    """
+    current = calculate_rpci_from_lap(
+        Furlong3Time(_SAPPORO_QUEEN_S_S3), Furlong3Time(_SAPPORO_QUEEN_S_L3)
+    )
+
+    assert current == 50.6
+    assert round(51.6 - current, 1) == 1.0
+
+
+def test_lap_total_matches_the_recorded_race_time() -> None:
+    """検証データ自体の整合を確認する（ラップ合計＝走破タイム）。"""
+    assert round(sum(_SAPPORO_QUEEN_S_LAP), 1) == _SAPPORO_QUEEN_S_TOTAL
+    assert round(sum(_SAPPORO_QUEEN_S_LAP[:3]), 1) == _SAPPORO_QUEEN_S_S3
+    assert round(sum(_SAPPORO_QUEEN_S_LAP[-3:]), 1) == _SAPPORO_QUEEN_S_L3
+
+
+def test_both_formulas_agree_at_1200m() -> None:
+    """1200m戦では total = S3 + L3 が成り立ち、両式は一致する。"""
+    s3, l3 = Furlong3Time(34.5), Furlong3Time(35.8)
+
+    assert calculate_rpci_from_lap(s3, l3) == calculate_rpci_target(
+        RaceTime(s3.seconds + l3.seconds), l3, Distance(1200)
+    )

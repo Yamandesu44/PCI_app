@@ -8,6 +8,7 @@ DB に格納された値の分布と外れ値を表示する。
     python -m scripts.diagnose_rpci
     python -m scripts.diagnose_rpci --show-outliers   # 外れ値の詳細表示
     python -m scripts.diagnose_rpci --by-track-year   # コース種別×年の分布と中立点の妥当性
+    python -m scripts.diagnose_rpci --compare-rpci-formula  # 現行式とTARGET一致式の乖離実測
 """
 
 from __future__ import annotations
@@ -21,7 +22,10 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from pci.config.settings import get_settings
+from pci.domain.pace.pci import calculate_rpci_from_lap, calculate_rpci_target
+from pci.domain.pace.rpci_forecast import classify_pace
 from pci.domain.pace.style_advantage import neutral_rpci
+from pci.domain.shared.measurements import Distance, Furlong3Time, RaceTime
 from pci.infrastructure.database.models import RaceEntryModel, RaceModel
 from pci.infrastructure.database.session import build_engine, build_session_maker
 
@@ -29,6 +33,11 @@ from pci.infrastructure.database.session import build_engine, build_session_make
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="rpci_actual / pci_actual 品質診断")
     p.add_argument("--show-outliers", action="store_true", help="外れ値レースを一覧表示")
+    p.add_argument(
+        "--compare-rpci-formula",
+        action="store_true",
+        help="現行のRPCI式とTARGET一致式の乖離を実測する（本番設定は変えない）",
+    )
     p.add_argument("--rpci-min", type=float, default=20.0, help="正常範囲の下限 (default: 20)")
     p.add_argument("--rpci-max", type=float, default=90.0, help="正常範囲の上限 (default: 90)")
     p.add_argument(
@@ -252,6 +261,131 @@ def _print_track_year_rpci_source(session: Session, month_from: int, month_to: i
     )
 
 
+def _print_rpci_formula_comparison(session: Session) -> None:
+    """現行のRPCI式と、TARGET のレースPCI に一致する式の乖離を実測する。
+
+    現行 `calculate_rpci_from_lap` は前半3Fと後半3Fだけを仮想1200mへ射影するため、
+    中間区間を捨てている。TARGET は個馬PCIと同じ式をレース自身へ適用しており、
+    1200m超では系統的に乖離する（1200m戦では両式が一致する）。
+
+    置き換えは全レース再計算・ペース区分閾値の再較正・RPCIモデル再学習を伴うため、
+    まず「どれだけ動くか」「区分が変わるレースがどれだけあるか」を測る。
+    レース走破タイムは勝ち馬のタイムを使う（TARGET のレースPCI と同じ定義）。
+    """
+    print("\n" + "=" * 78)
+    print("■ RPCI式の乖離実測: 現行(S3/L3を1200m射影) vs TARGET一致式(レース全体)")
+    print("=" * 78)
+
+    rows = session.execute(
+        text(
+            """
+            SELECT r.race_key, r.race_date, r.track_type, r.distance_m,
+                   r.race_s3f, r.race_l3f, w.race_time_s
+            FROM races r
+            JOIN (
+                SELECT DISTINCT ON (race_key) race_key, race_time_s
+                FROM race_entries
+                WHERE finish_pos = 1 AND race_time_s IS NOT NULL
+                ORDER BY race_key, horse_no
+            ) w ON w.race_key = r.race_key
+            WHERE r.race_s3f IS NOT NULL
+              AND r.race_l3f IS NOT NULL
+              AND r.status = 'result'
+            """
+        )
+    ).fetchall()
+
+    if not rows:
+        print("  レースラップと勝ち馬タイムが揃うレースがありません。")
+        return
+
+    samples: list[tuple[str, int, float, float, str, str]] = []
+    skipped = 0
+    for _key, _date, track_type, distance_m, s3f, l3f, winner_time in rows:
+        try:
+            current = calculate_rpci_from_lap(Furlong3Time(s3f), Furlong3Time(l3f))
+            target = calculate_rpci_target(
+                RaceTime(winner_time), Furlong3Time(l3f), Distance(distance_m)
+            )
+        except ValueError:
+            # 上がり3F ≧ 走破タイム 等の不整合データは比較対象から外す。
+            skipped += 1
+            continue
+        samples.append(
+            (
+                track_type,
+                distance_m,
+                current,
+                target,
+                str(classify_pace(current, track_type)),
+                str(classify_pace(target, track_type)),
+            )
+        )
+
+    if not samples:
+        print("  比較可能なレースがありません。")
+        return
+
+    n = len(samples)
+    diffs = [t - c for _, _, c, t, _, _ in samples]
+    abs_diffs = sorted(abs(d) for d in diffs)
+    changed = [s for s in samples if s[4] != s[5]]
+
+    def _pct(values: list[float], q: float) -> float:
+        return values[min(len(values) - 1, int(len(values) * q))]
+
+    print(f"  対象レース: {n:,}件（不整合でスキップ {skipped:,}件）")
+    print(
+        f"  差(TARGET式 − 現行式) 平均 {sum(diffs) / n:+.3f}"
+        f"  絶対差 平均 {sum(abs_diffs) / n:.3f}"
+    )
+    print(
+        f"  絶対差 中央値 {_pct(abs_diffs, 0.50):.2f}"
+        f"  90%点 {_pct(abs_diffs, 0.90):.2f}"
+        f"  99%点 {_pct(abs_diffs, 0.99):.2f}"
+        f"  最大 {abs_diffs[-1]:.2f}"
+    )
+    print(f"  ペース区分が変わるレース: {len(changed):,}件（{len(changed) / n:.1%}）")
+
+    print("\n  距離帯別（乖離は距離とともに拡大するはず）")
+    print(f"    {'距離帯':<12}{'件数':>8}{'平均差':>10}{'絶対差平均':>12}{'区分変化':>10}")
+    bands = [(0, 1200), (1201, 1600), (1601, 2000), (2001, 2400), (2401, 9999)]
+    for lo, hi in bands:
+        band = [s for s in samples if lo <= s[1] <= hi]
+        if not band:
+            continue
+        bd = [t - c for _, _, c, t, _, _ in band]
+        bc = sum(1 for s in band if s[4] != s[5])
+        label = f"{lo}-{hi}m" if hi < 9999 else f"{lo}m以上"
+        print(
+            f"    {label:<12}{len(band):>8,}{sum(bd) / len(band):>+10.3f}"
+            f"{sum(abs(d) for d in bd) / len(band):>12.3f}{bc / len(band):>9.1%}"
+        )
+
+    print("\n  コース種別別")
+    print(f"    {'種別':<12}{'件数':>8}{'平均差':>10}{'絶対差平均':>12}{'区分変化':>10}")
+    for track in sorted({s[0] for s in samples}):
+        grp = [s for s in samples if s[0] == track]
+        gd = [t - c for _, _, c, t, _, _ in grp]
+        gc = sum(1 for s in grp if s[4] != s[5])
+        print(
+            f"    {track:<12}{len(grp):>8,}{sum(gd) / len(grp):>+10.3f}"
+            f"{sum(abs(d) for d in gd) / len(grp):>12.3f}{gc / len(grp):>9.1%}"
+        )
+
+    print("\n  区分変化の内訳（現行 → TARGET式）")
+    transitions: dict[str, int] = {}
+    for s in changed:
+        transitions[f"{s[4]} → {s[5]}"] = transitions.get(f"{s[4]} → {s[5]}", 0) + 1
+    for name, count in sorted(transitions.items(), key=lambda kv: -kv[1]):
+        print(f"    {name:<20}{count:>8,}件（全体の {count / n:.1%}）")
+
+    print(
+        "\n  ※ 区分変化率が高いほど、式の置き換えには閾値の再較正とモデル再学習が要る。"
+        "\n  ※ 本番設定は変更していない。この出力は判断材料のみ。"
+    )
+
+
 def main() -> None:
     args = _parse_args()
     settings = get_settings()
@@ -425,6 +559,10 @@ def main() -> None:
             print(f"  分位数取得エラー: {exc}")
 
     # ── 4b. コース種別×年の分布（中立点の妥当性診断） ────────────────
+    if args.compare_rpci_formula:
+        _print_rpci_formula_comparison(session)
+        return
+
     if args.by_track_year:
         try:
             _print_track_year_distribution(

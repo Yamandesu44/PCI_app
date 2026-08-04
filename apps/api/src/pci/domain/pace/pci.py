@@ -110,23 +110,55 @@ def calculate_rpci_from_lap(
     race_s3f: Furlong3Time,
     race_l3f: Furlong3Time,
 ) -> float:
-    """前半3F / 後半3F 比から RPCI（レースPCI）を算出する（TARGET 準拠）。
+    """前半3F / 後半3F 比から RPCI（レースPCI）を算出する【現行本番・要再検証】。
 
-    TARGET の RPCI 公式:
-        RPCI = HaronTimeS3 / HaronTimeL3 × 100 − 50
-
-    PCI 式の一元化（ADR-0004）のため calculate_pci を再利用する:
         synthetic_time = S3 + L3  →  仮想1200m(6F)として射影
         RPCI = calculate_pci(S3+L3, L3, distance=1200)
 
-    この射影で前半3Fを後半3Fと直接比較でき、距離に依存しない指数になる。
-    winner_time ベースの旧方式は距離が伸びるにつれ前半重みが増し TARGET と乖離していた。
-    全馬 PCI 平均は aggregate_rpci のフォールバック時のみ使用する。
+    警告: この式は TARGET のレースPCI と一致しない。
+        中間区間を捨てて前半3Fだけを前半代表としているため、
+        中間ラップが S3 と異なる距離（1200m超）で系統的に乖離する。
+        1200m戦では両者が一致する（total = S3 + L3 が成り立つため）。
+
+        実測（2026-08-02 札幌11R 芝1800m / TARGET レースPCI=51.6）:
+            LAP 12.3-11.2-11.7-12.0-12.0-11.9-11.6-11.7-11.7（計106.1、S3=35.2、L3=35.0）
+            この式               → 50.6  ✗
+            calculate_rpci_target → 51.6  ✓（同レースの個馬PCIもTARGETと完全一致）
+
+        置き換えには全レース再計算・ペース区分閾値の再較正・RPCIモデル再学習が伴うため、
+        影響実測（scripts/diagnose_rpci.py --compare-rpci-formula）を経てから判断する。
+        それまで本番はこの式を使い続ける（ADR-0004: 式変更は根拠とゴールデンテスト必須）。
     """
     return calculate_pci(
         race_time=RaceTime(race_s3f.seconds + race_l3f.seconds),
         furlong_3f=race_l3f,
         distance=Distance(1200),
+    ).value
+
+
+def calculate_rpci_target(
+    race_time: RaceTime,
+    race_l3f: Furlong3Time,
+    distance: Distance,
+) -> float:
+    """TARGET のレースPCI と一致する RPCI を算出する【候補・本番未接続】。
+
+    個馬 PCI と同じ式をレース自身へ適用するだけ:
+        Ave-3F = (レース走破タイム − レース後半3F) × 600 ÷ (距離 − 600)
+        RPCI   = Ave-3F ÷ レース後半3F × 100 − 50
+
+    Args:
+        race_time: レースの走破タイム（＝勝ち馬のタイム）
+        race_l3f:  レースラップの後半3F（勝ち馬の上がり3Fではない）
+        distance:  レース距離(m)
+
+    現行の calculate_rpci_from_lap と違い中間区間を落とさないため、
+    1200m超でも TARGET と一致する。採否は影響実測後に判断する。
+    """
+    return calculate_pci(
+        race_time=race_time,
+        furlong_3f=race_l3f,
+        distance=distance,
     ).value
 
 
