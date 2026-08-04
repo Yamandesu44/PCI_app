@@ -78,6 +78,7 @@ def _review_input(
         rpci_actual=rpci_actual,
         pci3_actual=52.5,
         formula_version="pci-v3",
+        track_type="芝",
         field_size=10,
         sample_size=sample_size,
         horses=(

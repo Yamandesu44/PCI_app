@@ -194,6 +194,7 @@ class GetPaceAnalysisUseCase:
             rpci_actual=rpci,
             pci3_actual=pci3,
             formula_version=FORMULA_VERSION,
+            track_type=race.track_type,
             field_size=race.field_size,
             sample_size=sample_size,
             horses=tuple(

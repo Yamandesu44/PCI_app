@@ -102,3 +102,81 @@ class TestForecastReasons:
 
         text = " ".join(r.description for r in forecast.reasons)
         assert str(forecast.label) in text
+
+
+class TestCommentReasons:
+    """「コメントの根拠」に出る reasons（2026-08-04: ここも漏れていた）。"""
+
+    @staticmethod
+    def _review(rpci: float, track_type: str, **kwargs: object) -> object:
+        from pci.domain.pace.commentary import (
+            ReviewCommentInput,
+            ReviewHorseRef,
+            RuleBasedCommentGenerator,
+        )
+
+        base = {
+            "rpci_actual": rpci,
+            "pci3_actual": rpci + 2.0,
+            "formula_version": "pci-v3",
+            "track_type": track_type,
+            "field_size": 14,
+            "sample_size": 14,
+            "horses": (ReviewHorseRef(7, 1, "追込", rpci + 4.0),),
+        }
+        base.update(kwargs)
+        return RuleBasedCommentGenerator().review_comment(ReviewCommentInput(**base))  # type: ignore[arg-type]
+
+    def test_review_reasons_hide_the_index(self) -> None:
+        out = self._review(51.6, "芝")
+
+        _assert_no_index_value([r.description for r in out.reasons])  # type: ignore[attr-defined]
+
+    def test_forecast_accuracy_reason_hides_the_index(self) -> None:
+        """答え合わせ文にも想定・実績の実数値を出さない。"""
+        from pci.domain.pace.rpci_forecast import PaceLabel
+
+        out = self._review(
+            51.6,
+            "芝",
+            predicted_rpci=58.7,
+            predicted_label=PaceLabel.SLOW,
+            actual_label=PaceLabel.AVERAGE,
+        )
+
+        descriptions = [r.description for r in out.reasons]  # type: ignore[attr-defined]
+        _assert_no_index_value(descriptions)
+        # 的中・外れの結論は伝え続ける。
+        assert any("外れ" in d for d in descriptions)
+
+    def test_headline_and_accuracy_sentence_agree(self) -> None:
+        """見出しの流れと答え合わせ文の実績ラベルが食い違わない。
+
+        2026-08-04: _actual_pace が閾値を独自に持ち、芝の旧値(49/51)で判定していたため、
+        RPCI 51.6 が見出しでは「やや落ち着いた流れ」、答え合わせ文では「平均的な流れ」に
+        なっていた。判定は classify_pace 一箇所へ集約した。
+        """
+        from pci.domain.pace.rpci_forecast import PaceLabel
+
+        out = self._review(
+            51.6,
+            "芝",
+            predicted_rpci=58.7,
+            predicted_label=PaceLabel.SLOW,
+            actual_label=PaceLabel.AVERAGE,
+        )
+
+        # 見出しは「実績」を描写する。想定側の「やや落ち着いた流れ」は答え合わせ文へ
+        # 正しく残るため、検査対象は見出しに限る。
+        assert "平均的な流れ" in out.headline  # type: ignore[attr-defined]
+        assert "落ち着いた" not in out.headline  # type: ignore[attr-defined]
+        assert any("実際は「平均的な流れ」" in line for line in out.body)  # type: ignore[attr-defined]
+
+    def test_dirt_uses_dirt_thresholds(self) -> None:
+        """コース種別を無視すると、ダートの平均域を芝の閾値で誤判定する。"""
+        # 46.5 はダートの平均帯(44.8〜48.2)だが、芝の閾値(49.7)ではハイになる。
+        dirt = self._review(46.5, "ダート")
+        turf = self._review(46.5, "芝")
+
+        assert "平均的な流れ" in dirt.headline  # type: ignore[attr-defined]
+        assert "速い流れ" in turf.headline  # type: ignore[attr-defined]

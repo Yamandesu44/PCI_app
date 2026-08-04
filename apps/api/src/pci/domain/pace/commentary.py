@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from pci.domain.pace.horse_number_label import horse_number_label
-from pci.domain.pace.rpci_forecast import PaceLabel
+from pci.domain.pace.rpci_forecast import PaceLabel, classify_pace
 from pci.domain.shared.reason import Reason
 
 COMMENTARY_VERSION = "comment-v2"
@@ -79,6 +79,7 @@ class ReviewCommentInput:
     rpci_actual: float | None
     pci3_actual: float | None
     formula_version: str
+    track_type: str
     field_size: int
     sample_size: int
     horses: tuple[ReviewHorseRef, ...]
@@ -173,8 +174,9 @@ class RuleBasedCommentGenerator:
         reasons = (
             Reason(
                 code="comment_basis",
+                # 指数の実数値はUIの「コメントの根拠」へそのまま出るため入れない。
                 description=(
-                    f"想定RPCI {data.predicted_rpci}（{data.pace_label}）・"
+                    f"想定の流れ「{data.pace_label}」・"
                     f"展開合致 {len(data.beneficiaries)}頭・確信度 {data.confidence:.0%} を要約"
                 ),
             ),
@@ -199,7 +201,7 @@ class RuleBasedCommentGenerator:
                 reasons=_review_reasons(data),
             )
 
-        pace_word, pace_clause = _actual_pace(data.rpci_actual)
+        pace_word, pace_clause = _actual_pace(data.rpci_actual, data.track_type)
         body: list[str] = []
         body.append(f"実際は{pace_clause}。")
 
@@ -253,13 +255,21 @@ def _beneficiary_sentence(
     )
 
 
-def _actual_pace(rpci: float) -> tuple[str, str]:
-    """確定後の流れを非専門家向けの「ペース語」と説明句に変換する（49/51 帯で3分類）。"""
-    if rpci > 51.0:
-        return "やや落ち着いた流れ", "前半が落ち着き、前で運んだ馬が余力を残しやすい流れでした"
-    if rpci < 49.0:
-        return "やや速い流れ", "前半から流れて、後ろで脚をためた馬にもチャンスが出やすい流れでした"
-    return "平均的な流れ", "大きな偏りのない平均的な流れでした"
+_ACTUAL_PACE_PHRASE: dict[PaceLabel, str] = {
+    PaceLabel.SLOW: "前半が落ち着き、前で運んだ馬が余力を残しやすい流れでした",
+    PaceLabel.HIGH: "前半から流れて、後ろで脚をためた馬にもチャンスが出やすい流れでした",
+    PaceLabel.AVERAGE: "大きな偏りのない平均的な流れでした",
+}
+
+
+def _actual_pace(rpci: float, track_type: str) -> tuple[str, str]:
+    """確定後の流れを非専門家向けの「ペース語」と説明句に変換する。
+
+    区分判定は classify_pace（唯一の判定・ADR-0004）へ委ねる。ここで閾値を持つと
+    コース種別を取り違え、見出しと答え合わせ文が食い違う（2026-08-04に発生した）。
+    """
+    label = classify_pace(rpci, track_type)
+    return _PACE_WORD[label], _ACTUAL_PACE_PHRASE[label]
 
 
 def _forecast_accuracy_sentence(data: ReviewCommentInput) -> str | None:
@@ -290,14 +300,13 @@ def _horse_pace_phrase(horse_pci: float, rpci: float) -> str:
 
 
 def _review_reasons(data: ReviewCommentInput) -> tuple[Reason, ...]:
-    rpci = data.rpci_actual if data.rpci_actual is not None else "—"
-    pci3 = data.pci3_actual if data.pci3_actual is not None else "—"
+    # 指数の実数値はUIの「コメントの根拠」へそのまま出るため入れない。
     reasons_list = [
         Reason(
             code="comment_basis",
             description=(
-                f"実績RPCI {rpci}・PCI3 {pci3}・対象{data.sample_size}頭"
-                f"（{data.formula_version}）を要約"
+                f"完走{data.sample_size}頭のレース内容と、上位3着馬の走りを要約"
+                f"（{data.formula_version}）"
             ),
         ),
     ]
@@ -307,8 +316,8 @@ def _review_reasons(data: ReviewCommentInput) -> tuple[Reason, ...]:
             Reason(
                 code="forecast_accuracy",
                 description=(
-                    f"想定RPCI {data.predicted_rpci}（{data.predicted_label}）vs "
-                    f"実績RPCI {rpci}（{data.actual_label}）→ "
+                    f"事前の想定「{data.predicted_label}」と"
+                    f"実際の「{data.actual_label}」を照合 → "
                     f"{'的中' if hit else '外れ'}"
                 ),
             )

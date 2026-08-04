@@ -23,7 +23,7 @@ from pci.domain.pace.commentary import (
     RuleBasedCommentGenerator,
 )
 from pci.domain.pace.horse_number_label import horse_number_label
-from pci.domain.pace.rpci_forecast import PaceLabel
+from pci.domain.pace.rpci_forecast import PaceLabel, classify_pace
 from pci.domain.shared.reason import Reason
 
 _log = logging.getLogger(__name__)
@@ -167,17 +167,21 @@ def _build_forecast_prompt(data: ForecastCommentInput) -> str:
 {{"headline": "...", "body": ["...", "...", "..."]}}"""
 
 
+_REVIEW_PACE_DESC: dict[PaceLabel, str] = {
+    PaceLabel.SLOW: "前半が緩く、前が止まりにくい流れ",
+    PaceLabel.HIGH: "前半から速く、差しが届きやすい流れ",
+    PaceLabel.AVERAGE: "大きな偏りのない平均的な流れ",
+}
+
+
 def _build_review_prompt(data: ReviewCommentInput) -> str:
     assert data.rpci_actual is not None
     pci3_text = f"{data.pci3_actual}" if data.pci3_actual is not None else "算出不可"
     rpci = data.rpci_actual
 
-    if rpci > 51.0:
-        pace_desc = "前半が緩く、前が止まりにくい流れ"
-    elif rpci < 49.0:
-        pace_desc = "前半から速く、差しが届きやすい流れ"
-    else:
-        pace_desc = "大きな偏りのない平均的な流れ"
+    # 閾値をここへ持つとコース種別を取り違え、ルールベース側と食い違う。
+    # 判定は classify_pace（唯一の判定・ADR-0004）へ委ねる。
+    pace_desc = _REVIEW_PACE_DESC[classify_pace(rpci, data.track_type)]
 
     winner_text = "不明"
     confirmed = [h for h in data.horses if h.finish_pos is not None]
