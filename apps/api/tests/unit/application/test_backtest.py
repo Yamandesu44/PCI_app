@@ -423,6 +423,43 @@ class TestClampImpact:
         assert impact.lower == DEFAULT_RULE_WEIGHTS.rpci_min
         assert impact.upper == DEFAULT_RULE_WEIGHTS.rpci_max
 
+    def test_explicit_clamp_overrides_the_default_bounds(self) -> None:
+        """安全弁を広げて実測するとき、判定境界も同じ値へ合わせる必要がある。"""
+        samples = [self._sample(28.0, 27.0), self._sample(50.0, 50.0)]
+
+        impact = summarize_clamp_impact(samples, clamp=(28.0, 90.0))
+
+        assert impact is not None
+        assert (impact.lower, impact.upper) == (28.0, 90.0)
+        assert impact.at_lower_n == 1
+        assert impact.interior_n == 1
+
+    def test_widened_clamp_reports_nothing_pinned(self) -> None:
+        """境界を広げれば張り付きが消え、診断セクション自体が出なくなる。"""
+        samples = [self._sample(35.0, 28.0), self._sample(50.0, 50.0)]
+
+        impact = summarize_clamp_impact(samples, clamp=(20.0, 90.0))
+
+        assert impact is not None
+        assert impact.at_lower_n == 0
+        assert impact.at_upper_n == 0
+        assert format_clamp_impact(impact) == ""
+
+    def test_format_report_honours_the_clamp_argument(self) -> None:
+        """レポート整形も実際に適用した安全弁で判定する。"""
+        report = BacktestReport(
+            model_version="test",
+            n_races=2,
+            n_horses=0,
+            skipped=0,
+            rpci=summarize_rpci([self._sample(35.0, 28.0), self._sample(50.0, 50.0)]),
+            pai=None,
+            rpci_samples=[self._sample(35.0, 28.0), self._sample(50.0, 50.0)],
+        )
+
+        assert "予測値クランプ" in format_report(report)
+        assert "予測値クランプ" not in format_report(report, clamp=(20.0, 90.0))
+
 
 class TestStyleAdvantageProfileComparison:
     @staticmethod

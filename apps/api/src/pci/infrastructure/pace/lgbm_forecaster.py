@@ -105,6 +105,8 @@ _CLOSER_STYLES = (RunningStyleLabel.STALKER, RunningStyleLabel.CLOSER)
 _CONDITION_ORD: dict[str, int] = {"良": 0, "稍重": 1, "重": 2, "不良": 3}
 _RPCI_MIN = 35.0
 _RPCI_MAX = 65.0
+# 本番の安全弁。較正を実測する CLI から参照するため公開している。
+DEFAULT_RPCI_CLAMP: tuple[float, float] = (_RPCI_MIN, _RPCI_MAX)
 _logger = logging.getLogger(__name__)
 
 
@@ -148,6 +150,7 @@ def _make_forecast(
     context: RaceContext,
     version: str,
     feature_names: list[str] = FEATURE_NAMES,
+    clamp: tuple[float, float] = (_RPCI_MIN, _RPCI_MAX),
 ) -> RpciForecast:
     """特徴量ベクトルを渡して予測値・ラベル・reasons を組み立てる共通処理。"""
     styles = context.running_styles
@@ -157,7 +160,8 @@ def _make_forecast(
 
     features = build_features(context, feature_names)
     raw = float(predict_fn([features])[0])
-    rpci = round(min(max(raw, _RPCI_MIN), _RPCI_MAX), 1)
+    lower, upper = clamp
+    rpci = round(min(max(raw, lower), upper), 1)
     label = classify_pace(rpci, context.track_type)
     confidence = _classification_margin_confidence(rpci, context.track_type)
 
@@ -201,9 +205,14 @@ class LightGBMRpciForecaster:
     芝/ダート別モデルは SplitLightGBMRpciForecaster を使うこと。
     """
 
-    def __init__(self, model_path: str | Path) -> None:
+    def __init__(
+        self,
+        model_path: str | Path,
+        clamp: tuple[float, float] = (_RPCI_MIN, _RPCI_MAX),
+    ) -> None:
         booster = _load_lgb_booster(model_path)
         self._predict = booster.predict
+        self._clamp = clamp
         self._feature_names = _feature_names_for_booster(booster)
         fallback_version = _version_for_feature_names(
             self._feature_names,
@@ -233,6 +242,7 @@ class LightGBMRpciForecaster:
                 ),
             ),
             feature_names,
+            getattr(self, "_clamp", (_RPCI_MIN, _RPCI_MAX)),
         )
 
 
@@ -247,11 +257,13 @@ class SplitLightGBMRpciForecaster:
         self,
         turf_model_path: str | Path,
         dirt_model_path: str | Path,
+        clamp: tuple[float, float] = (_RPCI_MIN, _RPCI_MAX),
     ) -> None:
         turf_booster = _load_lgb_booster(turf_model_path)
         dirt_booster = _load_lgb_booster(dirt_model_path)
         self._turf_predict = turf_booster.predict
         self._dirt_predict = dirt_booster.predict
+        self._clamp = clamp
         self._turf_feature_names = _feature_names_for_booster(turf_booster)
         self._dirt_feature_names = _feature_names_for_booster(dirt_booster)
         self._turf_model_version = _model_version_from_provenance(
@@ -296,6 +308,7 @@ class SplitLightGBMRpciForecaster:
                     ),
                 ),
                 feature_names,
+                getattr(self, "_clamp", (_RPCI_MIN, _RPCI_MAX)),
             )
         feature_names = getattr(self, "_turf_feature_names", FEATURE_NAMES)
         return _make_forecast(
@@ -314,6 +327,7 @@ class SplitLightGBMRpciForecaster:
                 ),
             ),
             feature_names,
+            getattr(self, "_clamp", (_RPCI_MIN, _RPCI_MAX)),
         )
 
 
@@ -388,6 +402,7 @@ def load_best_forecaster(
     model_path: Path | None = None,
     turf_model_path: Path | None = None,
     dirt_model_path: Path | None = None,
+    clamp: tuple[float, float] = (_RPCI_MIN, _RPCI_MAX),
 ) -> RpciForecaster:
     """モデルファイルの有無に応じて最良の予測器を返す共通ファクトリ。
 
@@ -395,6 +410,8 @@ def load_best_forecaster(
       1. turf + dirt 別モデル両方あり → SplitLightGBMRpciForecaster (lgbm-turf-v1 / lgbm-dirt-v1)
       2. 統合モデルあり               → LightGBMRpciForecaster (lgbm-v1, 後方互換)
       3. いずれも無し                 → RuleBasedRpciForecaster (rule-v4)
+
+    clamp は予測値の安全弁。既定は本番値で、較正の実測時だけ呼び出し側が広げる。
     """
     from pci.domain.pace.rpci_forecast import RuleBasedRpciForecaster
 
@@ -402,7 +419,9 @@ def load_best_forecaster(
     dirt_path = dirt_model_path or _DEFAULT_DIRT_MODEL_PATH
     if turf_path.exists() and dirt_path.exists():
         try:
-            forecaster: RpciForecaster = SplitLightGBMRpciForecaster(turf_path, dirt_path)
+            forecaster: RpciForecaster = SplitLightGBMRpciForecaster(
+                turf_path, dirt_path, clamp
+            )
             return forecaster
         except Exception as exc:
             _logger.warning(
@@ -413,7 +432,7 @@ def load_best_forecaster(
     unified_path = model_path or _DEFAULT_MODEL_PATH
     if unified_path.exists():
         try:
-            forecaster = LightGBMRpciForecaster(unified_path)
+            forecaster = LightGBMRpciForecaster(unified_path, clamp)
             return forecaster
         except Exception as exc:
             _logger.warning(

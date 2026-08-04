@@ -15,6 +15,7 @@ from pci.domain.pace.rpci_forecast import (
 )
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.infrastructure.pace.lgbm_forecaster import (
+    DEFAULT_RPCI_CLAMP,
     FEATURE_NAMES,
     FEATURE_NAMES_V2,
     FEATURE_NAMES_V3,
@@ -647,3 +648,81 @@ class TestCommittedModels:
 
         assert result.model_version == MODEL_VERSION
         assert "CRLF改行をLFへ補正" in caplog.text
+
+
+class TestRpciClamp:
+    """予測値の安全弁は既定で本番値。較正の実測時だけ呼び出し側が広げられる。"""
+
+    def _forecaster(
+        self, tmp_path: Path, raw: float, clamp: tuple[float, float] | None = None
+    ) -> SplitLightGBMRpciForecaster:
+        turf = tmp_path / "turf.txt"
+        dirt = tmp_path / "dirt.txt"
+        turf.write_text("dummy")
+        dirt.write_text("dummy")
+        mock_booster = MagicMock()
+        mock_booster.predict.return_value = [raw]
+        mock_booster.num_feature.return_value = len(FEATURE_NAMES_V4)
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            return_value=mock_booster,
+        ):
+            if clamp is None:
+                return SplitLightGBMRpciForecaster(turf, dirt)
+            return SplitLightGBMRpciForecaster(turf, dirt, clamp)
+
+    def test_production_default_is_unchanged(self) -> None:
+        assert DEFAULT_RPCI_CLAMP == (35.0, 65.0)
+
+    def test_low_prediction_is_truncated_at_the_production_floor(
+        self, tmp_path: Path
+    ) -> None:
+        forecaster = self._forecaster(tmp_path, raw=28.4)
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.value == 35.0
+
+    def test_widened_clamp_lets_the_model_predict_low(self, tmp_path: Path) -> None:
+        forecaster = self._forecaster(tmp_path, raw=28.4, clamp=(20.0, 90.0))
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.value == 28.4
+
+    def test_widened_clamp_still_bounds_extreme_output(self, tmp_path: Path) -> None:
+        forecaster = self._forecaster(tmp_path, raw=5.0, clamp=(20.0, 90.0))
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.value == 20.0
+
+    def test_clamp_applies_to_turf_branch_too(self, tmp_path: Path) -> None:
+        forecaster = self._forecaster(tmp_path, raw=28.4, clamp=(20.0, 90.0))
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="芝"))
+        assert result.value == 28.4
+
+    def test_unified_forecaster_accepts_the_clamp(self, tmp_path: Path) -> None:
+        model = tmp_path / "unified.txt"
+        model.write_text("dummy")
+        mock_booster = MagicMock()
+        mock_booster.predict.return_value = [28.4]
+        mock_booster.num_feature.return_value = len(FEATURE_NAMES)
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            return_value=mock_booster,
+        ):
+            forecaster = LightGBMRpciForecaster(model, (20.0, 90.0))
+        assert forecaster.forecast(_ctx((FRONT,) * 10)).value == 28.4
+
+    def test_load_best_forecaster_forwards_the_clamp(self, tmp_path: Path) -> None:
+        turf = tmp_path / "turf.txt"
+        dirt = tmp_path / "dirt.txt"
+        turf.write_text("dummy")
+        dirt.write_text("dummy")
+        mock_booster = MagicMock()
+        mock_booster.predict.return_value = [28.4]
+        mock_booster.num_feature.return_value = len(FEATURE_NAMES_V4)
+        with patch(
+            "pci.infrastructure.pace.lgbm_forecaster._load_lgb_booster",
+            return_value=mock_booster,
+        ):
+            forecaster = load_best_forecaster(
+                turf_model_path=turf, dirt_model_path=dirt, clamp=(20.0, 90.0)
+            )
+        result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
+        assert result.value == 28.4

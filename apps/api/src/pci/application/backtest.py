@@ -306,11 +306,17 @@ class ClampImpact:
 def summarize_clamp_impact(
     samples: list[RpciSample],
     rule_weights: RuleWeights = DEFAULT_RULE_WEIGHTS,
+    clamp: tuple[float, float] | None = None,
 ) -> ClampImpact | None:
-    """予測がクランプ端に張り付いた群と、内側の群とで誤差を分けて集計する。"""
+    """予測がクランプ端に張り付いた群と、内側の群とで誤差を分けて集計する。
+
+    clamp を渡すと本番既定ではなくその境界で判定する（較正の実測用）。
+    """
     if not samples:
         return None
-    lower, upper = rule_weights.rpci_min, rule_weights.rpci_max
+    lower, upper = (
+        clamp if clamp is not None else (rule_weights.rpci_min, rule_weights.rpci_max)
+    )
     # 予測値は小数1桁へ丸めてから返るため、端値との比較は微小誤差だけ見れば足りる。
     at_lower = [s for s in samples if s.predicted <= lower + 1e-9]
     at_upper = [s for s in samples if s.predicted >= upper - 1e-9]
@@ -1698,8 +1704,14 @@ def _style_advantage_sample_to_dict(sample: StyleAdvantageSample) -> dict[str, A
     }
 
 
-def format_report(report: BacktestReport) -> str:
-    """バックテスト結果を人間可読のテキストへ整形する（CLI 出力用）。"""
+def format_report(
+    report: BacktestReport,
+    clamp: tuple[float, float] | None = None,
+) -> str:
+    """バックテスト結果を人間可読のテキストへ整形する（CLI 出力用）。
+
+    clamp は実際に予測へ適用された安全弁。省略時は本番既定で判定する。
+    """
     lines: list[str] = []
     lines.append("=" * 60)
     lines.append(f"バックテスト結果  model_version={report.model_version or '(不明)'}")
@@ -1717,7 +1729,9 @@ def format_report(report: BacktestReport) -> str:
         for label, acc in r.per_label_accuracy.items():
             lines.append(f"    - 実績「{label}」の再現率: {acc:.1%}")
         # 端に張り付きが無ければ空文字が返るので、通常時は出力を汚さない。
-        clamp_text = format_clamp_impact(summarize_clamp_impact(report.rpci_samples))
+        clamp_text = format_clamp_impact(
+            summarize_clamp_impact(report.rpci_samples, clamp=clamp)
+        )
         if clamp_text:
             lines.append(clamp_text)
     else:

@@ -115,7 +115,10 @@ from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.shared.race_key import RaceKey
 from pci.infrastructure.database.models import RaceModel
 from pci.infrastructure.database.session import build_engine, build_session_maker
-from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster
+from pci.infrastructure.pace.lgbm_forecaster import (
+    DEFAULT_RPCI_CLAMP,
+    load_best_forecaster,
+)
 from pci.infrastructure.repositories.race_repository import SqlAlchemyRaceRepository
 
 _DIRT_V4_MONITORING_START = datetime.date(2026, 7, 25)
@@ -171,6 +174,21 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="検証に使うダートLightGBMモデル。未指定時は本番モデル",
+    )
+    p.add_argument(
+        "--clamp-min",
+        type=float,
+        default=None,
+        help=(
+            "想定RPCI予測の下限。未指定時は本番値。"
+            "安全弁の較正を実測するときだけ広げる（本番設定は変えない）"
+        ),
+    )
+    p.add_argument(
+        "--clamp-max",
+        type=float,
+        default=None,
+        help="想定RPCI予測の上限。未指定時は本番値",
     )
     p.add_argument(
         "--output",
@@ -253,7 +271,18 @@ def _parse_args() -> argparse.Namespace:
         value = getattr(args, path_arg)
         if value is not None and not Path(value).is_file():
             p.error(f"--{path_arg.replace('_', '-')} のファイルが見つかりません: {value}")
+    if _clamp_from_args(args)[0] >= _clamp_from_args(args)[1]:
+        p.error("--clamp-min は --clamp-max より小さい値を指定してください")
     return args
+
+
+def _clamp_from_args(args: argparse.Namespace) -> tuple[float, float]:
+    """CLI 指定と本番既定から、実際に適用する安全弁を決める。"""
+    default_min, default_max = DEFAULT_RPCI_CLAMP
+    return (
+        args.clamp_min if args.clamp_min is not None else default_min,
+        args.clamp_max if args.clamp_max is not None else default_max,
+    )
 
 
 def _select_targets(session: Session, args: argparse.Namespace) -> list[Race]:
@@ -317,6 +346,9 @@ def main() -> None:
         notes.append(f"芝モデル: {args.turf_model_path}")
     if args.dirt_model_path is not None:
         notes.append(f"ダートモデル: {args.dirt_model_path}")
+    if _clamp_from_args(args) != DEFAULT_RPCI_CLAMP:
+        lo, hi = _clamp_from_args(args)
+        notes.append(f"安全弁を上書き: [{lo:g}, {hi:g}]（本番設定は未変更）")
     if notes:
         filter_note = f" （{' / '.join(notes)}）"
     print(f"対象 {len(targets)} レースでバックテストを実行します{filter_note}…\n")
@@ -367,9 +399,11 @@ def main() -> None:
             _write_diagnostic_output(args.output, payload)
         return
 
+    clamp = _clamp_from_args(args)
     forecaster = load_best_forecaster(
         turf_model_path=Path(args.turf_model_path) if args.turf_model_path else None,
         dirt_model_path=Path(args.dirt_model_path) if args.dirt_model_path else None,
+        clamp=clamp,
     )
     backtester = ForecastBacktester(repo, forecaster=forecaster)
     if args.diagnose_style_advantage:
@@ -386,7 +420,7 @@ def main() -> None:
         return
 
     report = backtester.run(targets)
-    print(format_report(report))
+    print(format_report(report, clamp=clamp))
     monitoring: RpciMonitoringResult | None = None
     if args.monitor_dirt_v4:
         monitoring = evaluate_dirt_v4_monitoring(report)
@@ -394,7 +428,7 @@ def main() -> None:
 
     track_reports: dict[str, BacktestReport] = {}
     if args.track_type is None:
-        track_reports = _print_track_breakdown(backtester, targets)
+        track_reports = _print_track_breakdown(backtester, targets, clamp)
 
     weight_comparisons: list[AbilityWeightComparison] = []
     if args.compare_ability_weights:
@@ -504,7 +538,9 @@ def _run_pai_weight_comparison(
 
 
 def _print_track_breakdown(
-    backtester: ForecastBacktester, targets: list[Race]
+    backtester: ForecastBacktester,
+    targets: list[Race],
+    clamp: tuple[float, float] = DEFAULT_RPCI_CLAMP,
 ) -> dict[str, BacktestReport]:
     """--track-type 未指定時、芝/ダート別の内訳も追加表示する。戻り値は --output 保存用。
 
@@ -519,7 +555,7 @@ def _print_track_breakdown(
         races = by_track[track_type]
         print(f"\n{'#' * 60}\nコース別内訳: {track_type}（{len(races)}レース）\n{'#' * 60}")
         track_report = backtester.run(races)
-        print(format_report(track_report))
+        print(format_report(track_report, clamp=clamp))
         reports[track_type] = track_report
     return reports
 
