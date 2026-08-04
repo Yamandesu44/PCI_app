@@ -155,19 +155,21 @@ def aggregate_rpci(
     if len(pci_values) != len(finish_positions):
         raise ValueError("pci_values と finish_positions の長さが一致しません。")
 
+    # reasons へ指数の実数値を入れない: そのまま UI の「算出の根拠」に出るため。
+    # 数値は rpci / pci3 フィールドで返し、表示側は段階評価へ翻訳する。
     if race_rpci is not None:
         rpci = round(race_rpci, 1)
         rpci_reason = Reason(
             code="rpci_lap",
-            description=f"レースラップ後半3Fから算出（TARGET準拠）→ RPCI={rpci}",
+            description="レース全体のラップから、前半と後半どちらが速かったかを比べて判定しました。",
         )
     else:
         rpci = round(sum(pci_values) / len(pci_values), 1)
         rpci_reason = Reason(
             code="rpci_sample",
             description=(
-                f"全完走馬 {len(pci_values)} 頭の PCI 平均 → RPCI={rpci}"
-                "（暫定: レースラップ未取得）"
+                f"レースラップが未取得のため、完走した {len(pci_values)} 頭の走破内容から"
+                "暫定的に判定しました。"
             ),
         )
 
@@ -181,12 +183,18 @@ def aggregate_rpci(
         reasons.append(
             Reason(
                 code="pci3_sample",
-                description=f"上位3着馬 {len(top3_pcis)} 頭の PCI 平均 → PCI3={pci3}",
+                description=(
+                    f"上位3着馬 {len(top3_pcis)} 頭の走りから、"
+                    "上位馬にとってどんな流れだったかを判定しました。"
+                ),
             )
         )
     else:
         reasons.append(
-            Reason(code="pci3_unavailable", description="上位3着馬データ不足のため PCI3 算出不可")
+            Reason(
+                code="pci3_unavailable",
+                description="上位3着馬のデータが不足しており、上位馬の傾向は判定できません。",
+            )
         )
 
     return RpciResult(

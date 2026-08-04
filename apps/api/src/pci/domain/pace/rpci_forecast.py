@@ -333,9 +333,10 @@ class RuleBasedRpciForecaster:
         label = self._classify(rpci, context.track_type)
         confidence = self._confidence(balance, escape_pressure, evidence_samples)
         reasons.append(
+            # 指数の実数値は UI の「予測の根拠」へそのまま出るため入れない。
             Reason(
                 code="forecast",
-                description=f"想定RPCI={rpci} → 展開「{label}」（信頼度 {confidence:.0%}）",
+                description=f"想定される流れは「{label}」（信頼度 {confidence:.0%}）",
             )
         )
 

@@ -22,11 +22,16 @@ from pci.domain.pace.commentary import (
     RuleBasedCommentGenerator,
 )
 from pci.domain.pace.mart_repository import MartRepository
-from pci.domain.pace.pci import FORMULA_VERSION, aggregate_rpci
+from pci.domain.pace.pci import (
+    FORMULA_VERSION,
+    aggregate_rpci,
+    calculate_rpci_from_lap,
+)
 from pci.domain.pace.rpci_forecast import PaceLabel, classify_pace
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.racing.repository import RaceRepository
+from pci.domain.shared.measurements import Furlong3Time
 from pci.domain.shared.race_key import RaceKey
 from pci.domain.shared.reason import Reason
 
@@ -166,7 +171,7 @@ class GetPaceAnalysisUseCase:
             raise RaceNotConfirmedError(f"レースはまだ確定していません: {race_key_str}")
 
         entries = self._repo.find_entries(key)
-        rpci, pci3, sample_size, reasons = self._aggregate(entries)
+        rpci, pci3, sample_size, reasons = self._aggregate(entries, race)
 
         name_map = self._repo.find_horse_names(e.ketto_num for e in entries if e.ketto_num)
         horses = [
@@ -251,7 +256,7 @@ class GetPaceAnalysisUseCase:
         return predicted_label, actual_label, accuracy_output
 
     def _aggregate(
-        self, entries: list[RaceEntry]
+        self, entries: list[RaceEntry], race: Race
     ) -> tuple[float | None, float | None, int, tuple[Reason, ...]]:
         completed = [
             (e.pci_actual, e.finish_pos)
@@ -259,12 +264,24 @@ class GetPaceAnalysisUseCase:
             if e.pci_actual is not None and e.finish_pos is not None
         ]
         if not completed:
-            reason = Reason(code="insufficient", description="PCI算出済みの完走馬がいません")
+            reason = Reason(
+                code="insufficient",
+                description="ペースを算出できる完走馬のデータがありません。",
+            )
             return None, None, 0, (reason,)
+
+        # レースラップを渡さないと常にフォールバック値になり、取り込み時に保存した
+        # races.rpci_actual と食い違う（同じ画面でヘッダーと本文の流れが割れる）。
+        race_rpci: float | None = None
+        if race.race_s3f is not None and race.race_l3f is not None:
+            race_rpci = calculate_rpci_from_lap(
+                Furlong3Time(race.race_s3f),
+                Furlong3Time(race.race_l3f),
+            )
 
         pci_values = [pci for pci, _ in completed]
         finish_positions = [pos for _, pos in completed]
-        result = aggregate_rpci(pci_values, finish_positions)
+        result = aggregate_rpci(pci_values, finish_positions, race_rpci=race_rpci)
         return result.rpci, result.pci3, result.sample_size, result.reasons
 
 

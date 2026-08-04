@@ -184,9 +184,10 @@ def _make_forecast(
                 f" / 馬場「{context.track_condition or '良'}」"
             ),
         ),
+        # 指数の実数値は UI の「予測の根拠」へそのまま出るため入れない。
         Reason(
             code="forecast",
-            description=f"想定RPCI={rpci} → 展開「{label}」（ML予測）",
+            description=f"想定される流れは「{label}」（過去データからの機械学習予測）",
         ),
         Reason(
             code=CLASSIFICATION_MARGIN_REASON_CODE,

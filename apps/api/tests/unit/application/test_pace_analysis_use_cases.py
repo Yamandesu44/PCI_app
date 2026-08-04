@@ -217,3 +217,74 @@ class TestForecastAccuracyFeedback:
         assert out.forecast_accuracy.predicted_label == str(PaceLabel.HIGH)
         assert out.forecast_accuracy.actual_label == str(PaceLabel.SLOW)
         assert any("という結果でした" in para for para in out.comment.body)  # type: ignore[union-attr]
+
+
+class TestPaceAnalysisUsesTheSameSourceAsTheRaceHeader:
+    """分析APIと保存済み races.rpci_actual が食い違わないことを守る。
+
+    2026-08-04: 分析側がレースラップを渡さず常にフォールバック値を返していたため、
+    同じ画面でヘッダー「実績ペース」と本文「実際の流れ」が別のペース区分になっていた。
+    """
+
+    @staticmethod
+    def _seed_with_lap(repo: FakeRaceRepository) -> None:
+        info = RaceInfo(
+            race_key=CONFIRMED,
+            race_date=datetime.date(2026, 6, 17),
+            jyo_cd="05",
+            distance_m=1600,
+            track_type="芝",
+            field_size=3,
+            track_condition="良",
+        )
+        entries = [
+            EntryInput(
+                horse_no=i,
+                frame_no=i,
+                ketto_num=f"202110000{i}",
+                weight=480.0,
+                jockey_code=f"J10{i}",
+                trainer_code=f"T10{i}",
+            )
+            for i in range(1, 4)
+        ]
+        RegisterRaceEntriesUseCase(repo).execute(info, entries)
+        results = [
+            ResultInput(horse_no=1, finish_pos=1, race_time_s=94.4, agari_3f_s=34.0, corner_4=2),
+            ResultInput(horse_no=2, finish_pos=2, race_time_s=94.6, agari_3f_s=34.2, corner_4=1),
+            ResultInput(horse_no=3, finish_pos=3, race_time_s=95.0, agari_3f_s=34.5, corner_4=4),
+        ]
+        RecordRaceResultUseCase(repo).execute(
+            CONFIRMED, results, track_condition="良", race_s3f=35.2, race_l3f=35.0
+        )
+
+    def test_analysis_matches_the_stored_value_when_the_lap_exists(self) -> None:
+        repo = FakeRaceRepository()
+        self._seed_with_lap(repo)
+
+        stored = repo.find_by_key(RaceKey(CONFIRMED))
+        out = GetPaceAnalysisUseCase(repo).execute(CONFIRMED)
+
+        assert stored is not None
+        assert stored.rpci_actual is not None
+        assert out.rpci_actual == stored.rpci_actual
+
+    def test_lap_derived_reason_replaces_the_provisional_one(self) -> None:
+        repo = FakeRaceRepository()
+        self._seed_with_lap(repo)
+
+        out = GetPaceAnalysisUseCase(repo).execute(CONFIRMED)
+
+        codes = {r.code for r in out.reasons}
+        assert "rpci_lap" in codes
+        assert "rpci_sample" not in codes
+
+    def test_falls_back_only_when_the_lap_is_missing(self) -> None:
+        repo = FakeRaceRepository()
+        _seed_confirmed(repo)  # ラップ未設定
+
+        out = GetPaceAnalysisUseCase(repo).execute(CONFIRMED)
+
+        codes = {r.code for r in out.reasons}
+        assert "rpci_sample" in codes
+        assert "暫定" in " ".join(r.description for r in out.reasons)
