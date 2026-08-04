@@ -686,6 +686,8 @@ class BacktestReport:
     rpci_samples: list[RpciSample] = field(default_factory=list)
     horse_samples: list[HorseSample] = field(default_factory=list)
     integrated_samples: list[IntegratedSample] = field(default_factory=list)
+    # 市場比較用。popularity を rank として扱った同型のサンプル。
+    market_samples: list[IntegratedSample] = field(default_factory=list)
     style_advantage_samples: list[StyleAdvantageSample] = field(default_factory=list)
 
 
@@ -1084,6 +1086,125 @@ def _summarize_style_advantage_groups(
             )
         )
     return tuple(groups)
+
+
+@dataclass(frozen=True)
+class RankingComparison:
+    """統合順位と市場（単勝人気）を同一レース集合で比較した結果。
+
+    利用者が比べる相手は「全馬平均」ではなく「1番人気を買った場合」なので、
+    製品価値の判断にはこの比較が要る。`ability-v3` は成分に単勝人気を含むため、
+    市場情報を使いながら市場を上回れているかという意味でも重要。
+    """
+
+    n_races: int  # 両方を計算できたレース数
+    n_races_total: int  # バックテスト対象の全レース数
+    integrated: IntegratedAccuracy
+    market: IntegratedAccuracy
+
+    @property
+    def coverage(self) -> float:
+        return self.n_races / self.n_races_total if self.n_races_total else 0.0
+
+    @property
+    def win_rate_delta(self) -> float:
+        return round(self.integrated.top1_win_rate - self.market.top1_win_rate, 4)
+
+    @property
+    def good_rate_delta(self) -> float:
+        return round(self.integrated.top1_good_rate - self.market.top1_good_rate, 4)
+
+    @property
+    def capture_rate_delta(self) -> float:
+        return round(
+            self.integrated.top3_good_capture_rate - self.market.top3_good_capture_rate, 4
+        )
+
+    @property
+    def beats_market(self) -> bool:
+        """3指標すべてで市場以上か。1つでも下回れば False。"""
+        return (
+            self.win_rate_delta >= 0
+            and self.good_rate_delta >= 0
+            and self.capture_rate_delta >= 0
+        )
+
+
+def compare_with_market(
+    integrated_samples: list[IntegratedSample],
+    market_samples: list[IntegratedSample],
+    n_races_total: int,
+) -> RankingComparison | None:
+    """統合順位と単勝人気を、同じレース集合へ揃えてから比較する。
+
+    人気が未取得のレースを片方だけに含めると比較が歪むため、両方に現れる
+    レースだけを対象にする。市場側は popularity をそのまま rank として扱う。
+    """
+    if not integrated_samples or not market_samples:
+        return None
+    common = {s.race_key for s in integrated_samples} & {s.race_key for s in market_samples}
+    if not common:
+        return None
+
+    integrated = summarize_integrated_accuracy(
+        [s for s in integrated_samples if s.race_key in common]
+    )
+    market = summarize_integrated_accuracy(
+        [s for s in market_samples if s.race_key in common]
+    )
+    if integrated is None or market is None:
+        return None
+    return RankingComparison(
+        n_races=len(common),
+        n_races_total=n_races_total,
+        integrated=integrated,
+        market=market,
+    )
+
+
+def format_ranking_comparison(comparison: RankingComparison | None) -> str:
+    """統合順位と市場の比較をCLI向けに整形する。比較不能なら空文字。"""
+    if comparison is None:
+        return ""
+    lines = [
+        "",
+        "■ 市場（単勝人気）との比較"
+        f"  対象 {comparison.n_races:,}レース（{comparison.coverage:.0%}／人気データのある分）",
+        f"    {'指標':<20}{'統合順位':>12}{'人気順':>12}{'差':>12}",
+    ]
+    rows = (
+        (
+            "1位の勝率",
+            comparison.integrated.top1_win_rate,
+            comparison.market.top1_win_rate,
+            comparison.win_rate_delta,
+        ),
+        (
+            "1位の好走率",
+            comparison.integrated.top1_good_rate,
+            comparison.market.top1_good_rate,
+            comparison.good_rate_delta,
+        ),
+        (
+            "TOP3の好走馬捕捉率",
+            comparison.integrated.top3_good_capture_rate,
+            comparison.market.top3_good_capture_rate,
+            comparison.capture_rate_delta,
+        ),
+    )
+    for label, ours, theirs, delta in rows:
+        mark = " " if delta >= 0 else "!"
+        lines.append(f"  {mark} {label:<20}{ours:>11.1%}{theirs:>12.1%}{delta:>+12.1%}")
+    verdict = (
+        "統合順位が3指標すべてで市場以上。"
+        if comparison.beats_market
+        else "市場を下回る指標がある（! 印）。順位予想の看板としての価値を再検討する材料。"
+    )
+    lines.append(f"  → {verdict}")
+    lines.append(
+        "  ※ ability-v3 は成分に単勝人気を含む。市場情報を使いながら市場に勝てているかを見る。"
+    )
+    return "\n".join(lines)
 
 
 def summarize_style_advantage(
@@ -1762,6 +1883,14 @@ def format_report(
         lines.append(f"  1位馬の勝率: {i.top1_win_rate:.1%}")
         lines.append(f"  1位馬の好走率: {i.top1_good_rate:.1%}")
         lines.append(f"  TOP3の好走馬捕捉率: {i.top3_good_capture_rate:.1%}")
+        # 人気データが無ければ空文字が返るので、通常時は出力を汚さない。
+        market_text = format_ranking_comparison(
+            compare_with_market(
+                report.integrated_samples, report.market_samples, report.n_races
+            )
+        )
+        if market_text:
+            lines.append(market_text)
     else:
         lines.append("\n■ 統合順位予想: 有効サンプルなし")
 
@@ -2105,6 +2234,7 @@ class ForecastBacktester:
         rpci_samples: list[RpciSample] = []
         horse_samples: list[HorseSample] = []
         integrated_samples: list[IntegratedSample] = []
+        market_samples: list[IntegratedSample] = []
         style_advantage_samples: list[StyleAdvantageSample] = []
         n_races = 0
         skipped = 0
@@ -2176,6 +2306,19 @@ class ForecastBacktester:
                             good_run=is_good_run(finish, race.grade),
                         )
                     )
+            # 市場ベースライン: 単勝人気をそのまま順位として同じ指標で測る。
+            for actual in actual_entries:
+                if actual.popularity is None:
+                    continue
+                market_samples.append(
+                    IntegratedSample(
+                        race_key=key,
+                        horse_no=actual.horse_no,
+                        rank=actual.popularity,
+                        finish_pos=actual.finish_pos,
+                        good_run=is_good_run(actual.finish_pos, race.grade),
+                    )
+                )
             n_races += 1
 
         model_version = " / ".join(sorted(model_versions)) if model_versions else ""
@@ -2191,6 +2334,7 @@ class ForecastBacktester:
             rpci_samples=rpci_samples,
             horse_samples=horse_samples,
             integrated_samples=integrated_samples,
+            market_samples=market_samples,
             style_advantage_samples=style_advantage_samples,
         )
 
