@@ -1,5 +1,106 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-04 (Claude Code) 作業区切り — 想定RPCIの安全弁を較正、v5採用はモデルファイル待ち
+
+- 更新日時: 2026-08-04 JST
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- 現在のブランチ: `claude/sweet-einstein-ilnaov`
+- 最新コミット: `7875c02 fix(api): lower the RPCI clamp floor to the training label range`
+- 作業目的: ダート想定RPCIの系統バイアス+2.5の原因を特定し、再学習候補の採否判断をやり直せる状態にする。
+
+### 完了した内容
+
+1. **クランプ診断を追加**（`2a2acb0`）。`summarize_clamp_impact` / `format_clamp_impact` で、
+   予測誤差を「クランプ端に張り付いた群」と「内側の群」へ分けて集計する。
+2. **クランプを注入可能化**（`db4d538`）。`--clamp-min` / `--clamp-max` で本番設定を変えずに較正を実測できる。
+3. **原因を特定**。ダートのバイアスはモデルではなく安全弁の下限35.0が原因と確定した。
+   v5は下限で切られる前の領域ではほぼ無バイアス（内側+0.211）だが、より正しく低い値を
+   出そうとするほど下限で切られる頭数が増え（76→113R）、全体バイアスの95%が下限由来だった。
+4. **下限を35.0→20.0へ較正**（`7875c02`）。学習ラベル範囲の下端に合わせた。根拠は
+   `docs/DECISIONS.md` ADR-2026-08-04。
+
+### 実測値（2026-06-01以降・ダート257R / 芝348R）
+
+| | 旧下限35.0 | 新下限20.0 |
+|---|---:|---:|
+| v4 MAE / バイアス | 4.457 / +2.479 | 3.719 / +1.653 |
+| v5 MAE / バイアス | 3.835 / +2.508 | **2.356 / +0.012** |
+| v5 展開ラベル的中率 | 78.6% | 78.6%（v4は71.2%） |
+| v5 PAI最上位帯リフト | 1.27x | 1.27x（v4は1.19x） |
+| 芝（本番設定） | 上下限とも張り付き0件・影響なし | 同左 |
+
+### 未完了の内容・止まっている箇所
+
+**ダートv5の本番採用**。以下は次の担当での対応が必要:
+
+1. `models/rpci_lgbm_dirt_v5_full.txt` が**リポジトリに存在しない**（ユーザーのWindows機のみ）。
+   採用にはこのファイルのコミットが要る。
+2. 同ファイルの `.meta.json` に `model_version` が無く、v4と同じ特徴量数(39)のため
+   `lgbm-dirt-v4-lap-history` にフォールバックしている。**このまま採用するとmart層へv4と記録される**
+   （DoD違反）。再学習は不要で、meta.json へ `"model_version": "lgbm-dirt-v5-lap-history"` を追記すれば足りる。
+3. `apps/api/src/pci/application/rpci_monitoring.py` の `RpciMonitoringPolicy` は
+   `expected_model_version="lgbm-dirt-v4-lap-history"`、閾値もv4採用時評価由来（MAE≤5.94 / |bias|≤4.62）。
+   v5採用時は同時に更新しないと `MODEL_MISMATCH` で監視が止まる。
+4. `_DEFAULT_DIRT_MODEL_PATH`（`lgbm_forecaster.py:51`）の切替。
+
+### 判断が必要な論点（独断で確定していない）
+
+ADR-2026-08-02（Codex）は次回採用評価に **2026-08-03以降・100レース以上・実績ハイ/平均/スロー各20R以上** を
+予約し、2026-06〜08-02を予備評価済み期間としている。今回の比較は 2026-06-01以降257R で、この予約期間ではない。
+
+一方、その採用条件（絶対バイアスが現行より小さい／MAE・分類的中率・PAI最上位帯リフトを悪化させない）は
+**新しい下限では4条件すべてv5が満たす**（バイアス +0.012 < +1.653、MAE 2.356 < 3.719、
+的中率 78.6% > 71.2%、リフト 1.27x > 1.19x）。見送りの根拠だった「バイアスが縮まらない」は
+測定側の欠陥だったことが判明している。
+
+「予約期間の到達を待つ」か「測定欠陥の判明をもって再評価する」かは**運用方針の判断**であり、
+本セッションでは確定していない。ユーザーからは採用指示が出ている。
+
+### 対象ファイル
+
+- `apps/api/src/pci/infrastructure/pace/lgbm_forecaster.py`（下限20.0・clamp注入）
+- `apps/api/src/pci/application/backtest.py`（`ClampImpact`・診断）
+- `apps/api/scripts/backtest_forecast.py`（`--clamp-min` / `--clamp-max`）
+- `apps/api/tests/unit/application/test_backtest.py`
+- `apps/api/tests/unit/infrastructure/pace/test_lgbm_forecaster.py`
+- `docs/DECISIONS.md`（ADR-2026-08-04）
+
+### 仮実装・暫定値・未確定仕様
+
+- **上限65.0は据え置き**。芝・ダートとも張り付き0件で拘束の証拠がないため。学習ラベル上限90との
+  不一致は残る（監視対象）。
+- **芝の下限引き下げは長期未検証**。2026-06以降348Rで非拘束を確認しただけ。
+- `RuleWeights.rpci_min`（rule-v4）は変更していない。別推定器の安全弁で誤較正の証拠がないため。
+- v4監視ポリシーの閾値は旧下限時代の評価由来で、新下限では緩くなる方向（誤検知はしないが感度は落ちる）。
+
+### 既知の不具合・注意事項
+
+- application層は予測器の実装値を参照できないため、`format_report` はクランプ値を
+  明示的に渡された時だけ内訳を出す。CLIは常に実際の値を渡している。
+- この診断以前に「バイアスを主指標」として下した再学習候補の採否
+  （ADR-2026-08-02 の2件）は、いずれも測定欠陥下の判断であり再評価対象。
+
+### テスト状況（2026-08-04・`7875c02`時点）
+
+```
+cd apps/api
+.venv/bin/python -m pytest tests/unit/ tests/contract/ -q   # 658 passed
+.venv/bin/ruff check src/ tests/ scripts/                   # All checks passed
+.venv/bin/python -m mypy src/ --strict                      # 0 errors (65 files)
+.venv/bin/lint-imports                                      # 2 kept, 0 broken
+```
+
+### 再開コマンド
+
+```bash
+cd apps/api
+# クランプ内訳は標準レポートへ自動で出る（端に張り付きがある時だけ）
+.venv/bin/python -m scripts.backtest_forecast --date-from 2026-06-01 --track-type ダート --limit 500
+# 較正を実測する場合（本番設定は変えない）
+.venv/bin/python -m scripts.backtest_forecast --date-from 2026-06-01 --track-type ダート --clamp-min 20
+```
+
 ## 2026-08-03 17:56 JST (OpenAI Codex → Claude Code) 作業区切り
 
 - 更新日時: 2026-08-03 17:56 JST
