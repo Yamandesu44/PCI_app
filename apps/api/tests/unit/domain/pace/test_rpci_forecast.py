@@ -55,11 +55,15 @@ class TestRuleBasedForecast:
         assert result.value > DEFAULT_WEIGHTS.slow_threshold
 
     def test_balanced_field_gives_average(self) -> None:
-        # 芝補正(+5.0)込みで均衡するフィールド:
-        # base=54.75, balance=-3.2, escape_pressure=-0.8 → structural=50.75 (平均域)
+        """前5頭・後ろ5頭の均衡フィールドは平均域に収まる。
+
+        旧版は逃2先5差2追1（前7・後3）で、これは構成として均衡しておらず、
+        当時の芝補正(+5.0)に合わせて平均域へ入るよう調整された値だった。
+        pci-v3で補正を実分布から引き直した（+2.0）ため、素直に均衡する構成へ変更する。
+        """
         forecaster = RuleBasedRpciForecaster()
         result = forecaster.forecast(
-            _ctx((ESCAPE,) * 2 + (FRONT,) * 5 + (STALKER,) * 2 + (CLOSER,) * 1)
+            _ctx((ESCAPE,) + (FRONT,) * 4 + (STALKER,) * 4 + (CLOSER,))
         )
         assert result.label == PaceLabel.AVERAGE
 
