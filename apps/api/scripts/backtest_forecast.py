@@ -68,6 +68,7 @@ from pci.application.backtest import (
     BacktestReport,
     ForecastBacktester,
     PaiWeightComparison,
+    RankingStrategyResult,
     RuleWeightComparison,
     ability_weight_comparisons_to_dict,
     build_actual_style_advantage_breakdown,
@@ -77,11 +78,13 @@ from pci.application.backtest import (
     compare_pai_weight_reports,
     compare_rule_weight_reports,
     compare_style_advantage_profiles,
+    compare_with_market,
     format_ability_weight_comparison,
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
     format_pace_style_matrix,
     format_pai_weight_comparison,
+    format_ranking_strategy_comparison,
     format_report,
     format_rule_weight_comparison,
     format_style_advantage_attribution,
@@ -107,6 +110,7 @@ from pci.application.rpci_monitoring import (
 from pci.config.settings import get_settings
 from pci.domain.pace.ability import AbilityScorer
 from pci.domain.pace.adaptability import PaceAdaptabilityScorer
+from pci.domain.pace.integrated_ranking import RankingStrategy
 from pci.domain.pace.rpci_forecast import (
     RpciForecaster,
     RuleBasedRpciForecaster,
@@ -211,6 +215,11 @@ def _parse_args() -> argparse.Namespace:
         "--compare-pai-weights",
         action="store_true",
         help="PAIの検証用重み5候補を全体・芝・ダートで比較する",
+    )
+    p.add_argument(
+        "--compare-ranking-strategies",
+        action="store_true",
+        help="統合順位の並べ方を比較し、どの成分が効いているか切り分ける",
     )
     p.add_argument(
         "--monitor-dirt",
@@ -458,6 +467,13 @@ def main() -> None:
         )
         print(f"\n{format_pai_weight_comparison(pai_weight_comparisons)}")
 
+    if args.compare_ranking_strategies:
+        print(
+            format_ranking_strategy_comparison(
+                _run_ranking_strategy_comparison(repo, forecaster, targets, report)
+            )
+        )
+
     if args.output:
         _write_output(
             args.output,
@@ -516,6 +532,41 @@ def _run_rule_weight_comparison(
         )
         reports[profile.name] = candidate_backtester.run(targets)
     return compare_rule_weight_reports(reports)
+
+
+def _run_ranking_strategy_comparison(
+    repo: SqlAlchemyRaceRepository,
+    forecaster: RpciForecaster | None,
+    targets: list[Race],
+    current_report: BacktestReport,
+) -> list[RankingStrategyResult]:
+    """並べ方を差し替えて再実行し、成分ごとの寄与を測る。
+
+    市場比較は同一レース集合で行う必要があるため、各戦略のレポートから
+    market_samples を使って毎回そろえ直す。
+    """
+    results: list[RankingStrategyResult] = []
+    for strategy in RankingStrategy:
+        if strategy is RankingStrategy.CURRENT:
+            report = current_report
+        else:
+            print(f"\n並べ方「{strategy}」を検証中…")
+            report = ForecastBacktester(
+                repo, forecaster=forecaster, ranking_strategy=strategy
+            ).run(targets)
+        comparison = compare_with_market(
+            report.integrated_samples, report.market_samples, report.n_races
+        )
+        if comparison is None:
+            continue
+        results.append(
+            RankingStrategyResult(
+                strategy=strategy,
+                accuracy=comparison.integrated,
+                market=comparison.market,
+            )
+        )
+    return results
 
 
 def _run_pai_weight_comparison(

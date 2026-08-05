@@ -136,3 +136,66 @@ class TestFormat:
         text = format_ranking_comparison(compare_with_market(integrated, market, 1))
 
         assert "3指標すべてで市場以上" in text
+
+
+class TestRankingStrategy:
+    """並べ方の切り替えが順位へ正しく反映されること。
+
+    本番(CURRENT)は同一tier内で展開向き(PAI由来)を能力scoreより優先する。
+    この優先順位が順位予想の精度を落としている疑いがあるため、切り分けられる
+    ようにした。mark・tier・fit_label の判定は戦略に依らず同じ。
+    """
+
+    @staticmethod
+    def _build(strategy: object) -> tuple[int, ...]:
+        from pci.domain.pace.ability import AbilityScore
+        from pci.domain.pace.adaptability import FitLabel, PaiResult
+        from pci.domain.pace.integrated_ranking import build_integrated_ranking
+
+        # tierは3分位なので、上位tierに複数頭入るよう9頭で構成する。
+        # 能力score 90,80,...,10。上位tierは1〜3番。
+        abilities = tuple(
+            AbilityScore(
+                horse_no=no, score=100.0 - no * 10, sample_size=5, model_version="t", reasons=()
+            )
+            for no in range(1, 10)
+        )
+        # 上位tier内で展開向きを能力と逆順にする（3番が最も展開向き）。
+        labels = {1: FitLabel.UNFAVORABLE, 2: FitLabel.NEUTRAL, 3: FitLabel.MATCHED}
+        fits = tuple(
+            PaiResult(
+                horse_no=no,
+                pai=50.0,
+                fit_label=labels.get(no, FitLabel.NEUTRAL),
+                model_version="t",
+                reasons=(),
+            )
+            for no in range(1, 10)
+        )
+        ranking = build_integrated_ranking(abilities, fits, strategy)  # type: ignore[arg-type]
+        return tuple(e.horse_no for e in sorted(ranking.entries, key=lambda e: e.rank))
+
+    def test_current_lets_pace_fit_outrank_ability_score(self) -> None:
+        """本番は展開向きが能力scoreより先に効く。"""
+        from pci.domain.pace.integrated_ranking import RankingStrategy
+
+        assert self._build(RankingStrategy.CURRENT)[0] == 3
+
+    def test_ability_first_ignores_pace_fit_for_ordering(self) -> None:
+        from pci.domain.pace.integrated_ranking import RankingStrategy
+
+        assert self._build(RankingStrategy.ABILITY_FIRST) == tuple(range(1, 10))
+
+    def test_score_only_ignores_tier_and_fit(self) -> None:
+        from pci.domain.pace.integrated_ranking import RankingStrategy
+
+        assert self._build(RankingStrategy.SCORE_ONLY) == tuple(range(1, 10))
+
+    def test_default_is_the_production_strategy(self) -> None:
+        """既定を変えると本番の並びが変わる。取り違え防止に固定する。"""
+        import inspect
+
+        from pci.domain.pace.integrated_ranking import RankingStrategy, build_integrated_ranking
+
+        default = inspect.signature(build_integrated_ranking).parameters["strategy"].default
+        assert default is RankingStrategy.CURRENT

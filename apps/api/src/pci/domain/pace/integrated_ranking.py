@@ -79,28 +79,56 @@ _TIER_ORDER = {
 }
 
 
+class RankingStrategy(StrEnum):
+    """表示順の決め方。既定は本番の CURRENT で、他は検証専用。
+
+    2026-08-04: 統合順位が単勝人気に大きく負けている（1位勝率 20.2% 対 36.9%）ことが
+    判明した。CURRENT は同一tier内で fit_label（PAI由来）を能力scoreより優先するため、
+    PAIが雑音なら上位tier内の並びをかき混ぜる。どの成分が効いているかを切り分けるために
+    別の並べ方を注入できるようにした（本番の既定は変えない）。
+    """
+
+    CURRENT = "tier-fit-score"      # 能力tier → 展開向き → 能力score（本番）
+    ABILITY_FIRST = "tier-score"    # 能力tier → 能力score（展開を順位付けに使わない）
+    SCORE_ONLY = "score"            # 能力scoreの連続値のみ（tierも使わない）
+
+
+def _sort_key(
+    strategy: RankingStrategy,
+    tier_order: int,
+    fit_order: int,
+    score: float,
+) -> tuple[float, float, float]:
+    if strategy is RankingStrategy.ABILITY_FIRST:
+        return (tier_order, -score, 0.0)
+    if strategy is RankingStrategy.SCORE_ONLY:
+        return (-score, 0.0, 0.0)
+    return (tier_order, fit_order, -score)
+
+
 def build_integrated_ranking(
     abilities: tuple[AbilityScore, ...],
     fits: tuple[PaiResult, ...],
+    strategy: RankingStrategy = RankingStrategy.CURRENT,
 ) -> IntegratedRanking:
     """能力スコアとPAI結果から2軸分類・表示順を組み立てる。
 
     abilities / fits は同一レースの全出走馬分。horse_no で突き合わせる。
+    strategy は表示順の決め方（既定は本番）。mark・tier・fit_label の判定は
+    strategy に依らず同じで、変わるのは並び順だけ。
     """
     fit_by_no = {f.horse_no: f for f in fits}
     tier_by_no = _assign_relative_tiers(abilities)
 
-    entries_unranked: list[tuple[int, int, float, IntegratedEntry]] = []
+    entries_unranked: list[tuple[float, float, float, IntegratedEntry]] = []
     for ability in abilities:
         fit = fit_by_no.get(ability.horse_no)
         fit_label = fit.fit_label if fit is not None else FitLabel.NEUTRAL
         tier = tier_by_no[ability.horse_no]
         mark = _classify(tier, fit_label)
-        # 表示順キー: 能力tier（主） → 展開向き（従） → 能力score（細分）。
-        sort_key = (
-            _TIER_ORDER[tier],
-            _FIT_ORDER[fit_label],
-            -ability.score,
+        # 既定の表示順キー: 能力tier（主） → 展開向き（従） → 能力score（細分）。
+        sort_key = _sort_key(
+            strategy, _TIER_ORDER[tier], _FIT_ORDER[fit_label], ability.score
         )
         entry = IntegratedEntry(
             horse_no=ability.horse_no,

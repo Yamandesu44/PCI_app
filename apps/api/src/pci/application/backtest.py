@@ -44,6 +44,7 @@ from pci.domain.pace.adaptability import (
 )
 from pci.domain.pace.affinity import is_good_run
 from pci.domain.pace.commentary import CommentGenerator
+from pci.domain.pace.integrated_ranking import RankingStrategy
 from pci.domain.pace.rpci_forecast import (
     DEFAULT_WEIGHTS as DEFAULT_RULE_WEIGHTS,
 )
@@ -1207,6 +1208,74 @@ def format_ranking_comparison(comparison: RankingComparison | None) -> str:
     return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class RankingStrategyResult:
+    """並べ方ごとの統合順位の実績。市場との差も併記する。"""
+
+    strategy: RankingStrategy
+    accuracy: IntegratedAccuracy
+    market: IntegratedAccuracy
+
+    @property
+    def win_rate_delta(self) -> float:
+        return round(self.accuracy.top1_win_rate - self.market.top1_win_rate, 4)
+
+    @property
+    def good_rate_delta(self) -> float:
+        return round(self.accuracy.top1_good_rate - self.market.top1_good_rate, 4)
+
+    @property
+    def capture_rate_delta(self) -> float:
+        return round(
+            self.accuracy.top3_good_capture_rate - self.market.top3_good_capture_rate, 4
+        )
+
+
+def format_ranking_strategy_comparison(
+    results: list[RankingStrategyResult],
+) -> str:
+    """並べ方の比較をCLI向けに整形する。
+
+    どの成分が順位付けに効いているかを切り分けるための出力。
+    CURRENT と ABILITY_FIRST の差が「展開（PAI）を順位付けに使うことの効果」、
+    ABILITY_FIRST と SCORE_ONLY の差が「tierで粗く丸めることの効果」になる。
+    """
+    if not results:
+        return ""
+    labels = {
+        RankingStrategy.CURRENT: "現行(tier→展開→score)",
+        RankingStrategy.ABILITY_FIRST: "展開を使わない(tier→score)",
+        RankingStrategy.SCORE_ONLY: "能力scoreのみ",
+    }
+    lines = [
+        "",
+        "=" * 78,
+        "■ 統合順位の並べ方の比較（どの成分が効いているかの切り分け）",
+        "=" * 78,
+        f"  {'並べ方':<28}{'1位勝率':>10}{'1位好走率':>12}{'TOP3捕捉':>11}",
+    ]
+    for r in results:
+        lines.append(
+            f"  {labels.get(r.strategy, str(r.strategy)):<28}"
+            f"{r.accuracy.top1_win_rate:>9.1%}"
+            f"{r.accuracy.top1_good_rate:>11.1%}"
+            f"{r.accuracy.top3_good_capture_rate:>10.1%}"
+        )
+    market = results[0].market
+    lines.append(
+        f"  {'（参考）単勝人気順':<28}"
+        f"{market.top1_win_rate:>9.1%}"
+        f"{market.top1_good_rate:>11.1%}"
+        f"{market.top3_good_capture_rate:>10.1%}"
+    )
+    lines.append(
+        "\n  読み方: 現行と「展開を使わない」の差が、展開(PAI)を順位付けへ使うことの効果。"
+        "\n          さらに「能力scoreのみ」との差が、tierで粗く丸めることの効果。"
+        "\n  ※ どれも人気順を下回るなら、順位予想そのものを看板から外す判断材料になる。"
+    )
+    return "\n".join(lines)
+
+
 def summarize_style_advantage(
     samples: list[StyleAdvantageSample],
 ) -> StyleAdvantageLift | None:
@@ -2222,6 +2291,7 @@ class ForecastBacktester:
         ability_scorer: AbilityScorer | None = None,
         pai_scorer: PaceAdaptabilityScorer | None = None,
         band_edges: tuple[int, ...] = DEFAULT_BAND_EDGES,
+        ranking_strategy: RankingStrategy = RankingStrategy.CURRENT,
     ) -> None:
         self._repo = repo
         self._forecaster = forecaster
@@ -2229,6 +2299,7 @@ class ForecastBacktester:
         self._ability_scorer = ability_scorer
         self._pai_scorer = pai_scorer
         self._band_edges = band_edges
+        self._ranking_strategy = ranking_strategy
 
     def run(self, targets: Iterable[Race]) -> BacktestReport:
         rpci_samples: list[RpciSample] = []
@@ -2445,6 +2516,7 @@ class ForecastBacktester:
             comment_generator=self._commenter,
             ability_scorer=self._ability_scorer,
             scorer=self._pai_scorer,
+            ranking_strategy=self._ranking_strategy,
         )
         return use_case.execute(str(race.race_key))
 

@@ -44,7 +44,11 @@ from pci.domain.pace.formation import (
     FormationPrediction,
     predict_formation,
 )
-from pci.domain.pace.integrated_ranking import IntegratedRanking, build_integrated_ranking
+from pci.domain.pace.integrated_ranking import (
+    IntegratedRanking,
+    RankingStrategy,
+    build_integrated_ranking,
+)
 from pci.domain.pace.mart_repository import MartRepository
 from pci.domain.pace.rpci_forecast import (
     FrontRunnerPaceSample,
@@ -86,6 +90,7 @@ class ForecastRaceUseCase:
         mart_repo: MartRepository | None = None,
         comment_generator: CommentGenerator | None = None,
         ability_scorer: AbilityScorer | None = None,
+        ranking_strategy: RankingStrategy = RankingStrategy.CURRENT,
     ) -> None:
         self._repo = repo
         self._forecaster = forecaster or RuleBasedRpciForecaster()
@@ -93,6 +98,8 @@ class ForecastRaceUseCase:
         self._mart_repo = mart_repo
         self._commenter = comment_generator or RuleBasedCommentGenerator()
         self._ability_scorer = ability_scorer or AbilityScorer()
+        # 統合順位の並べ方。既定は本番で、バックテストが検証用に差し替える。
+        self._ranking_strategy = ranking_strategy
 
     def execute(self, race_key_str: str) -> ForecastOutput:
         key = RaceKey(race_key_str)
@@ -213,7 +220,9 @@ class ForecastRaceUseCase:
             )
             for e in entries
         )
-        integrated = build_integrated_ranking(abilities, tuple(fit_results))
+        integrated = build_integrated_ranking(
+            abilities, tuple(fit_results), self._ranking_strategy
+        )
 
         comment_input = ForecastCommentInput(
             distance_m=race.distance_m,
