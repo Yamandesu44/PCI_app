@@ -317,15 +317,11 @@ def summarize_clamp_impact(
     """
     if not samples:
         return None
-    lower, upper = (
-        clamp if clamp is not None else (rule_weights.rpci_min, rule_weights.rpci_max)
-    )
+    lower, upper = clamp if clamp is not None else (rule_weights.rpci_min, rule_weights.rpci_max)
     # 予測値は小数1桁へ丸めてから返るため、端値との比較は微小誤差だけ見れば足りる。
     at_lower = [s for s in samples if s.predicted <= lower + 1e-9]
     at_upper = [s for s in samples if s.predicted >= upper - 1e-9]
-    interior = [
-        s for s in samples if lower + 1e-9 < s.predicted < upper - 1e-9
-    ]
+    interior = [s for s in samples if lower + 1e-9 < s.predicted < upper - 1e-9]
 
     def _bias(group: list[RpciSample]) -> float:
         return sum(s.predicted - s.actual for s in group) / len(group) if group else 0.0
@@ -339,9 +335,7 @@ def summarize_clamp_impact(
         upper=upper,
         at_lower_n=len(at_lower),
         at_lower_bias=round(_bias(at_lower), 3),
-        at_lower_actual_mean=round(
-            sum(s.actual for s in at_lower) / len(at_lower), 2
-        )
+        at_lower_actual_mean=round(sum(s.actual for s in at_lower) / len(at_lower), 2)
         if at_lower
         else 0.0,
         at_upper_n=len(at_upper),
@@ -376,9 +370,7 @@ def format_clamp_impact(impact: ClampImpact | None) -> str:
         f"  → 全体バイアスへの寄与: 下限 {impact.bias_from_lower:+.3f}"
         f" / 上限 {impact.bias_from_upper:+.3f}"
     )
-    lines.append(
-        "  ※ 内側のバイアスが小さいのに全体が偏るなら、原因はモデルではなくクランプ幅。"
-    )
+    lines.append("  ※ 内側のバイアスが小さいのに全体が偏るなら、原因はモデルではなくクランプ幅。")
     return "\n".join(lines)
 
 
@@ -758,9 +750,7 @@ def summarize_integrated_accuracy(
     return IntegratedAccuracy(
         n_races=len(top1),
         n_horses=len(samples),
-        top1_win_rate=round(
-            sum(1 for sample in top1 if sample.finish_pos == 1) / len(top1), 4
-        )
+        top1_win_rate=round(sum(1 for sample in top1 if sample.finish_pos == 1) / len(top1), 4)
         if top1
         else 0.0,
         top1_good_rate=round(sum(1 for sample in top1 if sample.good_run) / len(top1), 4)
@@ -1116,17 +1106,13 @@ class RankingComparison:
 
     @property
     def capture_rate_delta(self) -> float:
-        return round(
-            self.integrated.top3_good_capture_rate - self.market.top3_good_capture_rate, 4
-        )
+        return round(self.integrated.top3_good_capture_rate - self.market.top3_good_capture_rate, 4)
 
     @property
     def beats_market(self) -> bool:
         """3指標すべてで市場以上か。1つでも下回れば False。"""
         return (
-            self.win_rate_delta >= 0
-            and self.good_rate_delta >= 0
-            and self.capture_rate_delta >= 0
+            self.win_rate_delta >= 0 and self.good_rate_delta >= 0 and self.capture_rate_delta >= 0
         )
 
 
@@ -1149,9 +1135,7 @@ def compare_with_market(
     integrated = summarize_integrated_accuracy(
         [s for s in integrated_samples if s.race_key in common]
     )
-    market = summarize_integrated_accuracy(
-        [s for s in market_samples if s.race_key in common]
-    )
+    market = summarize_integrated_accuracy([s for s in market_samples if s.race_key in common])
     if integrated is None or market is None:
         return None
     return RankingComparison(
@@ -1225,9 +1209,7 @@ class RankingStrategyResult:
 
     @property
     def capture_rate_delta(self) -> float:
-        return round(
-            self.accuracy.top3_good_capture_rate - self.market.top3_good_capture_rate, 4
-        )
+        return round(self.accuracy.top3_good_capture_rate - self.market.top3_good_capture_rate, 4)
 
 
 def format_ranking_strategy_comparison(
@@ -1275,7 +1257,6 @@ def format_ranking_strategy_comparison(
     return "\n".join(lines)
 
 
-
 @dataclass(frozen=True)
 class PaiStyleRow:
     """脚質ごとの PAI 平均と実際の好走率。"""
@@ -1289,9 +1270,11 @@ class PaiStyleRow:
 def summarize_pai_by_style(samples: list[HorseSample]) -> list[PaiStyleRow]:
     """脚質ごとに PAI の平均と実際の好走率を並べる。
 
-    PAI は「想定ペースへの適性」のはずだが、`_preferred_rpci` が脚質だけで決まり
-    コース種別の補正を持たないため、実質的に脚質を符号化している疑いがある。
-    PAI順と好走率順が一致しなければ、PAIは順位付けの根拠にならない。
+    構成を把握するための表であって、性能評価ではない。pai-v3 の PAI は
+    「その脚質にとって普段どおりの流れか」を表す**脚質内の相対量**なので、
+    脚質をまたいだ平均の大小は何も主張していない（感応度0の差し・追込は
+    ペース由来の振れが無く、常に基準点付近へ集まる）。
+    脚質の定数効果を除いた効きは `summarize_pai_within_style` で見ること。
     """
     styles = sorted({s.running_style for s in samples if s.running_style})
     rows: list[PaiStyleRow] = []
@@ -1310,11 +1293,72 @@ def summarize_pai_by_style(samples: list[HorseSample]) -> list[PaiStyleRow]:
     return sorted(rows, key=lambda r: -r.mean_pai)
 
 
+@dataclass(frozen=True)
+class PaiWithinStyleRow:
+    """脚質を固定したときに、PAI が好走を判別できているか。"""
+
+    style: str
+    n: int
+    baseline_rate: float
+    group_n: int  # 上位1/3・下位1/3それぞれの頭数
+    low_mean_pai: float
+    low_rate: float
+    high_mean_pai: float
+    high_rate: float
+
+    @property
+    def spread(self) -> float:
+        """上位1/3と下位1/3の好走率差。脚質の定数効果を除いたペース依存の純効果。"""
+        return self.high_rate - self.low_rate
+
+    @property
+    def pai_spread(self) -> float:
+        """上位1/3と下位1/3の PAI 差。小さいならそもそも判別する幅が無い。"""
+        return self.high_mean_pai - self.low_mean_pai
+
+
+def summarize_pai_within_style(samples: list[HorseSample]) -> list[PaiWithinStyleRow]:
+    """脚質を固定した上で、PAI 上位1/3と下位1/3の好走率を比べる。
+
+    pai-v3 の PAI は脚質内の相対量なので、脚質をまたいだ集計では性能を測れない。
+    実際「PAI帯 → 好走率」の表が 40-60 帯で沈むのは、感応度0の差し・追込
+    （好走率 0.47〜0.99x と元々走らない脚質）がそこへ積み上がるためで、
+    PAI の判別力とは別の話。脚質を固定すれば定数効果が落ち、ペース依存の
+    純効果だけが残る。
+
+    同値が多い脚質では順位で切るため境界の割り当ては任意になる。判別する幅が
+    あったかは `pai_spread` で確認すること。
+    """
+    rows: list[PaiWithinStyleRow] = []
+    for style in sorted({s.running_style for s in samples if s.running_style}):
+        group = sorted((s for s in samples if s.running_style == style), key=lambda s: s.pai)
+        cut = len(group) // 3
+        if cut < 1:
+            continue
+        low, high = group[:cut], group[-cut:]
+        rows.append(
+            PaiWithinStyleRow(
+                style=style,
+                n=len(group),
+                baseline_rate=round(sum(1 for s in group if s.good_run) / len(group), 4),
+                group_n=cut,
+                low_mean_pai=round(sum(s.pai for s in low) / cut, 1),
+                low_rate=round(sum(1 for s in low if s.good_run) / cut, 4),
+                high_mean_pai=round(sum(s.pai for s in high) / cut, 1),
+                high_rate=round(sum(1 for s in high if s.good_run) / cut, 4),
+            )
+        )
+    return sorted(rows, key=lambda r: -r.spread)
+
+
+_PAI_SMALL_GROUP_N = 30
+
+
 def format_pai_by_style(samples: list[HorseSample]) -> str:
-    """PAI順と好走率順が一致しているかをコース別に示す。"""
+    """脚質の定数効果と、脚質内での PAI の効きを分けて示す。"""
     if not samples:
         return ""
-    lines = ["", "=" * 78, "■ PAIは展開適性か、それとも脚質か（PAI順 対 実際の好走率順）", "=" * 78]
+    lines = ["", "=" * 78, "■ PAI診断（脚質の定数効果 / 脚質内での PAI の効き）", "=" * 78]
     for track in ("芝", "ダート"):
         group = [s for s in samples if s.track_type == track]
         rows = summarize_pai_by_style(group)
@@ -1328,15 +1372,28 @@ def format_pai_by_style(samples: list[HorseSample]) -> str:
                 f"    {r.style:<8}{r.n:>8,}{r.mean_pai:>10.1f}"
                 f"{r.good_rate:>10.1%}{r.good_rate / base if base else 0:>9.2f}x"
             )
-        by_good = [r.style for r in sorted(rows, key=lambda r: -r.good_rate)]
-        by_pai = [r.style for r in rows]
-        agree = "一致" if by_pai == by_good else "不一致"
-        lines.append(f"    PAI順: {' > '.join(by_pai)}")
-        lines.append(f"    実績順: {' > '.join(by_good)}   → {agree}")
+        lines.append("    ※ PAI平均の大小は脚質間で比較できない（pai-v3 は脚質内の相対量）。")
+
+        within = summarize_pai_within_style(group)
+        if not within:
+            continue
+        lines.append(f"\n    脚質内でのPAIの効き（上位1/3 対 下位1/3・{track}）")
+        lines.append(
+            f"    {'脚質':<8}{'1/3頭数':>9}{'下位PAI':>9}{'下位好走':>9}"
+            f"{'上位PAI':>9}{'上位好走':>9}{'差':>9}"
+        )
+        for w in within:
+            mark = "*" if w.group_n < _PAI_SMALL_GROUP_N else " "
+            lines.append(
+                f"    {w.style:<8}{w.group_n:>8,}{mark}{w.low_mean_pai:>9.1f}"
+                f"{w.low_rate:>9.1%}{w.high_mean_pai:>9.1f}{w.high_rate:>9.1%}"
+                f"{w.spread:>+9.1%}"
+            )
     lines.append(
-        "\n  ※ PAI順と実績順が不一致なら、PAIは展開適性ではなく脚質を符号化している。"
-        "\n  ※ preferred RPCI は脚質だけで決まりコース補正を持たないため、"
-        "\n     分布の異なる芝とダートで順序が反転する（docs/DECISIONS.md ADR-2026-08-04）。"
+        f"\n  ※ 「差」が正なら、脚質を固定しても PAI が好走を判別できている。"
+        f"\n  ※ 下位PAIと上位PAIが近い脚質は、そもそも判別する幅が無い（感応度0など）。"
+        f"\n  ※ * は片側 {_PAI_SMALL_GROUP_N} 頭未満で、差を偶然と区別できない。"
+        f"\n  ※ 脚質をまたいだ順位付けに PAI を使わないこと（docs/DECISIONS.md ADR-2026-08-04）。"
     )
     return "\n".join(lines)
 
@@ -1486,12 +1543,9 @@ def compare_ability_weight_reports(
         if (
             baseline is not None
             and accuracy is not None
-            and (accuracy.n_races, accuracy.n_horses)
-            != (baseline.n_races, baseline.n_horses)
+            and (accuracy.n_races, accuracy.n_horses) != (baseline.n_races, baseline.n_horses)
         ):
-            raise ValueError(
-                f"比較サンプル数が現行重みと一致しません: {profile.name}"
-            )
+            raise ValueError(f"比較サンプル数が現行重みと一致しません: {profile.name}")
         if baseline is None or accuracy is None:
             deltas: tuple[float | None, float | None, float | None] = (None, None, None)
         else:
@@ -1565,9 +1619,7 @@ def compare_pai_weight_reports(
     baseline_report = reports.get(baseline_name)
     if baseline_report is None:
         raise ValueError(f"基準プロファイルがありません: {baseline_name}")
-    baseline_keys = [
-        (sample.race_key, sample.horse_no) for sample in baseline_report.horse_samples
-    ]
+    baseline_keys = [(sample.race_key, sample.horse_no) for sample in baseline_report.horse_samples]
 
     comparisons: list[PaiWeightComparison] = []
     for profile in profiles:
@@ -1598,9 +1650,7 @@ def compare_pai_weight_reports(
     return comparisons
 
 
-def _filter_horse_samples(
-    samples: list[HorseSample], track_type: str
-) -> list[HorseSample]:
+def _filter_horse_samples(samples: list[HorseSample], track_type: str) -> list[HorseSample]:
     return [sample for sample in samples if sample.track_type == track_type]
 
 
@@ -1682,9 +1732,7 @@ def report_to_dict(report: BacktestReport) -> dict[str, Any]:
         "style_advantage": style_advantage_lift_to_dict(report.style_advantage),
         "rpci_samples": [_rpci_sample_to_dict(s) for s in report.rpci_samples],
         "horse_samples": [_horse_sample_to_dict(s) for s in report.horse_samples],
-        "integrated_samples": [
-            _integrated_sample_to_dict(s) for s in report.integrated_samples
-        ],
+        "integrated_samples": [_integrated_sample_to_dict(s) for s in report.integrated_samples],
         "style_advantage_samples": [
             _style_advantage_sample_to_dict(s) for s in report.style_advantage_samples
         ],
@@ -1973,8 +2021,7 @@ def format_report(
     lines.append("=" * 60)
     lines.append(f"バックテスト結果  model_version={report.model_version or '(不明)'}")
     lines.append(
-        f"対象レース {report.n_races} / 出走 {report.n_horses} 頭 "
-        f"（スキップ {report.skipped}）"
+        f"対象レース {report.n_races} / 出走 {report.n_horses} 頭 （スキップ {report.skipped}）"
     )
     lines.append("=" * 60)
 
@@ -2019,9 +2066,7 @@ def format_report(
         lines.append(f"  TOP3の好走馬捕捉率: {i.top3_good_capture_rate:.1%}")
         # 人気データが無ければ空文字が返るので、通常時は出力を汚さない。
         market_text = format_ranking_comparison(
-            compare_with_market(
-                report.integrated_samples, report.market_samples, report.n_races
-            )
+            compare_with_market(report.integrated_samples, report.market_samples, report.n_races)
         )
         if market_text:
             lines.append(market_text)
@@ -2138,14 +2183,21 @@ def format_pai_weight_comparison(comparisons: list[PaiWeightComparison]) -> str:
             if metrics.lift is None:
                 summary = "有効サンプルなし"
             else:
+                # 上位帯の頭数を必ず併記する。振れ幅を狭めると上位帯へ届く馬が減り、
+                # 少数の当たりでリフトだけが跳ね上がるため、n 無しでは比較できない。
+                top_n = metrics.lift.bands[-1].n if metrics.lift.bands else 0
                 summary = (
                     f"n={metrics.lift.n:5d} "
                     f"相関={metrics.lift.point_biserial:+.3f}"
                     f"({_format_number_delta(metrics.delta_point_biserial)}) "
                     f"上位帯={metrics.lift.top_band_lift:5.2f}x"
-                    f"({_format_number_delta(metrics.delta_top_band_lift)})"
+                    f"({_format_number_delta(metrics.delta_top_band_lift)}) "
+                    f"上位帯n={top_n:5d}"
                 )
             lines.append(f"  {label:<4} {summary}")
+    lines.append(
+        "※ 上位帯nが小さい候補のリフトは信用しないこと。相関は全頭を使うため頭数の影響を受けない。"
+    )
     lines.append("=" * 96)
     return "\n".join(lines)
 
@@ -2475,9 +2527,7 @@ class ForecastBacktester:
             style_advantage_samples=style_advantage_samples,
         )
 
-    def diagnose_style_advantage(
-        self, targets: Iterable[Race]
-    ) -> StyleAdvantageAttribution:
+    def diagnose_style_advantage(self, targets: Iterable[Race]) -> StyleAdvantageAttribution:
         """ペースと脚質を個別に確定値へ置換し、有利度の誤差要因を切り分ける。"""
         forecast_samples: list[StyleAdvantageSample] = []
         actual_pace_samples: list[StyleAdvantageSample] = []

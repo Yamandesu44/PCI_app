@@ -202,10 +202,12 @@ class TestRankingStrategy:
 
 
 class TestPaiByStyle:
-    """PAIが展開適性を測っているか、脚質を符号化しているだけかの切り分け。
+    """PAIが順位付けの根拠になるかの切り分け。
 
-    `_preferred_rpci` は脚質だけで決まりコース種別の補正を持たないため、
-    分布の異なる芝(平均52.0)とダート(平均46.5)で脚質の順序が反転する。
+    pai-v2 では脚質をまたいだ PAI 平均の順位を実績順と突き合わせていた。
+    pai-v3 の PAI は「その脚質にとって普段どおりか」を表す脚質内の相対量なので、
+    その突き合わせは何も主張しない（感応度0の差し・追込は常に基準点へ集まる）。
+    判定は脚質を固定した上位1/3対下位1/3で行う（ADR-2026-08-04）。
     """
 
     @staticmethod
@@ -236,12 +238,15 @@ class TestPaiByStyle:
         assert rows[0].mean_pai == 85.0
         assert rows[0].good_rate == 0.5
 
-    def test_reports_disagreement_between_pai_and_results(self) -> None:
-        """PAI順と実績順が食い違えば、PAIは順位付けの根拠にならない。"""
+    def test_does_not_judge_by_cross_style_pai_order(self) -> None:
+        """脚質をまたいだ PAI 平均の順位で合否を出さない。
+
+        pai-v3 では PAI 平均が低い脚質ほどよく走ること自体は正常な状態で
+        （逃げは芝でも中立点を挟んで振れる）、これを「不一致」と呼ぶのは誤り。
+        """
         from pci.application.backtest import format_pai_by_style
 
         samples = [
-            # PAIは追込が高いが、実際に好走するのは逃げ。
             self._horse("追込", 95.0, False),
             self._horse("追込", 95.0, False),
             self._horse("逃げ", 55.0, True),
@@ -250,21 +255,32 @@ class TestPaiByStyle:
 
         text = format_pai_by_style(samples)  # type: ignore[arg-type]
 
-        assert "PAI順: 追込 > 逃げ" in text
-        assert "実績順: 逃げ > 追込" in text
-        assert "不一致" in text
+        assert "不一致" not in text
+        assert "脚質間で比較できない" in text
 
-    def test_reports_agreement_when_pai_matches_results(self) -> None:
-        from pci.application.backtest import format_pai_by_style
+    def test_judges_by_within_style_split(self) -> None:
+        """脚質を固定して PAI 上位1/3が上回れば、PAI は判別できている。"""
+        from pci.application.backtest import summarize_pai_within_style
 
         samples = [
-            self._horse("追込", 95.0, True),
-            self._horse("追込", 95.0, True),
-            self._horse("逃げ", 55.0, False),
-            self._horse("逃げ", 55.0, False),
+            self._horse("逃げ", pai, pai >= 70.0) for pai in (30.0, 40.0, 50.0, 60.0, 70.0, 80.0)
         ]
 
-        assert "→ 一致" in format_pai_by_style(samples)  # type: ignore[arg-type]
+        rows = summarize_pai_within_style(samples)  # type: ignore[arg-type]
+
+        assert len(rows) == 1
+        assert rows[0].spread > 0
+        assert rows[0].pai_spread > 0
+
+    def test_flat_pai_style_has_no_discriminating_width(self) -> None:
+        """感応度0の脚質は基準点へ張り付き、判別する幅そのものが無い。"""
+        from pci.application.backtest import summarize_pai_within_style
+
+        samples = [self._horse("追込", 50.0, i < 2) for i in range(6)]
+
+        rows = summarize_pai_within_style(samples)  # type: ignore[arg-type]
+
+        assert rows[0].pai_spread == 0.0
 
     def test_empty_returns_empty(self) -> None:
         from pci.application.backtest import format_pai_by_style

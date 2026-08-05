@@ -43,6 +43,7 @@ from pci.application.backtest import (
     format_actual_style_advantage_validation,
     format_clamp_impact,
     format_pace_style_matrix,
+    format_pai_by_style,
     format_pai_weight_comparison,
     format_report,
     format_rule_weight_comparison,
@@ -58,6 +59,7 @@ from pci.application.backtest import (
     summarize_clamp_impact,
     summarize_integrated_accuracy,
     summarize_pai_lift,
+    summarize_pai_within_style,
     summarize_rpci,
     summarize_style_advantage,
 )
@@ -149,6 +151,81 @@ class TestSummarizePaiLift:
         lift = summarize_pai_lift(samples)
         assert lift is not None
         assert lift.point_biserial > 0
+
+
+class TestSummarizePaiWithinStyle:
+    """脚質を固定した PAI の効き。pai-v3 は脚質内の相対量なので、これが唯一の性能軸。"""
+
+    @staticmethod
+    def _h(style: str, pai: float, good: bool, track: str = "芝") -> HorseSample:
+        return HorseSample(
+            race_key="2026010105010101",
+            horse_no=1,
+            pai=pai,
+            good_run=good,
+            track_type=track,
+            running_style=style,
+        )
+
+    def test_empty_returns_empty(self) -> None:
+        assert summarize_pai_within_style([]) == []
+
+    def test_style_with_fewer_than_three_horses_is_skipped(self) -> None:
+        samples = [self._h("逃げ", 40.0, False), self._h("逃げ", 60.0, True)]
+        assert summarize_pai_within_style(samples) == []
+
+    def test_splits_into_terciles_and_measures_spread(self) -> None:
+        # PAI昇順で9頭。上位1/3だけが好走 → 差は +100%。
+        samples = [
+            self._h("逃げ", pai, pai >= 70.0)
+            for pai in (10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0)
+        ]
+        rows = summarize_pai_within_style(samples)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.n == 9
+        assert row.group_n == 3
+        assert row.low_mean_pai == 20.0
+        assert row.high_mean_pai == 80.0
+        assert row.low_rate == 0.0
+        assert row.high_rate == 1.0
+        assert row.spread == pytest.approx(1.0)
+        assert row.pai_spread == pytest.approx(60.0)
+
+    def test_flat_pai_reports_no_discriminating_width(self) -> None:
+        # 感応度0の脚質は基準点に張り付き、PAI に幅が無い。差が出ても偶然。
+        samples = [self._h("追込", 50.0, i < 2) for i in range(9)]
+        rows = summarize_pai_within_style(samples)
+        assert rows[0].pai_spread == 0.0
+
+    def test_sorted_by_spread_descending(self) -> None:
+        samples = [self._h("逃げ", pai, pai >= 70.0) for pai in (10.0, 40.0, 70.0)]
+        samples += [self._h("追込", pai, pai < 70.0) for pai in (10.0, 40.0, 70.0)]
+        rows = summarize_pai_within_style(samples)
+        assert [r.style for r in rows] == ["逃げ", "追込"]
+
+
+class TestFormatPaiByStyle:
+    def test_empty_returns_empty_string(self) -> None:
+        assert format_pai_by_style([]) == ""
+
+    def test_drops_cross_style_verdict_and_warns_instead(self) -> None:
+        """pai-v3 では脚質をまたいだ PAI 平均の順位比較は何も主張しない。"""
+        samples = [
+            TestSummarizePaiWithinStyle._h("逃げ", pai, pai >= 70.0) for pai in (10.0, 40.0, 70.0)
+        ]
+        out = format_pai_by_style(samples)
+        assert "不一致" not in out
+        assert "PAI順" not in out
+        assert "脚質間で比較できない" in out
+        assert "脚質内でのPAIの効き" in out
+
+    def test_marks_small_groups(self) -> None:
+        samples = [
+            TestSummarizePaiWithinStyle._h("逃げ", pai, pai >= 70.0) for pai in (10.0, 40.0, 70.0)
+        ]
+        out = format_pai_by_style(samples)
+        assert "*" in out
 
 
 class TestSummarizeIntegratedAccuracy:
@@ -789,9 +866,7 @@ class TestActualStyleAdvantageBreakdown:
 
 class TestAbilityWeightComparison:
     @staticmethod
-    def _report(
-        win_rate: float, good_rate: float, capture_rate: float
-    ) -> BacktestReport:
+    def _report(win_rate: float, good_rate: float, capture_rate: float) -> BacktestReport:
         return BacktestReport(
             model_version="rule-v4",
             n_races=100,
@@ -898,8 +973,7 @@ class TestRuleWeightComparison:
             self._sample("R2", "ダート", 46.0, 44.0, SLOW, AVERAGE),
         ]
         reports = {
-            profile.name: self._report(baseline_samples)
-            for profile in DEFAULT_RULE_WEIGHT_PROFILES
+            profile.name: self._report(baseline_samples) for profile in DEFAULT_RULE_WEIGHT_PROFILES
         }
         reports["style-light"] = self._report(candidate_samples)
 
@@ -917,12 +991,8 @@ class TestRuleWeightComparison:
         with pytest.raises(ValueError, match="基準プロファイル"):
             compare_rule_weight_reports({})
 
-        baseline = self._report(
-            [self._sample("R1", "芝", 50.0, 50.0, AVERAGE, AVERAGE)]
-        )
-        reports = {
-            profile.name: baseline for profile in DEFAULT_RULE_WEIGHT_PROFILES
-        }
+        baseline = self._report([self._sample("R1", "芝", 50.0, 50.0, AVERAGE, AVERAGE)])
+        reports = {profile.name: baseline for profile in DEFAULT_RULE_WEIGHT_PROFILES}
         reports["evidence-heavy"] = self._report(
             [self._sample("R2", "芝", 50.0, 50.0, AVERAGE, AVERAGE)]
         )
@@ -930,12 +1000,8 @@ class TestRuleWeightComparison:
             compare_rule_weight_reports(reports)
 
     def test_json_and_text_include_weights_track_metrics_and_deltas(self) -> None:
-        report = self._report(
-            [self._sample("R1", "芝", 50.0, 50.0, AVERAGE, AVERAGE)]
-        )
-        reports = {
-            profile.name: report for profile in DEFAULT_RULE_WEIGHT_PROFILES
-        }
+        report = self._report([self._sample("R1", "芝", 50.0, 50.0, AVERAGE, AVERAGE)])
+        reports = {profile.name: report for profile in DEFAULT_RULE_WEIGHT_PROFILES}
 
         comparisons = compare_rule_weight_reports(reports)
         payload = rule_weight_comparisons_to_dict(comparisons)
@@ -997,8 +1063,7 @@ class TestPaiWeightComparison:
             self._sample("R2", 2, "ダート", 20.0, False),
         ]
         reports = {
-            profile.name: self._report(baseline_samples)
-            for profile in DEFAULT_PAI_WEIGHT_PROFILES
+            profile.name: self._report(baseline_samples) for profile in DEFAULT_PAI_WEIGHT_PROFILES
         }
         reports["swing-light"] = self._report(candidate_samples)
 
@@ -1015,12 +1080,8 @@ class TestPaiWeightComparison:
             compare_pai_weight_reports({})
 
         baseline = self._report([self._sample("R1", 1, "芝", 80.0, True)])
-        reports = {
-            profile.name: baseline for profile in DEFAULT_PAI_WEIGHT_PROFILES
-        }
-        reports["swing-heavy"] = self._report(
-            [self._sample("R1", 2, "芝", 80.0, True)]
-        )
+        reports = {profile.name: baseline for profile in DEFAULT_PAI_WEIGHT_PROFILES}
+        reports["swing-heavy"] = self._report([self._sample("R1", 2, "芝", 80.0, True)])
         with pytest.raises(ValueError, match="比較対象馬"):
             compare_pai_weight_reports(reports)
 
@@ -1031,9 +1092,7 @@ class TestPaiWeightComparison:
                 self._sample("R1", 2, "芝", 10.0, False),
             ]
         )
-        reports = {
-            profile.name: report for profile in DEFAULT_PAI_WEIGHT_PROFILES
-        }
+        reports = {profile.name: report for profile in DEFAULT_PAI_WEIGHT_PROFILES}
 
         comparisons = compare_pai_weight_reports(reports)
         payload = pai_weight_comparisons_to_dict(comparisons)
