@@ -199,3 +199,74 @@ class TestRankingStrategy:
 
         default = inspect.signature(build_integrated_ranking).parameters["strategy"].default
         assert default is RankingStrategy.CURRENT
+
+
+class TestPaiByStyle:
+    """PAIが展開適性を測っているか、脚質を符号化しているだけかの切り分け。
+
+    `_preferred_rpci` は脚質だけで決まりコース種別の補正を持たないため、
+    分布の異なる芝(平均52.0)とダート(平均46.5)で脚質の順序が反転する。
+    """
+
+    @staticmethod
+    def _horse(style: str, pai: float, good: bool, track: str = "芝") -> object:
+        from pci.application.backtest import HorseSample
+
+        return HorseSample(
+            race_key="R1",
+            horse_no=1,
+            pai=pai,
+            good_run=good,
+            track_type=track,
+            running_style=style,
+        )
+
+    def test_orders_styles_by_mean_pai(self) -> None:
+        from pci.application.backtest import summarize_pai_by_style
+
+        rows = summarize_pai_by_style(
+            [
+                self._horse("追込", 90.0, True),
+                self._horse("追込", 80.0, False),
+                self._horse("逃げ", 60.0, True),
+            ]  # type: ignore[arg-type]
+        )
+
+        assert [r.style for r in rows] == ["追込", "逃げ"]
+        assert rows[0].mean_pai == 85.0
+        assert rows[0].good_rate == 0.5
+
+    def test_reports_disagreement_between_pai_and_results(self) -> None:
+        """PAI順と実績順が食い違えば、PAIは順位付けの根拠にならない。"""
+        from pci.application.backtest import format_pai_by_style
+
+        samples = [
+            # PAIは追込が高いが、実際に好走するのは逃げ。
+            self._horse("追込", 95.0, False),
+            self._horse("追込", 95.0, False),
+            self._horse("逃げ", 55.0, True),
+            self._horse("逃げ", 55.0, True),
+        ]
+
+        text = format_pai_by_style(samples)  # type: ignore[arg-type]
+
+        assert "PAI順: 追込 > 逃げ" in text
+        assert "実績順: 逃げ > 追込" in text
+        assert "不一致" in text
+
+    def test_reports_agreement_when_pai_matches_results(self) -> None:
+        from pci.application.backtest import format_pai_by_style
+
+        samples = [
+            self._horse("追込", 95.0, True),
+            self._horse("追込", 95.0, True),
+            self._horse("逃げ", 55.0, False),
+            self._horse("逃げ", 55.0, False),
+        ]
+
+        assert "→ 一致" in format_pai_by_style(samples)  # type: ignore[arg-type]
+
+    def test_empty_returns_empty(self) -> None:
+        from pci.application.backtest import format_pai_by_style
+
+        assert format_pai_by_style([]) == ""

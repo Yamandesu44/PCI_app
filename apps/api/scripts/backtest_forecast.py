@@ -83,6 +83,7 @@ from pci.application.backtest import (
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
     format_pace_style_matrix,
+    format_pai_by_style,
     format_pai_weight_comparison,
     format_ranking_strategy_comparison,
     format_report,
@@ -215,6 +216,11 @@ def _parse_args() -> argparse.Namespace:
         "--compare-pai-weights",
         action="store_true",
         help="PAIの検証用重み5候補を全体・芝・ダートで比較する",
+    )
+    p.add_argument(
+        "--diagnose-pai",
+        action="store_true",
+        help="PAIが展開適性か脚質かを、PAI順と実際の好走率順の一致で切り分ける",
     )
     p.add_argument(
         "--compare-ranking-strategies",
@@ -466,6 +472,9 @@ def main() -> None:
             current_report=report,
         )
         print(f"\n{format_pai_weight_comparison(pai_weight_comparisons)}")
+
+    if args.diagnose_pai:
+        print(format_pai_by_style(report.horse_samples))
 
     if args.compare_ranking_strategies:
         print(

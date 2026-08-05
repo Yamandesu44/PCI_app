@@ -176,6 +176,8 @@ class HorseSample:
     pai: float
     good_run: bool
     track_type: str = ""
+    # PAIが「展開適性」ではなく脚質そのものを符号化していないか調べるために持つ。
+    running_style: str = ""
 
 
 @dataclass(frozen=True)
@@ -1276,6 +1278,72 @@ def format_ranking_strategy_comparison(
     return "\n".join(lines)
 
 
+
+@dataclass(frozen=True)
+class PaiStyleRow:
+    """脚質ごとの PAI 平均と実際の好走率。"""
+
+    style: str
+    n: int
+    mean_pai: float
+    good_rate: float
+
+
+def summarize_pai_by_style(samples: list[HorseSample]) -> list[PaiStyleRow]:
+    """脚質ごとに PAI の平均と実際の好走率を並べる。
+
+    PAI は「想定ペースへの適性」のはずだが、`_preferred_rpci` が脚質だけで決まり
+    コース種別の補正を持たないため、実質的に脚質を符号化している疑いがある。
+    PAI順と好走率順が一致しなければ、PAIは順位付けの根拠にならない。
+    """
+    styles = sorted({s.running_style for s in samples if s.running_style})
+    rows: list[PaiStyleRow] = []
+    for style in styles:
+        group = [s for s in samples if s.running_style == style]
+        if not group:
+            continue
+        rows.append(
+            PaiStyleRow(
+                style=style,
+                n=len(group),
+                mean_pai=round(sum(s.pai for s in group) / len(group), 1),
+                good_rate=round(sum(1 for s in group if s.good_run) / len(group), 4),
+            )
+        )
+    return sorted(rows, key=lambda r: -r.mean_pai)
+
+
+def format_pai_by_style(samples: list[HorseSample]) -> str:
+    """PAI順と好走率順が一致しているかをコース別に示す。"""
+    if not samples:
+        return ""
+    lines = ["", "=" * 78, "■ PAIは展開適性か、それとも脚質か（PAI順 対 実際の好走率順）", "=" * 78]
+    for track in ("芝", "ダート"):
+        group = [s for s in samples if s.track_type == track]
+        rows = summarize_pai_by_style(group)
+        if not rows:
+            continue
+        base = sum(1 for s in group if s.good_run) / len(group)
+        lines.append(f"\n  ── {track}（ベースライン好走率 {base:.1%}）")
+        lines.append(f"    {'脚質':<8}{'頭数':>8}{'PAI平均':>10}{'好走率':>10}{'対ベース':>10}")
+        for r in rows:
+            lines.append(
+                f"    {r.style:<8}{r.n:>8,}{r.mean_pai:>10.1f}"
+                f"{r.good_rate:>10.1%}{r.good_rate / base if base else 0:>9.2f}x"
+            )
+        by_good = [r.style for r in sorted(rows, key=lambda r: -r.good_rate)]
+        by_pai = [r.style for r in rows]
+        agree = "一致" if by_pai == by_good else "不一致"
+        lines.append(f"    PAI順: {' > '.join(by_pai)}")
+        lines.append(f"    実績順: {' > '.join(by_good)}   → {agree}")
+    lines.append(
+        "\n  ※ PAI順と実績順が不一致なら、PAIは展開適性ではなく脚質を符号化している。"
+        "\n  ※ preferred RPCI は脚質だけで決まりコース補正を持たないため、"
+        "\n     分布の異なる芝とダートで順序が反転する（docs/DECISIONS.md ADR-2026-08-04）。"
+    )
+    return "\n".join(lines)
+
+
 def summarize_style_advantage(
     samples: list[StyleAdvantageSample],
 ) -> StyleAdvantageLift | None:
@@ -2352,6 +2420,7 @@ class ForecastBacktester:
                         pai=horse.pai,
                         good_run=good_run,
                         track_type=race.track_type,
+                        running_style=horse.running_style,
                     )
                 )
                 style_score = style_scores.get(horse.running_style)
