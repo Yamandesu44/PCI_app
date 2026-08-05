@@ -198,6 +198,7 @@ export function MobileRaceForecastDashboard({
     confidence: forecast.confidence,
     horses,
     integratedRanking: forecast.integrated_ranking,
+    styleAdvantage: forecast.style_advantage,
     trackType: race.track_type,
   });
 

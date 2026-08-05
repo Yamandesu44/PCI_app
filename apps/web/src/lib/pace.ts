@@ -445,12 +445,14 @@ export function forecastDecisionChecklist({
   confidence,
   horses,
   integratedRanking,
+  styleAdvantage,
   trackType,
 }: {
   predictedRpci: number | null | undefined;
   confidence: number;
   horses: HorseFit[];
   integratedRanking?: IntegratedRanking | null;
+  styleAdvantage?: StyleAdvantage | null;
   trackType: string | null | undefined;
 }): ForecastDecisionChecklistItem[] {
   const speed = paceSpeedFromIndex(predictedRpci, trackType);
@@ -458,7 +460,13 @@ export function forecastDecisionChecklist({
   const integratedTop = [...(integratedRanking?.entries ?? [])]
     .sort((a, b) => a.rank - b.rank)
     .slice(0, 3);
-  const paceFitNames = sortByPai(horses).slice(0, 3).map(horseName);
+  // 2026-08-04: 個別馬の名指しをやめた。PAIは脚質を符号化しているだけで、
+  // ダートでは最も好走する逃げ(1.41x)に低い値、最も走らない追込(0.47x)に高い値を出す
+  // （ADR-2026-08-04）。検証済みの脚質別有利度で「どの脚質に向く流れか」だけを示す。
+  const favoredStyles = (styleAdvantage?.entries ?? [])
+    .filter((entry) => DIRECTIONAL_STYLES.has(entry.style) && entry.score >= 60)
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.style);
   const attentionHorse = sortDiscountCandidates(horses).find(
     (horse) => horse.fit_label === "不利" || horse.pai < 60,
   );
@@ -473,15 +481,12 @@ export function forecastDecisionChecklist({
       detail: speed.bettingHint,
     },
     {
-      // 2026-08-04: 「総合上位3頭」は能力×展開の順位を推奨として出していたが、
-      // 期間外500レースで単勝人気順に大きく劣ることが確定した（ADR-2026-08-04）。
-      // 検証で実信号が確認できた展開適性（PAI最上位帯 1.29x）だけを提示する。
-      label: "展開が向く馬",
-      value: paceFitNames.length > 0 ? paceFitNames.join(" / ") : "判断材料が不足",
+      label: "恩恵を受ける脚質",
+      value: favoredStyles.length > 0 ? favoredStyles.join(" / ") : "脚質による差は小さい",
       detail:
-        paceFitNames.length > 0
-          ? "想定した流れで恩恵を受けやすい馬です。能力や人気は加味していません。"
-          : "出走馬データがそろうと、展開が向く馬を表示します。",
+        favoredStyles.length > 0
+          ? "この流れで前に行く馬が有利になりやすい想定です。差し・追込は展開より各馬の決め手が効きます。"
+          : "前に行く馬が特別有利になる流れではありません。各馬の力量で決まりやすい想定です。",
     },
     {
       label: "注意馬",

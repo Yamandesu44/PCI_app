@@ -296,7 +296,7 @@ describe("sortDiscountCandidates", () => {
 });
 
 describe("forecastDecisionChecklist", () => {
-  it("展開・展開が向く馬・注意馬・信頼度の4項目を作る", () => {
+  it("展開・恩恵を受ける脚質・注意馬・信頼度の4項目を作る", () => {
     const checklist = forecastDecisionChecklist({
       predictedRpci: 48,
       confidence: 0.72,
@@ -343,15 +343,68 @@ describe("forecastDecisionChecklist", () => {
 
     expect(checklist).toHaveLength(4);
     expect(checklist[0]).toMatchObject({ label: "展開", value: "速い流れ" });
-    // 2026-08-04: 順位ではなく展開適性(PAI)の上位を出す。PAI 86 の1番が先。
-    // 統合順位（本命=2番）に引きずられないことを固定する（ADR-2026-08-04）。
-    expect(checklist[1]).toMatchObject({ label: "展開が向く馬" });
-    expect(checklist[1]?.value).toBe("テストホース / 馬番 2");
+    // 2026-08-04: 個別馬の名指しをやめ、検証済みの脚質別有利度だけを出す。
+    // PAIは脚質を符号化しているだけで、ダートでは最も好走する逃げに低い値を出す
+    // （ADR-2026-08-04）。styleAdvantage 未指定なら脚質差なしと表示する。
+    expect(checklist[1]).toMatchObject({ label: "恩恵を受ける脚質" });
+    expect(checklist[1]?.value).toBe("脚質による差は小さい");
     expect(checklist[2]).toMatchObject({ label: "注意馬", value: "大きな割引材料なし" });
     expect(checklist[3]).toMatchObject({ label: "展開信頼度", value: "読みやすい ・ 72%" });
   });
 
-  it("馬データがない場合は展開が向く馬を不足扱いにする", () => {
+  it("恩恵を受ける脚質は検証済みの脚質別有利度から取る（PAIは使わない）", () => {
+    // 2026-08-04: PAIは脚質を符号化しているだけで、ダートでは最も好走する逃げ(1.41x)に
+    // 低い値、最も走らない追込(0.47x)に高い値を出す（ADR-2026-08-04）。
+    const checklist = forecastDecisionChecklist({
+      predictedRpci: 48,
+      confidence: 0.6,
+      trackType: "芝",
+      horses: [
+        // PAIが最も高いのは追込だが、これは採用しない。
+        { horse_no: 1, frame_no: 1, running_style: "追込", pai: 99, fit_label: "合致", reasons: [] },
+      ],
+      styleAdvantage: {
+        model_version: "style-advantage-v4",
+        reliability: "standard",
+        reliability_reason: null,
+        reasons: [],
+        entries: [
+          { style: "逃げ", score: 78 },
+          { style: "先行", score: 64 },
+          { style: "差し", score: 50 },
+          { style: "追込", score: 50 },
+        ],
+      },
+    });
+
+    expect(checklist[1]).toMatchObject({ label: "恩恵を受ける脚質" });
+    expect(checklist[1]?.value).toBe("逃げ / 先行");
+    // 後方脚質は ADR-0010 により常に互角なので挙げない。
+    expect(checklist[1]?.value).not.toContain("追込");
+  });
+
+  it("前付けが有利にならない流れでは脚質差なしと述べる", () => {
+    const checklist = forecastDecisionChecklist({
+      predictedRpci: 52,
+      confidence: 0.6,
+      trackType: "芝",
+      horses: [],
+      styleAdvantage: {
+        model_version: "style-advantage-v4",
+        reliability: "standard",
+        reliability_reason: null,
+        reasons: [],
+        entries: [
+          { style: "逃げ", score: 52 },
+          { style: "先行", score: 50 },
+        ],
+      },
+    });
+
+    expect(checklist[1]?.value).toBe("脚質による差は小さい");
+  });
+
+  it("馬データがない場合も展開の項目は破綻しない", () => {
     const checklist = forecastDecisionChecklist({
       predictedRpci: null,
       confidence: 0.4,
@@ -360,7 +413,8 @@ describe("forecastDecisionChecklist", () => {
     });
 
     expect(checklist[0]?.value).toBe("判断材料が不足");
-    expect(checklist[1]?.value).toBe("判断材料が不足");
+    // 脚質別有利度が無ければ「差は小さい」と述べる。個別馬を推さないので不足表示は不要。
+    expect(checklist[1]?.value).toBe("脚質による差は小さい");
     expect(checklist[2]?.value).toBe("大きな割引材料なし");
     expect(checklist[3]?.value).toBe("変動注意 ・ 40%");
   });
