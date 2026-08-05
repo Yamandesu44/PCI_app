@@ -203,12 +203,14 @@ def _classify(tier: AbilityTier, fit_label: FitLabel) -> Mark:
 
 
 def _entry_reasons(mark: Mark, tier: AbilityTier, fit_label: FitLabel) -> tuple[Reason, ...]:
+    # 2026-08-04: 買い目の推奨として読める文言をやめ、2軸の評価を事実として述べる。
+    # この順位は単勝人気順に劣ることが実測で確定している（ADR-2026-08-04）。
     description = {
-        Mark.HONMEI: "地力は上位で、想定される流れも向くと見ています。",
-        Mark.TAIKO: "地力は上位。流れの後押しは限定的でも軸として信頼できます。",
-        Mark.KIKEN: "地力は上位ですが、想定の流れは向きにくく取りこぼしに注意です。",
-        Mark.ANA: "地力は中位ですが、想定の流れが向けば上位進出の余地があります。",
-        Mark.NONE: "現時点では能力・展開の両面から強調材料は多くありません。",
+        Mark.HONMEI: "近走内容は上位で、想定される流れも向く側です。",
+        Mark.TAIKO: "近走内容は上位で、流れの影響は中立です。",
+        Mark.KIKEN: "近走内容は上位ですが、想定の流れは向きにくい側です。",
+        Mark.ANA: "近走内容は中位で、想定の流れは向く側です。",
+        Mark.NONE: "近走内容・展開のどちらにも目立つ特徴はありません。",
     }[mark]
     return (
         Reason(code="integrated_mark", description=description),
@@ -233,21 +235,21 @@ def _summary_reasons(entries: tuple[IntegratedEntry, ...]) -> tuple[Reason, ...]
         reasons.append(
             Reason(
                 code="integrated_honmei",
-                description=f"能力・展開の両面がそろう本命候補は{_nos(honmei)}です。",
+                description=f"近走内容が上位で展開も向く側なのは{_nos(honmei)}です。",
             )
         )
     if ana:
         reasons.append(
             Reason(
                 code="integrated_ana",
-                description=f"流れ次第で浮上する穴候補は{_nos(ana)}です。",
+                description=f"近走内容は中位でも展開が向く側なのは{_nos(ana)}です。",
             )
         )
     if kiken:
         reasons.append(
             Reason(
                 code="integrated_kiken",
-                description=f"地力上位でも流れが向きにくい注意馬は{_nos(kiken)}です。",
+                description=f"近走内容は上位でも展開が向きにくいのは{_nos(kiken)}です。",
             )
         )
     return tuple(reasons)

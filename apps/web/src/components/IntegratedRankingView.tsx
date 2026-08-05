@@ -1,15 +1,13 @@
-import { Trophy } from "lucide-react";
+import { ListOrdered } from "lucide-react";
 
 import { frameColorClass, horseNumberLabel } from "@/lib/pace";
 import type { IntegratedEntry, IntegratedRanking } from "@pci/api-client";
 
-// 分類タグ（記号ではなく言葉タグで表す）。無印はタグを付けない。
-const CATEGORY_TAG: Record<string, { label: string; chip: string; row: string }> = {
-  本命: { label: "本命", chip: "bg-emerald-600 text-white", row: "border-emerald-300 bg-emerald-50/70" },
-  対抗: { label: "対抗", chip: "bg-blue-600 text-white", row: "border-blue-200 bg-blue-50/50" },
-  穴: { label: "穴（妙味）", chip: "bg-amber-500 text-white", row: "border-amber-200 bg-amber-50/50" },
-  危険: { label: "人気でも注意", chip: "bg-rose-600 text-white", row: "border-rose-200 bg-rose-50/50" },
-};
+// 2026-08-04: 「本命/対抗/穴/危険」という買い目の印は表示しない。
+// 期間外500レースで、この順位の1位馬は勝率20.2%と単勝人気順の36.9%を大きく下回った
+// （docs/DECISIONS.md ADR-2026-08-04）。当たらない印を推奨として出さない。
+// 能力の段階と展開の向き不向きという「事実」だけをタグで示す。
+const CATEGORY_TAG: Record<string, { label: string; chip: string; row: string }> = {};
 
 function abilityTag(tier: string): { label: string; chip: string } | null {
   if (tier === "上位") return { label: "能力上位", chip: "bg-slate-900 text-white" };
@@ -48,8 +46,8 @@ function RankingRows({ entries }: { entries: IntegratedEntry[] }) {
             className={`flex items-start gap-3 rounded-lg border p-3 shadow-sm ${rowClass}`}
           >
             <span className="flex shrink-0 flex-col items-center justify-center">
-              <span className="text-xl font-bold leading-none text-slate-900">{entry.rank}</span>
-              <span className="mt-0.5 text-[10px] font-medium text-slate-400">位</span>
+              <span className="text-base font-semibold leading-none text-slate-500">{entry.rank}</span>
+              <span className="mt-0.5 text-[10px] font-medium text-slate-400">番目</span>
             </span>
             <span
               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded border text-xs font-bold ${frameColorClass(entry.frame_no)}`}
@@ -80,7 +78,11 @@ function RankingRows({ entries }: { entries: IntegratedEntry[] }) {
 }
 
 /**
- * 統合順位予想（展開×能力）。総合順位を主役に、分類は◎○▲△の印ではなく言葉タグで表す。
+ * 近走内容による能力の並び（参考）。買い目の推奨ではない。
+ *
+ * 2026-08-04の実測で、この順位は単勝人気順に大きく劣ることが確定した
+ * （1位馬の勝率 20.2% 対 36.9%）。予想として提示すると利用者を誤らせるため、
+ * 見出し・順位表記・印を落とし、展開解説の補助情報として置く。
  */
 export function IntegratedRankingView({ ranking }: { ranking: IntegratedRanking }) {
   const entries = [...(ranking.entries ?? [])].sort((a, b) => a.rank - b.rank);
@@ -93,18 +95,20 @@ export function IntegratedRankingView({ ranking }: { ranking: IntegratedRanking 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-50 text-amber-700">
-              <Trophy className="h-4 w-4" aria-hidden />
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-slate-600">
+              <ListOrdered className="h-4 w-4" aria-hidden />
             </span>
             <h2
               id="integrated-heading"
-              className="m-0 text-lg font-semibold tracking-normal text-slate-950"
+              className="m-0 text-base font-semibold tracking-normal text-slate-800"
             >
-              統合順位予想
+              近走内容による能力の並び（参考）
             </h2>
           </div>
           <p className="m-0 mt-2 text-sm text-slate-500">
-            地力（近走内容）と想定される流れへの適性を合わせた総合順位。分類はタグで表示します。
+            各馬の近走から算出した地力の順です。
+            <strong className="font-semibold text-slate-700">買うべき馬の推奨ではありません。</strong>
+            この並びは単勝人気の順より当たりません。展開が向くかどうかの判断材料としてお使いください。
           </p>
         </div>
       </div>
@@ -121,8 +125,9 @@ export function IntegratedRankingView({ ranking }: { ranking: IntegratedRanking 
         </details>
       ) : null}
       <p className="m-0 mt-3 text-xs leading-5 text-slate-400">
-        ※ 地力は近走の着順内容から推定した相対評価です。「穴（妙味）」は地力中位でも展開が向けば上位進出の
-        余地がある馬、「人気でも注意」は地力上位でも今回の流れが向きにくい馬です。
+        ※ 地力は近走の着順内容から推定した相対評価です。過去500レースの検証では、
+        この並びの1番目の馬より、単勝人気1位の馬のほうが好走しました。
+        買う馬を決める用途には向きません。「展開が向く」馬を探す手がかりとしてお使いください。
       </p>
     </section>
   );

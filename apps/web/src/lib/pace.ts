@@ -458,11 +458,7 @@ export function forecastDecisionChecklist({
   const integratedTop = [...(integratedRanking?.entries ?? [])]
     .sort((a, b) => a.rank - b.rank)
     .slice(0, 3);
-  const fallbackTop = sortByPai(horses).slice(0, 3);
-  const topNames =
-    integratedTop.length > 0
-      ? integratedTop.map((entry) => entry.horse_name ?? horseNumberLabel(entry))
-      : fallbackTop.map(horseName);
+  const paceFitNames = sortByPai(horses).slice(0, 3).map(horseName);
   const attentionHorse = sortDiscountCandidates(horses).find(
     (horse) => horse.fit_label === "不利" || horse.pai < 60,
   );
@@ -477,12 +473,15 @@ export function forecastDecisionChecklist({
       detail: speed.bettingHint,
     },
     {
-      label: "総合上位3頭",
-      value: topNames.length > 0 ? topNames.join(" / ") : "判断材料が不足",
+      // 2026-08-04: 「総合上位3頭」は能力×展開の順位を推奨として出していたが、
+      // 期間外500レースで単勝人気順に大きく劣ることが確定した（ADR-2026-08-04）。
+      // 検証で実信号が確認できた展開適性（PAI最上位帯 1.29x）だけを提示する。
+      label: "展開が向く馬",
+      value: paceFitNames.length > 0 ? paceFitNames.join(" / ") : "判断材料が不足",
       detail:
-        topNames.length > 0
-          ? "近走内容と今回の展開適性を合わせた上位候補です。"
-          : "出走馬データがそろうと、総合上位候補を表示します。",
+        paceFitNames.length > 0
+          ? "想定した流れで恩恵を受けやすい馬です。能力や人気は加味していません。"
+          : "出走馬データがそろうと、展開が向く馬を表示します。",
     },
     {
       label: "注意馬",

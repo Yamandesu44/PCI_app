@@ -296,7 +296,7 @@ describe("sortDiscountCandidates", () => {
 });
 
 describe("forecastDecisionChecklist", () => {
-  it("展開・総合上位・注意馬・信頼度の4項目を作る", () => {
+  it("展開・展開が向く馬・注意馬・信頼度の4項目を作る", () => {
     const checklist = forecastDecisionChecklist({
       predictedRpci: 48,
       confidence: 0.72,
@@ -343,13 +343,15 @@ describe("forecastDecisionChecklist", () => {
 
     expect(checklist).toHaveLength(4);
     expect(checklist[0]).toMatchObject({ label: "展開", value: "速い流れ" });
-    expect(checklist[1]).toMatchObject({ label: "総合上位3頭" });
-    expect(checklist[1]?.value).toBe("総合一位 / テストホース");
+    // 2026-08-04: 順位ではなく展開適性(PAI)の上位を出す。PAI 86 の1番が先。
+    // 統合順位（本命=2番）に引きずられないことを固定する（ADR-2026-08-04）。
+    expect(checklist[1]).toMatchObject({ label: "展開が向く馬" });
+    expect(checklist[1]?.value).toBe("テストホース / 馬番 2");
     expect(checklist[2]).toMatchObject({ label: "注意馬", value: "大きな割引材料なし" });
     expect(checklist[3]).toMatchObject({ label: "展開信頼度", value: "読みやすい ・ 72%" });
   });
 
-  it("馬データがない場合は総合上位を不足扱いにする", () => {
+  it("馬データがない場合は展開が向く馬を不足扱いにする", () => {
     const checklist = forecastDecisionChecklist({
       predictedRpci: null,
       confidence: 0.4,

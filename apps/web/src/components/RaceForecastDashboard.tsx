@@ -208,10 +208,6 @@ export function RaceForecastDashboard({
         </div>
       </section>
 
-      {forecast.integrated_ranking ? (
-        <IntegratedRankingView ranking={forecast.integrated_ranking} />
-      ) : null}
-
       {forecast.formation ? <FormationView formation={forecast.formation} /> : null}
 
       {forecast.comment ? (
@@ -236,6 +232,12 @@ export function RaceForecastDashboard({
             <ReasonList reasons={forecast.comment.reasons ?? []} />
           </details>
         </section>
+      ) : null}
+
+      {/* 順位は展開解説より後ろへ置く。買い目の推奨ではなく参考情報という位置づけ
+          （docs/DECISIONS.md ADR-2026-08-04）。 */}
+      {forecast.integrated_ranking ? (
+        <IntegratedRankingView ranking={forecast.integrated_ranking} />
       ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
