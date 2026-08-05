@@ -26,6 +26,7 @@ from pci.domain.shared.race_key import RaceKey
 
 ESCAPE = RunningStyleLabel.ESCAPE
 CLOSER = RunningStyleLabel.CLOSER
+STALKER = RunningStyleLabel.STALKER
 FLEXIBLE = RunningStyleLabel.FLEXIBLE
 
 
@@ -35,9 +36,10 @@ def _forecast(value: float, label: PaceLabel) -> RpciForecast:
     )
 
 
-SLOW = _forecast(57.0, PaceLabel.SLOW)
-HIGH = _forecast(43.0, PaceLabel.HIGH)
-AVERAGE = _forecast(50.0, PaceLabel.AVERAGE)
+# pai-v3 はコース相対で判定する。既定 track_type="芝"（中立51.85・境界49.7/54.0）に合わせる。
+SLOW = _forecast(56.0, PaceLabel.SLOW)
+HIGH = _forecast(48.0, PaceLabel.HIGH)
+AVERAGE = _forecast(51.85, PaceLabel.AVERAGE)
 
 
 class TestPaiCoreLogic:
@@ -45,30 +47,51 @@ class TestPaiCoreLogic:
         scorer = PaceAdaptabilityScorer()
         result = scorer.score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
         assert result.fit_label == FitLabel.MATCHED
-        assert result.pai >= 70.0
+        assert result.pai >= 65.0
 
     def test_escape_horse_unfavorable_in_high_pace(self) -> None:
         scorer = PaceAdaptabilityScorer()
         result = scorer.score(HorsePaceProfile(1, ESCAPE), HIGH, 1600)
         assert result.fit_label == FitLabel.UNFAVORABLE
-        assert result.pai < 46.0
+        assert result.pai < 40.0
 
-    def test_closer_horse_matches_high_pace(self) -> None:
-        scorer = PaceAdaptabilityScorer()
-        result = scorer.score(HorsePaceProfile(1, CLOSER), HIGH, 1600)
-        assert result.fit_label == FitLabel.MATCHED
+    def test_back_styles_stay_neutral_whatever_the_pace(self) -> None:
+        """後方脚質はペース依存が小さいため常に中立（ADR-0010・pai-v3）。
 
-    def test_closer_horse_unfavorable_in_slow_pace(self) -> None:
+        pai-v2 は追込に preferred=45.0 を与えていたが、ダート(分布46.5)では
+        それが最高スコアになり、実際には最も走らない脚質(0.47x)を推していた。
+        """
         scorer = PaceAdaptabilityScorer()
-        result = scorer.score(HorsePaceProfile(1, CLOSER), SLOW, 1600)
-        assert result.fit_label == FitLabel.UNFAVORABLE
+        for style in (STALKER, CLOSER):
+            for fc in (SLOW, HIGH, AVERAGE):
+                result = scorer.score(HorsePaceProfile(1, style), fc, 1600)
+                assert result.fit_label == FitLabel.NEUTRAL
 
-    def test_flexible_horse_is_robust(self) -> None:
-        """自在馬はどの展開でも極端に不利にはならない。"""
+    def test_same_pace_gives_different_labels_per_track(self) -> None:
+        """コース相対で判定する。同じRPCIでも芝とダートで意味が違う。
+
+        RPCI 48.0 は芝ではハイ寄り(中立51.85より下)、ダートではスロー寄り(中立46.5より上)。
+        pai-v2 は絶対値で判定していたため、この区別ができなかった。
+        """
         scorer = PaceAdaptabilityScorer()
-        for fc in (SLOW, HIGH, AVERAGE):
-            result = scorer.score(HorsePaceProfile(1, FLEXIBLE), fc, 1600)
-            assert result.fit_label != FitLabel.UNFAVORABLE
+        fc = _forecast(48.0, PaceLabel.AVERAGE)
+
+        turf = scorer.score(HorsePaceProfile(1, ESCAPE), fc, 1600, None, "芝")
+        dirt = scorer.score(HorsePaceProfile(1, ESCAPE), fc, 1600, None, "ダート")
+
+        assert turf.pai < 50.0  # 芝では向かい風
+        assert dirt.pai > 50.0  # ダートでは追い風
+
+    def test_flexible_horse_swings_less_than_escape(self) -> None:
+        """自在馬はペースの影響を受けるが、逃げ馬より振れ幅が小さい。
+
+        実測（2026-08-04）でも 自在は芝1.13x/ダート1.09x、逃げは1.21x/1.17x。
+        """
+        scorer = PaceAdaptabilityScorer()
+        for fc in (SLOW, HIGH):
+            flexible = scorer.score(HorsePaceProfile(1, FLEXIBLE), fc, 1600)
+            escape = scorer.score(HorsePaceProfile(1, ESCAPE), fc, 1600)
+            assert abs(flexible.pai - 50.0) < abs(escape.pai - 50.0)
 
     def test_distance_mismatch_lowers_pai(self) -> None:
         scorer = PaceAdaptabilityScorer()
@@ -94,12 +117,12 @@ class TestPaiCoreLogic:
         scorer = PaceAdaptabilityScorer()
         result = scorer.score(HorsePaceProfile(1, ESCAPE), HIGH, 1600)
         codes = {r.code for r in result.reasons}
-        assert "rpci_diff" in codes
+        assert "pace_fit" in codes
         assert "pai" in codes
 
-    def test_model_version_is_pai_v2(self) -> None:
+    def test_model_version_is_pai_v3(self) -> None:
         result = PaceAdaptabilityScorer().score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
-        assert result.model_version == "pai-v2"
+        assert result.model_version == "pai-v3"
 
     def test_custom_weights_change_thresholds(self) -> None:
         strict = PaiWeights(matched_threshold=95.0)
@@ -134,9 +157,9 @@ class TestPaiProperties:
     ) -> None:
         scorer = PaceAdaptabilityScorer()
         result = scorer.score(profile, fc, dist)
-        if result.pai >= 70.0:
+        if result.pai >= 65.0:
             assert result.fit_label == FitLabel.MATCHED
-        elif result.pai < 46.0:
+        elif result.pai < 40.0:
             assert result.fit_label == FitLabel.UNFAVORABLE
         else:
             assert result.fit_label == FitLabel.NEUTRAL
@@ -183,13 +206,14 @@ class TestPaiPaceAffinityBlend:
     def test_pai_is_blended_50_50_with_affinity_score(self) -> None:
         """PAI = (base_pai × 0.5) + (affinity_score × 0.5) のブレンドを検証する。
 
-        ESCAPE + AVERAGE(50.0): preferred=55, gap=5 → rpci_penalty=25
-        base_pai = 100 - 25 = 75.0
-        predicted_level=AVERAGE → affinity_score=50
+        pai-v3: ESCAPE + SLOW(56.0)、芝の中立51.85・半幅2.15。
+        deviation = (56.0 - 51.85) / 2.15 → 1.0 でクリップ
+        base_pai = 50 + 1.0 × 25 = 75.0
+        predicted_level=SLOW → affinity_score=50（_make_affinity の設定による）
         blended = (75 × 0.5) + (50 × 0.5) = 62.5
         """
         profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity())
-        result = PaceAdaptabilityScorer().score(profile, AVERAGE, 1600)
+        result = PaceAdaptabilityScorer().score(profile, SLOW, 1600)
         assert result.pai == pytest.approx(62.5, abs=0.1)
 
     def test_very_slow_specialist_not_unfavorable_when_forecast_is_slow(self) -> None:

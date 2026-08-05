@@ -575,7 +575,7 @@ class TestForecastRaceUseCase:
 
         assert (UPCOMING, "rule-v4") in mart_repo.predicted_pace
         assert len(mart_repo.pace_fit) == 4
-        assert all(key[2] == "pai-v2" for key in mart_repo.pace_fit)
+        assert all(key[2] == "pai-v3" for key in mart_repo.pace_fit)
 
     def test_mart_not_called_when_no_repo(self) -> None:
         """mart_repo が None の場合、永続化なしで算出結果を返す。"""

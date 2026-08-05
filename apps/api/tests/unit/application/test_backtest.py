@@ -1000,11 +1000,11 @@ class TestPaiWeightComparison:
             profile.name: self._report(baseline_samples)
             for profile in DEFAULT_PAI_WEIGHT_PROFILES
         }
-        reports["rpci-light"] = self._report(candidate_samples)
+        reports["swing-light"] = self._report(candidate_samples)
 
         comparisons = compare_pai_weight_reports(reports)
 
-        candidate = next(item for item in comparisons if item.profile.name == "rpci-light")
+        candidate = next(item for item in comparisons if item.profile.name == "swing-light")
         assert candidate.turf.delta_point_biserial == -2.0
         assert candidate.turf.delta_top_band_lift == -2.0
         assert candidate.dirt.delta_point_biserial == 0.0
@@ -1018,7 +1018,7 @@ class TestPaiWeightComparison:
         reports = {
             profile.name: baseline for profile in DEFAULT_PAI_WEIGHT_PROFILES
         }
-        reports["rpci-heavy"] = self._report(
+        reports["swing-heavy"] = self._report(
             [self._sample("R1", 2, "芝", 80.0, True)]
         )
         with pytest.raises(ValueError, match="比較対象馬"):
@@ -1039,8 +1039,8 @@ class TestPaiWeightComparison:
         payload = pai_weight_comparisons_to_dict(comparisons)
 
         assert payload[0]["name"] == "current"
-        assert payload[0]["weights"]["rpci_diff_weight"] == 5.0
-        assert payload[0]["weights"]["preferred_escape"] == 55.0
+        assert payload[0]["weights"]["pace_swing"] == 25.0
+        assert payload[0]["weights"]["sensitivity_escape"] == 1.0
         assert payload[0]["turf"]["pai"]["n"] == 2
         assert payload[0]["dirt"]["pai"] is None
         assert payload[0]["combined"]["delta_vs_current"]["point_biserial"] == 0.0

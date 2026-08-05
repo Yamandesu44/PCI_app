@@ -31,7 +31,7 @@ from pci.domain.pace.rpci_forecast import RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "pai-v2"
+MODEL_VERSION = "pai-v3"
 
 _OFF_TRACK_CONDITIONS = ("稍重", "重", "不良")
 
@@ -59,28 +59,41 @@ class HorsePaceProfile:
 class PaiWeights:
     """PAI 算出の重み（C10・設定ファイルから上書き可能）。"""
 
-    # 脚質ごとの「好ペース」= preferred RPCI（馬がもっとも力を出せる想定ペース）
-    preferred_escape: float = 55.0
-    preferred_front: float = 53.0
-    preferred_flexible: float = 50.0
-    preferred_stalker: float = 47.0
-    preferred_closer: float = 45.0
-    # 減点係数
-    rpci_diff_weight: float = 5.0
-    rpci_diff_cap: float = 60.0
+    # 脚質ごとのペース感応度（pai-v3）。正=スローで有利、0=ペース依存なし。
+    # 2026-08-04に21万頭で較正（`--pace-style-matrix` の「自脚質の平均に対する比」）。
+    #   芝   スロー時: 逃げ1.21x 先行1.12x 自在1.13x 差し1.04x 追込0.98x
+    #   ダート スロー時: 逃げ1.17x 先行1.12x 自在1.09x 差し0.94x 追込0.96x
+    # 差し・追込は芝とダートで符号が揃わず（差し 1.04x 対 0.94x）、ADR-0010 が
+    # 「後方脚質に一貫した有利はない」と結論した通りなので 0 とする。
+    #
+    # 旧 pai-v2 は preferred RPCI を絶対値（逃げ55.0〜追込45.0）で持ち、コース種別の
+    # 補正が無かった。分布の異なる芝(52.0)とダート(46.5)で脚質の順序が反転し、
+    # ダートでは最も好走する逃げ(1.41x)に低い値、最も走らない追込(0.47x)に高い値を
+    # 与えていた（docs/DECISIONS.md ADR-2026-08-04）。
+    sensitivity_escape: float = 1.0
+    sensitivity_front: float = 0.65
+    sensitivity_flexible: float = 0.6
+    sensitivity_stalker: float = 0.0
+    sensitivity_closer: float = 0.0
+    # 感応度1.0の脚質が、区分境界まで振れたときの最大加点/減点（PAI点）。
+    pace_swing: float = 25.0
+    # ペースの影響が無いときの基準点。ここへ加減点を足し引きする。
+    # 50 = 「今回の流れは、この脚質にとって普段どおり」。
+    pace_neutral_pai: float = 50.0
     distance_weight_per_200m: float = 5.0
     distance_cap: float = 20.0
     off_track_penalty: float = 15.0
-    # 合致ラベル閾値
-    matched_threshold: float = 70.0
-    unfavorable_threshold: float = 46.0
+    # 合致ラベル閾値（pai-v3 のスケールに合わせて再設定）。
+    # 感応度1.0の脚質が区分境界まで振れると 50±25 になるため、その中間を境界にする。
+    matched_threshold: float = 65.0
+    unfavorable_threshold: float = 40.0
 
 
 DEFAULT_WEIGHTS = PaiWeights()
 
 
 class PaceAdaptabilityScorer:
-    """PAI 算出器（pai-v2）。減点内訳を reasons として出力する。"""
+    """PAI 算出器（pai-v3）。加減点の内訳を reasons として出力する。"""
 
     def __init__(self, weights: PaiWeights | None = None) -> None:
         self._w = weights or DEFAULT_WEIGHTS
@@ -91,15 +104,24 @@ class PaceAdaptabilityScorer:
         forecast: RpciForecast,
         race_distance_m: int,
         track_condition: str | None = None,
+        track_type: str = "芝",
     ) -> PaiResult:
         reasons: list[Reason] = []
 
-        rpci_penalty = self._rpci_diff_penalty(profile, forecast, reasons)
+        # pai-v3: ペースは加減点。基準点からの振れ幅で「普段より有利か」を表す。
+        pace_bonus = self._pace_bonus(profile, forecast, track_type, reasons)
         distance_penalty = self._distance_penalty(profile, race_distance_m, reasons)
         track_penalty = self._track_penalty(profile, track_condition, reasons)
 
         base_pai = round(
-            min(max(100.0 - rpci_penalty - distance_penalty - track_penalty, 0.0), 100.0), 1
+            min(
+                max(
+                    self._w.pace_neutral_pai + pace_bonus - distance_penalty - track_penalty,
+                    0.0,
+                ),
+                100.0,
+            ),
+            1,
         )
         pai = self._blend_pace_affinity(base_pai, profile, forecast, reasons)
         label = self._classify(pai)
@@ -118,29 +140,52 @@ class PaceAdaptabilityScorer:
             reasons=tuple(reasons),
         )
 
-    def _preferred_rpci(self, style: RunningStyleLabel) -> float:
+    def _sensitivity(self, style: RunningStyleLabel) -> float:
         w = self._w
         return {
-            RunningStyleLabel.ESCAPE: w.preferred_escape,
-            RunningStyleLabel.FRONT: w.preferred_front,
-            RunningStyleLabel.FLEXIBLE: w.preferred_flexible,
-            RunningStyleLabel.STALKER: w.preferred_stalker,
-            RunningStyleLabel.CLOSER: w.preferred_closer,
+            RunningStyleLabel.ESCAPE: w.sensitivity_escape,
+            RunningStyleLabel.FRONT: w.sensitivity_front,
+            RunningStyleLabel.FLEXIBLE: w.sensitivity_flexible,
+            RunningStyleLabel.STALKER: w.sensitivity_stalker,
+            RunningStyleLabel.CLOSER: w.sensitivity_closer,
         }[style]
 
-    def _rpci_diff_penalty(
-        self, profile: HorsePaceProfile, forecast: RpciForecast, reasons: list[Reason]
+    def _pace_bonus(
+        self,
+        profile: HorsePaceProfile,
+        forecast: RpciForecast,
+        track_type: str,
+        reasons: list[Reason],
     ) -> float:
-        preferred = self._preferred_rpci(profile.running_style)
-        gap = abs(forecast.value - preferred)
-        penalty = min(gap * self._w.rpci_diff_weight, self._w.rpci_diff_cap)
+        """今回の流れが、この脚質にとって普段より追い風か向かい風かを点数にする。
+
+        コース平均（neutral_rpci）を0とし、展開区分の境界で±1になるよう正規化する。
+        絶対RPCIではなくコース相対で見るのが pai-v3 の要点。芝とダートは分布が
+        異なる（52.0 対 46.5）ため、絶対値で判定すると脚質の順序が反転する。
+        """
+        from pci.domain.pace.style_advantage import neutral_rpci
+
+        neutral = neutral_rpci(track_type)
+        half_band = self._half_band(track_type)
+        deviation = (forecast.value - neutral) / half_band if half_band else 0.0
+        deviation = min(max(deviation, -1.0), 1.0)
+        bonus = self._sensitivity(profile.running_style) * self._w.pace_swing * deviation
         reasons.append(
             Reason(
-                code="rpci_diff",
-                description=_style_reason(profile.running_style, penalty),
+                code="pace_fit",
+                description=_style_reason(profile.running_style, bonus),
             )
         )
-        return penalty
+        return bonus
+
+    @staticmethod
+    def _half_band(track_type: str) -> float:
+        """展開3分類の「平均」帯の半幅。境界で deviation が±1になるようにする。"""
+        from pci.domain.pace.rpci_forecast import DEFAULT_WEIGHTS as RW
+
+        if track_type == "ダート":
+            return (RW.dirt_slow_threshold - RW.dirt_high_threshold) / 2
+        return (RW.slow_threshold - RW.high_threshold) / 2
 
     def _distance_penalty(
         self, profile: HorsePaceProfile, race_distance_m: int, reasons: list[Reason]

@@ -169,7 +169,10 @@ class ForecastRaceUseCase:
         forecast = self._forecaster.forecast(context)
 
         fit_results: list[PaiResult] = [
-            self._scorer.score(p, forecast, race.distance_m, race.track_condition) for p in profiles
+            self._scorer.score(
+                p, forecast, race.distance_m, race.track_condition, race.track_type
+            )
+            for p in profiles
         ]
 
         if self._mart_repo is not None:

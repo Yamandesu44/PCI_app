@@ -621,35 +621,32 @@ DEFAULT_PAI_WEIGHT_PROFILES: tuple[PaiWeightProfile, ...] = (
         weights=DEFAULT_PAI_WEIGHTS,
     ),
     PaiWeightProfile(
-        name="rpci-light",
-        description="想定ペース差の減点を弱める",
-        weights=replace(DEFAULT_PAI_WEIGHTS, rpci_diff_weight=4.0),
+        name="swing-light",
+        description="ペースの振れ幅を弱める",
+        weights=replace(DEFAULT_PAI_WEIGHTS, pace_swing=15.0),
     ),
     PaiWeightProfile(
-        name="rpci-heavy",
-        description="想定ペース差の減点を強める",
-        weights=replace(DEFAULT_PAI_WEIGHTS, rpci_diff_weight=6.0),
+        name="swing-heavy",
+        description="ペースの振れ幅を強める",
+        weights=replace(DEFAULT_PAI_WEIGHTS, pace_swing=35.0),
     ),
     PaiWeightProfile(
-        name="preference-compressed",
-        description="脚質ごとの好ペース差を縮める",
+        name="front-only",
+        description="前付けだけ採点（ADR-0010と同じ構造）",
         weights=replace(
             DEFAULT_PAI_WEIGHTS,
-            preferred_escape=53.0,
-            preferred_front=52.0,
-            preferred_stalker=48.0,
-            preferred_closer=47.0,
+            sensitivity_flexible=0.0,
+            sensitivity_stalker=0.0,
+            sensitivity_closer=0.0,
         ),
     ),
     PaiWeightProfile(
-        name="preference-expanded",
-        description="脚質ごとの好ペース差を広げる",
+        name="back-included",
+        description="後方脚質にも実測どおりの弱い感応度を与える",
         weights=replace(
             DEFAULT_PAI_WEIGHTS,
-            preferred_escape=57.0,
-            preferred_front=54.0,
-            preferred_stalker=46.0,
-            preferred_closer=43.0,
+            sensitivity_stalker=-0.1,
+            sensitivity_closer=-0.2,
         ),
     ),
 )
@@ -1776,12 +1773,12 @@ def pai_weight_comparisons_to_dict(
             "name": item.profile.name,
             "description": item.profile.description,
             "weights": {
-                "preferred_escape": item.profile.weights.preferred_escape,
-                "preferred_front": item.profile.weights.preferred_front,
-                "preferred_flexible": item.profile.weights.preferred_flexible,
-                "preferred_stalker": item.profile.weights.preferred_stalker,
-                "preferred_closer": item.profile.weights.preferred_closer,
-                "rpci_diff_weight": item.profile.weights.rpci_diff_weight,
+                "sensitivity_escape": item.profile.weights.sensitivity_escape,
+                "sensitivity_front": item.profile.weights.sensitivity_front,
+                "sensitivity_flexible": item.profile.weights.sensitivity_flexible,
+                "sensitivity_stalker": item.profile.weights.sensitivity_stalker,
+                "sensitivity_closer": item.profile.weights.sensitivity_closer,
+                "pace_swing": item.profile.weights.pace_swing,
             },
             "combined": _pai_weight_metrics_to_dict(item.combined),
             "turf": _pai_weight_metrics_to_dict(item.turf),
@@ -2128,10 +2125,10 @@ def format_pai_weight_comparison(comparisons: list[PaiWeightComparison]) -> str:
         weights = item.profile.weights
         lines.append(
             f"{item.profile.name} "
-            f"(preferred={weights.preferred_escape:.1f}/"
-            f"{weights.preferred_front:.1f}/{weights.preferred_flexible:.1f}/"
-            f"{weights.preferred_stalker:.1f}/{weights.preferred_closer:.1f}, "
-            f"rpci_weight={weights.rpci_diff_weight:.1f})"
+            f"(感応度={weights.sensitivity_escape:.2f}/"
+            f"{weights.sensitivity_front:.2f}/{weights.sensitivity_flexible:.2f}/"
+            f"{weights.sensitivity_stalker:.2f}/{weights.sensitivity_closer:.2f}, "
+            f"振れ幅={weights.pace_swing:.1f})"
         )
         for label, metrics in (
             ("全体", item.combined),
