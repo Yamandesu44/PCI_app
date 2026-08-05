@@ -641,6 +641,22 @@ DEFAULT_PAI_WEIGHT_PROFILES: tuple[PaiWeightProfile, ...] = (
             sensitivity_closer=-0.2,
         ),
     ),
+    # 帰無仮説。ペース補正を全て切り、pace_affinity と距離・馬場減点だけにする。
+    # これが current と並ぶなら、ペース補正は判別に寄与していないことになる。
+    # 実測で感応度1.0の逃げが脚質内で最も判別できていない（芝+4.1% ダート+2.6%・
+    # いずれも誤差内）ため、まず疑うべき仮説として常設する。
+    PaiWeightProfile(
+        name="pace-off",
+        description="ペース補正を全て切る（帰無仮説・pace_affinityと減点のみ）",
+        weights=replace(
+            DEFAULT_PAI_WEIGHTS,
+            sensitivity_escape=0.0,
+            sensitivity_front=0.0,
+            sensitivity_flexible=0.0,
+            sensitivity_stalker=0.0,
+            sensitivity_closer=0.0,
+        ),
+    ),
 )
 
 
@@ -1316,6 +1332,20 @@ class PaiWithinStyleRow:
         """上位1/3と下位1/3の PAI 差。小さいならそもそも判別する幅が無い。"""
         return self.high_mean_pai - self.low_mean_pai
 
+    @property
+    def spread_se(self) -> float:
+        """好走率差の標準誤差。独立2標本の比率差なので分散を足す。"""
+        if self.group_n <= 0:
+            return 0.0
+        hi, lo = self.high_rate, self.low_rate
+        return math.sqrt((hi * (1 - hi) + lo * (1 - lo)) / self.group_n)
+
+    @property
+    def is_significant(self) -> bool:
+        """差が誤差の2倍を超えているか。頭数の閾値より直接的に判断できる。"""
+        se = self.spread_se
+        return se > 0 and abs(self.spread) >= 2 * se
+
 
 def summarize_pai_within_style(samples: list[HorseSample]) -> list[PaiWithinStyleRow]:
     """脚質を固定した上で、PAI 上位1/3と下位1/3の好走率を比べる。
@@ -1351,9 +1381,6 @@ def summarize_pai_within_style(samples: list[HorseSample]) -> list[PaiWithinStyl
     return sorted(rows, key=lambda r: -r.spread)
 
 
-_PAI_SMALL_GROUP_N = 30
-
-
 def format_pai_by_style(samples: list[HorseSample]) -> str:
     """脚質の定数効果と、脚質内での PAI の効きを分けて示す。"""
     if not samples:
@@ -1380,20 +1407,22 @@ def format_pai_by_style(samples: list[HorseSample]) -> str:
         lines.append(f"\n    脚質内でのPAIの効き（上位1/3 対 下位1/3・{track}）")
         lines.append(
             f"    {'脚質':<8}{'1/3頭数':>9}{'下位PAI':>9}{'下位好走':>9}"
-            f"{'上位PAI':>9}{'上位好走':>9}{'差':>9}"
+            f"{'上位PAI':>9}{'上位好走':>9}{'差':>9}{'±2誤差':>9}{'判定':>7}"
         )
         for w in within:
-            mark = "*" if w.group_n < _PAI_SMALL_GROUP_N else " "
+            verdict = "有意" if w.is_significant else "誤差内"
             lines.append(
-                f"    {w.style:<8}{w.group_n:>8,}{mark}{w.low_mean_pai:>9.1f}"
+                f"    {w.style:<8}{w.group_n:>9,}{w.low_mean_pai:>9.1f}"
                 f"{w.low_rate:>9.1%}{w.high_mean_pai:>9.1f}{w.high_rate:>9.1%}"
-                f"{w.spread:>+9.1%}"
+                f"{w.spread:>+9.1%}{2 * w.spread_se:>9.1%}{verdict:>7}"
             )
     lines.append(
-        f"\n  ※ 「差」が正なら、脚質を固定しても PAI が好走を判別できている。"
-        f"\n  ※ 下位PAIと上位PAIが近い脚質は、そもそも判別する幅が無い（感応度0など）。"
-        f"\n  ※ * は片側 {_PAI_SMALL_GROUP_N} 頭未満で、差を偶然と区別できない。"
-        f"\n  ※ 脚質をまたいだ順位付けに PAI を使わないこと（docs/DECISIONS.md ADR-2026-08-04）。"
+        "\n  ※ 「差」が正なら、脚質を固定しても PAI が好走を判別できている。"
+        "\n  ※ 「誤差内」の行は偶然と区別できない。頭数ではなく差と標準誤差で判定している。"
+        "\n  ※ 下位PAIと上位PAIが近い脚質は、そもそも判別する幅が無い（感応度0など）。"
+        "\n  ※ 感応度が高い脚質ほど差が小さいなら、ペース補正が効いていないことを意味する。"
+        "\n     PAI の残り半分は pace_affinity（その馬自身の過去のペース別実績）由来。"
+        "\n  ※ 脚質をまたいだ順位付けに PAI を使わないこと（docs/DECISIONS.md ADR-2026-08-04）。"
     )
     return "\n".join(lines)
 

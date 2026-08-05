@@ -63,6 +63,7 @@ from pci.application.backtest import (
     summarize_rpci,
     summarize_style_advantage,
 )
+from pci.domain.pace.adaptability import DEFAULT_WEIGHTS as DEFAULT_PAI_WEIGHTS
 from pci.domain.pace.rpci_forecast import PaceLabel
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.racing.master import Horse, Jockey, Trainer
@@ -204,6 +205,41 @@ class TestSummarizePaiWithinStyle:
         rows = summarize_pai_within_style(samples)
         assert [r.style for r in rows] == ["逃げ", "追込"]
 
+    def test_tiny_groups_are_not_significant(self) -> None:
+        """片側1頭では 0% 対 100% でも偶然と区別できない。"""
+        samples = [self._h("逃げ", pai, pai >= 70.0) for pai in (10.0, 40.0, 70.0)]
+        row = summarize_pai_within_style(samples)[0]
+        assert row.spread == pytest.approx(1.0)
+        assert row.is_significant is False
+
+    @staticmethod
+    def _terciles(low_good: int, high_good: int) -> list[HorseSample]:
+        """1/3が100頭ちょうどになる300頭。中位帯は判定に使われない。"""
+        h = TestSummarizePaiWithinStyle._h
+        return (
+            [h("逃げ", 20.0, i < low_good) for i in range(100)]
+            + [h("逃げ", 50.0, False) for _ in range(100)]
+            + [h("逃げ", 80.0, i < high_good) for i in range(100)]
+        )
+
+    def test_large_consistent_difference_is_significant(self) -> None:
+        # 下位10% 対 上位40%。誤差の2倍を大きく超える。
+        row = summarize_pai_within_style(self._terciles(low_good=10, high_good=40))[0]
+        assert row.group_n == 100
+        assert row.spread == pytest.approx(0.3)
+        assert row.is_significant is True
+
+    def test_flat_rates_are_not_significant(self) -> None:
+        row = summarize_pai_within_style(self._terciles(low_good=20, high_good=20))[0]
+        assert row.spread == 0.0
+        assert row.is_significant is False
+
+    def test_small_difference_is_within_noise(self) -> None:
+        # 20% 対 24%。差 +4% に対し誤差の2倍は約11%。
+        row = summarize_pai_within_style(self._terciles(low_good=20, high_good=24))[0]
+        assert row.spread == pytest.approx(0.04)
+        assert row.is_significant is False
+
 
 class TestFormatPaiByStyle:
     def test_empty_returns_empty_string(self) -> None:
@@ -220,12 +256,18 @@ class TestFormatPaiByStyle:
         assert "脚質間で比較できない" in out
         assert "脚質内でのPAIの効き" in out
 
-    def test_marks_small_groups(self) -> None:
+    def test_marks_underpowered_rows_as_noise(self) -> None:
+        """頭数が少なければ、差の大きさに関わらず「誤差内」と出す。"""
         samples = [
             TestSummarizePaiWithinStyle._h("逃げ", pai, pai >= 70.0) for pai in (10.0, 40.0, 70.0)
         ]
         out = format_pai_by_style(samples)
-        assert "*" in out
+        assert "判定" in out  # 見出し
+        assert "誤差内" in out
+
+    def test_marks_a_real_difference_as_significant(self) -> None:
+        out = format_pai_by_style(TestSummarizePaiWithinStyle._terciles(10, 40))
+        assert "有意" in out
 
 
 class TestSummarizeIntegratedAccuracy:
@@ -1107,6 +1149,23 @@ class TestPaiWeightComparison:
         assert "候補は自動採用しません" in text
         assert "全体" in text
         assert "ダート" in text
+        assert "上位帯n=" in text  # 母数の減少でリフトが跳ねる候補を見分けるため
+
+    def test_pace_off_is_available_as_the_null_hypothesis(self) -> None:
+        """ペース補正を全て切った候補が常設されていること。
+
+        current と並ぶなら、ペース補正は判別に寄与していない。
+        """
+        profile = next(p for p in DEFAULT_PAI_WEIGHT_PROFILES if p.name == "pace-off")
+
+        w = profile.weights
+        assert w.sensitivity_escape == 0.0
+        assert w.sensitivity_front == 0.0
+        assert w.sensitivity_flexible == 0.0
+        # ペース以外は現行と同じでないと切り分けにならない。
+        assert w.pace_swing == DEFAULT_PAI_WEIGHTS.pace_swing
+        assert w.distance_weight_per_200m == DEFAULT_PAI_WEIGHTS.distance_weight_per_200m
+        assert w.off_track_penalty == DEFAULT_PAI_WEIGHTS.off_track_penalty
 
 
 class TestGroupRacesByTrack:
