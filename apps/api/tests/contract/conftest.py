@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from pci.application.dto import EntryInput, RaceInfo, ResultInput
@@ -134,9 +135,12 @@ def repo() -> FakeRaceRepository:
     return r
 
 
-@pytest.fixture
-def client(repo: FakeRaceRepository) -> TestClient:
-    app = create_app()
+def override_dependencies(app: FastAPI, repo: FakeRaceRepository) -> None:
+    """DB を使わずに API 契約を検証できるよう、依存を Fake へ差し替える。
+
+    `client` フィクスチャ以外（設定を差し替えて自前で app を組むテスト）からも
+    同じ差し替えを使えるよう関数として切り出してある。
+    """
     mart_repo = FakeMartRepository()
     app.dependency_overrides[get_race_repository] = lambda: repo
     app.dependency_overrides[get_mart_repository] = lambda: mart_repo
@@ -163,4 +167,10 @@ def client(repo: FakeRaceRepository) -> TestClient:
     app.dependency_overrides[get_database_readiness] = lambda: DatabaseReadiness(
         ready=True, database="ok"
     )
+
+
+@pytest.fixture
+def client(repo: FakeRaceRepository) -> TestClient:
+    app = create_app()
+    override_dependencies(app, repo)
     return TestClient(app)

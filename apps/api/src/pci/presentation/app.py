@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import math
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request
@@ -12,6 +13,7 @@ from fastapi.responses import JSONResponse, Response
 
 from pci.application.errors import RaceNotConfirmedError
 from pci.config.settings import get_settings
+from pci.presentation.rate_limit import SlidingWindowRateLimiter, client_key
 from pci.presentation.routers import health, ingest, races, status
 
 _logger = logging.getLogger(__name__)
@@ -72,6 +74,37 @@ def create_app() -> FastAPI:
                 headers={
                     "Cache-Control": "no-store",
                     "WWW-Authenticate": "Bearer",
+                },
+            )
+        return await call_next(request)
+
+    # ここは `_protect_public_api` より**後に**登録する。Starlette は後から登録した
+    # middleware を外側に置くため、レート制限が先に走る。安いはじき方を先にする。
+    limiter = SlidingWindowRateLimiter(settings.rate_limit_per_minute)
+    trusted_proxies = settings.rate_limit_trusted_proxies
+
+    @app.middleware("http")
+    async def _rate_limit_public_api(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """公開参照APIを、クライアント単位で1分あたりの回数制限へかける。"""
+        if limiter.limit == 0 or not request.url.path.startswith("/api/v1/"):
+            return await call_next(request)
+
+        key = client_key(
+            request.client.host if request.client else None,
+            request.headers.get("X-Forwarded-For"),
+            trusted_proxies,
+        )
+        wait = limiter.retry_after(key)
+        if wait is not None:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests"},
+                headers={
+                    "Cache-Control": "no-store",
+                    "Retry-After": str(max(1, math.ceil(wait))),
                 },
             )
         return await call_next(request)

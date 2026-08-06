@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     # JRA-VAN 由来のデータを読み出せる状態になる（CLAUDE.md「生データ再配布は禁止前提」）。
     cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # 公開参照APIの1分あたり上限（クライアント単位）。0 で無効。
+    # 目的は無制限スクレイピングの抑止であって、正規利用の妨害ではない。
+    # 1レース閲覧で数リクエスト、一覧で十数リクエスト程度を想定して余裕を持たせる。
+    rate_limit_per_minute: int = 120
+    # 前段に置く信頼できるプロキシの段数。
+    #
+    # PaaS のロードバランサ配下では接続元IPが常にプロキシになり、全利用者が同じ
+    # キーへ集約されてしまう。かといって `X-Forwarded-For` を無条件に信じると、
+    # ヘッダ詐称で制限を回避できる。**実際の構成の段数を明示したときだけ**
+    # そのヘッダを使う。既定0＝接続元IPをそのまま使う（プロキシ無しの想定）。
+    rate_limit_trusted_proxies: int = 0
+
     def cors_origin_list(self) -> list[str]:
         """設定文字列をオリジンの一覧へ変換する。空なら CORS を一切許可しない。"""
         return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]

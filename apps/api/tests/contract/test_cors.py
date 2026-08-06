@@ -24,6 +24,9 @@ def _settings(origins: str, token: str | None = None) -> MagicMock:
     settings.cors_allow_origins = origins
     settings.cors_origin_list.return_value = Settings(cors_allow_origins=origins).cors_origin_list()
     settings.public_api_token = token
+    # MagicMock の自動属性だとレート制限の初期化が落ちるため、実値を与える。
+    settings.rate_limit_per_minute = 0
+    settings.rate_limit_trusted_proxies = 0
     return settings
 
 
