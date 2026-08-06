@@ -124,6 +124,15 @@ gcloud run deploy pci-api --source apps/api --region asia-northeast1 \
 環境変数は Settings → **Environments → Production** 配下（旧UIの位置から移動している）。
 `API_BASE_URL` と `API_ACCESS_TOKEN`（API の `PUBLIC_API_TOKEN` と同値）の2つ。
 
+### 取り込みの自動化（2026-08-06 完了・検証済み）
+
+`PaceLab_Sync_Mykeibadb`（火21 / 金10 / 金21 / 土10 / 土21 / 日21）。
+手動実行で `LastTaskResult: 0`、公開API側の鮮度も最終成功0日前・失敗0件。
+ワーカーの `API_BASE_URL` は Cloud Run 直結で、手元のAPIを経由していない。
+
+設計は `docs/design/ingestion-automation.md`。要点は**「止まったと気付く」**方に
+重心を置いたこと。実行だけ自動化すると、沈黙する仕組みが1つ増える。
+
 ### 次の担当がやること（コードではなく外部の準備）
 
 コード側は揃っている。以下はコンソール作業のため、このセッションでは実行していない。
@@ -133,6 +142,14 @@ gcloud run deploy pci-api --source apps/api --region asia-northeast1 \
 3. ~~GCP 側の準備~~ **手動デプロイで公開済み**（上記）。CD ワークフローを使う場合は
    `deploy-cloudrun.yml` 冒頭の Workload Identity 連携が別途必要。
 4. ~~Cloud Run の環境変数~~ **設定済み**（`RATE_LIMIT_TRUSTED_PROXIES=1` を含む）
+
+- [ ] GitHub へ `PUBLIC_API_BASE_URL`（Variables）と `PUBLIC_API_TOKEN`（Secrets）を
+  設定する。**設定するまで毎日の鮮度監視はスキップされる**（未設定で失敗させると
+  毎日通知が飛び、本当の異常に気付けなくなるため）。
+- [ ] `PUBLIC_API_TOKEN` の入れ替え。構築中の会話ログに値が残っているため、
+  公開サービスのアクセス制御としては入れ替えておくのが望ましい（未実施）。
+  `gcloud run services update pci-api --region asia-northeast1 --update-env-vars PUBLIC_API_TOKEN=...`
+  と Vercel の `API_ACCESS_TOKEN` を同時に更新する。
 
 **公開状態になったため、次の2点が新たに効いてくる。**
 
