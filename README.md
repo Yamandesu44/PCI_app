@@ -110,8 +110,46 @@ push で自動デプロイしないのは、作業ブランチへの push で本
   （`warm_up`）、最初の利用者が待たされることはない。
 - `--max-instances` を必ず設定する。上限が無いと異常時に従量課金が青天井になる。
 
-**PostgreSQL は別途必要。** Cloud SQL には無料枠が無いので、東京リージョンの
-マネージド Postgres（Neon / Supabase 等）を併用する構成を想定している。
+### PostgreSQL（Aiven）
+
+Cloud SQL に無料枠が無いため、東京リージョンのマネージド Postgres を併用する。
+Aiven を選定（無料枠5GB・PgBouncer統合・東京リージョン）。実測 123MB に対して
+余裕があり、mart 層の増加を含めても当面容量を気にしなくてよい。
+
+**必ず session モードのプーラー経由で接続する。** transaction モードは PgBouncer 系で
+prepared statement が失われ、pg8000 と組み合わせると断続的に失敗する。
+
+接続文字列はそのまま `DATABASE_URL` へ貼ってよい。`?sslmode=require` は pg8000 が
+解釈できないため、アプリ側で `ssl_context` へ翻訳している。証明書を検証するなら
+`sslmode=verify-full&sslrootcert=<CAのパス>` が望ましい（`require` は暗号化のみで
+検証しないため中間者攻撃を防げない）。
+
+#### 移行手順
+
+```bash
+# 1. 移行先にスキーマを作る
+DATABASE_URL="<移行先>" alembic upgrade head
+
+# 2. データを移す（pg_dump は libpq を使うので sslmode をそのまま解釈する）
+pg_dump --format=custom --no-owner --no-privileges --data-only \
+  --file=pci.dump "<移行元のURL>"
+pg_restore --no-owner --no-privileges --disable-triggers \
+  --dbname="<移行先のURL>" pci.dump
+
+# 3. 欠けが無いか突き合わせる（pg_restore は部分成功で終わることがある）
+DATABASE_URL="<移行先>" python -m scripts.verify_migration --source "<移行元>"
+```
+
+#### 容量の運用
+
+`model_version` は主キーの一部なので、世代を上げると行が**更新ではなく追加**される。
+放置するとコアデータより速く容量を食う。
+
+```bash
+python -m scripts.db_size                     # 現在の容量と世代別行数
+python -m scripts.prune_mart_versions         # 削除対象を確認（DBは変更しない）
+python -m scripts.prune_mart_versions --apply # 実際に削除
+```
 
 手元で本番と同じイメージを動かす場合:
 
