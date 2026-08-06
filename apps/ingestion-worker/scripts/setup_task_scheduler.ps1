@@ -44,7 +44,11 @@
 
 .EXAMPLE
     # Open PowerShell as Administrator and run:
-    .\scripts\setup_task_scheduler.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\setup_task_scheduler.ps1
+
+    # Calling the script directly fails on a default Windows install,
+    # which blocks local scripts. Bypassing for this one call leaves the
+    # machine's policy alone -- sync_mykeibadb.bat does the same thing.
 #>
 
 Set-StrictMode -Version Latest
