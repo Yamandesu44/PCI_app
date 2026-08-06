@@ -19,6 +19,19 @@ class Settings(BaseSettings):
     gemini_model: str = DEFAULT_GEMINI_MODEL
     ingest_token: str | None = None  # Bearer token for /internal/ingest/* endpoints
     public_api_token: str | None = None  # Bearer token for /api/v1/* endpoints
+    # ブラウザから直接叩くことを許すオリジン（カンマ区切り）。
+    #
+    # web は Next.js のサーバコンポーネントから呼ぶため、通常の動作に CORS は要らない
+    # （`apps/web/src/lib/api.ts` 参照）。既定をローカル開発の2つに絞ってあるのは、
+    # 手元でブラウザから叩く場合のためだけ。**本番オリジンは環境変数で明示すること。**
+    #
+    # 以前は `allow_origins=["*"]` だった。利点が無い一方、公開時は任意のサイトから
+    # JRA-VAN 由来のデータを読み出せる状態になる（CLAUDE.md「生データ再配布は禁止前提」）。
+    cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    def cors_origin_list(self) -> list[str]:
+        """設定文字列をオリジンの一覧へ変換する。空なら CORS を一切許可しない。"""
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
 
 
 @lru_cache

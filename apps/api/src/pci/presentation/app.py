@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request
@@ -12,6 +13,8 @@ from fastapi.responses import JSONResponse, Response
 from pci.application.errors import RaceNotConfirmedError
 from pci.config.settings import get_settings
 from pci.presentation.routers import health, ingest, races, status
+
+_logger = logging.getLogger(__name__)
 
 
 def _has_valid_public_api_token(request: Request, expected_token: str) -> bool:
@@ -31,13 +34,25 @@ def create_app() -> FastAPI:
         description="競馬展開予想 SaaS — 想定RPCI・PAI・展開シナリオを提供する REST API",
     )
 
-    # MVP は個人利用。フロント（Vercel）からのアクセスを許可する。
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["GET"],
-        allow_headers=["*"],
-    )
+    settings = get_settings()
+
+    # web はサーバコンポーネントから呼ぶため通常の動作に CORS は要らない。
+    # 許可オリジンが空なら middleware 自体を入れない（既定はローカル開発の2つ）。
+    allowed_origins = settings.cors_origin_list()
+    if allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_methods=["GET"],
+            allow_headers=["*"],
+        )
+
+    if settings.public_api_token is None:
+        # 黙って全公開にしない。到達できる相手は誰でも全データを読める状態になる。
+        _logger.warning(
+            "PUBLIC_API_TOKEN が未設定です。/api/v1/* は認証なしで公開されます。"
+            "外部から到達できる場所へ置く場合は必ず設定してください。"
+        )
 
     @app.middleware("http")
     async def _protect_public_api(
