@@ -23,7 +23,12 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"  # CI は最新を使用
+          # 型チェックは pyproject の [tool.mypy] python_version と揃える。
+          # 3.12 で走らせると numpy 2.5 系（3.12以上専用）が入り、その型スタブが
+          # PEP695 の `type` 文を使うため、3.11 を対象とした解析が構文エラーで落ちる。
+          #   numpy/__init__.pyi: error: Type statement is only supported in Python 3.12+
+          # requires-python = ">=3.11" を掲げている以上、下限で検証するのが筋。
+          python-version: "3.11"
           cache: pip
 
       - name: Install dev dependencies
