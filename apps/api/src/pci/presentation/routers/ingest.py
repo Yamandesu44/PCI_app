@@ -39,7 +39,6 @@ router = APIRouter(prefix="/internal/ingest", tags=["ingest"])
 
 # ----- 認証 -----
 
-
 def _verify_token(x_ingest_token: Annotated[str | None, Header()] = None) -> None:
     settings = get_settings()
     if settings.ingest_token is None:
@@ -144,7 +143,6 @@ def get_incomplete_race_keys(
 
 # ----- リクエストスキーマ -----
 
-
 class HorseBody(BaseModel):
     ketto_num: str = Field(min_length=10, max_length=10)
     name: str
@@ -218,7 +216,6 @@ class RaceMetadataBody(BaseModel):
 
 # ----- レスポンス -----
 
-
 class IngestResponse(BaseModel):
     accepted: int
     message: str = "ok"
@@ -260,7 +257,6 @@ class ForecastPrecomputeResponse(BaseModel):
 
 
 # ----- エンドポイント -----
-
 
 @router.post(
     "/duplicate-races/delete-stale",

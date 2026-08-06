@@ -101,11 +101,15 @@ def evaluate_dirt_monitoring(
             reasons=("対象期間に評価可能な確定ダートレースがありません。",),
         )
 
-    high_race_count = sum(sample.actual_label == PaceLabel.HIGH for sample in report.rpci_samples)
+    high_race_count = sum(
+        sample.actual_label == PaceLabel.HIGH for sample in report.rpci_samples
+    )
     average_race_count = sum(
         sample.actual_label == PaceLabel.AVERAGE for sample in report.rpci_samples
     )
-    slow_race_count = sum(sample.actual_label == PaceLabel.SLOW for sample in report.rpci_samples)
+    slow_race_count = sum(
+        sample.actual_label == PaceLabel.SLOW for sample in report.rpci_samples
+    )
     if report.model_version != policy.expected_model_version:
         return RpciMonitoringResult(
             status=RpciMonitoringStatus.MODEL_MISMATCH,
@@ -132,10 +136,13 @@ def evaluate_dirt_monitoring(
     if report.rpci.n < policy.minimum_races or insufficient_labels:
         reasons: list[str] = []
         if report.rpci.n < policy.minimum_races:
-            reasons.append(f"全体レース数が判定開始条件の{policy.minimum_races}件に未達です。")
+            reasons.append(
+                f"全体レース数が判定開始条件の{policy.minimum_races}件に未達です。"
+            )
         for label, _count in insufficient_labels:
             reasons.append(
-                f"{label}実績レース数が判定開始条件の{policy.minimum_races_per_label}件に未達です。"
+                f"{label}実績レース数が判定開始条件の"
+                f"{policy.minimum_races_per_label}件に未達です。"
             )
         return RpciMonitoringResult(
             status=RpciMonitoringStatus.ACCUMULATING,

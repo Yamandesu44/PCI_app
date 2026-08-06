@@ -450,10 +450,16 @@ class ForecastPerformanceOutput:
     confidence_review_ready: bool
     previous_period: ForecastPerformanceComparisonOutput
     groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
-    confidence_groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
-    confidence_cohort_groups: list[ForecastPerformanceGroupOutput] = field(default_factory=list)
+    confidence_groups: list[ForecastPerformanceGroupOutput] = field(
+        default_factory=list
+    )
+    confidence_cohort_groups: list[ForecastPerformanceGroupOutput] = field(
+        default_factory=list
+    )
     pace_matrix: list[ForecastPaceMatrixRowOutput] = field(default_factory=list)
-    weekly_trend: list[ForecastPerformanceTrendPointOutput] = field(default_factory=list)
+    weekly_trend: list[ForecastPerformanceTrendPointOutput] = field(
+        default_factory=list
+    )
     recent_misses: list[ForecastMissOutput] = field(default_factory=list)
 
 

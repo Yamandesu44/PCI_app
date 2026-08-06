@@ -275,7 +275,11 @@ class GetPaceAnalysisUseCase:
         # races.rpci_actual と食い違う（同じ画面でヘッダーと本文の流れが割れる）。
         # pci-v3: 個馬PCIと同じ式をレース自身へ適用する（取り込み側と同一の算出）。
         winner_time = next(
-            (e.race_time_s for e in entries if e.finish_pos == 1 and e.race_time_s is not None),
+            (
+                e.race_time_s
+                for e in entries
+                if e.finish_pos == 1 and e.race_time_s is not None
+            ),
             None,
         )
         race_rpci: float | None = None

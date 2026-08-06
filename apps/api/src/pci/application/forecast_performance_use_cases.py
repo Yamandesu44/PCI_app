@@ -68,13 +68,17 @@ class GetForecastPerformanceUseCase:
         date_to = current.astimezone(_JRA_TIMEZONE).date()
         date_from = date_to - datetime.timedelta(days=period_days - 1)
         previous_date_to = date_from - datetime.timedelta(days=1)
-        previous_date_from = previous_date_to - datetime.timedelta(days=period_days - 1)
+        previous_date_from = previous_date_to - datetime.timedelta(
+            days=period_days - 1
+        )
         trend_date_from = _weekly_trend_date_from(date_to)
         records = self._repo.find_prediction_evaluations(
             min(previous_date_from, trend_date_from),
             date_to,
         )
-        period_records = [record for record in records if date_from <= record.race_date <= date_to]
+        period_records = [
+            record for record in records if date_from <= record.race_date <= date_to
+        ]
         previous_records = [
             record
             for record in records
@@ -121,9 +125,12 @@ class GetForecastPerformanceUseCase:
             )
             for key, label, track_type in _GROUPS
         ]
-        confidence_cohort_by_key = {group.key: group for group in confidence_cohort_groups}
+        confidence_cohort_by_key = {
+            group.key: group for group in confidence_cohort_groups
+        }
         confidence_review_ready = all(
-            confidence_cohort_by_key[key].sample_size >= _CONFIDENCE_REVIEW_TARGET_PER_TRACK
+            confidence_cohort_by_key[key].sample_size
+            >= _CONFIDENCE_REVIEW_TARGET_PER_TRACK
             for key in ("turf", "dirt")
         )
         pace_matrix = _build_pace_matrix(period_records)
@@ -137,7 +144,9 @@ class GetForecastPerformanceUseCase:
             eligible_race_count=eligible_race_count,
             sample_size=overall.sample_size,
             coverage_rate=(
-                round(overall.sample_size / eligible_race_count, 3) if eligible_race_count else None
+                round(overall.sample_size / eligible_race_count, 3)
+                if eligible_race_count
+                else None
             ),
             hit_count=overall.hit_count,
             hit_rate=overall.hit_rate,
@@ -196,7 +205,10 @@ class GetForecastMissesUseCase:
             miss
             for miss in misses
             if (track_type is None or miss.track_type == track_type)
-            and (predicted_label is None or miss.predicted_label == predicted_label)
+            and (
+                predicted_label is None
+                or miss.predicted_label == predicted_label
+            )
             and (actual_label is None or miss.actual_label == actual_label)
         ]
         return ForecastMissesOutput(
@@ -218,10 +230,13 @@ def _summarize(
     track_type: str | None,
 ) -> ForecastPerformanceGroupOutput:
     targets = [
-        record for record in records if track_type is None or record.track_type == track_type
+        record
+        for record in records
+        if track_type is None or record.track_type == track_type
     ]
     hit_count = sum(
-        str(classify_pace(record.actual_rpci, record.track_type)) == record.predicted_label
+        str(classify_pace(record.actual_rpci, record.track_type))
+        == record.predicted_label
         for record in targets
     )
     sample_size = len(targets)
@@ -244,9 +259,14 @@ def _build_weekly_trend(
     for week_index in range(_TREND_WEEKS):
         week_from = first_monday + datetime.timedelta(days=week_index * 7)
         week_to = week_from + datetime.timedelta(days=6)
-        targets = [record for record in records if week_from <= record.race_date <= week_to]
+        targets = [
+            record
+            for record in records
+            if week_from <= record.race_date <= week_to
+        ]
         hit_count = sum(
-            str(classify_pace(record.actual_rpci, record.track_type)) == record.predicted_label
+            str(classify_pace(record.actual_rpci, record.track_type))
+            == record.predicted_label
             for record in targets
         )
         sample_size = len(targets)
@@ -256,7 +276,11 @@ def _build_weekly_trend(
                 date_to=week_to.isoformat(),
                 sample_size=sample_size,
                 hit_count=hit_count,
-                hit_rate=(round(hit_count / sample_size, 3) if sample_size else None),
+                hit_rate=(
+                    round(hit_count / sample_size, 3)
+                    if sample_size
+                    else None
+                ),
             )
         )
     return points
@@ -283,7 +307,8 @@ def _summarize_confidence(
         and (maximum is None or record.confidence < maximum)
     ]
     hit_count = sum(
-        str(classify_pace(record.actual_rpci, record.track_type)) == record.predicted_label
+        str(classify_pace(record.actual_rpci, record.track_type))
+        == record.predicted_label
         for record in targets
     )
     sample_size = len(targets)
@@ -302,10 +327,15 @@ def _build_pace_matrix(
     """予想3区分ごとに、実績3区分への分布を集計する。"""
     rows: list[ForecastPaceMatrixRowOutput] = []
     for predicted_key, predicted_label, predicted_value in _PACE_GROUPS:
-        targets = [record for record in records if record.predicted_label == predicted_value]
+        targets = [
+            record
+            for record in records
+            if record.predicted_label == predicted_value
+        ]
         sample_size = len(targets)
         actual_labels = [
-            str(classify_pace(record.actual_rpci, record.track_type)) for record in targets
+            str(classify_pace(record.actual_rpci, record.track_type))
+            for record in targets
         ]
         cells = []
         for actual_key, actual_label, actual_value in _PACE_GROUPS:
@@ -315,7 +345,11 @@ def _build_pace_matrix(
                     key=actual_key,
                     label=actual_label,
                     count=count,
-                    rate=(round(count / sample_size, 3) if sample_size else None),
+                    rate=(
+                        round(count / sample_size, 3)
+                        if sample_size
+                        else None
+                    ),
                 )
             )
         rows.append(
@@ -343,7 +377,8 @@ def _build_misses(
     misses = [
         (record, str(classify_pace(record.actual_rpci, record.track_type)))
         for record in records
-        if str(classify_pace(record.actual_rpci, record.track_type)) != record.predicted_label
+        if str(classify_pace(record.actual_rpci, record.track_type))
+        != record.predicted_label
     ]
     misses.sort(
         key=lambda item: (item[0].race_date, item[0].race_key),

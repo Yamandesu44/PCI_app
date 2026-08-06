@@ -246,7 +246,9 @@ class RuleBasedRpciForecaster:
         reasons: list[Reason] = []
 
         # 1. 距離基準ペース
-        dist_adj = (context.distance_m - w.distance_pivot_m) / 200.0 * w.distance_slope_per_200m
+        dist_adj = (
+            (context.distance_m - w.distance_pivot_m) / 200.0 * w.distance_slope_per_200m
+        )
         base = w.base_rpci + dist_adj
         reasons.append(
             Reason(
@@ -258,17 +260,17 @@ class RuleBasedRpciForecaster:
 
         # 1b. コース種別基準補正（rule-v3: 芝/ダートで実績 RPCI 平均が大きく異なる）
         track_type_adj = (
-            w.turf_base_adjust
-            if context.track_type == "芝"
-            else w.dirt_base_adjust
-            if context.track_type == "ダート"
+            w.turf_base_adjust if context.track_type == "芝"
+            else w.dirt_base_adjust if context.track_type == "ダート"
             else 0.0
         )
         if track_type_adj != 0.0:
             reasons.append(
                 Reason(
                     code="track_type_base",
-                    description=(f"コース「{context.track_type}」基準補正 {track_type_adj:+.2f}"),
+                    description=(
+                        f"コース「{context.track_type}」基準補正 {track_type_adj:+.2f}"
+                    ),
                     contribution=round(track_type_adj, 2),
                 )
             )

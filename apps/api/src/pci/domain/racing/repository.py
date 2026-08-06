@@ -124,7 +124,9 @@ class RaceCompletenessRepository(Protocol):
         self, before: datetime.date
     ) -> datetime.date | None: ...
 
-    def find_incomplete_past_races(self, before: datetime.date, limit: int = 20) -> list[Race]: ...
+    def find_incomplete_past_races(
+        self, before: datetime.date, limit: int = 20
+    ) -> list[Race]: ...
 
     def count_missing_track_conditions(
         self, on_or_after: datetime.date, before: datetime.date

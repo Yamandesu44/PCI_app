@@ -226,7 +226,9 @@ def _confidence(sample_size: int) -> float:
     return 0.6
 
 
-def _fallback_profile(horse_id: str, running_style: RunningStyleLabel) -> HorsePaceAffinityProfile:
+def _fallback_profile(
+    horse_id: str, running_style: RunningStyleLabel
+) -> HorsePaceAffinityProfile:
     scores = _fallback_scores(running_style)
     preferred_level = max(scores, key=lambda level: scores[level])
     return HorsePaceAffinityProfile(

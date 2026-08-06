@@ -116,10 +116,12 @@ _FORECAST_CONSEQUENCE: dict[PaceLabel, str] = {
         "後ろで脚をためる馬に出番が回ってきます。"
     ),
     PaceLabel.AVERAGE: (
-        "平均的な流れなら大きな有利・不利は出にくく、普段どおり力を出せる馬を重視したいレースです。"
+        "平均的な流れなら大きな有利・不利は出にくく、"
+        "普段どおり力を出せる馬を重視したいレースです。"
     ),
     PaceLabel.SLOW: (
-        "前半が落ち着くと後ろから一気に届かせるのは難しく、前めで運べる馬が粘り込みやすくなります。"
+        "前半が落ち着くと後ろから一気に届かせるのは難しく、"
+        "前めで運べる馬が粘り込みやすくなります。"
     ),
 }
 
@@ -194,9 +196,7 @@ class RuleBasedCommentGenerator:
         if data.rpci_actual is None:
             return Commentary(
                 headline="判断材料が不足しています。",
-                body=(
-                    "振り返りに必要な材料が足りないため、今回は流れの評価を控えめに見てください。",
-                ),
+                body=("振り返りに必要な材料が足りないため、今回は流れの評価を控えめに見てください。",),
                 model_version=COMMENTARY_VERSION,
                 reasons=_review_reasons(data),
             )
@@ -245,9 +245,13 @@ def _beneficiary_sentence(
     top = beneficiaries[0]
     top_label = horse_number_label(top.horse_no, confirmed=horse_numbers_confirmed)
     if len(beneficiaries) == 1:
-        return f"この流れで注目したいのは{top_label}です。展開がかみ合えば力を出しやすい一頭です。"
+        return (
+            f"この流れで注目したいのは{top_label}です。"
+            "展開がかみ合えば力を出しやすい一頭です。"
+        )
     return (
-        f"この流れで特に注目したいのが{top_label}です。同じように流れが向きそうな馬も複数います。"
+        f"この流れで特に注目したいのが{top_label}です。"
+        f"同じように流れが向きそうな馬も複数います。"
     )
 
 

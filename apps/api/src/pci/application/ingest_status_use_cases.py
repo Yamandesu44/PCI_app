@@ -48,14 +48,20 @@ class GetIngestStatusUseCase:
         incomplete_races = self._race_repo.find_incomplete_past_races(
             race_date_today, limit=_INCOMPLETE_RACES_LIMIT
         )
-        metadata_date_from = race_date_today - datetime.timedelta(days=_RACE_METADATA_LOOKBACK_DAYS)
-        missing_track_condition_count = self._race_repo.count_missing_track_conditions(
-            metadata_date_from, race_date_today
+        metadata_date_from = race_date_today - datetime.timedelta(
+            days=_RACE_METADATA_LOOKBACK_DAYS
         )
-        missing_track_condition_races = self._race_repo.find_missing_track_conditions(
-            metadata_date_from,
-            race_date_today,
-            limit=_MISSING_TRACK_CONDITIONS_LIMIT,
+        missing_track_condition_count = (
+            self._race_repo.count_missing_track_conditions(
+                metadata_date_from, race_date_today
+            )
+        )
+        missing_track_condition_races = (
+            self._race_repo.find_missing_track_conditions(
+                metadata_date_from,
+                race_date_today,
+                limit=_MISSING_TRACK_CONDITIONS_LIMIT,
+            )
         )
         duplicate_race_group_count = self._race_repo.count_duplicate_race_groups(
             metadata_date_from, race_date_today

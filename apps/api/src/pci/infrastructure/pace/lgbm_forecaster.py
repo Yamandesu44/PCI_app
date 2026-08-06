@@ -26,7 +26,7 @@ from pci.domain.pace.rpci_forecast import (
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "lgbm-v1"  # 統合モデル（後方互換）
+MODEL_VERSION = "lgbm-v1"          # 統合モデル（後方互換）
 MODEL_VERSION_TURF = "lgbm-turf-v1"  # 芝専用モデル
 MODEL_VERSION_DIRT = "lgbm-dirt-v1"  # ダート専用モデル
 MODEL_VERSION_V2 = "lgbm-v2-features"
@@ -57,44 +57,44 @@ _CONFIDENCE_MAX = 0.9
 
 # 特徴量名（学習スクリプトと inference で順序を完全に一致させること）
 FEATURE_NAMES = [
-    "distance_m",  # 距離（m）
-    "is_dirt",  # ダート=1, 芝=0
-    "jyo_cd",  # 競馬場コード（整数 1〜10、不明=0）
+    "distance_m",    # 距離（m）
+    "is_dirt",       # ダート=1, 芝=0
+    "jyo_cd",        # 競馬場コード（整数 1〜10、不明=0）
     "escape_count",  # 逃げ馬頭数
-    "front_ratio",  # 逃先行比率 (ESCAPE+FRONT) / n
+    "front_ratio",   # 逃先行比率 (ESCAPE+FRONT) / n
     "closer_ratio",  # 差追比率 (STALKER+CLOSER) / n
-    "style_balance",  # 差追比率 - 逃先行比率
-    "track_cond",  # 馬場状態（良=0, 稍重=1, 重=2, 不良=3）
+    "style_balance", # 差追比率 - 逃先行比率
+    "track_cond",    # 馬場状態（良=0, 稍重=1, 重=2, 不良=3）
 ]
 
 FEATURE_NAMES_V2 = FEATURE_NAMES + [
-    "field_size",  # 出走頭数
-    "escape_ratio",  # 逃げ馬比率
-    "front_count",  # 逃げ・先行馬頭数
-    "flexible_ratio",  # 自在馬比率
+    "field_size",          # 出走頭数
+    "escape_ratio",        # 逃げ馬比率
+    "front_count",         # 逃げ・先行馬頭数
+    "flexible_ratio",      # 自在馬比率
     "escape_competition",  # 2頭目以降の逃げ競合比率
-    "distance_short",  # 1400m以下
-    "distance_mile",  # 1401〜1800m
-    "distance_middle",  # 1801〜2200m
-    "distance_long",  # 2201m以上
+    "distance_short",      # 1400m以下
+    "distance_mile",       # 1401〜1800m
+    "distance_middle",     # 1801〜2200m
+    "distance_long",       # 2201m以上
     *(f"venue_{code:02d}" for code in range(1, 11)),
 ]
 
 FEATURE_NAMES_V3 = FEATURE_NAMES_V2 + [
-    "history_front_horses",  # 前付け履歴を持つ馬の頭数
+    "history_front_horses",   # 前付け履歴を持つ馬の頭数
     "history_front_samples",  # 前付け履歴の総レース数
     "history_front_avg_pci",  # 馬単位で平均した前付け時PCI
     "history_front_min_pci",  # 最も速い流れを作った馬の平均PCI
-    "history_front_spread",  # 馬ごとの平均PCIの幅
-    "history_front_coverage",  # 全出走馬に対する履歴保有率
+    "history_front_spread",   # 馬ごとの平均PCIの幅
+    "history_front_coverage", # 全出走馬に対する履歴保有率
 ]
 
 FEATURE_NAMES_V4 = FEATURE_NAMES_V3 + [
-    "history_lap_horses",  # 前後半3F履歴を持つ馬の頭数
-    "history_lap_samples",  # 前後半3F履歴の総レース数
-    "history_lap_avg_delta",  # 馬単位で平均した後半3F－前半3F
-    "history_lap_min_delta",  # 最も前傾傾向が強い馬の平均差
-    "history_lap_spread",  # 馬ごとの平均差の幅
+    "history_lap_horses",    # 前後半3F履歴を持つ馬の頭数
+    "history_lap_samples",   # 前後半3F履歴の総レース数
+    "history_lap_avg_delta", # 馬単位で平均した後半3F－前半3F
+    "history_lap_min_delta", # 最も前傾傾向が強い馬の平均差
+    "history_lap_spread",    # 馬ごとの平均差の幅
     "history_lap_coverage",  # 全出走馬に対する履歴保有率
 ]
 
@@ -128,7 +128,9 @@ def _load_lgb_booster(model_path: str | Path) -> Any:
     path = Path(model_path)
     raw_model = path.read_bytes()
     if b"\r\n" in raw_model:
-        _logger.warning("LightGBMモデルのCRLF改行をLFへ補正して読み込みます: %s", path)
+        _logger.warning(
+            "LightGBMモデルのCRLF改行をLFへ補正して読み込みます: %s", path
+        )
     model_text = raw_model.decode("utf-8").replace("\r\n", "\n")
     return lgb.Booster(model_str=model_text)
 
@@ -180,7 +182,7 @@ def _make_forecast(
             description=(
                 f"LightGBM({version}): {context.distance_m}m"
                 f" / {context.track_type}"
-                f" / 逃{escape}頭 / 前{front / n:.0%} 後{closer / n:.0%}"
+                f" / 逃{escape}頭 / 前{front/n:.0%} 後{closer/n:.0%}"
                 f" / 馬場「{context.track_condition or '良'}」"
             ),
         ),
@@ -378,7 +380,9 @@ def _classification_margin_confidence(rpci: float, track_type: str) -> float:
         boundary_margin = min(abs(rpci - high), abs(rpci - slow))
 
     normalized_margin = min(max(boundary_margin / half_band, 0.0), 1.0)
-    confidence = _CONFIDENCE_MIN + normalized_margin * (_CONFIDENCE_MAX - _CONFIDENCE_MIN)
+    confidence = _CONFIDENCE_MIN + normalized_margin * (
+        _CONFIDENCE_MAX - _CONFIDENCE_MIN
+    )
     return round(confidence, 2)
 
 
@@ -423,7 +427,9 @@ def load_best_forecaster(
     dirt_path = dirt_model_path or _DEFAULT_DIRT_MODEL_PATH
     if turf_path.exists() and dirt_path.exists():
         try:
-            forecaster: RpciForecaster = SplitLightGBMRpciForecaster(turf_path, dirt_path, clamp)
+            forecaster: RpciForecaster = SplitLightGBMRpciForecaster(
+                turf_path, dirt_path, clamp
+            )
             return forecaster
         except Exception as exc:
             _logger.warning(
@@ -522,7 +528,9 @@ def build_features(
     if feature_names == FEATURE_NAMES_V3:
         return v3
 
-    lap_history = [sample for sample in context.historical_lap_samples if sample.sample_size > 0]
+    lap_history = [
+        sample for sample in context.historical_lap_samples if sample.sample_size > 0
+    ]
     lap_horses = len(lap_history)
     lap_samples = sum(sample.sample_size for sample in lap_history)
     lap_deltas = [sample.avg_lap_delta for sample in lap_history]
