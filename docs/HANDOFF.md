@@ -1,5 +1,83 @@
 # HANDOFF — 現在の作業状態
 
+## 2026-08-06 (Claude Code) 作業区切り その6 — 公開の足回り（Cloud Run + Aiven）
+
+- 更新日時: 2026-08-06 JST
+- 作業担当: Claude Code
+- 引き継ぎ先: OpenAI Codex
+- ブランチ: `claude/sweet-einstein-ilnaov`
+- 最新コミット: `1f25369 feat(api): add migration verification and mart version pruning`
+- 作業目的: アルゴリズムではなく**公開できる状態にする**こと。ドメインのコードは触っていない。
+
+### 決めたこと
+
+| 項目 | 決定 | 理由 |
+|---|---|---|
+| API の置き場所 | **Cloud Run**（東京） | 実測103MBに対し512Miで足り、ゼロスケールで無料枠に収まる |
+| DB の置き場所 | **Aiven for PostgreSQL**（東京・無料枠5GB） | 実測123MBに対し十分。PgBouncer 同梱・東京リージョン有り |
+| デプロイ契機 | **手動実行のみ**（`workflow_dispatch`） | GCP 側が未整備。作業ブランチへの push で本番が変わるのは事故のもと |
+| マイグレーション | **自動実行しない** | 複数インスタンス同時起動で競合する。スキーマ変更時は事前に手で流す |
+
+容量の実測（`scripts/db_size.py`）: 全体123MB / race_entries 219,329行 58MB /
+horses 411,491行 48MB / races 15,931行。約4.7年分で、コアだけなら年21%増。
+
+### 見つけて直した「黙って壊れる」不具合3件
+
+いずれも**エラーを出さずに劣化する**種類で、繋いでから気付くと原因究明が長引く。
+
+1. **`MODELS_DIR`**（`77c113d` 以前・`aee0370` 系）: モデル置き場をソースからの相対で
+   解決していたため、パッケージとして入れた途端に見つからず、**例外も出さずに
+   ルールベースへ落ちる**。設定項目へ移し、Dockerfile で `/app/models` を指定。
+   CI にフォールバック検出のステップを追加した（落ちたらビルド失敗）。
+2. **接続プールの既定値**（`77c113d`）: SQLAlchemy 既定は1プロセス最大15本。
+   max-instances=3 なら45本で、無料枠の上限に当たると**新しいインスタンスが
+   一切繋げなくなる**。3+2=5本/プロセスへ絞った。併せて `pool_pre_ping`
+   （アイドル自動停止で死んだ接続を掴むと**最初の1リクエストだけ失敗する**）と
+   `pool_recycle=1800` を入れた。
+3. **pg8000 と `sslmode`**（`e08775b`）: マネージドDBが配る接続文字列は
+   `?sslmode=require` を含むが、pg8000 はこの引数を受け取れず `TypeError` で
+   **最初の接続から失敗する**（psycopg2 なら通るためドライバ依存の罠）。
+   URL から外して `ssl_context` へ翻訳するようにした。libpq の意味に合わせている。
+
+### 用意した運用スクリプト（`1f25369`）
+
+- `scripts/verify_migration.py` — 移行元と移行先の行数・レースキー範囲を突き合わせる。
+  **`pg_restore` は部分的に成功した状態で終わることがある**ため、移行直後に必ず走らせる。
+- `scripts/prune_mart_versions.py` — 古い `model_version` の行を削除する（既定 dry-run）。
+  **`predicted_pace` は芝とダートで別世代が同時に現役**なので、「新しいN世代」だけで
+  切ると書き込み頻度の低い側を現役のまま消す。ドメインの現行世代を固定で残し、
+  さらに `--active-days`（既定7）以内に書かれた世代を残す二重の守りにした。
+- `scripts/db_size.py` — 容量と世代別行数。行数は `count(*)` 実測
+  （`n_live_tup` は ANALYZE 前だと0で当てにならない）。
+
+### 次の担当がやること（コードではなく外部の準備）
+
+コード側は揃っている。以下はコンソール作業のため、このセッションでは実行していない。
+
+1. Aiven でサービス作成（東京・**session モードのプーラー**の接続文字列を使うこと。
+   transaction モードは pg8000 の prepared statement と衝突し、断続的に失敗する）
+2. 移行の実行（手順は README の「PostgreSQL（Aiven）」節。最後に `verify_migration.py`）
+3. GCP 側の準備（`deploy-cloudrun.yml` 冒頭に必要な資源と権限を列挙済み）
+4. Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
+   前段にロードバランサが入るため、0のままだと全利用者が同じキーへ集約され、
+   レート制限が実質「全体で120回/分」になる。
+
+### テスト状況
+
+`python -m pytest tests/unit/ tests/contract/ -q` 816 passed / Ruff 0 / mypy --strict 0 /
+lint-imports 通過。
+
+### 再開コマンド
+
+```bash
+cd apps/api
+python -m pytest tests/unit/ tests/contract/ -q
+python -m scripts.db_size                      # 容量の現状
+python -m scripts.prune_mart_versions          # 掃除の影響（DBは変更しない）
+```
+
+---
+
 ## 2026-08-04 (Claude Code) 作業区切り その5 — PAIを中心合わせ＋実効サイズへ（pai-v4）
 
 - 更新日時: 2026-08-04 JST
