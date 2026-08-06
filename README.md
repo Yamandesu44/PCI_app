@@ -88,3 +88,45 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 - 認証・課金: 少人数テスト用の共有認証のみ実装。個別アカウント・権限・課金は対象外
 
 詳細: [`docs/design/01-requirements.md`](./docs/design/01-requirements.md)
+
+## デプロイ
+
+### API（Railway / Render / Fly.io など）
+
+`apps/api/Dockerfile` はどのPaaSでも動くよう、固有の仕組みを使わない。ポートは
+`PORT` 環境変数で受ける（未設定なら 8000）。
+
+```bash
+docker build -t pci-api apps/api
+docker run -p 8000:8000 -e DATABASE_URL=... -e PUBLIC_API_TOKEN=... pci-api
+```
+
+**マイグレーションはイメージ側で自動実行しない。** 複数インスタンスが同時起動すると
+競合するため、デプロイ手順で1回だけ流すこと。
+
+```bash
+alembic upgrade head
+```
+
+必ず設定する環境変数:
+
+| 変数 | 未設定だとどうなるか |
+|---|---|
+| `DATABASE_URL` | ローカル既定を見に行き接続できない |
+| `PUBLIC_API_TOKEN` | **`/api/v1/*` が無認証で全公開**（起動時に警告が出る） |
+| `INGEST_TOKEN` | `/internal/ingest/*` が無認証 |
+| `CORS_ALLOW_ORIGINS` | ローカル開発の2オリジンのみ許可（公開フロントからは弾かれる） |
+
+CI はイメージのビルドと `/health` 応答までを毎回検証する（`docker` ジョブ）。
+レジストリへの push は入れていない。デプロイ先が決まってから足すこと。
+
+### web（Vercel）
+
+ルートの `vercel.json` が設定を持つ。`API_BASE_URL` を Vercel の環境変数へ入れる。
+公開する場合は API 側の `PUBLIC_API_TOKEN` と web 側の `API_ACCESS_TOKEN` を揃える。
+
+### 手元で本番と同じイメージを動かす
+
+```bash
+docker compose --profile api up --build api
+```
