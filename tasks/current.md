@@ -57,8 +57,11 @@ pai-v3 の感応度を確定しようとして、もっと手前に2つの問題
 - [x] **API の本番用 Dockerfile を追加した**（`aee0370`）。PaaS 非依存（PORT で受ける）。
       非 root・lightgbm 用に libgomp1 のみ・モデル同梱。CI がビルドと `/health` 応答を検証する。
       `vercel.json` は既存。docker-compose に `api` サービスを profile 付きで追加した。
-- [ ] **CD（レジストリへの push とデプロイ）は未着手。デプロイ先が未定のため。**
-      Railway / Render / Fly.io のいずれかが決まれば push 段を足せる。
+- [x] **デプロイ先を Cloud Run に決定し、CD を用意した**（`7d7f724`・手動実行のみ）。
+- [ ] **PostgreSQL の置き場所が未決定。** Cloud SQL に無料枠が無いため、東京リージョンの
+      マネージド Postgres を併用する想定。**これが最後の未決定事項。**
+- [ ] GCP 側の準備（プロジェクト・Artifact Registry・Workload Identity・環境変数）。
+      手順は `deploy-cloudrun.yml` 冒頭に列挙済み。
 - [ ] 取り込みの自動化（Windows機での手動 PowerShell 実行のまま）。
 - [ ] JRA-VAN 規約確認（コードでは解決できないため早めに）。
 
