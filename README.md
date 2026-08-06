@@ -192,6 +192,18 @@ DATABASE_URL="<移行先>" python -m scripts.verify_migration --source "<移行�
 
 上記は実際の PostgreSQL 16 に対して通し、`verify_migration` が一致を返すことを確認した手順。
 
+**`pg_dump` が手元に無い場合はコンテナの中のものを使う。** 開発用DBは
+`postgres:16-alpine`（`docker-compose.yml`）なので、移行元と同じ版が入っている。
+
+```bash
+docker compose exec db pg_dump -U pci -d pci_dev --format=custom \
+  --no-owner --no-privileges --data-only --exclude-table=alembic_version -f /tmp/pci.dump
+
+docker compose exec -e PGPASSWORD="<移行先のパスワード>" -e PGSSLMODE=require db \
+  pg_restore -h <移行先のホスト> -p 5432 -U <移行先のユーザー> -d postgres \
+  --no-owner --no-privileges /tmp/pci.dump
+```
+
 #### 容量の運用
 
 `model_version` は主キーの一部なので、世代を上げると行が**更新ではなく追加**される。
