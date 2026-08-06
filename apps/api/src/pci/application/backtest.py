@@ -1434,6 +1434,8 @@ class PaceCentering:
     half_band: float
     mean_deviation: float
     pace_swing: float
+    # 平均ずれを0にする `pace_center_offset_*`。現行中心からの差分（RPCI点）。
+    recommended_offset: float
 
     @property
     def mean_bonus_at_full_sensitivity(self) -> float:
@@ -1444,6 +1446,41 @@ class PaceCentering:
     def is_centered(self) -> bool:
         """加点の平均が1点未満なら、実用上は中心が合っているとみなす。"""
         return abs(self.mean_bonus_at_full_sensitivity) < 1.0
+
+
+def _solve_center_offset(forecasts: list[float], track_type: str, weights: PaiWeights) -> float:
+    """平均 deviation を0にする中心オフセットを二分法で求める。
+
+    予測RPCIの平均を中心に置くだけでは足りない。deviation は±1で頭打ちになるため、
+    分布が非対称なら平均が中心と一致していても平均 deviation は0にならない。
+    実際ダートは予測平均46.55・中立46.50とほぼ一致しているのに平均ずれ +0.172 で、
+    感応度1.0の脚質が +4.3点 の底上げを受けていた。頭打ちの効果まで含めて解く。
+    """
+
+    def mean_dev(offset: float) -> float:
+        shifted = replace(
+            weights,
+            pace_center_offset_dirt=offset if track_type == "ダート" else 0.0,
+            pace_center_offset_turf=0.0 if track_type == "ダート" else offset,
+        )
+        return sum(pace_deviation(f, track_type, shifted) for f in forecasts) / len(forecasts)
+
+    base = (
+        weights.pace_center_offset_dirt
+        if track_type == "ダート"
+        else weights.pace_center_offset_turf
+    )
+    lo, hi = base - 10.0, base + 10.0
+    # mean_dev は offset について単調減少。端で符号が変わらなければ解無し。
+    if mean_dev(lo) < 0 or mean_dev(hi) > 0:
+        return base
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        if mean_dev(mid) > 0:
+            lo = mid
+        else:
+            hi = mid
+    return round((lo + hi) / 2, 3)
 
 
 def summarize_pace_centering(
@@ -1463,16 +1500,18 @@ def summarize_pace_centering(
         group = [s for s in samples if s.track_type == track and s.forecast_rpci]
         if not group:
             continue
-        deviations = [pace_deviation(s.forecast_rpci, track, weights) for s in group]
+        forecasts = [s.forecast_rpci for s in group]
+        deviations = [pace_deviation(f, track, weights) for f in forecasts]
         rows.append(
             PaceCentering(
                 track_type=track,
                 n=len(group),
-                mean_forecast_rpci=round(sum(s.forecast_rpci for s in group) / len(group), 2),
+                mean_forecast_rpci=round(sum(forecasts) / len(forecasts), 2),
                 neutral=pace_center(track, weights),
                 half_band=pace_half_band(track),
                 mean_deviation=round(sum(deviations) / len(deviations), 4),
                 pace_swing=weights.pace_swing,
+                recommended_offset=_solve_center_offset(forecasts, track, weights),
             )
         )
     return rows
@@ -1486,18 +1525,23 @@ def format_pace_centering(rows: list[PaceCentering]) -> str:
         "",
         "  ── ペース補正の中心ずれ（0から離れるほど脚質の定数効果を埋め込む）",
         f"    {'コース':<8}{'頭数':>8}{'予測RPCI平均':>13}{'中立値':>9}"
-        f"{'平均ずれ':>10}{'感応度1.0の平均加点':>20}{'判定':>7}",
+        f"{'平均ずれ':>10}{'感応度1.0の平均加点':>20}{'判定':>7}{'推奨offset':>12}",
     ]
     for r in rows:
         verdict = "中心一致" if r.is_centered else "ずれ"
         lines.append(
             f"    {r.track_type:<8}{r.n:>9,}{r.mean_forecast_rpci:>12.2f}{r.neutral:>10.2f}"
             f"{r.mean_deviation:>+11.3f}{r.mean_bonus_at_full_sensitivity:>+17.1f}点{verdict:>8}"
+            f"{r.recommended_offset:>+12.2f}"
         )
     lines.append(
         "    ※ 加点の平均が0でなければ、感応度の高い脚質だけが系統的に底上げされる。"
         "\n       脚質間の相対位置が動くので、脚質をまたいだ相関は改善して見えるが、"
         "\n       脚質内の判別は良くならない（pai-v2 と同じ誤りを別経路で再現する）。"
+        "\n    ※ 推奨offset は平均ずれを0にする `pace_center_offset_*`（現行中心からの差分）。"
+        "\n       予測平均を中心へ置くだけでは足りない。deviation は±1で頭打ちになるため、"
+        "\n       分布が非対称だと平均が一致していても平均ずれは0にならない。"
+        "\n    ※ 同一期間から取った当てはめ値なので、採用するなら期間外で確認すること。"
     )
     return "\n".join(lines)
 

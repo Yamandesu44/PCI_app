@@ -289,6 +289,34 @@ class TestPaceCentering:
         assert rows[0].mean_bonus_at_full_sensitivity == pytest.approx(12.5)
         assert rows[0].is_centered is False
 
+    def test_recommended_offset_zeroes_the_mean_deviation(self) -> None:
+        """推奨offset を入れ直すと平均ずれが0になること。
+
+        deviation は±1で頭打ちになるため、予測平均を中心へ置くだけでは足りない。
+        ダートは予測平均46.55・中立46.50とほぼ一致しているのに平均ずれ +0.172 だった。
+        """
+        n = neutral_rpci("ダート")
+        half = pace_half_band("ダート")
+        # 上側へ非対称にばらけさせる（頭打ちの効果が出る形）。
+        samples = [self._h("ダート", n + half * d) for d in (-3.0, -0.2, 0.1, 0.4, 2.0, 3.0)]
+
+        row = summarize_pace_centering(samples)[0]
+        assert row.mean_deviation > 0
+        assert row.recommended_offset > 0
+
+        recentered = replace(DEFAULT_PAI_WEIGHTS, pace_center_offset_dirt=row.recommended_offset)
+        assert summarize_pace_centering(samples, recentered)[0].mean_deviation == pytest.approx(
+            0.0, abs=0.01
+        )
+
+    def test_offset_is_unchanged_when_no_solution_exists(self) -> None:
+        """全頭が同じ側へ振り切れていれば解が無い。現行値を返して壊れない。"""
+        n = neutral_rpci("ダート")
+        half = pace_half_band("ダート")
+        samples = [self._h("ダート", n + half * 50) for _ in range(5)]
+
+        assert summarize_pace_centering(samples)[0].recommended_offset == 0.0
+
     def test_ignores_samples_without_a_forecast(self) -> None:
         """forecast_rpci 未設定のサンプルを 0 として平均に混ぜない。"""
         rows = summarize_pace_centering([self._h("芝", neutral_rpci("芝")), self._h("芝", 0.0)])
