@@ -43,9 +43,12 @@
       `/ready`・レースボード・予想検証すべて正常。**DB移行は完了。**
 - [x] `db_size.py` の不具合を直した（`fcb00c0`）。`pg_stat_user_tables` は public 以外も
       含むため、Supabase の `auth.users` をスキーマ名なしで数えて落ちていた。
-- [ ] GCP 側の準備（`deploy-cloudrun.yml` 冒頭に列挙済み）。
-- [ ] Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
-- [ ] デプロイ後に `python -m scripts.check_deployment --base-url ... --token ...` を通す。
+- [x] **Cloud Run へ公開した**（`pci-api` / asia-northeast1）。Cloud Shell から手動で。
+      環境変数は `RATE_LIMIT_TRUSTED_PROXIES=1` を含めて設定済み。
+- [x] `check_deployment` の6項目すべてが意図どおり。モデルは `lgbm-dirt-v6-pci-v3`。
+- [ ] Vercel に `API_BASE_URL` と `API_ACCESS_TOKEN` を設定し、web を公開する。
+- [ ] CD ワークフロー（`deploy-cloudrun.yml`）を使うなら Workload Identity 連携を用意する。
+      手動デプロイで足りているうちは後回しでよい。
 
 ### 触ってはいけないこと
 

@@ -86,13 +86,35 @@ Supabase（東京・無料）へ移行を完了した。9テーブル・65万行
 `/ready`・レースボード・予想検証）。容量は **111MB / 500MB**。ローカルの123MBより
 小さいのは、入れ直しで不要領域が整理されたため。
 
+### Cloud Run の公開（2026-08-06 実施済み）
+
+`https://pci-api-906588230297.asia-northeast1.run.app`（asia-northeast1・`pciapp-504713`）
+
+`scripts/check_deployment.py` の6項目すべてが意図どおり。特に**予測モデルが
+`lgbm-dirt-v6-pci-v3` で動いている**ことを確認済み（`rule-` ならビルド方法の誤り）。
+
+初回は CD ワークフローではなく、Cloud Shell から手動で出した。IAM 連携の設定量が多く、
+コンテナが動くかどうかと切り分けたかったため。
+
+```bash
+gcloud run deploy pci-api --source apps/api --region asia-northeast1 \
+  --memory 512Mi --cpu 1 --min-instances 0 --max-instances 3 \
+  --timeout 60s --allow-unauthenticated --env-vars-file ~/env.yaml
+```
+
+**`--source` は必ずリポジトリのルートから実行する。** パスが解決できないと
+`Building using Buildpacks` に落ち、Dockerfile が使われない。その場合 `MODELS_DIR` が
+設定されず、**例外を出さずルールベースへ落ちる**。冒頭の1行が
+`Building using Dockerfile` であることを毎回確認すること。
+
 ### 次の担当がやること（コードではなく外部の準備）
 
 コード側は揃っている。以下はコンソール作業のため、このセッションでは実行していない。
 
 1. ~~Supabase でプロジェクト作成~~ **完了**（東京・session プーラー :5432）
 2. ~~移行の実行~~ **完了**（上記）
-3. GCP 側の準備（`deploy-cloudrun.yml` 冒頭に必要な資源と権限を列挙済み）
+3. ~~GCP 側の準備~~ **手動デプロイで公開済み**（上記）。CD ワークフローを使う場合は
+   `deploy-cloudrun.yml` 冒頭の Workload Identity 連携が別途必要。
 4. Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
    前段にロードバランサが入るため、0のままだと全利用者が同じキーへ集約され、
    レート制限が実質「全体で120回/分」になる。
