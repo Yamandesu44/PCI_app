@@ -168,19 +168,29 @@ pg8000 は内部でこれを使うので、**繋がった後に断続的に失�
 
 #### 移行手順
 
-```bash
-# 1. 移行先にスキーマを作る
-DATABASE_URL="<移行先>" alembic upgrade head
+スキーマは alembic で作り、データだけを移す。
 
-# 2. データを移す（pg_dump は libpq を使うので sslmode をそのまま解釈する）
+```bash
+# 1. 移行先にスキーマを作る（接続の確認も兼ねる）
+DATABASE_URL="<移行先>" python -m alembic upgrade head
+
+# 2. データを移す（pg_dump は libpq なので sslmode をそのまま解釈する）
 pg_dump --format=custom --no-owner --no-privileges --data-only \
-  --file=pci.dump "<移行元のURL>"
-pg_restore --no-owner --no-privileges --disable-triggers \
-  --dbname="<移行先のURL>" pci.dump
+  --exclude-table=alembic_version --file=pci.dump "<移行元のURL>"
+pg_restore --no-owner --no-privileges --dbname="<移行先のURL>" pci.dump
 
 # 3. 欠けが無いか突き合わせる（pg_restore は部分成功で終わることがある）
 DATABASE_URL="<移行先>" python -m scripts.verify_migration --source "<移行元>"
 ```
+
+**`--exclude-table=alembic_version`** が要る。手順1で alembic が現在の版を記録済みなので、
+これを外さないと復元時に主キー衝突で失敗する。
+
+**`--disable-triggers` は要らない。** `pg_restore` はテーブルのデータを依存関係の順に流す
+（`race_entries` は `races` の後）ので外部キーは壊れない。むしろ `--disable-triggers` は
+外部キーの内部トリガーを止めるため superuser が要り、マネージド Postgres では拒否される。
+
+上記は実際の PostgreSQL 16 に対して通し、`verify_migration` が一致を返すことを確認した手順。
 
 #### 容量の運用
 
