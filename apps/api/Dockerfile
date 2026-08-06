@@ -63,5 +63,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import os,urllib.request;\
 urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT','8000')}/health\").read()"
 
-# PORT を展開するためシェル形式。exec でシグナルを uvicorn へ渡す。
-CMD exec uvicorn pci.presentation.app:app --host 0.0.0.0 --port "${PORT}"
+# PORT を展開するためシェル経由。JSON 形式で明示的に sh を呼ぶのは、素のシェル形式だと
+# buildkit が JSONArgsRecommended 警告を出すため（exec しているのでシグナルは
+# uvicorn へ届いており、警告自体は誤検知）。exec を外すとシェルが残り、
+# SIGTERM が uvicorn に届かず停止が強制終了になる。
+CMD ["/bin/sh", "-c", "exec uvicorn pci.presentation.app:app --host 0.0.0.0 --port \"${PORT}\""]
