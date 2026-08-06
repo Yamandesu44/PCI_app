@@ -1,3 +1,4 @@
+import logging
 import ssl
 from typing import Any
 
@@ -5,10 +6,31 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
+_logger = logging.getLogger(__name__)
+
 # libpq の sslmode のうち、暗号化はするが証明書を検証しないもの。
 # 検証しないため中間者攻撃を防げない。可能なら verify-full を使う。
 _UNVERIFIED_SSL_MODES = frozenset({"allow", "prefer", "require"})
 _VERIFIED_SSL_MODES = frozenset({"verify-ca", "verify-full"})
+
+# 手元・コンテナ内のDB。ここへの接続は公衆網を通らないため暗号化を求めない。
+# `db` は docker-compose のサービス名。
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "db", ""})
+
+
+def _warn_if_unencrypted(url: URL) -> None:
+    """公衆網へ平文で出ようとしていたら警告する。
+
+    マネージドDBの接続文字列は `sslmode` を含まないことがあり、そのまま貼ると
+    **暗号化なしで接続できてしまう**。接続は成功し、動作も変わらないので、
+    気付く機会が無いまま資格情報とデータが平文で流れ続ける。
+    """
+    if url.host and url.host.lower() not in _LOCAL_HOSTS and "sslmode" not in url.query:
+        _logger.warning(
+            "DATABASE_URL に sslmode がありません。%s へ暗号化なしで接続します。"
+            "マネージドDBへ繋ぐ場合は ?sslmode=require を付けてください。",
+            url.host,
+        )
 
 
 def _split_pg8000_ssl(url: URL) -> tuple[URL, dict[str, Any]]:
@@ -73,6 +95,7 @@ def build_engine(
     （`_split_pg8000_ssl` 参照）。マネージドDBの接続文字列をそのまま貼れるようにするため。
     """
     url = make_url(database_url)
+    _warn_if_unencrypted(url)
     connect_args: dict[str, Any] = {}
     if url.drivername.endswith("pg8000"):
         url, connect_args = _split_pg8000_ssl(url)

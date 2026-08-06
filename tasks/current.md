@@ -1,6 +1,6 @@
 # tasks/current.md — 進行中タスク
 
-## 2026-08-06 完了: Claude Code — 公開の足回りを固めた（Cloud Run + Aiven）
+## 2026-08-06 完了: Claude Code — 公開の足回りを固めた（Cloud Run + Supabase）
 
 ドメインのコードは触っていない。「動くが公開できない」状態を解消する作業。
 
@@ -12,7 +12,8 @@
 - [x] 接続プールをサーバーレス向けに絞った（`77c113d`・5本/プロセス）。
       `pool_pre_ping` と `pool_recycle=1800` も併せて入れた。
 - [x] 容量を実測した（`420df71` / `77a2d3f`）。全体123MB・約4.7年分・コアは年21%増。
-- [x] DB を **Aiven for PostgreSQL**（東京・無料枠5GB）に決めた。
+- [x] DB を **Supabase**（東京・無料枠 DB 500MB）に決めた。Aiven は無料プランで
+      リージョンを選べず（東京なし）、東京には有料プランが要るため見送った。
 - [x] pg8000 が `sslmode` を受け取れない問題を吸収した（`e08775b`）。
       マネージドDBの接続文字列をそのまま貼れる。
 - [x] 移行の突き合わせと世代掃除のスクリプトを追加した（`1f25369`）。
@@ -31,8 +32,9 @@
 
 ### 次にやること（コンソール作業・このセッションでは実行できない）
 
-- [ ] Aiven でサービス作成。**必ず session モードのプーラーの接続文字列を使う。**
-      transaction モードは pg8000 の prepared statement と衝突し断続的に失敗する。
+- [ ] Supabase でプロジェクト作成（東京）。**接続はプーラー経由・ポート5432を使う。**
+      直結は IPv6 のみで Cloud Run から届かない。6543 は transaction モードで
+      pg8000 の prepared statement と衝突し、繋がった後に断続的に失敗する。
 - [ ] 移行を実行し、最後に `python -m scripts.verify_migration --source ...` を通す。
 - [ ] GCP 側の準備（`deploy-cloudrun.yml` 冒頭に列挙済み）。
 - [ ] Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。

@@ -1,6 +1,6 @@
 # HANDOFF — 現在の作業状態
 
-## 2026-08-06 (Claude Code) 作業区切り その6 — 公開の足回り（Cloud Run + Aiven）
+## 2026-08-06 (Claude Code) 作業区切り その6 — 公開の足回り（Cloud Run + Supabase）
 
 - 更新日時: 2026-08-06 JST
 - 作業担当: Claude Code
@@ -14,7 +14,7 @@
 | 項目 | 決定 | 理由 |
 |---|---|---|
 | API の置き場所 | **Cloud Run**（東京） | 実測103MBに対し512Miで足り、ゼロスケールで無料枠に収まる |
-| DB の置き場所 | **Aiven for PostgreSQL**（東京・無料枠5GB） | 実測123MBに対し十分。PgBouncer 同梱・東京リージョン有り |
+| DB の置き場所 | **Supabase**（東京・無料枠 DB 500MB） | 実測123MBに対し4倍の余裕。東京を無料で選べる |
 | デプロイ契機 | **手動実行のみ**（`workflow_dispatch`） | GCP 側が未整備。作業ブランチへの push で本番が変わるのは事故のもと |
 | マイグレーション | **自動実行しない** | 複数インスタンス同時起動で競合する。スキーマ変更時は事前に手で流す |
 
@@ -67,9 +67,10 @@ horses 411,491行 48MB / races 15,931行。約4.7年分で、コアだけなら�
 
 コード側は揃っている。以下はコンソール作業のため、このセッションでは実行していない。
 
-1. Aiven でサービス作成（東京・**session モードのプーラー**の接続文字列を使うこと。
-   transaction モードは pg8000 の prepared statement と衝突し、断続的に失敗する）
-2. 移行の実行（手順は README の「PostgreSQL（Aiven）」節。最後に `verify_migration.py`）
+1. Supabase でプロジェクト作成（東京。接続は**プーラー経由・ポート5432**の文字列を使う。
+   直結は IPv6 のみで Cloud Run から届かず、6543 は transaction モードで
+   pg8000 の prepared statement と衝突し断続的に失敗する）
+2. 移行の実行（手順は README の「PostgreSQL（Supabase・東京）」節。最後に `verify_migration.py`）
 3. GCP 側の準備（`deploy-cloudrun.yml` 冒頭に必要な資源と権限を列挙済み）
 4. Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
    前段にロードバランサが入るため、0のままだと全利用者が同じキーへ集約され、

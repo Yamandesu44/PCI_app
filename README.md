@@ -129,19 +129,42 @@ python -m scripts.check_deployment --base-url https://<サービスのURL> --tok
 問題があれば終了コード1で落ちる。外から判定できない項目（`RATE_LIMIT_TRUSTED_PROXIES`
 など）は「確認できない項目」として最後に並ぶ。
 
-### PostgreSQL（Aiven）
+### PostgreSQL（Supabase・東京）
 
 Cloud SQL に無料枠が無いため、東京リージョンのマネージド Postgres を併用する。
-Aiven を選定（無料枠5GB・PgBouncer統合・東京リージョン）。実測 123MB に対して
-余裕があり、mart 層の増加を含めても当面容量を気にしなくてよい。
+Supabase を選定（無料枠 DB 500MB・東京リージョン）。実測 123MB に対して4倍の余裕があり、
+コアの増加は年 26MB 程度。mart 層は世代を掃除すれば頭打ちにできる（下記）。
 
-**必ず session モードのプーラー経由で接続する。** transaction モードは PgBouncer 系で
-prepared statement が失われ、pg8000 と組み合わせると断続的に失敗する。
+Aiven を検討したが、**無料プランはリージョンを選べず**（DigitalOcean 固定・東京なし）、
+東京を使うには有料プランが要るため見送った。判断の経緯は `docs/HANDOFF.md`。
 
-接続文字列はそのまま `DATABASE_URL` へ貼ってよい。`?sslmode=require` は pg8000 が
-解釈できないため、アプリ側で `ssl_context` へ翻訳している。証明書を検証するなら
-`sslmode=verify-full&sslrootcert=<CAのパス>` が望ましい（`require` は暗号化のみで
-検証しないため中間者攻撃を防げない）。
+#### 接続文字列（ここを間違えると繋がらない／断続的に落ちる）
+
+**必ずプーラー（Supavisor）経由の、ポート 5432 の文字列を使う。**
+
+| 種類 | ホスト・ポート | 使えるか |
+|---|---|---|
+| 直結 | `db.<ref>.supabase.co:5432` | **不可**。IPv6 のみで、Cloud Run の外向きは IPv4 |
+| プーラー session | `...pooler.supabase.com:**5432**` | **これを使う** |
+| プーラー transaction | `...pooler.supabase.com:**6543**` | **不可**。下記 |
+
+transaction モードは文ごとに接続を割り当て直すため prepared statement が失われる。
+pg8000 は内部でこれを使うので、**繋がった後に断続的に失敗する**——起動直後は動くのに
+時々落ちる、という最も追いにくい壊れ方になる。
+
+接続文字列はダッシュボードからコピーしたものをそのまま `DATABASE_URL` へ貼ってよい。
+ドライバ部分だけ `postgresql+pg8000://` へ書き換え、末尾に `?sslmode=require` を足す。
+
+**`sslmode` を付けること。** 付けないと暗号化なしで公衆網へ出る。pg8000 は `sslmode` を
+引数として受け取れないため、アプリ側で `ssl_context` へ翻訳している（未設定のまま
+非ローカルへ繋ごうとすると起動時に警告が出る）。証明書まで検証するなら
+`sslmode=verify-full&sslrootcert=<CAのパス>` が望ましい。`require` は暗号化のみで
+検証しないため中間者攻撃を防げない。
+
+#### 無料プランで気に留めること
+
+- **7日間アクセスが無いと一時停止する。** 日次の取り込みがあるので通常は起こらない。
+- **DB 500MB を超えると読み取り専用になる。** `scripts/db_size.py` で定期的に見る。
 
 #### 移行手順
 

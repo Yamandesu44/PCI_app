@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 import ssl
 
 import pytest
@@ -113,3 +114,38 @@ class TestPg8000Ssl:
         engine = build_engine(f"{_URL}?sslmode=require")
 
         assert "sslmode" not in engine.url.query
+
+
+class TestUnencryptedWarning:
+    """マネージドDBへ平文で繋ごうとしていることに気付けるか。
+
+    接続は成功し、動作も変わらない。警告が無ければ、資格情報とデータが平文で
+    流れ続けていることに気付く機会が無い。
+    """
+
+    def test_remote_host_without_sslmode_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING):
+            build_engine("postgresql+pg8000://u:p@db.example.supabase.com:5432/postgres")
+
+        assert "sslmode" in caplog.text
+
+    def test_remote_host_with_sslmode_is_quiet(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING):
+            build_engine(
+                "postgresql+pg8000://u:p@db.example.supabase.com:5432/postgres?sslmode=require"
+            )
+
+        assert caplog.text == ""
+
+    def test_local_host_is_quiet(self, caplog: pytest.LogCaptureFixture) -> None:
+        """手元の開発を騒がしくしない。公衆網を通らないため。"""
+        with caplog.at_level(logging.WARNING):
+            build_engine(_URL)
+
+        assert caplog.text == ""
+
+    def test_docker_compose_service_name_is_quiet(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING):
+            build_engine("postgresql+pg8000://u:p@db:5432/pci_dev")
+
+        assert caplog.text == ""
