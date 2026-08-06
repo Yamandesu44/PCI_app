@@ -15,6 +15,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from pci.config.settings import get_settings
 from pci.domain.pace.rpci_forecast import (
     CLASSIFICATION_MARGIN_REASON_CODE,
     DEFAULT_WEIGHTS,
@@ -45,9 +46,24 @@ MODEL_VERSION_V5_FEATURES = "lgbm-v5-month"
 MODEL_VERSION_TURF_V5_FEATURES = "lgbm-turf-v5-month"
 MODEL_VERSION_DIRT_V5_FEATURES = "lgbm-dirt-v5-month"
 
+
 # Path(__file__) = src/pci/infrastructure/pace/lgbm_forecaster.py
 # .parent × 5   = apps/api/
-_MODELS_DIR = Path(__file__).parent.parent.parent.parent.parent / "models"
+def _models_dir() -> Path:
+    """モデルの置き場所を決める。
+
+    既定はソースからの相対（リポジトリ内の `apps/api/models`）。ただしパッケージとして
+    導入すると site-packages 配下になり、相対では届かない。見つからない場合は
+    ルールベースへ静かに落ちるだけなので、気付かないまま精度を失う。
+    配置先が変わる環境では `MODELS_DIR` を設定すること。
+    """
+    configured = get_settings().models_dir
+    if configured:
+        return Path(configured)
+    return Path(__file__).parent.parent.parent.parent.parent / "models"
+
+
+_MODELS_DIR = _models_dir()
 _DEFAULT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_v1.txt"
 _DEFAULT_TURF_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_turf_v2.txt"
 _DEFAULT_DIRT_MODEL_PATH = _MODELS_DIR / "rpci_lgbm_dirt_v6.txt"

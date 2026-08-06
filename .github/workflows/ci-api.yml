@@ -107,6 +107,24 @@ jobs:
       - name: Build API image
         run: docker build -t pci-api:ci apps/api
 
+      # デプロイ先の枠（512MB など）に収まるかを数字で判断できるようにする。
+      # LightGBM を読み込んだ状態が実運用のピークに近い。
+      - name: Report image size and model-loaded memory
+        run: |
+          size_mb=$(( $(docker image inspect pci-api:ci --format '{{.Size}}') / 1024 / 1024 ))
+          echo "image_size_mb=${size_mb}"
+          docker run --rm pci-api:ci python -c "import resource; from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster as L; f=L(); print('forecaster=' + type(f).__name__); print('peak_rss_mb=%.0f' % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024))"
+
+      # モデルが読めていないと精度だけ静かに失う。イメージ側の配置を回帰テストする。
+      - name: Fail if the image falls back to the rule-based forecaster
+        run: |
+          picked=$(docker run --rm pci-api:ci python -c "from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster as L; print(type(L()).__name__)")
+          echo "forecaster=${picked}"
+          if [ "${picked}" = "RuleBasedRpciForecaster" ]; then
+            echo "LightGBM モデルを読めていない（MODELS_DIR / models/ の配置を確認）" >&2
+            exit 1
+          fi
+
       # 起動できることまで見る。DB 無しでも /health は応答する設計。
       - name: Smoke test the container
         run: |

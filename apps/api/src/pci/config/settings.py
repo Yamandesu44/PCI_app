@@ -13,6 +13,14 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
+    # LightGBM モデルの置き場所。未設定なら「リポジトリ内の apps/api/models」を見る。
+    #
+    # 既定はソースファイルからの相対解決だが、これはリポジトリ構成を前提にしている。
+    # パッケージとして導入すると site-packages 配下になり、相対では届かない
+    # （コンテナがまさにこれ）。見つからない場合ルールベースへ静かに落ちるだけなので、
+    # 気付かないまま精度だけ失う。配置先が変わる環境では必ずこれを設定すること。
+    models_dir: str | None = None
+
     database_url: str = "postgresql+pg8000://pci:pci_dev@localhost:5432/pci_dev"
     comment_generator_mode: CommentGeneratorMode = "rule"
     gemini_api_key: str | None = None

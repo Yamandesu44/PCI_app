@@ -36,10 +36,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 pci
 
+# MODELS_DIR は必須。既定のモデル探索はソースからの相対で、site-packages 配下では
+# 届かない。設定しないと LightGBM を読めず、静かにルールベースへ落ちる（精度だけ失う）。
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PORT=8000 \
+    MODELS_DIR=/app/models
 
 COPY --from=builder /opt/venv /opt/venv
 
