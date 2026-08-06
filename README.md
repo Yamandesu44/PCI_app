@@ -91,10 +91,29 @@ JRA-VAN DataLab の JV-Link から取得した競馬データを元に、レー�
 
 ## デプロイ
 
-### API（Railway / Render / Fly.io など）
+### API（Cloud Run）
 
-`apps/api/Dockerfile` はどのPaaSでも動くよう、固有の仕組みを使わない。ポートは
-`PORT` 環境変数で受ける（未設定なら 8000）。
+デプロイ先は Cloud Run を選定した（東京リージョンがあり、SSR の経路
+「Vercel のリージョン ↔ API のリージョン」を短くできるため。判断の経緯は
+`docs/HANDOFF.md`）。`apps/api/Dockerfile` は PaaS 固有の仕組みを使っていないので、
+別の環境へ移す場合もそのまま使える。ポートは `PORT` 環境変数で受ける。
+
+デプロイは `.github/workflows/deploy-cloudrun.yml` を**手動実行**する。
+push で自動デプロイしないのは、作業ブランチへの push で本番が更新される事故を
+避けるため。必要な GCP 側の準備とリポジトリ変数はワークフロー冒頭に列挙してある。
+
+**Cloud Run 固有の注意:**
+
+- `RATE_LIMIT_TRUSTED_PROXIES=1` を設定する。前段にロードバランサが入るため、
+  未設定だと全利用者が同じキーへ集約され、レート制限が実質「全体で N 回/分」になる。
+- ゼロスケールするため起動が繰り返される。モデル読み込みは起動時に済ませているので
+  （`warm_up`）、最初の利用者が待たされることはない。
+- `--max-instances` を必ず設定する。上限が無いと異常時に従量課金が青天井になる。
+
+**PostgreSQL は別途必要。** Cloud SQL には無料枠が無いので、東京リージョンの
+マネージド Postgres（Neon / Supabase 等）を併用する構成を想定している。
+
+手元で本番と同じイメージを動かす場合:
 
 ```bash
 docker build -t pci-api apps/api

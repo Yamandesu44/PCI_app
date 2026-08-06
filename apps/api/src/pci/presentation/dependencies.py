@@ -49,10 +49,29 @@ _logger = logging.getLogger(__name__)
 
 @lru_cache
 def _get_forecaster() -> RpciForecaster:
-    """モデルファイルの有無に応じて予測器を選択する（lru_cache でプロセス起動時に1回評価）。"""
+    """モデルファイルの有無に応じて予測器を選択する（lru_cache で1プロセス1回だけ評価）。"""
     forecaster = load_best_forecaster()
     _logger.info("予測器: %s", forecaster.__class__.__name__)
     return forecaster
+
+
+def warm_up() -> None:
+    """重い初期化を起動時に済ませる。
+
+    `_get_forecaster` は lru_cache なので、何もしなければ**最初の予想リクエスト**が
+    LightGBM の読み込みを負担する。Cloud Run のようにゼロスケールする環境では
+    起動のたびにこれが起きるため、待たされるのは常に「その時の最初の利用者」になる。
+    起動時に呼んでおけば、プラットフォーム側の起動プローブが吸収してくれる。
+
+    **失敗しても起動は止めない。** モデルが読めない場合 `load_best_forecaster` は
+    ルールベースへ落ちる設計で、予想以外の機能は問題なく動くため。
+    """
+    try:
+        _get_forecaster()
+    except Exception:  # noqa: BLE001 - 起動を止めないことが目的
+        _logger.exception(
+            "起動時の予測器ウォームアップに失敗しました。初回リクエストで再試行します。"
+        )
 
 
 @lru_cache

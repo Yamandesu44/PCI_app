@@ -1,0 +1,121 @@
+name: Deploy API (Cloud Run)
+
+# 手動実行のみ。push で自動デプロイしないのは、
+#   - GCP 側の準備（下記）が済むまで実行できない
+#   - 作業ブランチへの push で本番が更新されるのは事故のもと
+# ため。自動化したくなったら push トリガーを足す（その際はブランチを限定すること）。
+#
+# ---- 事前に GCP 側で用意するもの ----
+# 1. プロジェクトと Artifact Registry のリポジトリ（asia-northeast1・Docker形式）
+# 2. GitHub Actions 用の Workload Identity 連携とサービスアカウント
+#    （長期鍵の JSON は使わない。漏れたときの被害が大きいため）
+#    サービスアカウントに要る権限:
+#      roles/artifactregistry.writer   イメージの push
+#      roles/run.admin                 Cloud Run へのデプロイ
+#      roles/iam.serviceAccountUser    Cloud Run 実行 SA の借用
+#
+# ---- リポジトリ側に設定するもの ----
+# Variables (Settings > Secrets and variables > Actions > Variables):
+#   GCP_PROJECT_ID           例: pci-app-prod
+#   GCP_REGION               asia-northeast1
+#   GCP_ARTIFACT_REPO        例: pci
+#   CLOUD_RUN_SERVICE        例: pci-api
+#   CLOUD_RUN_SERVICE_ACCOUNT  Cloud Run の実行 SA のメールアドレス
+# Secrets:
+#   GCP_WORKLOAD_IDENTITY_PROVIDER  projects/.../providers/... の完全な名前
+#   GCP_DEPLOY_SERVICE_ACCOUNT      デプロイ用 SA のメールアドレス
+#
+# ---- Cloud Run 側に設定する環境変数（このワークフローでは触らない）----
+# DATABASE_URL              必須。未設定だとローカル既定を見に行き接続できない
+# PUBLIC_API_TOKEN          未設定だと /api/v1/* が無認証で全公開になる
+# INGEST_TOKEN              未設定だと取り込みAPIが無認証になる
+# CORS_ALLOW_ORIGINS        公開フロントのオリジン
+# RATE_LIMIT_TRUSTED_PROXIES  Cloud Run は前段にロードバランサが入るため 1 を設定する。
+#                             0 のままだと全利用者が同じキーへ集約され、レート制限が
+#                             実質「全体で N 回/分」になる。
+# MODELS_DIR                イメージ側で /app/models を設定済み。上書き不要。
+#
+# 秘密値は Cloud Run のシークレット参照（Secret Manager）で渡すこと。
+# このワークフローに直接書かない。
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "イメージタグ（未指定ならコミットSHA）"
+        required: false
+        type: string
+
+# WIF に必要。id-token が無いと認証できない。
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  # 同じサービスへ同時にデプロイしない。後勝ちで打ち消し合うのを防ぐ。
+  group: deploy-cloudrun
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image reference
+        id: image
+        run: |
+          tag="${{ inputs.image_tag }}"
+          if [ -z "${tag}" ]; then tag="${GITHUB_SHA::12}"; fi
+          host="${{ vars.GCP_REGION }}-docker.pkg.dev"
+          path="${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REPO }}/${{ vars.CLOUD_RUN_SERVICE }}"
+          echo "ref=${host}/${path}:${tag}" >> "$GITHUB_OUTPUT"
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build and push
+        run: |
+          docker build -t "${{ steps.image.outputs.ref }}" apps/api
+          docker push "${{ steps.image.outputs.ref }}"
+
+      # マイグレーションは自動実行しない。複数インスタンスが同時に起動したときに
+      # 競合するため、スキーマ変更を伴うデプロイでは事前に手動で流すこと。
+      #   cd apps/api && alembic upgrade head
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE }}" \
+            --image "${{ steps.image.outputs.ref }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --service-account "${{ vars.CLOUD_RUN_SERVICE_ACCOUNT }}" \
+            --platform managed \
+            --port 8000 \
+            --memory 512Mi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 3 \
+            --timeout 60s \
+            --allow-unauthenticated \
+            --quiet
+        # --memory 512Mi: 実測はアプリ生成+モデル読み込みで 103MB（CI の docker ジョブが毎回出す）。
+        # --max-instances 3: 上限を設けないと、異常時に従量課金が青天井になる。
+        # --allow-unauthenticated: 参照APIは公開する前提。アクセス制御は
+        #   アプリ側の PUBLIC_API_TOKEN とレート制限で行う（Cloud Run のIAM認証を使うと
+        #   ブラウザ経由の Next.js サーバから叩けなくなるため）。
+
+      - name: Show the deployed revision
+        run: |
+          gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --format 'value(status.url, status.latestReadyRevisionName)'

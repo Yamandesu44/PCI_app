@@ -5,7 +5,8 @@ from __future__ import annotations
 import hmac
 import logging
 import math
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,7 @@ from fastapi.responses import JSONResponse, Response
 
 from pci.application.errors import RaceNotConfirmedError
 from pci.config.settings import get_settings
+from pci.presentation.dependencies import warm_up
 from pci.presentation.rate_limit import SlidingWindowRateLimiter, client_key
 from pci.presentation.routers import health, ingest, races, status
 
@@ -29,8 +31,16 @@ def _has_valid_public_api_token(request: Request, expected_token: str) -> bool:
     )
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """起動時に重い初期化を済ませる。"""
+    warm_up()
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
+        lifespan=_lifespan,
         title="PCI App API",
         version="0.1.0",
         description="競馬展開予想 SaaS — 想定RPCI・PAI・展開シナリオを提供する REST API",
