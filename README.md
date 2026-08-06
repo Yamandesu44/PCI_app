@@ -184,8 +184,16 @@ CI はイメージのビルドと `/health` 応答までを毎回検証する（
 
 ### web（Vercel）
 
-ルートの `vercel.json` が設定を持つ。`API_BASE_URL` を Vercel の環境変数へ入れる。
-公開する場合は API 側の `PUBLIC_API_TOKEN` と web 側の `API_ACCESS_TOKEN` を揃える。
+ルートの `vercel.json` が設定を持つ。Vercel の環境変数へ次の2つを入れる。
+
+| 変数 | 値 | 入れ忘れるとどうなるか |
+|---|---|---|
+| `API_BASE_URL` | Cloud Run のサービス URL | 開発用の `127.0.0.1:8000` へ接続を試み、全ページが接続エラーになる |
+| `API_ACCESS_TOKEN` | API 側の `PUBLIC_API_TOKEN` と**同じ値** | 全リクエストが 401 になる |
+
+どちらも「APIは正常なのに画面が壊れる」形で出るため、画面の案内文を原因別に
+分けてある（`src/lib/apiError.ts`）。設定漏れなら設定を、値の不一致ならトークンの
+突き合わせを促す。「APIが起動しているか確認」とは出ない。
 
 ### 手元で本番と同じイメージを動かす
 
