@@ -136,9 +136,9 @@ jobs:
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8000/health > /dev/null; then
               echo "health ok"
-              # 実際に常駐するプロセスの使用量。前段の peak_rss_mb は素の python で
-              # モデルを読んだだけの値で、uvicorn/FastAPI/SQLAlchemy を含まない。
-              # デプロイ先の枠を判断するにはこちらとモデル分の両方が要る。
+              # uvicorn が実際に常駐している状態の使用量。モデルは初回の予想
+              # リクエストで遅延読み込みされるため、この値には含まれない。
+              # モデル込みの値は前段の peak_rss_mb を見ること。
               docker stats --no-stream --format 'container_idle_mem={{.MemUsage}}' pci-api-ci
               docker rm -f pci-api-ci
               exit 0
