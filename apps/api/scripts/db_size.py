@@ -32,10 +32,14 @@ def main() -> None:
         print("\n■ 大きいテーブル（インデックス込み）")
         # 行数は count(*) で実測する。`pg_stat_user_tables.n_live_tup` は
         # ANALYZE / autovacuum が走るまで 0 のままで、取り込み直後は当てにならない。
+        #
+        # **スキーマ名を必ず伴わせること。** `pg_stat_user_tables` は public 以外も
+        # 含み、マネージド環境には管理用スキーマがある（Supabase の `auth`・`storage` 等）。
+        # 名前だけで数えると `auth.users` を public から探して落ちる。
         rows = conn.execute(
             text(
                 """
-                SELECT relname,
+                SELECT schemaname, relname,
                        pg_size_pretty(pg_total_relation_size(relid)) AS total,
                        pg_total_relation_size(relid) AS bytes
                 FROM pg_catalog.pg_stat_user_tables
@@ -46,10 +50,12 @@ def main() -> None:
             {"limit": _TOP_N},
         ).all()
         print(f"  {'テーブル':<28}{'サイズ':>12}{'行数':>12}{'1行あたり':>12}")
-        for relname, size, total_bytes in rows:
-            n = conn.execute(text(f'SELECT count(*) FROM "{relname}"')).scalar_one()
+        for schema, relname, size, total_bytes in rows:
+            n = conn.execute(text(f'SELECT count(*) FROM "{schema}"."{relname}"')).scalar_one()
             per_row = f"{total_bytes / n / 1024:.2f} KB" if n else "-"
-            print(f"  {relname:<28}{size:>12}{n:>12,}{per_row:>12}")
+            # 自前のテーブルは public にあるので、それ以外だけスキーマ名を出す。
+            label = relname if schema == "public" else f"{schema}.{relname}"
+            print(f"  {label:<28}{size:>12}{n:>12,}{per_row:>12}")
 
         # 増加率の見積もりに使う。JRA は年間約3,400レース。
         race_count = conn.execute(text("SELECT count(*) FROM races")).scalar_one()
