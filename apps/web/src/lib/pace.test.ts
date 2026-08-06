@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import type { HorseFit } from "@pci/api-client";
+
 import {
   beginnerPaceLabel,
   benefitRecommendation,
@@ -18,6 +20,7 @@ import {
   pciToneLabel,
   raceSpotlight,
   sanitizeBeginnerComment,
+  sortByPaceBenefit,
   sortByPai,
   sortDiscountCandidates,
   styleAdvantageReliabilityMeta,
@@ -217,8 +220,8 @@ describe("raceSpotlight", () => {
           horse_no: 1,
           frame_no: 1,
           running_style: "先行",
-          pai: 84,
-          fit_label: "合う",
+          pai: 68,
+          fit_label: "合致",
           low_evidence: false,
           reasons: [],
         },
@@ -237,8 +240,8 @@ describe("raceSpotlight", () => {
           horse_no: 1,
           frame_no: 1,
           running_style: "差し",
-          pai: 74,
-          fit_label: "合う",
+          pai: 66,
+          fit_label: "合致",
           low_evidence: false,
           reasons: [],
         },
@@ -257,7 +260,7 @@ describe("raceSpotlight", () => {
           horse_no: 1,
           frame_no: 1,
           running_style: "逃げ",
-          pai: 66,
+          pai: 52,
           fit_label: "中立",
           low_evidence: false,
           reasons: [],
@@ -277,8 +280,8 @@ describe("raceSpotlight", () => {
           horse_no: 1,
           frame_no: 1,
           running_style: "差し",
-          pai: 76,
-          fit_label: "合う",
+          pai: 70,
+          fit_label: "合致",
           low_evidence: false,
           reasons: [],
         },
@@ -297,7 +300,7 @@ describe("raceSpotlight", () => {
           horse_no: 1,
           frame_no: 1,
           running_style: "追込",
-          pai: 62,
+          pai: 50,
           fit_label: "中立",
           low_evidence: false,
           reasons: [],
@@ -752,5 +755,75 @@ describe("判断材料が薄い馬の扱い", () => {
     });
     expect(out.label).not.toBe("評価下げ");
     expect(out.reason).toContain("決めつけられません");
+  });
+});
+
+describe("sortByPaceBenefit", () => {
+  function h(no: number, style: string, pai: number): HorseFit {
+    return {
+      horse_no: no,
+      frame_no: no,
+      running_style: style,
+      pai,
+      fit_label: "中立",
+      low_evidence: false,
+      reasons: [],
+    };
+  }
+
+  const advantage = {
+    model_version: "style-advantage-v4",
+    reliability: "standard" as const,
+    reasons: [],
+    entries: [
+      { style: "逃げ", score: 72 },
+      { style: "先行", score: 64 },
+      { style: "追込", score: 38 },
+    ],
+  };
+
+  it("PAIが高くても、脚質が不利なら上へ来ない", () => {
+    // ダートの追込は好走率0.47xだが高いPAIを取りうる（ADR-2026-08-04）。
+    const sorted = sortByPaceBenefit(
+      [h(1, "追込", 78), h(2, "逃げ", 52)],
+      advantage,
+    );
+
+    expect(sorted.map((x) => x.horse_no)).toEqual([2, 1]);
+  });
+
+  it("同じ脚質の中ではPAI順になる", () => {
+    const sorted = sortByPaceBenefit(
+      [h(1, "逃げ", 48), h(2, "逃げ", 62)],
+      advantage,
+    );
+
+    expect(sorted.map((x) => x.horse_no)).toEqual([2, 1]);
+  });
+
+  it("有利度が無い脚質は互角(50)として扱う", () => {
+    const sorted = sortByPaceBenefit(
+      [h(1, "自在", 60), h(2, "追込", 90)],
+      advantage,
+    );
+
+    // 自在は有利度なし=50、追込は38。PAIが高くても追込が下。
+    expect(sorted.map((x) => x.horse_no)).toEqual([1, 2]);
+  });
+
+  it("脚質有利度が無ければPAI順へ縮退する", () => {
+    const sorted = sortByPaceBenefit(
+      [h(1, "追込", 40), h(2, "逃げ", 70)],
+      null,
+    );
+
+    expect(sorted.map((x) => x.horse_no)).toEqual([2, 1]);
+  });
+
+  it("入力配列を破壊しない", () => {
+    const input = [h(1, "追込", 78), h(2, "逃げ", 52)];
+    sortByPaceBenefit(input, advantage);
+
+    expect(input.map((x) => x.horse_no)).toEqual([1, 2]);
   });
 });

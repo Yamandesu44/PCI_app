@@ -17,8 +17,19 @@ import { MobileRaceForecastDashboard } from "@/components/MobileRaceForecastDash
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { PaceProfileChart } from "@/components/PaceProfileChart";
 import { ReasonList } from "@/components/ReasonList";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
   formatRaceDate,
@@ -35,7 +46,7 @@ import {
   paceSpeedFromIndex,
   sanitizeBeginnerComment,
   sortDiscountCandidates,
-  sortByPai,
+  sortByPaceBenefit,
   styleAdvantageScores,
   styleAdvantageReliabilityMeta,
 } from "@/lib/pace";
@@ -66,7 +77,9 @@ function toneClass(index: number): string {
   return tones[index] ?? "border-border bg-card text-card-foreground";
 }
 
-function roleClass(tone: ReturnType<typeof benefitRecommendation>["tone"]): string {
+function roleClass(
+  tone: ReturnType<typeof benefitRecommendation>["tone"],
+): string {
   const tones = {
     main: "bg-white text-slate-950",
     partner: "bg-emerald-100 text-emerald-950",
@@ -76,7 +89,9 @@ function roleClass(tone: ReturnType<typeof benefitRecommendation>["tone"]): stri
   return tones[tone];
 }
 
-function discountClass(tone: ReturnType<typeof discountRecommendation>["tone"]): string {
+function discountClass(
+  tone: ReturnType<typeof discountRecommendation>["tone"],
+): string {
   const tones = {
     avoid: "border-rose-200 bg-rose-50 text-rose-950",
     caution: "border-amber-200 bg-amber-50 text-amber-950",
@@ -84,7 +99,9 @@ function discountClass(tone: ReturnType<typeof discountRecommendation>["tone"]):
   return tones[tone];
 }
 
-function confidenceClass(tone: ReturnType<typeof confidenceInsight>["tone"]): string {
+function confidenceClass(
+  tone: ReturnType<typeof confidenceInsight>["tone"],
+): string {
   const tones = {
     strong: "border-emerald-200 bg-emerald-50 text-emerald-950",
     normal: "border-sky-200 bg-sky-50 text-sky-950",
@@ -99,8 +116,13 @@ export function RaceForecastDashboard({
   navigation,
 }: RaceForecastDashboardProps) {
   const horses = forecast.horses ?? [];
-  const frameNoByHorseNo = new Map(horses.map((horse) => [horse.horse_no, horse.frame_no]));
-  const topHorses = sortByPai(horses).slice(0, 5);
+  const frameNoByHorseNo = new Map(
+    horses.map((horse) => [horse.horse_no, horse.frame_no]),
+  );
+  const topHorses = sortByPaceBenefit(horses, forecast.style_advantage).slice(
+    0,
+    5,
+  );
   const discountHorses = sortDiscountCandidates(horses)
     .filter((horse) => horse.fit_label === "不利" || horse.pai < 60)
     .slice(0, 3);
@@ -113,7 +135,10 @@ export function RaceForecastDashboard({
   const confidence = confidencePct(forecast.confidence);
   const confidenceMeta = confidenceInsight(forecast.confidence);
   const course = `${race.track_type}${race.distance_m}m`;
-  const predictedSpeed = paceSpeedFromIndex(forecast.predicted_rpci, race.track_type);
+  const predictedSpeed = paceSpeedFromIndex(
+    forecast.predicted_rpci,
+    race.track_type,
+  );
   const decisionChecklist = forecastDecisionChecklist({
     predictedRpci: forecast.predicted_rpci,
     confidence: forecast.confidence,
@@ -131,383 +156,459 @@ export function RaceForecastDashboard({
         navigation={navigation}
       />
       <main className="mx-auto hidden w-full max-w-7xl flex-col gap-7 px-4 py-6 md:flex md:px-6 lg:px-8 lg:py-9">
-      <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 font-semibold text-slate-600 transition hover:text-slate-950"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden />
-          レース一覧
-        </Link>
-        <span className="hidden font-mono text-xs sm:inline">{race.race_key}</span>
-      </div>
-
-      <section className="relative overflow-hidden rounded-lg border border-[#20312b] bg-[#111816] p-6 text-white shadow-lg md:p-8">
-        <span className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
-        <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
-          <div>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
-                {formatRaceDate(race.race_date)}
-              </span>
-              <span className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
-                {course}
-              </span>
-            </div>
-            <p className="mb-2 text-xs font-semibold uppercase text-emerald-400">Race forecast</p>
-            <h1 className="text-3xl font-semibold tracking-normal text-white md:text-4xl">
-              {jyoName(race.jyo_cd)} {raceNumber(race.race_key)}
-            </h1>
-            <p className="mt-3 text-sm font-medium text-slate-400">
-              {race.grade ? `${race.grade} ・ ` : ""}
-              {race.race_class ? `${race.race_class} ・ ` : ""}
-              {race.field_size}頭立て
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
-              <Activity className="h-4 w-4" />
-              想定展開
-            </div>
-            <p className="mt-2 text-2xl font-semibold text-white">{forecast.pace_label}</p>
-            <p className="mt-1 text-sm leading-6 text-slate-300">{forecast.scenario_headline}</p>
-            <div className="mt-4 flex items-center justify-between text-sm">
-              <span className="text-slate-400">展開信頼度</span>
-              <span className="font-semibold text-white">
-                {confidenceMeta.label} ・ {confidence}%
-              </span>
-            </div>
-            <Progress
-              value={confidence}
-              className="mt-2 bg-white/10"
-              indicatorClassName="bg-emerald-400"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
-            <ListChecks className="h-4 w-4" />
+        <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 font-semibold text-slate-600 transition hover:text-slate-950"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            レース一覧
+          </Link>
+          <span className="hidden font-mono text-xs sm:inline">
+            {race.race_key}
           </span>
-          <h2 className="m-0 text-lg font-semibold tracking-normal text-slate-950">
-            今回の検討サマリー
-          </h2>
         </div>
-        <div className="grid overflow-hidden rounded-lg border border-slate-200 bg-slate-200 gap-px shadow-sm md:grid-cols-2 xl:grid-cols-4">
-          {decisionChecklist.map((item) => (
-            <div key={item.label} className="min-w-0 bg-white p-4">
-              <p className="m-0 text-xs font-semibold text-slate-500">{item.label}</p>
-              <p className="m-0 mt-2 break-words text-base font-semibold tracking-normal text-slate-950">
-                {item.value}
-              </p>
-              <p className="m-0 mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      {forecast.formation ? <FormationView formation={forecast.formation} /> : null}
-
-      {forecast.comment ? (
-        <section className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-emerald-700" aria-hidden />
-            <h2 className="m-0 text-base font-semibold text-slate-950">この展開をやさしく解説</h2>
-          </div>
-          <p className="mt-3 text-sm font-bold leading-6 text-slate-950">
-            {sanitizeBeginnerComment(forecast.comment.headline)}
-          </p>
-          {(forecast.comment.body ?? []).map((para, i) => (
-            <p key={i} className="mt-2 text-sm leading-6 text-slate-700">
-              {sanitizeBeginnerComment(para)}
-            </p>
-          ))}
-          <details className="mt-4">
-            <summary className="cursor-pointer text-xs font-medium text-emerald-700 hover:text-emerald-900">
-              コメントの根拠
-            </summary>
-            <p className="mt-2 text-xs text-slate-500">生成方式: {forecast.comment.model_version}</p>
-            <ReasonList reasons={forecast.comment.reasons ?? []} />
-          </details>
-        </section>
-      ) : null}
-
-      {/* 順位は展開解説より後ろへ置く。買い目の推奨ではなく参考情報という位置づけ
-          （docs/DECISIONS.md ADR-2026-08-04）。 */}
-      {forecast.integrated_ranking ? (
-        <IntegratedRankingView ranking={forecast.integrated_ranking} />
-      ) : null}
-
-      <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              展開分析
-              {styleReliability?.isReference ? (
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
-                  参考
+        <section className="relative overflow-hidden rounded-lg border border-[#20312b] bg-[#111816] p-6 text-white shadow-lg md:p-8">
+          <span className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
+          <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
+            <div>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                  {formatRaceDate(race.race_date)}
                 </span>
-              ) : null}
-            </CardTitle>
-            <CardDescription>
-              脚質別に、今回の想定ペースがどれだけ向くかを示します（50=互角）。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            {styleReliability?.isReference ? (
-              <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950 md:col-span-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                <p className="m-0 text-sm leading-6">{styleReliability.description}</p>
+                <span className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                  {course}
+                </span>
               </div>
-            ) : null}
-            {styleScores.map((score) => (
-              <div key={score.key} className="rounded-lg border border-border p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-950">
-                      {score.label}
-                      <span
-                        className={`ml-2 rounded px-1.5 py-0.5 text-xs font-semibold ${
-                          !score.isDirectional
-                            ? "bg-slate-100 text-slate-600"
-                            : score.value > 54
-                              ? "bg-emerald-100 text-emerald-800"
-                              : score.value < 46
-                                ? "bg-rose-100 text-rose-800"
-                                : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {score.verdict}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{score.description}</p>
-                  </div>
-                  {/* 断定しない脚質でスコアと満杯のバーを出すと、文言より視覚が勝って
-                      「有利」と読まれてしまうため、数値表現ごと出さない。 */}
-                  {score.isDirectional ? (
-                    <span className="font-mono text-lg font-semibold">{score.value}</span>
-                  ) : null}
-                </div>
-                {score.isDirectional ? <Progress value={score.value} className="mt-3" /> : null}
+              <p className="mb-2 text-xs font-semibold uppercase text-emerald-400">
+                Race forecast
+              </p>
+              <h1 className="text-3xl font-semibold tracking-normal text-white md:text-4xl">
+                {jyoName(race.jyo_cd)} {raceNumber(race.race_key)}
+              </h1>
+              <p className="mt-3 text-sm font-medium text-slate-400">
+                {race.grade ? `${race.grade} ・ ` : ""}
+                {race.race_class ? `${race.race_class} ・ ` : ""}
+                {race.field_size}頭立て
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
+                <Activity className="h-4 w-4" />
+                想定展開
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {forecast.pace_label}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-300">
+                {forecast.scenario_headline}
+              </p>
+              <div className="mt-4 flex items-center justify-between text-sm">
+                <span className="text-slate-400">展開信頼度</span>
+                <span className="font-semibold text-white">
+                  {confidenceMeta.label} ・ {confidence}%
+                </span>
+              </div>
+              <Progress
+                value={confidence}
+                className="mt-2 bg-white/10"
+                indicatorClassName="bg-emerald-400"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+              <ListChecks className="h-4 w-4" />
+            </span>
+            <h2 className="m-0 text-lg font-semibold tracking-normal text-slate-950">
+              今回の検討サマリー
+            </h2>
+          </div>
+          <div className="grid overflow-hidden rounded-lg border border-slate-200 bg-slate-200 gap-px shadow-sm md:grid-cols-2 xl:grid-cols-4">
+            {decisionChecklist.map((item) => (
+              <div key={item.label} className="min-w-0 bg-white p-4">
+                <p className="m-0 text-xs font-semibold text-slate-500">
+                  {item.label}
+                </p>
+                <p className="m-0 mt-2 break-words text-base font-semibold tracking-normal text-slate-950">
+                  {item.value}
+                </p>
+                <p className="m-0 mt-2 text-sm leading-6 text-slate-600">
+                  {item.detail}
+                </p>
               </div>
             ))}
-            {/* 理由は脚質ごとに繰り返さず、リストの下に一度だけ置く。 */}
-            {styleScores.some((score) => !score.isDirectional) ? (
-              <p className="m-0 text-xs leading-5 text-muted-foreground md:col-span-2">
-                {styleScores.find((score) => !score.isDirectional)?.note}
+          </div>
+        </section>
+
+        {forecast.formation ? (
+          <FormationView formation={forecast.formation} />
+        ) : null}
+
+        {forecast.comment ? (
+          <section className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-700" aria-hidden />
+              <h2 className="m-0 text-base font-semibold text-slate-950">
+                この展開をやさしく解説
+              </h2>
+            </div>
+            <p className="mt-3 text-sm font-bold leading-6 text-slate-950">
+              {sanitizeBeginnerComment(forecast.comment.headline)}
+            </p>
+            {(forecast.comment.body ?? []).map((para, i) => (
+              <p key={i} className="mt-2 text-sm leading-6 text-slate-700">
+                {sanitizeBeginnerComment(para)}
               </p>
-            ) : null}
-          </CardContent>
-        </Card>
+            ))}
+            <details className="mt-4">
+              <summary className="cursor-pointer text-xs font-medium text-emerald-700 hover:text-emerald-900">
+                コメントの根拠
+              </summary>
+              <p className="mt-2 text-xs text-slate-500">
+                生成方式: {forecast.comment.model_version}
+              </p>
+              <ReasonList reasons={forecast.comment.reasons ?? []} />
+            </details>
+          </section>
+        ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Gauge className="h-4 w-4" />
-              展開信頼度
-            </CardTitle>
-            <CardDescription>モデルが今回の展開をどれだけ強く見ているか。</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <div className="text-5xl font-semibold text-slate-950">{confidence}%</div>
-                <p className="mt-2 text-sm font-semibold text-slate-600">{confidenceMeta.label}</p>
-              </div>
-              <span
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${confidenceClass(
-                  confidenceMeta.tone,
-                )}`}
-              >
-                {confidenceMeta.label}
-              </span>
-            </div>
-            <Progress value={confidence} className="mt-4 h-3" />
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="m-0 text-sm leading-6 text-slate-700">{confidenceMeta.summary}</p>
-              <p className="m-0 mt-2 text-sm leading-6 text-slate-600">{confidenceMeta.bettingHint}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
+        {/* 順位は展開解説より後ろへ置く。買い目の推奨ではなく参考情報という位置づけ
+          （docs/DECISIONS.md ADR-2026-08-04）。 */}
+        {forecast.integrated_ranking ? (
+          <IntegratedRankingView ranking={forecast.integrated_ranking} />
+        ) : null}
 
-      <section>
-        <div className="mb-3 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">展開恩恵馬 TOP5</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              今回の流れが向く馬を、検討時の役割つきで表示します。
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {topHorses.map((horse, index) => {
-            const recommendation = benefitRecommendation(horse, index);
-            return (
-              <article
-                key={horse.horse_no}
-                className={`rounded-lg border p-4 shadow-sm ${toneClass(index)}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold opacity-70">#{index + 1}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${roleClass(
-                      recommendation.tone,
-                    )}`}
-                  >
-                    {recommendation.label}
+        <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                展開分析
+                {styleReliability?.isReference ? (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                    参考
                   </span>
+                ) : null}
+              </CardTitle>
+              <CardDescription>
+                脚質別に、今回の想定ペースがどれだけ向くかを示します（50=互角）。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              {styleReliability?.isReference ? (
+                <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950 md:col-span-2">
+                  <AlertTriangle
+                    className="mt-0.5 h-4 w-4 shrink-0"
+                    aria-hidden
+                  />
+                  <p className="m-0 text-sm leading-6">
+                    {styleReliability.description}
+                  </p>
                 </div>
-                <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
-                <p className="mt-1 text-sm opacity-80">
-                  {horseNumberLabel(horse)} ・ {horse.running_style}
+              ) : null}
+              {styleScores.map((score) => (
+                <div
+                  key={score.key}
+                  className="rounded-lg border border-border p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-950">
+                        {score.label}
+                        <span
+                          className={`ml-2 rounded px-1.5 py-0.5 text-xs font-semibold ${
+                            !score.isDirectional
+                              ? "bg-slate-100 text-slate-600"
+                              : score.value > 54
+                                ? "bg-emerald-100 text-emerald-800"
+                                : score.value < 46
+                                  ? "bg-rose-100 text-rose-800"
+                                  : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {score.verdict}
+                        </span>
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {score.description}
+                      </p>
+                    </div>
+                    {/* 断定しない脚質でスコアと満杯のバーを出すと、文言より視覚が勝って
+                      「有利」と読まれてしまうため、数値表現ごと出さない。 */}
+                    {score.isDirectional ? (
+                      <span className="font-mono text-lg font-semibold">
+                        {score.value}
+                      </span>
+                    ) : null}
+                  </div>
+                  {score.isDirectional ? (
+                    <Progress value={score.value} className="mt-3" />
+                  ) : null}
+                </div>
+              ))}
+              {/* 理由は脚質ごとに繰り返さず、リストの下に一度だけ置く。 */}
+              {styleScores.some((score) => !score.isDirectional) ? (
+                <p className="m-0 text-xs leading-5 text-muted-foreground md:col-span-2">
+                  {styleScores.find((score) => !score.isDirectional)?.note}
                 </p>
-                <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <dt className="text-xs font-semibold opacity-70">適性指数</dt>
-                    <dd className="mt-1 text-2xl font-semibold">{horse.pai.toFixed(0)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-semibold opacity-70">評価</dt>
-                    <dd className="mt-1 font-semibold">{horse.fit_label}</dd>
-                  </div>
-                </dl>
-                <p className="mt-4 text-sm leading-6 opacity-90">{recommendation.reason}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+              ) : null}
+            </CardContent>
+          </Card>
 
-      <section>
-        <div className="mb-3 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">評価を下げたい馬</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              今回の流れが向きにくい馬を、割引理由つきで表示します。
-            </p>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Gauge className="h-4 w-4" />
+                展開信頼度
+              </CardTitle>
+              <CardDescription>
+                モデルが今回の展開をどれだけ強く見ているか。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <div className="text-5xl font-semibold text-slate-950">
+                    {confidence}%
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-slate-600">
+                    {confidenceMeta.label}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${confidenceClass(
+                    confidenceMeta.tone,
+                  )}`}
+                >
+                  {confidenceMeta.label}
+                </span>
+              </div>
+              <Progress value={confidence} className="mt-4 h-3" />
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="m-0 text-sm leading-6 text-slate-700">
+                  {confidenceMeta.summary}
+                </p>
+                <p className="m-0 mt-2 text-sm leading-6 text-slate-600">
+                  {confidenceMeta.bettingHint}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">
+                展開恩恵馬 TOP5
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                今回の流れが向く馬を、検討時の役割つきで表示します。
+              </p>
+            </div>
           </div>
-        </div>
-        {discountHorses.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
-            展開面だけで大きく割り引きたい馬は見当たりません。
-          </p>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-3">
-            {discountHorses.map((horse) => {
-              const discount = discountRecommendation(horse);
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {topHorses.map((horse, index) => {
+              const recommendation = benefitRecommendation(horse, index);
               return (
                 <article
                   key={horse.horse_no}
-                  className={`rounded-lg border p-4 shadow-sm ${discountClass(discount.tone)}`}
+                  className={`rounded-lg border p-4 shadow-sm ${toneClass(index)}`}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold text-slate-900">
-                      {discount.label}
+                    <span className="text-xs font-semibold opacity-70">
+                      #{index + 1}
                     </span>
-                    <span className="text-xs font-semibold opacity-70">適性 {horse.pai.toFixed(0)}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${roleClass(
+                        recommendation.tone,
+                      )}`}
+                    >
+                      {recommendation.label}
+                    </span>
                   </div>
-                  <h3 className="mt-4 text-xl font-semibold">{horseDisplayName(horse)}</h3>
+                  <h3 className="mt-4 text-xl font-semibold">
+                    {horseDisplayName(horse)}
+                  </h3>
                   <p className="mt-1 text-sm opacity-80">
-                    {horseNumberLabel(horse)} ・ {horse.running_style} ・ {horse.fit_label}
+                    {horseNumberLabel(horse)} ・ {horse.running_style}
                   </p>
-                  <p className="mt-4 text-sm leading-6 opacity-90">{discount.reason}</p>
+                  <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <dt className="text-xs font-semibold opacity-70">
+                        適性指数
+                      </dt>
+                      <dd className="mt-1 text-2xl font-semibold">
+                        {horse.pai.toFixed(0)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold opacity-70">評価</dt>
+                      <dd className="mt-1 font-semibold">{horse.fit_label}</dd>
+                    </div>
+                  </dl>
+                  <p className="mt-4 text-sm leading-6 opacity-90">
+                    {recommendation.reason}
+                  </p>
                 </article>
               );
             })}
           </div>
-        )}
-      </section>
+        </section>
 
-      <section className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              ペース分析
-            </CardTitle>
-            <CardDescription>想定ペースと脚質別スコアから、レースの流れを確認します。</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-lg bg-muted p-3">
-                <dt className="text-muted-foreground">想定ペース</dt>
-                <dd className="mt-1 text-2xl font-semibold" style={{ color: predictedSpeed.color }}>
-                  {predictedSpeed.symbol} {predictedSpeed.label}
-                </dd>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {predictedSpeed.description}
-                </p>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <dt className="text-muted-foreground">先導候補</dt>
-                <dd className="mt-1 text-2xl font-semibold">{forecast.front_runners?.length ?? 0}頭</dd>
-              </div>
-            </dl>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {(forecast.front_runners ?? []).map((horseNo) => (
-                <span
-                  key={horseNo}
-                  className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold"
-                >
-                  {horseNumberLabel({ horse_no: horseNo, frame_no: frameNoByHorseNo.get(horseNo) ?? 0 })}
-                </span>
-              ))}
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">
+                評価を下げたい馬
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                今回の流れが向きにくい馬を、割引理由つきで表示します。
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          {discountHorses.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
+              展開面だけで大きく割り引きたい馬は見当たりません。
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-3">
+              {discountHorses.map((horse) => {
+                const discount = discountRecommendation(horse);
+                return (
+                  <article
+                    key={horse.horse_no}
+                    className={`rounded-lg border p-4 shadow-sm ${discountClass(discount.tone)}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold text-slate-900">
+                        {discount.label}
+                      </span>
+                      <span className="text-xs font-semibold opacity-70">
+                        適性 {horse.pai.toFixed(0)}
+                      </span>
+                    </div>
+                    <h3 className="mt-4 text-xl font-semibold">
+                      {horseDisplayName(horse)}
+                    </h3>
+                    <p className="mt-1 text-sm opacity-80">
+                      {horseNumberLabel(horse)} ・ {horse.running_style} ・{" "}
+                      {horse.fit_label}
+                    </p>
+                    <p className="mt-4 text-sm leading-6 opacity-90">
+                      {discount.reason}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                ペース分析
+              </CardTitle>
+              <CardDescription>
+                想定ペースと脚質別スコアから、レースの流れを確認します。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg bg-muted p-3">
+                  <dt className="text-muted-foreground">想定ペース</dt>
+                  <dd
+                    className="mt-1 text-2xl font-semibold"
+                    style={{ color: predictedSpeed.color }}
+                  >
+                    {predictedSpeed.symbol} {predictedSpeed.label}
+                  </dd>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {predictedSpeed.description}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted p-3">
+                  <dt className="text-muted-foreground">先導候補</dt>
+                  <dd className="mt-1 text-2xl font-semibold">
+                    {forecast.front_runners?.length ?? 0}頭
+                  </dd>
+                </div>
+              </dl>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {(forecast.front_runners ?? []).map((horseNo) => (
+                  <span
+                    key={horseNo}
+                    className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold"
+                  >
+                    {horseNumberLabel({
+                      horse_no: horseNo,
+                      frame_no: frameNoByHorseNo.get(horseNo) ?? 0,
+                    })}
+                  </span>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>脚質別プロファイル</CardTitle>
+              <CardDescription>
+                想定ペースがどの脚質に傾くかを表します。差し・追込は実績検証で展開との関係が
+                確認できなかったため参考扱いです。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PaceProfileChart
+                data={styleScores.map(({ label, value, isDirectional }) => ({
+                  style: label,
+                  value,
+                  muted: !isDirectional,
+                }))}
+              />
+            </CardContent>
+          </Card>
+        </section>
 
         <Card>
-          <CardHeader>
-            <CardTitle>脚質別プロファイル</CardTitle>
-            <CardDescription>
-              想定ペースがどの脚質に傾くかを表します。差し・追込は実績検証で展開との関係が
-              確認できなかったため参考扱いです。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PaceProfileChart
-              data={styleScores.map(({ label, value, isDirectional }) => ({
-                style: label,
-                value,
-                muted: !isDirectional,
-              }))}
-            />
+          <CardContent className="p-0">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="pci-detail" className="border-0 px-5">
+                <AccordionTrigger>判定根拠データ</AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid gap-5">
+                    <PaceHeadline
+                      headline={forecast.scenario_headline}
+                      detail={forecast.scenario_detail}
+                      paceLabel={forecast.pace_label}
+                      predictedRpci={forecast.predicted_rpci}
+                      confidence={forecast.confidence}
+                      modelVersion={forecast.model_version}
+                      reasons={forecast.forecast_reasons ?? []}
+                      trackType={race.track_type}
+                    />
+                    <section className="panel">
+                      <h3>各馬の展開適性</h3>
+                      <HorseFitTable
+                        horses={horses}
+                        styleAdvantage={forecast.style_advantage}
+                      />
+                    </section>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </CardContent>
         </Card>
-      </section>
-
-      <Card>
-        <CardContent className="p-0">
-          <Accordion type="single" collapsible>
-            <AccordionItem value="pci-detail" className="border-0 px-5">
-              <AccordionTrigger>判定根拠データ</AccordionTrigger>
-              <AccordionContent>
-                <div className="grid gap-5">
-                  <PaceHeadline
-                    headline={forecast.scenario_headline}
-                    detail={forecast.scenario_detail}
-                    paceLabel={forecast.pace_label}
-                    predictedRpci={forecast.predicted_rpci}
-                    confidence={forecast.confidence}
-                    modelVersion={forecast.model_version}
-                    reasons={forecast.forecast_reasons ?? []}
-                    trackType={race.track_type}
-                  />
-                  <section className="panel">
-                    <h3>各馬の展開適性</h3>
-                    <HorseFitTable horses={horses} />
-                  </section>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </CardContent>
-      </Card>
       </main>
     </>
   );

@@ -258,14 +258,59 @@ export function fitLabelDisplay(
  */
 export const PAI_NEUTRAL = 50;
 
+/**
+ * 展開が向くと判定する PAI の下限。ドメインの `matched_threshold` と同じ値。
+ *
+ * UI 側で PAI の実数を直書きしないための唯一の定数。ここ以外に PAI の閾値を
+ * 置かないこと（置くとスケール変更に追随できず、機能が黙って止まる）。
+ */
+export const PAI_MATCHED = 55;
+
+/** 「注目」まで押し上げる、合致閾値からの上積み分。サーバの `_STRONG_MARGIN` と同じ。 */
+const PAI_STRONG_MARGIN = 10;
+
+/** PAI をサーバと同じカテゴリへ丸める。 */
+export function paiStrength(pai: number): "strong" | "notable" | "normal" {
+  if (pai >= PAI_MATCHED + PAI_STRONG_MARGIN) return "strong";
+  if (pai >= PAI_MATCHED) return "notable";
+  return "normal";
+}
+
 /** PAI(0–100) を表示バー幅(%) に変換。範囲外は丸める。 */
 export function paiBarWidth(pai: number): number {
   return Math.max(0, Math.min(100, Math.round(pai)));
 }
 
-/** 合致馬を PAI 降順で返す（入力配列は変更しない）。 */
+/**
+ * PAI 降順で返す（入力配列は変更しない）。
+ *
+ * **同一脚質の中でのみ使うこと。** PAI は脚質内の相対量なので、脚質をまたいだ
+ * 並べ替えは「展開が向く順」を意味しない。ダートの追込は好走率 0.47x でありながら
+ * 高い PAI を取りうる。脚質をまたぐ場面では `sortByPaceBenefit` を使う
+ * （docs/DECISIONS.md ADR-2026-08-04）。
+ */
 export function sortByPai(horses: HorseFit[]): HorseFit[] {
   return [...horses].sort((a, b) => b.pai - a.pai);
+}
+
+/**
+ * 今回の流れの恩恵を受ける順に並べる（脚質をまたいで使える）。
+ *
+ * 脚質をまたいで比較できるのは検証済みの脚質別有利度の方（有利−不利で
+ * 芝+2.8% / ダート+6.5%）。まず有利な脚質を上に置き、同じ脚質の中で PAI を使う。
+ * 有利度が取れない脚質は互角(50)として扱う。
+ */
+export function sortByPaceBenefit(
+  horses: HorseFit[],
+  styleAdvantage?: StyleAdvantage | null,
+): HorseFit[] {
+  const scores = new Map(
+    (styleAdvantage?.entries ?? []).map((entry) => [entry.style, entry.score]),
+  );
+  const advantage = (horse: HorseFit) => scores.get(horse.running_style) ?? 50;
+  return [...horses].sort(
+    (a, b) => advantage(b) - advantage(a) || b.pai - a.pai,
+  );
 }
 
 /**
@@ -328,18 +373,22 @@ export function raceSpotlight({
   topPai?: number;
   topFitStrength?: "strong" | "notable" | "normal" | string;
 }): RaceSpotlight {
-  const topHorse = sortByPai(horses ?? [])[0];
-  const topPai =
-    suppliedTopPai ??
-    (topFitStrength === "strong"
-      ? 80
-      : topFitStrength === "notable"
-        ? 70
-        : undefined) ??
-    topHorse?.pai ??
-    0;
+  // サーバは PAI をカテゴリへ丸めて返す（strong / notable / normal）。
+  // ここで PAI の実数へ戻すと、スケール変更に追随できない——実際 pai-v4 で
+  // 振れ幅を 25 → 10 へ下げた際、旧値の 80/70 はほぼ到達しなくなり
+  // 「注目」が黙って出なくなるところだった（docs/DECISIONS.md ADR-2026-08-04）。
+  // カテゴリが無い場合だけ、PAI を合致閾値と比べる。
+  //
+  // ここで PAI の最大値を取るのは、脚質をまたいだ順位付けではない。返すのは
+  // レース単位のラベルだけで、どの馬かは示さないため。「今回の流れに強く合う馬が
+  // いるか」という race 単位の問いに対する max であり、馬どうしの優劣は主張しない。
+  const observedTopPai = suppliedTopPai ?? Math.max(0, ...(horses ?? []).map((h) => h.pai));
+  const strength =
+    topFitStrength === "strong" || topFitStrength === "notable"
+      ? topFitStrength
+      : paiStrength(observedTopPai);
 
-  if (confidence >= 0.7 && topPai >= 80) {
+  if (confidence >= 0.7 && strength === "strong") {
     return {
       label: "注目",
       tone: "focus",
@@ -355,7 +404,7 @@ export function raceSpotlight({
     };
   }
 
-  if (fieldSize >= 14 && topPai >= 70) {
+  if (fieldSize >= 14 && strength !== "normal") {
     return {
       label: "妙味",
       tone: "value",

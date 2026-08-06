@@ -4,13 +4,24 @@ import {
   frameColorClass,
   horseNumberLabel,
   paiBarWidth,
-  sortByPai,
+  sortByPaceBenefit,
 } from "@/lib/pace";
-import type { HorseFit } from "@pci/api-client";
+import type { HorseFit, StyleAdvantage } from "@pci/api-client";
 
-/** 各馬の展開適性（PAI）を、合致度の高い順にバーで可視化する。 */
-export function HorseFitTable({ horses }: { horses: HorseFit[] }) {
-  const sorted = sortByPai(horses);
+/**
+ * 各馬の展開適性（PAI）を、今回の流れの恩恵を受ける順にバーで可視化する。
+ *
+ * PAI 単独で並べない。PAI は脚質内の相対量で、脚質をまたいだ大小は
+ * 「展開が向く順」を意味しないため（docs/DECISIONS.md ADR-2026-08-04）。
+ */
+export function HorseFitTable({
+  horses,
+  styleAdvantage,
+}: {
+  horses: HorseFit[];
+  styleAdvantage?: StyleAdvantage | null;
+}) {
+  const sorted = sortByPaceBenefit(horses, styleAdvantage);
 
   return (
     <ul className="horse-list">

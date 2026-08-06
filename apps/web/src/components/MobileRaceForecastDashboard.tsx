@@ -22,7 +22,12 @@ import { MobileRaceNavigation } from "@/components/MobileRaceNavigation";
 import { MobileTabList } from "@/components/MobileTabList";
 import { PaceHeadline } from "@/components/PaceHeadline";
 import { ReasonList } from "@/components/ReasonList";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import {
   formatRaceDate,
@@ -39,7 +44,7 @@ import {
   horseNumberLabel,
   sanitizeBeginnerComment,
   sortDiscountCandidates,
-  sortByPai,
+  sortByPaceBenefit,
   styleAdvantageScores,
 } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
@@ -85,7 +90,9 @@ function BenefitRow({ horse, index }: { horse: HorseFit; index: number }) {
       data-mobile-benefit
       className={`flex min-h-16 min-w-0 items-center gap-3 rounded-md border px-3 py-2.5 ${benefitTone(index)}`}
     >
-      <span className="w-5 shrink-0 text-center text-xs font-bold opacity-70">{index + 1}</span>
+      <span className="w-5 shrink-0 text-center text-xs font-bold opacity-70">
+        {index + 1}
+      </span>
       <span
         className={`flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-xs font-bold ${frameColorClass(horse.frame_no)}`}
       >
@@ -93,13 +100,16 @@ function BenefitRow({ horse, index }: { horse: HorseFit; index: number }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="m-0 truncate text-sm font-semibold">{horseDisplayName(horse)}</h3>
+          <h3 className="m-0 truncate text-sm font-semibold">
+            {horseDisplayName(horse)}
+          </h3>
           <span className="shrink-0 rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-slate-800">
             {recommendation.label}
           </span>
         </div>
         <p className="m-0 mt-1 truncate text-xs opacity-70">
-          {horseNumberLabel(horse)} ・ {horse.running_style} ・ 適性 {horse.fit_label}
+          {horseNumberLabel(horse)} ・ {horse.running_style} ・ 適性{" "}
+          {horse.fit_label}
         </p>
       </div>
     </article>
@@ -135,9 +145,14 @@ export function MobileExpandableHorseRow({
     >
       <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
         {rank ? (
-          <span className="w-5 shrink-0 text-center text-xs font-bold text-slate-500">{rank}</span>
+          <span className="w-5 shrink-0 text-center text-xs font-bold text-slate-500">
+            {rank}
+          </span>
         ) : (
-          <AlertTriangle className="h-4 w-5 shrink-0 text-amber-700" aria-hidden />
+          <AlertTriangle
+            className="h-4 w-5 shrink-0 text-amber-700"
+            aria-hidden
+          />
         )}
         <span
           className={`flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border px-1 text-xs font-bold ${frameColorClass(horse.frame_no)}`}
@@ -160,7 +175,8 @@ export function MobileExpandableHorseRow({
             </span>
           </div>
           <p className="m-0 mt-1 truncate text-xs text-slate-500">
-            {horseNumberLabel(horse)} ・ {horse.running_style} ・ 適性 {horse.fit_label}
+            {horseNumberLabel(horse)} ・ {horse.running_style} ・ 適性{" "}
+            {horse.fit_label}
           </p>
         </div>
         <ChevronDown
@@ -169,7 +185,9 @@ export function MobileExpandableHorseRow({
         />
       </summary>
       <div className="border-t border-current/10 px-4 py-3">
-        <p className="m-0 text-xs font-semibold text-slate-500">今回の評価理由</p>
+        <p className="m-0 text-xs font-semibold text-slate-500">
+          今回の評価理由
+        </p>
         <p className="m-0 mt-1 text-sm leading-6 text-slate-700">{reason}</p>
       </div>
     </details>
@@ -183,7 +201,7 @@ export function MobileRaceForecastDashboard({
 }: MobileRaceForecastDashboardProps) {
   const [activeTab, setActiveTab] = useState<MobileTab>("summary");
   const horses = forecast.horses ?? [];
-  const rankedHorses = sortByPai(horses);
+  const rankedHorses = sortByPaceBenefit(horses, forecast.style_advantage);
   const topHorses = rankedHorses.slice(0, 5);
   const discountHorses = sortDiscountCandidates(horses)
     .filter((horse) => horse.fit_label === "不利" || horse.pai < 60)
@@ -230,13 +248,20 @@ export function MobileRaceForecastDashboard({
               </p>
             </div>
             <div className="shrink-0 rounded-md border border-white/10 bg-white/[0.06] px-3 py-2 text-right">
-              <p className="m-0 text-[10px] font-semibold text-emerald-300">想定展開</p>
-              <p className="m-0 mt-0.5 text-base font-semibold">{forecast.pace_label}</p>
+              <p className="m-0 text-[10px] font-semibold text-emerald-300">
+                想定展開
+              </p>
+              <p className="m-0 mt-0.5 text-base font-semibold">
+                {forecast.pace_label}
+              </p>
             </div>
           </div>
 
           <div className="mt-3 flex items-center gap-3 border-t border-white/10 pt-3">
-            <Activity className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+            <Activity
+              className="h-4 w-4 shrink-0 text-emerald-400"
+              aria-hidden
+            />
             <p className="m-0 min-w-0 flex-1 truncate text-sm text-slate-200">
               {forecast.scenario_headline}
             </p>
@@ -274,16 +299,26 @@ export function MobileRaceForecastDashboard({
       >
         {activeTab === "summary" ? (
           <div className="grid min-w-0 gap-4">
-            <section className="min-w-0" aria-labelledby="mobile-benefit-heading">
+            <section
+              className="min-w-0"
+              aria-labelledby="mobile-benefit-heading"
+            >
               <div className="mb-2 flex items-center justify-between gap-3">
-                <h2 id="mobile-benefit-heading" className="m-0 text-base font-semibold text-slate-950">
+                <h2
+                  id="mobile-benefit-heading"
+                  className="m-0 text-base font-semibold text-slate-950"
+                >
                   展開恩恵馬 TOP3
                 </h2>
                 <span className="text-xs text-slate-500">まず見る3頭</span>
               </div>
               <div className="grid min-w-0 gap-2">
                 {topHorses.slice(0, 3).map((horse, index) => (
-                  <BenefitRow key={horse.horse_no} horse={horse} index={index} />
+                  <BenefitRow
+                    key={horse.horse_no}
+                    horse={horse}
+                    index={index}
+                  />
                 ))}
               </div>
             </section>
@@ -292,7 +327,9 @@ export function MobileRaceForecastDashboard({
               <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                 <div className="flex items-center gap-2 text-emerald-800">
                   <Sparkles className="h-4 w-4" aria-hidden />
-                  <h2 className="m-0 text-sm font-semibold">この展開をひとことで</h2>
+                  <h2 className="m-0 text-sm font-semibold">
+                    この展開をひとことで
+                  </h2>
                 </div>
                 <p className="m-0 mt-2 text-sm font-semibold leading-6 text-slate-900">
                   {sanitizeBeginnerComment(forecast.comment.headline)}
@@ -300,8 +337,14 @@ export function MobileRaceForecastDashboard({
               </section>
             ) : null}
 
-            <section className="min-w-0" aria-labelledby="mobile-discount-heading">
-              <h2 id="mobile-discount-heading" className="m-0 mb-2 text-base font-semibold text-slate-950">
+            <section
+              className="min-w-0"
+              aria-labelledby="mobile-discount-heading"
+            >
+              <h2
+                id="mobile-discount-heading"
+                className="m-0 mb-2 text-base font-semibold text-slate-950"
+              >
                 評価を下げたい馬
               </h2>
               {discountHorses.length === 0 ? (
@@ -315,7 +358,10 @@ export function MobileRaceForecastDashboard({
                     const discount = discountRecommendation(horse);
                     return (
                       <div className="flex min-h-16 items-center gap-3 px-3 py-2.5">
-                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700" aria-hidden />
+                        <AlertTriangle
+                          className="h-4 w-4 shrink-0 text-amber-700"
+                          aria-hidden
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <h3 className="m-0 truncate text-sm font-semibold text-slate-950">
@@ -325,7 +371,9 @@ export function MobileRaceForecastDashboard({
                               {discount.label}
                             </span>
                           </div>
-                          <p className="m-0 mt-1 truncate text-xs text-slate-600">{discount.reason}</p>
+                          <p className="m-0 mt-1 truncate text-xs text-slate-600">
+                            {discount.reason}
+                          </p>
                         </div>
                       </div>
                     );
@@ -365,7 +413,10 @@ export function MobileRaceForecastDashboard({
             ) : null}
 
             <section aria-labelledby="mobile-all-benefit-heading">
-              <h2 id="mobile-all-benefit-heading" className="m-0 mb-2 text-base font-semibold text-slate-950">
+              <h2
+                id="mobile-all-benefit-heading"
+                className="m-0 mb-2 text-base font-semibold text-slate-950"
+              >
                 展開恩恵馬 TOP5
               </h2>
               <div className="grid gap-2">
@@ -386,7 +437,10 @@ export function MobileRaceForecastDashboard({
             </section>
 
             <section aria-labelledby="mobile-all-discount-heading">
-              <h2 id="mobile-all-discount-heading" className="m-0 mb-2 text-base font-semibold text-slate-950">
+              <h2
+                id="mobile-all-discount-heading"
+                className="m-0 mb-2 text-base font-semibold text-slate-950"
+              >
                 評価を下げたい馬
               </h2>
               <div className="grid gap-2">
@@ -410,17 +464,26 @@ export function MobileRaceForecastDashboard({
         {activeTab === "detail" ? (
           <div className="grid gap-4">
             <section aria-labelledby="mobile-checklist-heading">
-              <h2 id="mobile-checklist-heading" className="m-0 mb-2 text-base font-semibold text-slate-950">
+              <h2
+                id="mobile-checklist-heading"
+                className="m-0 mb-2 text-base font-semibold text-slate-950"
+              >
                 今回の検討サマリー
               </h2>
               <div className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
                 {decisionChecklist.map((item) => (
                   <div key={item.label} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="m-0 text-xs font-semibold text-slate-500">{item.label}</p>
-                      <p className="m-0 text-right text-sm font-semibold text-slate-950">{item.value}</p>
+                      <p className="m-0 text-xs font-semibold text-slate-500">
+                        {item.label}
+                      </p>
+                      <p className="m-0 text-right text-sm font-semibold text-slate-950">
+                        {item.value}
+                      </p>
                     </div>
-                    <p className="m-0 mt-1 text-xs leading-5 text-slate-600">{item.detail}</p>
+                    <p className="m-0 mt-1 text-xs leading-5 text-slate-600">
+                      {item.detail}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -429,7 +492,9 @@ export function MobileRaceForecastDashboard({
             <section className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-2">
                 <Gauge className="h-4 w-4 text-emerald-700" aria-hidden />
-                <h2 className="m-0 text-sm font-semibold text-slate-950">脚質別の向きやすさ</h2>
+                <h2 className="m-0 text-sm font-semibold text-slate-950">
+                  脚質別の向きやすさ
+                </h2>
               </div>
               <div className="mt-3 grid gap-3">
                 {styleScores.map((score) => (
@@ -439,10 +504,14 @@ export function MobileRaceForecastDashboard({
                         {score.label} ・ {score.verdict}
                       </span>
                       {score.isDirectional ? (
-                        <span className="font-mono font-semibold text-slate-600">{score.value}</span>
+                        <span className="font-mono font-semibold text-slate-600">
+                          {score.value}
+                        </span>
                       ) : null}
                     </div>
-                    {score.isDirectional ? <Progress value={score.value} className="mt-1.5" /> : null}
+                    {score.isDirectional ? (
+                      <Progress value={score.value} className="mt-1.5" />
+                    ) : null}
                   </div>
                 ))}
                 {styleScores.some((score) => !score.isDirectional) ? (
@@ -455,12 +524,17 @@ export function MobileRaceForecastDashboard({
 
             {forecast.comment ? (
               <section className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4">
-                <h2 className="m-0 text-sm font-semibold text-slate-950">この展開をやさしく解説</h2>
+                <h2 className="m-0 text-sm font-semibold text-slate-950">
+                  この展開をやさしく解説
+                </h2>
                 <p className="m-0 mt-2 text-sm font-bold leading-6 text-slate-950">
                   {sanitizeBeginnerComment(forecast.comment.headline)}
                 </p>
                 {(forecast.comment.body ?? []).map((paragraph, index) => (
-                  <p key={index} className="m-0 mt-2 text-sm leading-6 text-slate-700">
+                  <p
+                    key={index}
+                    className="m-0 mt-2 text-sm leading-6 text-slate-700"
+                  >
                     {sanitizeBeginnerComment(paragraph)}
                   </p>
                 ))}
@@ -490,7 +564,10 @@ export function MobileRaceForecastDashboard({
                         trackType={race.track_type}
                       />
                       <div className="overflow-x-auto">
-                        <HorseFitTable horses={horses} />
+                        <HorseFitTable
+                          horses={horses}
+                          styleAdvantage={forecast.style_advantage}
+                        />
                       </div>
                     </div>
                   </AccordionContent>
