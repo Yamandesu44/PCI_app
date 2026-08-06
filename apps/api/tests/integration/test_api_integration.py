@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from pci.domain.pace.adaptability import MODEL_VERSION as PAI_MODEL_VERSION
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
 from pci.domain.shared.race_key import RaceKey
@@ -185,7 +186,9 @@ def test_forecast_persists_to_mart(client: TestClient, db_session: Session) -> N
         select(PaceFitModel).where(PaceFitModel.race_key == UPCOMING_RACE_KEY)
     ).all()
     assert len(pf_rows) == 1
-    assert pf_rows[0].model_version == "pai-v2"
+    # ドメインの世代がそのままmartへ保存される。文字列を直書きすると世代を上げた
+    # ときにここだけ取り残される（pai-v2 → pai-v3 で実際に取り残された）。
+    assert pf_rows[0].model_version == PAI_MODEL_VERSION
     assert 0.0 <= pf_rows[0].pai <= 100.0
     assert pf_rows[0].fit_label in ("合致", "中立", "不利")
     assert isinstance(pf_rows[0].reasons, list)
