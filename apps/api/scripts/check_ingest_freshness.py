@@ -94,7 +94,9 @@ def main() -> None:
         print()
         for problem in problems:
             print(f"✗ {problem}")
-        print("\nWindows機のタスクスケジューラ（PCI_Sync_Mykeibadb）の実行結果を確認してください。")
+        print(
+            "\nWindows機のタスクスケジューラ（PaceLab_Sync_Mykeibadb）の実行結果を確認してください。"
+        )
         raise SystemExit(1)
 
     print("\n✓ 取り込みは動いています。")

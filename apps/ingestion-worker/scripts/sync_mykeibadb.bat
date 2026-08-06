@@ -3,8 +3,9 @@ REM 日本語ログをコマンドプロンプトとPythonでUTF-8へ統一す�
 chcp 65001 >nul
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
-REM mykeibadb sync - run from Windows Task Scheduler Fri/Sat 10:00, Sun 18:00.
-REM Task name: PCI_Sync_Mykeibadb
+REM mykeibadb sync - run from Windows Task Scheduler.
+REM Task name: PaceLab_Sync_Mykeibadb
+REM Schedule: Tue 21:00 / Fri 10:00 / Fri 21:00 / Sat 10:00 / Sat 21:00 / Sun 21:00
 REM
 REM What it does: mykeibadb.exe (JV-Link -> MySQL) then batch.py (MySQL -> PostgreSQL,
 REM entries + results + special-entries).
