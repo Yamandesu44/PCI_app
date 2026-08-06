@@ -62,7 +62,8 @@
 - [x] 検知層を実装した。GitHub Actions が毎日 `/api/v1/ingest-status` を確認し、
       異常ならワークフローを失敗させる（GitHub が所有者へ通知する）。
       ローカルの実APIに対し、401・正常・鮮度不足の3経路を確認済み。
-- [ ] `setup_task_scheduler.ps1` を管理者権限で実行して登録する（Windows機）。
+- [x] タスクを登録した（`PaceLab_Sync_Mykeibadb`・火金土日の6回）。手動実行で成功。
+      **成功は「どこへ書いたか」を保証しない**ので、公開API側で鮮度を確認すること。
 - [ ] ワーカーの `.env` を Cloud Run 向きにする（`API_BASE_URL` / `INGEST_TOKEN`）。
 - [ ] リポジトリへ `PUBLIC_API_BASE_URL`（Variables）と `PUBLIC_API_TOKEN`（Secrets）を設定する。
       未設定の間、監視はスキップされる（毎日通知が飛ぶのを避けるため）。
