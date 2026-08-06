@@ -116,6 +116,11 @@ alembic upgrade head
 | `PUBLIC_API_TOKEN` | **`/api/v1/*` が無認証で全公開**（起動時に警告が出る） |
 | `INGEST_TOKEN` | `/internal/ingest/*` が無認証 |
 | `CORS_ALLOW_ORIGINS` | ローカル開発の2オリジンのみ許可（公開フロントからは弾かれる） |
+| `RATE_LIMIT_TRUSTED_PROXIES` | **全利用者が同じキーへ集約され、実質「全体で120回/分」になる** |
+
+レート制限は既定で 120回/分・クライアント単位（`RATE_LIMIT_PER_MINUTE=0` で無効）。
+ロードバランサ配下では `RATE_LIMIT_TRUSTED_PROXIES` に段数を設定しないと、
+接続元IPが常にプロキシになるため制限が全利用者で共有されてしまう。
 
 CI はイメージのビルドと `/health` 応答までを毎回検証する（`docker` ジョブ）。
 レジストリへの push は入れていない。デプロイ先が決まってから足すこと。
