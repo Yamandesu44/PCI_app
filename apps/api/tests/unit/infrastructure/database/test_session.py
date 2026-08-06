@@ -169,3 +169,20 @@ class TestMigrationsShareTheSamePreparation:
 
     def test_env_py_does_not_build_its_own_engine_from_config(self) -> None:
         assert "engine_from_config" not in self._env_source()
+
+    def test_env_py_resolves_the_target_through_settings(self) -> None:
+        """接続先もアプリと同じ経路で決めること。
+
+        以前は `os.environ` だけを読み、`.env` にしか書いていないと
+        `alembic.ini` のローカル向けURLへ落ちていた。**エラーにならず、
+        適用済みのローカルDBに対して正常終了する**ため、本番へ流したつもりで
+        流れていないことに気付けない。
+        """
+        assert "get_settings" in self._env_source()
+
+    def test_alembic_ini_has_no_fallback_target(self) -> None:
+        """設定が拾えなかったときに、黙って別のDBへ流れる先を残さない。"""
+        ini = Path(__file__).resolve().parents[4] / "alembic.ini"
+        for line in ini.read_text(encoding="utf-8").splitlines():
+            if line.strip().startswith("sqlalchemy.url"):
+                assert line.split("=", 1)[1].strip() == ""
