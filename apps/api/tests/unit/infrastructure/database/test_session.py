@@ -180,6 +180,15 @@ class TestMigrationsShareTheSamePreparation:
         """
         assert "get_settings" in self._env_source()
 
+    def test_alembic_ini_is_ascii_only(self) -> None:
+        """alembic はこのファイルを**ロケールの文字コード**で読む。
+
+        日本語版 Windows では cp932 になり、UTF-8 の日本語を入れると
+        コマンド自体が `UnicodeDecodeError` で起動しない。コメントは英語で書く。
+        """
+        ini = Path(__file__).resolve().parents[4] / "alembic.ini"
+        ini.read_bytes().decode("ascii")
+
     def test_alembic_ini_has_no_fallback_target(self) -> None:
         """設定が拾えなかったときに、黙って別のDBへ流れる先を残さない。"""
         ini = Path(__file__).resolve().parents[4] / "alembic.ini"
