@@ -50,6 +50,19 @@ horses 411,491行 48MB / races 15,931行。約4.7年分で、コアだけなら�
 - `scripts/db_size.py` — 容量と世代別行数。行数は `count(*)` 実測
   （`n_live_tup` は ANALYZE 前だと0で当てにならない）。
 
+### 設定漏れを検出する仕組み（`3469962` 以降）
+
+デプロイの設定漏れは落ちる形では現れない。動いたまま静かに壊れるので、
+**原因を名乗らせる**方向で手当てした。
+
+- Web の案内文を原因別に分けた。`API_BASE_URL` 未設定は開発用の 127.0.0.1 へ
+  落ち、`API_ACCESS_TOKEN` 不一致は全リクエスト401。旧コードはどちらも
+  「APIが起動しているか確認してください」と案内していた。**APIは動いている。**
+- `scripts/check_deployment.py` を追加。公開URLへ外から当てて、
+  `PUBLIC_API_TOKEN` の効き・CORS の広さ・モデルのフォールバックを検出する。
+  問題があれば終了コード1。ローカルの実インスタンスで、保護あり／保護なしの
+  両方の応答を確認済み。
+
 ### 次の担当がやること（コードではなく外部の準備）
 
 コード側は揃っている。以下はコンソール作業のため、このセッションでは実行していない。
@@ -74,6 +87,7 @@ cd apps/api
 python -m pytest tests/unit/ tests/contract/ -q
 python -m scripts.db_size                      # 容量の現状
 python -m scripts.prune_mart_versions          # 掃除の影響（DBは変更しない）
+python -m scripts.check_deployment --base-url http://127.0.0.1:8000  # 設定の確認
 ```
 
 ---

@@ -18,6 +18,17 @@
 - [x] 移行の突き合わせと世代掃除のスクリプトを追加した（`1f25369`）。
 - [x] API 816テスト、Ruff、strict mypy、import-linter を完了した。
 
+### 追記: 設定漏れが原因を名乗るようにした
+
+デプロイの設定漏れは「落ちる」形では出ない。**動いたまま静かに壊れる**ため、
+どちらも「原因が分かる形にする」ことで対処した。
+
+- [x] Web の案内文を原因別に分けた（`3469962`）。`API_BASE_URL` 未設定は
+      開発用の 127.0.0.1 へ落ち、`API_ACCESS_TOKEN` 不一致は全リクエスト401。
+      どちらも旧コードは「APIが起動しているか確認」と案内していた。**APIは動いている。**
+- [x] デプロイ直後の確認スクリプトを追加した（`scripts/check_deployment.py`）。
+      外から `PUBLIC_API_TOKEN`・CORS・モデルのフォールバックを検出する。
+
 ### 次にやること（コンソール作業・このセッションでは実行できない）
 
 - [ ] Aiven でサービス作成。**必ず session モードのプーラーの接続文字列を使う。**
@@ -25,6 +36,7 @@
 - [ ] 移行を実行し、最後に `python -m scripts.verify_migration --source ...` を通す。
 - [ ] GCP 側の準備（`deploy-cloudrun.yml` 冒頭に列挙済み）。
 - [ ] Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
+- [ ] デプロイ後に `python -m scripts.check_deployment --base-url ... --token ...` を通す。
 
 ### 触ってはいけないこと
 
