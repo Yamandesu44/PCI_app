@@ -52,7 +52,11 @@ pai-v3 の感応度を確定しようとして、もっと手前に2つの問題
 - [x] **CORS を許可オリジン制へ変えた**（`a811e40`）。既定はローカル開発の2つのみ。
       `PUBLIC_API_TOKEN` 未設定時に警告を出す。
 - [ ] レート制限とユーザー単位の認証は未着手（現状はサーバ間トークンのみ）。
-- [ ] デプロイ基盤（Dockerfile・vercel.json が無い。CIはあるがCDが無い）。
+- [x] **API の本番用 Dockerfile を追加した**（`aee0370`）。PaaS 非依存（PORT で受ける）。
+      非 root・lightgbm 用に libgomp1 のみ・モデル同梱。CI がビルドと `/health` 応答を検証する。
+      `vercel.json` は既存。docker-compose に `api` サービスを profile 付きで追加した。
+- [ ] **CD（レジストリへの push とデプロイ）は未着手。デプロイ先が未定のため。**
+      Railway / Render / Fly.io のいずれかが決まれば push 段を足せる。
 - [ ] 取り込みの自動化（Windows機での手動 PowerShell 実行のまま）。
 - [ ] JRA-VAN 規約確認（コードでは解決できないため早めに）。
 
