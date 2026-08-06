@@ -46,7 +46,11 @@
 - [x] **Cloud Run へ公開した**（`pci-api` / asia-northeast1）。Cloud Shell から手動で。
       環境変数は `RATE_LIMIT_TRUSTED_PROXIES=1` を含めて設定済み。
 - [x] `check_deployment` の6項目すべてが意図どおり。モデルは `lgbm-dirt-v6-pci-v3`。
-- [ ] Vercel に `API_BASE_URL` と `API_ACCESS_TOKEN` を設定し、web を公開する。
+- [x] **web を Vercel へ公開した**（`https://pciapp.vercel.app`）。3段が繋がった。
+- [x] `vercel.json` の廃止された Secrets 参照を削除した（`52d315e`）。
+      **これがデプロイ0件の原因。**ビルド開始前に弾かれるため作り直しても直らない。
+- [ ] **公開範囲を絞るか判断する。** JRA-VAN 規約確認が未了のまま公開状態にある。
+      `BETA_ACCESS_USER` / `BETA_ACCESS_PASSWORD` で閉じられる。
 - [ ] CD ワークフロー（`deploy-cloudrun.yml`）を使うなら Workload Identity 連携を用意する。
       手動デプロイで足りているうちは後回しでよい。
 

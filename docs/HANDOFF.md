@@ -107,6 +107,23 @@ gcloud run deploy pci-api --source apps/api --region asia-northeast1 \
 設定されず、**例外を出さずルールベースへ落ちる**。冒頭の1行が
 `Building using Dockerfile` であることを毎回確認すること。
 
+### web の公開（2026-08-06 実施済み）
+
+`https://pciapp.vercel.app`（Vercel `pci_app` / Hobby）
+
+**Vercel 側で詰まった2点。どちらも「Git連携が動いていない」ようにしか見えなかった。**
+
+1. `vercel.json` の `"env": {"API_BASE_URL": "@api_base_url"}`。`@` は廃止された
+   Vercel Secrets の参照で、存在しない秘密情報を要求して**ビルド開始前に弾かれる**。
+   デプロイが1件も作られないため原因が見えず、プロジェクトを作り直しても直らない。
+   削除済み（`52d315e`）。環境変数はダッシュボードで設定する。
+2. **Root Directory は空（リポジトリのルート）にすること。** `apps/web` を指定すると
+   `vercel.json` のパスと二重になり（`apps/web/apps/web/.next`）、ビルドが失敗する。
+   `npm ci` をワークスペース全体で走らせる必要もある（web は `@pci/api-client` に依存）。
+
+環境変数は Settings → **Environments → Production** 配下（旧UIの位置から移動している）。
+`API_BASE_URL` と `API_ACCESS_TOKEN`（API の `PUBLIC_API_TOKEN` と同値）の2つ。
+
 ### 次の担当がやること（コードではなく外部の準備）
 
 コード側は揃っている。以下はコンソール作業のため、このセッションでは実行していない。
@@ -115,9 +132,15 @@ gcloud run deploy pci-api --source apps/api --region asia-northeast1 \
 2. ~~移行の実行~~ **完了**（上記）
 3. ~~GCP 側の準備~~ **手動デプロイで公開済み**（上記）。CD ワークフローを使う場合は
    `deploy-cloudrun.yml` 冒頭の Workload Identity 連携が別途必要。
-4. Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
-   前段にロードバランサが入るため、0のままだと全利用者が同じキーへ集約され、
-   レート制限が実質「全体で120回/分」になる。
+4. ~~Cloud Run の環境変数~~ **設定済み**（`RATE_LIMIT_TRUSTED_PROXIES=1` を含む）
+
+**公開状態になったため、次の2点が新たに効いてくる。**
+
+- **JRA-VAN の規約確認が未了のまま公開されている。** 表示しているのは独自指標で
+  生データではないが、`BETA_ACCESS_USER` / `BETA_ACCESS_PASSWORD`（web の共有Basic認証）で
+  閉じておくのが安全。規約の判断が付くまでの暫定手段として用意してある。
+- **データの鮮度が手動運用に依存している。** 取り込みは Windows 機での手動実行のまま。
+  止まると画面は壊れず「古いまま」になり、最も気付かれにくい。
 
 ### テスト状況
 
