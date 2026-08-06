@@ -37,8 +37,12 @@
       6543 は transaction モードで pg8000 の prepared statement と衝突する）。
 - [x] 移行の過程で `alembic` の2つの不具合を直した（`4e9d9ae` / `1d42a35`）。
       SSL翻訳を通らない／接続先が `.env` を読まない。**どちらも黙って別のDBを見る。**
-- [ ] Supabase 上の実容量を `scripts.db_size` で確認する（無料枠 500MB に対する余裕）。
-- [ ] ローカルAPIを Supabase 向きで起動し、画面と応答速度を確認する。
+- [x] Supabase 上の実容量を確認した。**111MB / 500MB（22%）。** 入れ直しで不要領域が
+      整理され、ローカルの123MBより小さくなった。コアの増加は年26MB程度。
+- [x] ローカルAPIを Supabase 向きで起動し、画面まで確認した。モデル読み込み・
+      `/ready`・レースボード・予想検証すべて正常。**DB移行は完了。**
+- [x] `db_size.py` の不具合を直した（`fcb00c0`）。`pg_stat_user_tables` は public 以外も
+      含むため、Supabase の `auth.users` をスキーマ名なしで数えて落ちていた。
 - [ ] GCP 側の準備（`deploy-cloudrun.yml` 冒頭に列挙済み）。
 - [ ] Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
 - [ ] デプロイ後に `python -m scripts.check_deployment --base-url ... --token ...` を通す。
