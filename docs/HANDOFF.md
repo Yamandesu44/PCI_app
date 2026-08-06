@@ -87,29 +87,25 @@ pai-v4 のスケールでは到達しない。**恩恵馬の役割ラベルが�
 - [ ] 自在のフォールバック（山の位置と高さ）を実データで検証する。
 - [ ] オフセットの期間変動を監視する（芝は期間外で +0.42 ずれた。振れ幅10なら
       定数シフト3.8点に収まる範囲）。
-- [ ] **`sortByPai` が ADR と矛盾している。** `apps/web/src/lib/pace.ts`。要対応。
+- [x] **脚質をまたいだ PAI 順位付けを全廃した**（`fd60398`）。
 
-### CI（未着手・仕様判断が要る／私の変更とは無関係）
+### CI（解消済み）
 
-- [ ] `mypy --strict` が CI で失敗。CIは Python 3.12 で numpy 2.5.1 が入るが
-      `[tool.mypy] python_version = "3.11"` のため numpy の PEP695 構文で落ちる。
-      手元は 3.11 + numpy 2.4.6 なので再現しない。候補: (a) Type/Lintジョブを 3.11 で
-      走らせる（1行・`requires-python = ">=3.11"` とも開発環境とも一致）、
-      (b) `numpy<2.5` 固定、(c) 3.11サポートを捨てる。
-- [ ] `ruff format --check` が 42ファイルで失敗（mypy が先に落ちるため未到達）。
-      全体整形は独立した判断なので触っていない。
+- [x] **CI の mypy 失敗を解消した**（`95e4067`）。型検査ジョブを Python 3.11 へ。
+- [x] **`ruff format` をツリー全体へ適用した**（`78cceaa`・整形のみ・独立コミット）。
 
-### テスト状況（`d64c5f2`時点・手元）
+### テスト状況（`95e4067`時点・手元）
 
 ```
 cd apps/api
-.venv/bin/python -m pytest tests/unit/ tests/contract/ -q   # 751 passed
+.venv/bin/python -m pytest tests/unit/ tests/contract/ -q   # 770 passed
 .venv/bin/python -m ruff check src/ tests/                  # All checks passed
+.venv/bin/python -m ruff format --check src/ tests/         # 128 files already formatted
 .venv/bin/python -m mypy src/ --strict                      # 0 errors (65 files)
 .venv/bin/lint-imports                                      # 2 kept, 0 broken
-cd ../web && npm run test && npm run typecheck              # 153 passed / tsc OK
+cd ../web && npx tsc --noEmit && npx vitest run             # 164 passed / tsc OK
 ```
-OpenAPI は差分なし。統合テスト（Docker必須）は手元で未実行。
+OpenAPI・TS型は再生成済み。統合テスト（Docker必須）は手元で未実行。
 
 ## 2026-08-04 (Claude Code) 作業区切り その4 — ペース補正が判別に寄与しているかを疑い始めた
 
