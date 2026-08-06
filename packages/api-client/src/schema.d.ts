@@ -593,6 +593,11 @@ export interface components {
         /**
          * EntryDetailSchema
          * @description 出走馬の詳細（確定済みなら成績を含む）。
+         *
+         *     **血統登録番号（`ketto_num`）は返さない。** JRA-VAN 側のマスターキーそのもので、
+         *     公開すると手元のデータを元データへ突き合わせやすくする。表示にも使っておらず、
+         *     置いておく利点が無い（取り込み側の `/internal/ingest/*` では引き続き使う）。
+         *     馬をまたいで辿る機能が要るときは、外部キーをそのまま出さずに検討すること。
          */
         EntryDetailSchema: {
             /** Finish Pos */
@@ -601,8 +606,6 @@ export interface components {
             frame_no: number;
             /** Horse No */
             horse_no: number;
-            /** Ketto Num */
-            ketto_num: string;
             /** Pci Actual */
             pci_actual?: number | null;
             /** Running Style */
