@@ -42,6 +42,7 @@ from pci.application.backtest import (
     format_actual_style_advantage_breakdown,
     format_actual_style_advantage_validation,
     format_clamp_impact,
+    format_fit_label_shares,
     format_pace_style_matrix,
     format_pai_by_style,
     format_pai_weight_comparison,
@@ -57,6 +58,7 @@ from pci.application.backtest import (
     style_advantage_breakdown_to_dict,
     style_advantage_lift_to_dict,
     summarize_clamp_impact,
+    summarize_fit_label_shares,
     summarize_integrated_accuracy,
     summarize_pace_centering,
     summarize_pai_lift,
@@ -1701,3 +1703,69 @@ class TestReportToDict:
         assert result["integrated_samples"] == []
         assert result["style_advantage_samples"] == []
         json.dumps(result)
+
+
+class TestFitLabelShares:
+    """ラベルの良し悪しは脚質を固定して判断する。
+
+    脚質を跨いだ集計では「不利」が「中立」を上回ることがあるが、これは閾値の
+    ずれではなく脚質構成の差（絶対的な好走率は脚質ごとに 0.47x〜1.43x）。
+    """
+
+    @staticmethod
+    def _h(style: str, label: str, good: bool) -> HorseSample:
+        return HorseSample(
+            race_key="R1",
+            horse_no=1,
+            pai=50.0,
+            good_run=good,
+            track_type="芝",
+            running_style=style,
+            fit_label=label,
+        )
+
+    def test_empty_returns_empty(self) -> None:
+        assert summarize_fit_label_shares([]) == []
+
+    def test_emits_a_whole_track_row_and_one_row_per_style(self) -> None:
+        samples = [self._h("逃げ", "合致", True), self._h("追込", "不利", False)]
+
+        rows = summarize_fit_label_shares(samples)
+
+        styles = {r.style for r in rows}
+        assert styles == {"", "逃げ", "追込"}
+        # 3ラベル × (全体 + 2脚質)
+        assert len(rows) == 9
+
+    def test_share_is_relative_to_its_own_group(self) -> None:
+        samples = [
+            self._h("逃げ", "合致", True),
+            self._h("逃げ", "中立", False),
+            self._h("追込", "不利", False),
+        ]
+
+        rows = {(r.style, r.label): r for r in summarize_fit_label_shares(samples)}
+
+        # 逃げの中では合致が半分。全体では3頭中1頭。
+        assert rows[("逃げ", "合致")].share == pytest.approx(0.5)
+        assert rows[("", "合致")].share == pytest.approx(1 / 3, abs=1e-4)
+
+    def test_format_marks_ordering_per_group(self) -> None:
+        """脚質内で 合致 > 中立 > 不利 なら順当、崩れていれば逆転と出す。"""
+        ordered = (
+            [self._h("逃げ", "合致", True) for _ in range(10)]
+            + [self._h("逃げ", "中立", i < 5) for i in range(10)]
+            + [self._h("逃げ", "不利", False) for _ in range(10)]
+        )
+        assert "順当" in format_fit_label_shares(summarize_fit_label_shares(ordered))
+
+        inverted = (
+            [self._h("逃げ", "合致", False) for _ in range(10)]
+            + [self._h("逃げ", "中立", i < 5) for i in range(10)]
+            + [self._h("逃げ", "不利", True) for _ in range(10)]
+        )
+        assert "逆転" in format_fit_label_shares(summarize_fit_label_shares(inverted))
+
+    def test_format_warns_against_judging_on_the_whole_track_row(self) -> None:
+        out = format_fit_label_shares(summarize_fit_label_shares([self._h("逃げ", "合致", True)]))
+        assert "「全体」行の逆転で閾値を判断しないこと" in out

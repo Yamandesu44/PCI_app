@@ -1403,9 +1403,13 @@ def summarize_pai_within_style(samples: list[HorseSample]) -> list[PaiWithinStyl
 
 @dataclass(frozen=True)
 class FitLabelShare:
-    """展開合致ラベルの構成比と、各ラベルの実際の好走率。"""
+    """展開合致ラベルの構成比と、各ラベルの実際の好走率。
+
+    `style` が空文字なら、そのコース全体（脚質を跨いだ集計）を表す。
+    """
 
     track_type: str
+    style: str
     label: str
     n: int
     share: float
@@ -1413,23 +1417,26 @@ class FitLabelShare:
 
 
 def summarize_fit_label_shares(samples: list[HorseSample]) -> list[FitLabelShare]:
-    """コース×ラベルごとの構成比と好走率を出す。
+    """コース×脚質×ラベルごとの構成比と好走率を出す。
 
-    閾値（`matched_threshold` / `unfavorable_threshold`）を変えると構成比が動く。
-    「合致」が極端に少ない/多い、あるいは合致と不利の好走率が逆転しているなら、
-    閾値がスケールに合っていない。pai-v4 で振れ幅を 25 → 10 へ下げた際に
-    閾値も 65/40 → 55/45 へ引き直したが、**構成比は未測定**なのでここで確認する。
+    **脚質を跨いだ集計だけを見て閾値の良し悪しを判断してはいけない。** ラベルは
+    PAI から作られ、PAI は脚質内の相対量だからである。実測では「不利」の好走率が
+    「中立」を上回る（芝 24.3% 対 17.9%・ダート 22.8% 対 16.2%）が、これは閾値の
+    ずれではなく脚質構成の差である可能性が高い——絶対的な好走率は脚質ごとに
+    0.47x〜1.43x と大きく違うため。
+
+    判断は**脚質を固定した行**で行う。同一脚質の中で 合致 > 中立 > 不利 の順に
+    なっていればラベルは機能している。なっていなければ閾値がスケールに合っていない。
     """
-    rows: list[FitLabelShare] = []
-    for track in ("芝", "ダート"):
-        group = [s for s in samples if s.track_type == track and s.fit_label]
-        if not group:
-            continue
+
+    def _rows_for(track: str, style: str, group: list[HorseSample]) -> list[FitLabelShare]:
+        out: list[FitLabelShare] = []
         for label in ("合致", "中立", "不利"):
             members = [s for s in group if s.fit_label == label]
-            rows.append(
+            out.append(
                 FitLabelShare(
                     track_type=track,
+                    style=style,
                     label=label,
                     n=len(members),
                     share=round(len(members) / len(group), 4),
@@ -1440,6 +1447,17 @@ def summarize_fit_label_shares(samples: list[HorseSample]) -> list[FitLabelShare
                     ),
                 )
             )
+        return out
+
+    rows: list[FitLabelShare] = []
+    for track in ("芝", "ダート"):
+        group = [s for s in samples if s.track_type == track and s.fit_label]
+        if not group:
+            continue
+        rows.extend(_rows_for(track, "", group))
+        for style in sorted({s.running_style for s in group if s.running_style}):
+            in_style = [s for s in group if s.running_style == style]
+            rows.extend(_rows_for(track, style, in_style))
     return rows
 
 
@@ -1449,16 +1467,30 @@ def format_fit_label_shares(rows: list[FitLabelShare]) -> str:
         return ""
     lines = [
         "",
-        "  ── 展開合致ラベルの構成比（閾値がスケールに合っているか）",
-        f"    {'コース':<8}{'ラベル':<8}{'頭数':>8}{'構成比':>9}{'好走率':>9}",
+        "  ── 展開合致ラベルの構成比（脚質を固定して見ること）",
+        f"    {'コース':<8}{'脚質':<8}{'ラベル':<8}{'頭数':>8}"
+        f"{'構成比':>9}{'好走率':>9}{'判定':>8}",
     ]
+    by_group: dict[tuple[str, str], list[FitLabelShare]] = {}
     for r in rows:
-        lines.append(
-            f"    {r.track_type:<8}{r.label:<8}{r.n:>9,}{r.share:>9.1%}{r.good_rate:>9.1%}"
-        )
+        by_group.setdefault((r.track_type, r.style), []).append(r)
+
+    for (track, style), items in by_group.items():
+        rates = {i.label: i.good_rate for i in items}
+        ordered = rates["合致"] >= rates["中立"] >= rates["不利"]
+        verdict = "順当" if ordered else "逆転"
+        for i, item in enumerate(items):
+            lines.append(
+                f"    {track:<8}{(style or '全体'):<8}{item.label:<8}{item.n:>9,}"
+                f"{item.share:>9.1%}{item.good_rate:>9.1%}"
+                f"{(verdict if i == 0 else ''):>9}"
+            )
     lines.append(
-        "    ※ 「合致」が極端に少ない/多い、または合致と不利の好走率が逆転していれば"
-        "\n       閾値がスケールに合っていない。ラベルはUI表示と mart 層へそのまま出る。"
+        "    ※ **「全体」行の逆転で閾値を判断しないこと。** ラベルはPAIから作られ、"
+        "\n       PAIは脚質内の相対量なので、脚質を跨いだ集計は脚質構成の差を拾う"
+        "\n       （絶対的な好走率は脚質ごとに 0.47x〜1.43x と違う）。"
+        "\n    ※ 判断は脚質を固定した行で行う。同一脚質の中で 合致 > 中立 > 不利 に"
+        "\n       なっていればラベルは機能している。ラベルはUI表示と mart 層へそのまま出る。"
     )
     return "\n".join(lines)
 
