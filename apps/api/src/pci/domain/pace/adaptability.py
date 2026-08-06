@@ -316,8 +316,7 @@ class PaceAdaptabilityScorer:
             )
         else:
             description = (
-                f"過去の好走は{preferred}に集まっており、"
-                f"今回の{current}との相性は「{label}」です。"
+                f"過去の好走は{preferred}に集まっており、今回の{current}との相性は「{label}」です。"
             )
         reasons.append(Reason(code="pace_affinity", description=description))
         return round((base_pai * 0.5) + (pace_affinity_score * 0.5), 1)

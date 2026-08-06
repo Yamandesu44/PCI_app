@@ -486,8 +486,7 @@ class IngestStatusSchema(BaseModel):
             has_duplicate_races=dto.has_duplicate_races,
             duplicate_race_group_count=dto.duplicate_race_group_count,
             duplicate_race_groups=[
-                DuplicateRaceGroupSchema(**vars(group))
-                for group in dto.duplicate_race_groups
+                DuplicateRaceGroupSchema(**vars(group)) for group in dto.duplicate_race_groups
             ],
         )
 
@@ -597,9 +596,7 @@ class ForecastPerformanceSchema(BaseModel):
     recent_misses: list[ForecastMissSchema] = []
 
     @classmethod
-    def from_dto(
-        cls, dto: ForecastPerformanceOutput
-    ) -> ForecastPerformanceSchema:
+    def from_dto(cls, dto: ForecastPerformanceOutput) -> ForecastPerformanceSchema:
         return cls(
             date_from=dto.date_from,
             date_to=dto.date_to,
@@ -611,10 +608,7 @@ class ForecastPerformanceSchema(BaseModel):
             hit_rate=dto.hit_rate,
             confidence_review_target=dto.confidence_review_target,
             confidence_review_ready=dto.confidence_review_ready,
-            groups=[
-                ForecastPerformanceGroupSchema(**vars(group))
-                for group in dto.groups
-            ],
+            groups=[ForecastPerformanceGroupSchema(**vars(group)) for group in dto.groups],
             previous_period=ForecastPerformanceComparisonSchema(
                 date_from=dto.previous_period.date_from,
                 date_to=dto.previous_period.date_to,
@@ -624,8 +618,7 @@ class ForecastPerformanceSchema(BaseModel):
                 ],
             ),
             confidence_groups=[
-                ForecastPerformanceGroupSchema(**vars(group))
-                for group in dto.confidence_groups
+                ForecastPerformanceGroupSchema(**vars(group)) for group in dto.confidence_groups
             ],
             confidence_cohort_groups=[
                 ForecastPerformanceGroupSchema(**vars(group))
@@ -636,21 +629,14 @@ class ForecastPerformanceSchema(BaseModel):
                     predicted_key=row.predicted_key,
                     predicted_label=row.predicted_label,
                     sample_size=row.sample_size,
-                    cells=[
-                        ForecastPaceMatrixCellSchema(**vars(cell))
-                        for cell in row.cells
-                    ],
+                    cells=[ForecastPaceMatrixCellSchema(**vars(cell)) for cell in row.cells],
                 )
                 for row in dto.pace_matrix
             ],
             weekly_trend=[
-                ForecastPerformanceTrendPointSchema(**vars(point))
-                for point in dto.weekly_trend
+                ForecastPerformanceTrendPointSchema(**vars(point)) for point in dto.weekly_trend
             ],
-            recent_misses=[
-                ForecastMissSchema(**vars(miss))
-                for miss in dto.recent_misses
-            ],
+            recent_misses=[ForecastMissSchema(**vars(miss)) for miss in dto.recent_misses],
         )
 
 
@@ -675,9 +661,7 @@ class RaceBoardItemSchema(BaseModel):
     def from_dto(cls, dto: RaceBoardItemOutput) -> RaceBoardItemSchema:
         return cls(
             race=RaceSummarySchema.from_dto(dto.race),
-            forecast=(
-                RaceBoardForecastSchema(**vars(dto.forecast)) if dto.forecast else None
-            ),
+            forecast=(RaceBoardForecastSchema(**vars(dto.forecast)) if dto.forecast else None),
         )
 
 

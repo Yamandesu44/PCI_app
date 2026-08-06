@@ -96,9 +96,7 @@ def build_pace_scenario(
     )
 
 
-def _beneficiary_reason(
-    beneficiaries: tuple[int, ...], *, horse_numbers_confirmed: bool
-) -> str:
+def _beneficiary_reason(beneficiaries: tuple[int, ...], *, horse_numbers_confirmed: bool) -> str:
     suffix = (
         f"（{horse_number_list_label(beneficiaries, confirmed=horse_numbers_confirmed)}）"
         if beneficiaries

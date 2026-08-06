@@ -70,26 +70,24 @@ class SqlAlchemyRaceRepository:
 
     def list_races_by_date(self, date: datetime.date) -> list[Race]:
         """指定日のレース一覧を返す。"""
-        stmt = (
-            select(RaceModel)
-            .where(RaceModel.race_date == date)
-            .order_by(RaceModel.race_key)
-        )
+        stmt = select(RaceModel).where(RaceModel.race_date == date).order_by(RaceModel.race_key)
         return [self._to_race(m) for m in self._s.scalars(stmt).all()]
 
     def count_incomplete_past_races(self, before: datetime.date) -> int:
         """指定日より前で、結果未反映のJRA平地レース件数を返す。"""
-        stmt = select(func.count()).select_from(RaceModel).where(
-            RaceModel.race_date < before,
-            RaceModel.status == str(RaceStatus.ENTRIES),
-            RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
-            RaceModel.track_type != str(TrackType.HURDLE),
+        stmt = (
+            select(func.count())
+            .select_from(RaceModel)
+            .where(
+                RaceModel.race_date < before,
+                RaceModel.status == str(RaceStatus.ENTRIES),
+                RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+                RaceModel.track_type != str(TrackType.HURDLE),
+            )
         )
         return int(self._s.scalar(stmt) or 0)
 
-    def find_oldest_incomplete_past_race_date(
-        self, before: datetime.date
-    ) -> datetime.date | None:
+    def find_oldest_incomplete_past_race_date(self, before: datetime.date) -> datetime.date | None:
         """再同期範囲の算出に使う、結果未反映レースの最古開催日を返す。"""
         stmt = select(func.min(RaceModel.race_date)).where(
             RaceModel.race_date < before,
@@ -99,9 +97,7 @@ class SqlAlchemyRaceRepository:
         )
         return self._s.scalar(stmt)
 
-    def find_incomplete_past_races(
-        self, before: datetime.date, limit: int = 20
-    ) -> list[Race]:
+    def find_incomplete_past_races(self, before: datetime.date, limit: int = 20) -> list[Race]:
         """指定日より前で、結果未反映のレースを新しい順に返す。"""
         stmt = (
             select(RaceModel)
@@ -120,13 +116,17 @@ class SqlAlchemyRaceRepository:
         self, on_or_after: datetime.date, before: datetime.date
     ) -> int:
         """指定期間内で馬場状態が未反映の確定済みJRA平地レース件数を返す。"""
-        stmt = select(func.count()).select_from(RaceModel).where(
-            RaceModel.race_date >= on_or_after,
-            RaceModel.race_date < before,
-            RaceModel.status == str(RaceStatus.RESULT),
-            RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
-            RaceModel.track_type != str(TrackType.HURDLE),
-            RaceModel.track_condition.is_(None),
+        stmt = (
+            select(func.count())
+            .select_from(RaceModel)
+            .where(
+                RaceModel.race_date >= on_or_after,
+                RaceModel.race_date < before,
+                RaceModel.status == str(RaceStatus.RESULT),
+                RaceModel.jyo_cd.in_(_JRA_PLACE_CODES),
+                RaceModel.track_type != str(TrackType.HURDLE),
+                RaceModel.track_condition.is_(None),
+            )
         )
         return int(self._s.scalar(stmt) or 0)
 
@@ -152,9 +152,7 @@ class SqlAlchemyRaceRepository:
         )
         return [self._to_race(m) for m in self._s.scalars(stmt).all()]
 
-    def count_duplicate_race_groups(
-        self, on_or_after: datetime.date, before: datetime.date
-    ) -> int:
+    def count_duplicate_race_groups(self, on_or_after: datetime.date, before: datetime.date) -> int:
         """指定期間内の、日付・競馬場・R番号が重複するJRA平地レース組数を返す。"""
         race_no: ColumnElement[Any] = literal_column("right(races.race_key, 2)")
         groups = (
@@ -215,9 +213,7 @@ class SqlAlchemyRaceRepository:
 
         races = {
             model.race_key: model
-            for model in self._s.scalars(
-                select(RaceModel).where(RaceModel.race_key.in_(race_keys))
-            )
+            for model in self._s.scalars(select(RaceModel).where(RaceModel.race_key.in_(race_keys)))
         }
         entries_by_key: dict[str, list[RaceEntryModel]] = {}
         for entry in self._s.scalars(
@@ -226,9 +222,7 @@ class SqlAlchemyRaceRepository:
             .order_by(RaceEntryModel.race_key, RaceEntryModel.horse_no)
         ):
             entries_by_key.setdefault(entry.race_key, []).append(entry)
-        predicted_models = self._version_counts_by_race_key(
-            PredictedPaceModel, race_keys
-        )
+        predicted_models = self._version_counts_by_race_key(PredictedPaceModel, race_keys)
         fit_models = self._version_counts_by_race_key(PaceFitModel, race_keys)
 
         return [
@@ -277,10 +271,7 @@ class SqlAlchemyRaceRepository:
         pace_fit_models: tuple[MartVersionAudit, ...],
     ) -> DuplicateRaceKeyAudit:
         finished = [entry for entry in entries if entry.finish_pos is not None]
-        entry_values = [
-            (entry.horse_no, entry.frame_no, entry.ketto_num)
-            for entry in entries
-        ]
+        entry_values = [(entry.horse_no, entry.frame_no, entry.ketto_num) for entry in entries]
         # 馬ID・人気・賞金は再取り込み時期で変わり得るため、
         # 馬番に対応する中核成績だけで実結果の衝突を判定する。
         result_values = [
@@ -354,9 +345,7 @@ class SqlAlchemyRaceRepository:
         if not wanted:
             return {}
         rows = self._s.execute(
-            select(HorseModel.ketto_num, HorseModel.name).where(
-                HorseModel.ketto_num.in_(wanted)
-            )
+            select(HorseModel.ketto_num, HorseModel.name).where(HorseModel.ketto_num.in_(wanted))
         ).all()
         return {r.ketto_num: r.name for r in rows}
 
@@ -471,12 +460,14 @@ class SqlAlchemyRaceRepository:
         )
 
     def save_horse(self, horse: Horse) -> None:
-        self._s.merge(HorseModel(
-            ketto_num=horse.ketto_num,
-            name=horse.name,
-            sex=horse.sex,
-            birth_year=horse.birth_year,
-        ))
+        self._s.merge(
+            HorseModel(
+                ketto_num=horse.ketto_num,
+                name=horse.name,
+                sex=horse.sex,
+                birth_year=horse.birth_year,
+            )
+        )
 
     def save_jockey(self, jockey: Jockey) -> None:
         self._s.merge(JockeyModel(code=jockey.code, name=jockey.name))
@@ -510,9 +501,7 @@ class SqlAlchemyRaceRepository:
         if not wanted:
             return
         existing = set(
-            self._s.scalars(
-                select(JockeyModel.code).where(JockeyModel.code.in_(wanted))
-            ).all()
+            self._s.scalars(select(JockeyModel.code).where(JockeyModel.code.in_(wanted))).all()
         )
         for code in wanted - existing:
             self._s.add(JockeyModel(code=code, name=code))
@@ -523,9 +512,7 @@ class SqlAlchemyRaceRepository:
         if not wanted:
             return
         existing = set(
-            self._s.scalars(
-                select(TrainerModel.code).where(TrainerModel.code.in_(wanted))
-            ).all()
+            self._s.scalars(select(TrainerModel.code).where(TrainerModel.code.in_(wanted))).all()
         )
         for code in wanted - existing:
             self._s.add(TrainerModel(code=code, name=code))

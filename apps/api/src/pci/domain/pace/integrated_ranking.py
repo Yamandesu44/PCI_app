@@ -88,9 +88,9 @@ class RankingStrategy(StrEnum):
     別の並べ方を注入できるようにした（本番の既定は変えない）。
     """
 
-    CURRENT = "tier-fit-score"      # 能力tier → 展開向き → 能力score（本番）
-    ABILITY_FIRST = "tier-score"    # 能力tier → 能力score（展開を順位付けに使わない）
-    SCORE_ONLY = "score"            # 能力scoreの連続値のみ（tierも使わない）
+    CURRENT = "tier-fit-score"  # 能力tier → 展開向き → 能力score（本番）
+    ABILITY_FIRST = "tier-score"  # 能力tier → 能力score（展開を順位付けに使わない）
+    SCORE_ONLY = "score"  # 能力scoreの連続値のみ（tierも使わない）
 
 
 def _sort_key(
@@ -127,9 +127,7 @@ def build_integrated_ranking(
         tier = tier_by_no[ability.horse_no]
         mark = _classify(tier, fit_label)
         # 既定の表示順キー: 能力tier（主） → 展開向き（従） → 能力score（細分）。
-        sort_key = _sort_key(
-            strategy, _TIER_ORDER[tier], _FIT_ORDER[fit_label], ability.score
-        )
+        sort_key = _sort_key(strategy, _TIER_ORDER[tier], _FIT_ORDER[fit_label], ability.score)
         entry = IntegratedEntry(
             horse_no=ability.horse_no,
             rank=0,  # 後で採番

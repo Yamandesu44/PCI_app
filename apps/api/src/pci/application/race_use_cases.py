@@ -59,8 +59,7 @@ class RegisterRaceEntriesUseCase:
                 or (existing_race.track_condition if existing_race is not None else None)
             ),
             weather=(
-                race_info.weather
-                or (existing_race.weather if existing_race is not None else None)
+                race_info.weather or (existing_race.weather if existing_race is not None else None)
             ),
             grade=race_info.grade or (existing_race.grade if existing_race is not None else None),
             race_class=(
@@ -68,24 +67,16 @@ class RegisterRaceEntriesUseCase:
                 or (existing_race.race_class if existing_race is not None else None)
             ),
             rpci_actual=(
-                existing_race.rpci_actual
-                if preserve_result and existing_race is not None
-                else None
+                existing_race.rpci_actual if preserve_result and existing_race is not None else None
             ),
             pci3_actual=(
-                existing_race.pci3_actual
-                if preserve_result and existing_race is not None
-                else None
+                existing_race.pci3_actual if preserve_result and existing_race is not None else None
             ),
             race_s3f=(
-                existing_race.race_s3f
-                if preserve_result and existing_race is not None
-                else None
+                existing_race.race_s3f if preserve_result and existing_race is not None else None
             ),
             race_l3f=(
-                existing_race.race_l3f
-                if preserve_result and existing_race is not None
-                else None
+                existing_race.race_l3f if preserve_result and existing_race is not None else None
             ),
         )
         self._repo.save_race(race)
@@ -100,9 +91,7 @@ class RegisterRaceEntriesUseCase:
         for e in entries:
             previous = existing_entries.get(e.horse_no)
             keep_result = (
-                preserve_result
-                and previous is not None
-                and previous.ketto_num == e.ketto_num
+                preserve_result and previous is not None and previous.ketto_num == e.ketto_num
             )
             preserved = previous if keep_result else None
             entry = RaceEntry(
@@ -121,9 +110,7 @@ class RegisterRaceEntriesUseCase:
                 corner_3=preserved.corner_3 if preserved is not None else None,
                 corner_4=preserved.corner_4 if preserved is not None else None,
                 pci_actual=preserved.pci_actual if preserved is not None else None,
-                running_style=(
-                    preserved.running_style if preserved is not None else None
-                ),
+                running_style=(preserved.running_style if preserved is not None else None),
                 popularity=preserved.popularity if preserved is not None else None,
                 prize_money=preserved.prize_money if preserved is not None else None,
             )
@@ -147,9 +134,7 @@ class UpdateRaceMetadataUseCase:
     ) -> bool:
         key = RaceKey(race_key_str)
         races = self._find_target_races(key)
-        if not races or (
-            track_type is None and track_condition is None and weather is None
-        ):
+        if not races or (track_type is None and track_condition is None and weather is None):
             return False
 
         for race in races:
@@ -236,8 +221,7 @@ class DeleteDuplicateRaceUseCase:
             (
                 candidate
                 for candidate in groups
-                if {key.race_key for key in candidate.keys}
-                >= {stale_race_key, canonical_race_key}
+                if {key.race_key for key in candidate.keys} >= {stale_race_key, canonical_race_key}
             ),
             None,
         )
@@ -317,9 +301,7 @@ class RecordRaceResultUseCase:
                     frame_no=base.frame_no if base else r.horse_no,
                     ketto_num=base.ketto_num if base else "",
                     weight=(
-                        r.body_weight
-                        if r.body_weight is not None
-                        else base.weight if base else 0.0
+                        r.body_weight if r.body_weight is not None else base.weight if base else 0.0
                     ),
                     jockey_code=base.jockey_code if base else "",
                     trainer_code=base.trainer_code if base else "",
@@ -416,7 +398,6 @@ class RecordRaceResultUseCase:
         )
 
 
-
 def _winner_race_time(results: list[ResultInput]) -> float | None:
     """レース走破タイム（＝1着馬のタイム）を返す。
 
@@ -427,6 +408,7 @@ def _winner_race_time(results: list[ResultInput]) -> float | None:
         if r.finish_pos == 1 and r.race_time_s is not None:
             return float(r.race_time_s)
     return None
+
 
 def _resolve_running_style(entry: RaceEntry, repo: RaceRepository) -> str | None:
     """直近5走の4角通過順位から脚質ラベルを返す。データ不足時は None。"""
@@ -471,19 +453,14 @@ def _canonical_mart_covers_stale(
 ) -> bool:
     """正規キーの同一モデル世代が旧martを全件代替できるか判定する。"""
     if (
-        sum(item.row_count for item in stale.predicted_pace_models)
-        != stale.predicted_pace_count
-        or sum(item.row_count for item in stale.pace_fit_models)
-        != stale.pace_fit_count
+        sum(item.row_count for item in stale.predicted_pace_models) != stale.predicted_pace_count
+        or sum(item.row_count for item in stale.pace_fit_models) != stale.pace_fit_count
     ):
         return False
     canonical_predicted = {
-        item.model_version: item.row_count
-        for item in canonical.predicted_pace_models
+        item.model_version: item.row_count for item in canonical.predicted_pace_models
     }
-    canonical_fit = {
-        item.model_version: item.row_count for item in canonical.pace_fit_models
-    }
+    canonical_fit = {item.model_version: item.row_count for item in canonical.pace_fit_models}
     predicted_covered = all(
         canonical_predicted.get(item.model_version, 0) >= item.row_count
         for item in stale.predicted_pace_models
