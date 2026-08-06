@@ -32,10 +32,13 @@
 
 ### 次にやること（コンソール作業・このセッションでは実行できない）
 
-- [ ] Supabase でプロジェクト作成（東京）。**接続はプーラー経由・ポート5432を使う。**
-      直結は IPv6 のみで Cloud Run から届かない。6543 は transaction モードで
-      pg8000 の prepared statement と衝突し、繋がった後に断続的に失敗する。
-- [ ] 移行を実行し、最後に `python -m scripts.verify_migration --source ...` を通す。
+- [x] **Supabase（東京）へ移行を完了した。** 9テーブル・65万行超が完全一致。
+      接続はプーラー経由・ポート5432（直結は IPv6 のみで Cloud Run から届かない。
+      6543 は transaction モードで pg8000 の prepared statement と衝突する）。
+- [x] 移行の過程で `alembic` の2つの不具合を直した（`4e9d9ae` / `1d42a35`）。
+      SSL翻訳を通らない／接続先が `.env` を読まない。**どちらも黙って別のDBを見る。**
+- [ ] Supabase 上の実容量を `scripts.db_size` で確認する（無料枠 500MB に対する余裕）。
+- [ ] ローカルAPIを Supabase 向きで起動し、画面と応答速度を確認する。
 - [ ] GCP 側の準備（`deploy-cloudrun.yml` 冒頭に列挙済み）。
 - [ ] Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
 - [ ] デプロイ後に `python -m scripts.check_deployment --base-url ... --token ...` を通す。

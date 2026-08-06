@@ -63,14 +63,31 @@ horses 411,491行 48MB / races 15,931行。約4.7年分で、コアだけなら�
   問題があれば終了コード1。ローカルの実インスタンスで、保護あり／保護なしの
   両方の応答を確認済み。
 
+### 移行の実績（2026-08-06 実施済み）
+
+Supabase（東京・無料）へ移行を完了した。9テーブル・65万行超が完全一致
+（`verify_migration` で確認）。レースキー範囲 2022010506010101〜2026080907020608。
+
+移行中に踏んだ落とし穴。**いずれもエラーが出ない／出ても誤解を招く形だった。**
+
+| 事象 | 実際の原因 |
+|---|---|
+| `sslmode` で落ちる | alembic が `build_engine` を通っていなかった |
+| 何も実行されず正常終了 | `env.py` が `.env` を読まず `alembic.ini` のローカルURLへ落ちていた |
+| `UnicodeDecodeError` | `alembic.ini` は locale（cp932）で読まれる。日本語コメント不可 |
+| `tenant/user not found` | プーラーのホスト名が `aws-0-` と `aws-1-` で違っていた |
+
+手順面では `--disable-triggers` が不要（`pg_restore` は依存順にデータを流す）で、
+代わりに `--exclude-table=alembic_version` が必須（手順1で版を記録済みのため衝突）。
+`pg_dump` はホストに無いので `docker compose exec db` で使う。
+シーケンス（`ingest_log.id`）は正しく移ることを PostgreSQL 16 で確認済み。
+
 ### 次の担当がやること（コードではなく外部の準備）
 
 コード側は揃っている。以下はコンソール作業のため、このセッションでは実行していない。
 
-1. Supabase でプロジェクト作成（東京。接続は**プーラー経由・ポート5432**の文字列を使う。
-   直結は IPv6 のみで Cloud Run から届かず、6543 は transaction モードで
-   pg8000 の prepared statement と衝突し断続的に失敗する）
-2. 移行の実行（手順は README の「PostgreSQL（Supabase・東京）」節。最後に `verify_migration.py`）
+1. ~~Supabase でプロジェクト作成~~ **完了**（東京・session プーラー :5432）
+2. ~~移行の実行~~ **完了**（上記）
 3. GCP 側の準備（`deploy-cloudrun.yml` 冒頭に必要な資源と権限を列挙済み）
 4. Cloud Run の環境変数。特に **`RATE_LIMIT_TRUSTED_PROXIES=1`**。
    前段にロードバランサが入るため、0のままだと全利用者が同じキーへ集約され、
