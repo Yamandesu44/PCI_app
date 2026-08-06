@@ -207,6 +207,7 @@ class PaceAdaptabilityScorer:
             fit_label=label,
             model_version=MODEL_VERSION,
             reasons=tuple(reasons),
+            low_evidence=profile.pace_affinity is None or profile.pace_affinity.is_fallback,
         )
 
     def _sensitivity(self, style: RunningStyleLabel) -> float:
@@ -364,3 +365,12 @@ class PaiResult:
     fit_label: FitLabel
     model_version: str
     reasons: tuple[Reason, ...]
+    # この馬について、ペース別の実績が無い（脚質からの推定で埋めている）。
+    #
+    # 実測（2026-08-04・500レース）で「中立」の好走率が「不利」を下回る現象があり、
+    # 原因はここにあった。過去データが無い馬は脚質由来の固定プロファイルを使うが、
+    # `_blend_pace_affinity` の50%混合を通ると PAI が狭い範囲へ寄る。感応度0の
+    # 差しなら PAI は {40, 45, 50, 52.5} の4値だけになり、5段階中4段階が「中立」へ落ちる。
+    # つまり**「中立」は展開の判定ではなく「判断材料が足りない」を吸収していた**。
+    # ラベルだけでは区別できないので、表示側が言い分けられるよう別に持つ。
+    low_evidence: bool = False

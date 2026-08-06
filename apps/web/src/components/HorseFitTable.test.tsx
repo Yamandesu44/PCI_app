@@ -12,6 +12,7 @@ function horse(overrides: Partial<HorseFit> = {}): HorseFit {
     running_style: "先行",
     fit_label: "合致",
     pai: 70,
+    low_evidence: false,
     reasons: [],
     ...overrides,
   };
@@ -35,5 +36,29 @@ describe("HorseFitTable", () => {
 
     expect(markup).toMatch(/bg-slate-100[^"]*"[^>]*>\s*登録\s*</);
     expect(markup).toContain("登録順 5（馬番未確定）");
+  });
+});
+
+describe("HorseFitTable — 判断材料の表示", () => {
+  it("ペース別実績が無い馬には材料が薄いことを併記する", () => {
+    const markup = renderToStaticMarkup(
+      <HorseFitTable
+        horses={[horse({ fit_label: "中立", low_evidence: true })]}
+      />,
+    );
+
+    expect(markup).toContain("材料薄");
+    expect(markup).toContain("脚質からの推定です");
+  });
+
+  it("実績のある馬には材料薄を出さない", () => {
+    const markup = renderToStaticMarkup(
+      <HorseFitTable
+        horses={[horse({ fit_label: "中立", low_evidence: false })]}
+      />,
+    );
+
+    expect(markup).not.toContain("材料薄");
+    expect(markup).not.toContain("脚質からの推定です");
   });
 });

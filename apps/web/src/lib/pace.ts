@@ -78,7 +78,8 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     symbol: "H",
     description: "前半が速い流れ。前に行く馬は持続力を問われる。",
     beginnerLabel: "速い流れ",
-    beginnerSummary: "前半から流れそうです。前で運ぶ馬は苦しくなりやすい展開です。",
+    beginnerSummary:
+      "前半から流れそうです。前で運ぶ馬は苦しくなりやすい展開です。",
     bettingHint: "前に行く馬は苦しくなりやすい点を割り引いて見たいです。",
     color: "#2563eb",
   },
@@ -88,7 +89,8 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     symbol: "M",
     description: "標準的な流れ。脚質差は比較的小さめ。",
     beginnerLabel: "平均的な流れ",
-    beginnerSummary: "大きく偏らない流れになりそうです。展開だけで極端な有利不利は出にくいです。",
+    beginnerSummary:
+      "大きく偏らない流れになりそうです。展開だけで極端な有利不利は出にくいです。",
     bettingHint: "展開よりも、近走内容やコース相性を合わせて見たいです。",
     color: "#64748b",
   },
@@ -98,8 +100,10 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
     symbol: "S",
     description: "前半が緩めの流れ。逃げ・先行の粘り込みに注意。",
     beginnerLabel: "落ち着いた流れ",
-    beginnerSummary: "前半は落ち着きそうです。前めで運ぶ馬が余力を残しやすくなります。",
-    bettingHint: "前の位置を取れそうな馬や、直線で素早く動ける馬を重視したいです。",
+    beginnerSummary:
+      "前半は落ち着きそうです。前めで運ぶ馬が余力を残しやすくなります。",
+    bettingHint:
+      "前の位置を取れそうな馬や、直線で素早く動ける馬を重視したいです。",
     color: "#dc2626",
   },
   unknown: {
@@ -114,7 +118,8 @@ const PACE_SPEED_META: Record<PaceSpeedLevel, PaceSpeedMeta> = {
   },
 };
 
-const RAW_INDEX_WITH_VALUE = /\b(?:PCI3?|RPCI|PAI)\b\s*(?:は|が|:|：|=|＝)?\s*\d+(?:\.\d+)?/gi;
+const RAW_INDEX_WITH_VALUE =
+  /\b(?:PCI3?|RPCI|PAI)\b\s*(?:は|が|:|：|=|＝)?\s*\d+(?:\.\d+)?/gi;
 const RAW_INDEX_NAME = /\b(?:PCI3?|RPCI|PAI)\b/gi;
 const DECIMAL_VALUE = /\d+\.\d+/g;
 
@@ -190,7 +195,8 @@ export function confidenceInsight(confidence: number): ConfidenceInsight {
       label: "標準",
       tone: "normal",
       summary: "大きく崩れにくい一方で、決めつけすぎは避けたい信頼度です。",
-      bettingHint: "展開が向く馬を重視しつつ、地力上位も残して見たいレースです。",
+      bettingHint:
+        "展開が向く馬を重視しつつ、地力上位も残して見たいレースです。",
     };
   }
 
@@ -209,6 +215,39 @@ export function fitTone(label: string): FitTone {
   if (label === "合致") return "matched";
   if (label === "不利") return "unfavorable";
   return "neutral";
+}
+
+export interface FitLabelDisplay {
+  label: string;
+  tone: FitTone;
+  /** 過去のペース別実績が無く、脚質からの推定で埋めている。 */
+  lowEvidence: boolean;
+  /** 判断材料が薄いときに添える一言。十分なら null。 */
+  note: string | null;
+}
+
+/**
+ * 展開ラベルに「判断材料があるか」を添える。
+ *
+ * 実測（2026-08-04・500レース）で「中立」の好走率が「不利」を下回った。原因は
+ * 過去のペース別実績が無い馬が中立へ集中すること——感応度0の差しなら PAI は
+ * {40, 45, 50, 52.5} の4値だけになり、5段階中4段階が中立へ落ちる。
+ * つまり「中立」は展開の判定ではなく判断材料不足を吸収していた。
+ * ラベルだけでは区別が付かないので、表示側で必ず言い分ける
+ * （docs/DECISIONS.md ADR-2026-08-04）。
+ */
+export function fitLabelDisplay(
+  horse: Pick<HorseFit, "fit_label" | "low_evidence">,
+): FitLabelDisplay {
+  const lowEvidence = horse.low_evidence === true;
+  return {
+    label: horse.fit_label,
+    tone: fitTone(horse.fit_label),
+    lowEvidence,
+    note: lowEvidence
+      ? "過去の似た流れでの実績が少なく、脚質からの推定です。"
+      : null,
+  };
 }
 
 /**
@@ -237,7 +276,9 @@ export function sortByPai(horses: HorseFit[]): HorseFit[] {
  * 未確定時にそのまま「馬番」と表示すると確定情報であるかのように誤解されるため、
  * 枠順確定後（frame_no 1〜8）と区別してラベル化する。
  */
-export function horseNumberLabel(horse: Pick<HorseFit, "horse_no" | "frame_no">): string {
+export function horseNumberLabel(
+  horse: Pick<HorseFit, "horse_no" | "frame_no">,
+): string {
   if (horse.frame_no > 0) {
     return `馬番 ${horse.horse_no}`;
   }
@@ -288,10 +329,15 @@ export function raceSpotlight({
   topFitStrength?: "strong" | "notable" | "normal" | string;
 }): RaceSpotlight {
   const topHorse = sortByPai(horses ?? [])[0];
-  const topPai = suppliedTopPai
-    ?? (topFitStrength === "strong" ? 80 : topFitStrength === "notable" ? 70 : undefined)
-    ?? topHorse?.pai
-    ?? 0;
+  const topPai =
+    suppliedTopPai ??
+    (topFitStrength === "strong"
+      ? 80
+      : topFitStrength === "notable"
+        ? 70
+        : undefined) ??
+    topHorse?.pai ??
+    0;
 
   if (confidence >= 0.7 && topPai >= 80) {
     return {
@@ -357,11 +403,22 @@ function styleBenefitReason(style: string): string {
  * 追随できず黙って機能が止まる（ADR-2026-08-04）。
  */
 export function benefitRecommendation(
-  horse: Pick<HorseFit, "fit_label" | "running_style">,
+  horse: Pick<HorseFit, "fit_label" | "running_style" | "low_evidence">,
   rank: number,
 ): BenefitRecommendation {
   const reason = styleBenefitReason(horse.running_style);
   const matched = horse.fit_label === "合致";
+  const { note } = fitLabelDisplay(horse);
+
+  // 判断材料が薄い馬を「軸候補」と言い切らない。ラベルが合致でも、その合致が
+  // 脚質からの推定に由来するなら、根拠の強さが他と同じではない。
+  if (note) {
+    return {
+      label: matched ? "様子見（材料薄）" : "押さえ",
+      tone: "keep",
+      reason: `${reason} ${note}強くは推せません。`,
+    };
+  }
 
   if (rank === 0 && matched) {
     return {
@@ -420,13 +477,22 @@ function styleDiscountReason(style: string): string {
 
 /** 展開面から評価を下げたい馬を、検討用の自然語に変換する。 */
 export function discountRecommendation(
-  horse: Pick<HorseFit, "fit_label" | "pai" | "running_style">,
+  horse: Pick<HorseFit, "fit_label" | "pai" | "running_style" | "low_evidence">,
 ): DiscountRecommendation {
   const reason = styleDiscountReason(horse.running_style);
+  const { note } = fitLabelDisplay(horse);
 
   // `fit_label` が「不利」になる条件そのものがドメインの閾値なので、
   // ここで PAI の実数を重ねて書かない（書くと二重管理になり、ずれる）。
   if (horse.fit_label === "不利") {
+    // 材料が薄いなら「不利」も推定に過ぎない。断定して評価を下げない。
+    if (note) {
+      return {
+        label: "判断保留",
+        tone: "caution",
+        reason: `${reason} ${note}不利と決めつけられません。`,
+      };
+    }
     return {
       label: "評価下げ",
       tone: "avoid",
@@ -488,9 +554,13 @@ export function forecastDecisionChecklist({
     .filter((entry) => DIRECTIONAL_STYLES.has(entry.style) && entry.score >= 60)
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.style);
-  const attentionHorse = sortDiscountCandidates(horses).find(
+  // 材料のある馬を先に探す。無ければ材料が薄い馬でも拾うが、文言側で断定を避ける。
+  const attentionCandidates = sortDiscountCandidates(horses).filter(
     (horse) => horse.fit_label === "不利" || horse.pai < PAI_NEUTRAL,
   );
+  const attentionHorse =
+    attentionCandidates.find((horse) => !horse.low_evidence) ??
+    attentionCandidates[0];
   const attentionRecommendation = attentionHorse
     ? discountRecommendation(attentionHorse)
     : null;
@@ -503,7 +573,10 @@ export function forecastDecisionChecklist({
     },
     {
       label: "恩恵を受ける脚質",
-      value: favoredStyles.length > 0 ? favoredStyles.join(" / ") : "脚質による差は小さい",
+      value:
+        favoredStyles.length > 0
+          ? favoredStyles.join(" / ")
+          : "脚質による差は小さい",
       detail:
         favoredStyles.length > 0
           ? "この流れで前に行く馬が有利になりやすい想定です。差し・追込は展開より各馬の決め手が効きます。"
@@ -620,7 +693,9 @@ const NON_DIRECTIONAL_NOTE =
   "差し・追込は、展開よりも各馬の決め手が結果を左右します。過去5年の実績でも、" +
   "展開の向き不向きと成績のあいだに関係は見られませんでした。";
 
-export function styleAdvantageScores(advantage: StyleAdvantage): StyleAdvantageScore[] {
+export function styleAdvantageScores(
+  advantage: StyleAdvantage,
+): StyleAdvantageScore[] {
   return advantage.entries.map((entry) => {
     const isDirectional = DIRECTIONAL_STYLES.has(entry.style);
     return {
@@ -628,7 +703,9 @@ export function styleAdvantageScores(advantage: StyleAdvantage): StyleAdvantageS
       label: entry.style,
       value: Math.round(entry.score),
       description: STYLE_DESCRIPTIONS[entry.style] ?? "",
-      verdict: isDirectional ? styleVerdict(entry.score) : NON_DIRECTIONAL_VERDICT,
+      verdict: isDirectional
+        ? styleVerdict(entry.score)
+        : NON_DIRECTIONAL_VERDICT,
       isDirectional,
       note: isDirectional ? null : NON_DIRECTIONAL_NOTE,
     };
@@ -643,7 +720,9 @@ export function styleAdvantageReliabilityMeta(
   return {
     isReference,
     label: isReference ? "参考" : "通常",
-    description: isReference ? (advantage.reliability_reason ?? "開催条件別の検証では参考扱いです。") : null,
+    description: isReference
+      ? (advantage.reliability_reason ?? "開催条件別の検証では参考扱いです。")
+      : null,
   };
 }
 
@@ -662,7 +741,10 @@ export interface ForecastAccuracyMeta {
  * （PROJECT_RULES §5: UI に PCI/RPCI 実数値を出さない）。
  */
 export function forecastAccuracyMeta(
-  accuracy: Pick<ForecastAccuracy, "label_hit" | "predicted_label" | "actual_label">,
+  accuracy: Pick<
+    ForecastAccuracy,
+    "label_hit" | "predicted_label" | "actual_label"
+  >,
 ): ForecastAccuracyMeta {
   if (accuracy.label_hit) {
     return {

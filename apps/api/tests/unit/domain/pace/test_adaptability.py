@@ -362,3 +362,39 @@ class TestStyleReasonDirection:
             result = scorer.score(HorsePaceProfile(1, ESCAPE), HIGH, 1600)
             text = next(r for r in result.reasons if r.code == "pace_fit").description
             assert "力を出しにくい" in text
+
+
+class TestLowEvidence:
+    """「中立」が展開の判定なのか判断材料不足なのかを、ラベルと別に持つ。
+
+    実測（2026-08-04・500レース）で「中立」の好走率が「不利」を下回った。原因は
+    過去データが無い馬が中立へ集中すること。感応度0の差しなら PAI は
+    {40, 45, 50, 52.5} の4値だけになり、5段階中4段階が中立へ落ちる。
+    ラベルだけでは区別できないので別フラグにする（docs/DECISIONS.md ADR-2026-08-04）。
+    """
+
+    def test_no_affinity_profile_is_low_evidence(self) -> None:
+        result = PaceAdaptabilityScorer().score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
+        assert result.low_evidence is True
+
+    def test_fallback_affinity_is_low_evidence(self) -> None:
+        profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity(is_fallback=True))
+        result = PaceAdaptabilityScorer().score(profile, SLOW, 1600)
+        assert result.low_evidence is True
+
+    def test_real_affinity_is_not_low_evidence(self) -> None:
+        profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity(is_fallback=False))
+        result = PaceAdaptabilityScorer().score(profile, SLOW, 1600)
+        assert result.low_evidence is False
+
+    def test_flag_is_independent_of_the_label(self) -> None:
+        """判断材料の有無とラベルは別軸。合致でも材料不足はありうる。"""
+        seen = set()
+        for fc in (SLOW, HIGH, AVERAGE):
+            for affinity in (None, _make_affinity(is_fallback=True), _make_affinity()):
+                r = PaceAdaptabilityScorer().score(
+                    HorsePaceProfile(1, ESCAPE, pace_affinity=affinity), fc, 1600
+                )
+                seen.add((r.fit_label, r.low_evidence))
+        labels_with_low = {lab for lab, low in seen if low}
+        assert len(labels_with_low) > 1, "材料不足が特定のラベルだけに現れるなら別軸ではない"

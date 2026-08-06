@@ -209,6 +209,7 @@ class ForecastRaceUseCase:
                 running_style=str(p.running_style),
                 pai=fit_by_no[p.horse_no].pai,
                 fit_label=str(fit_by_no[p.horse_no].fit_label),
+                low_evidence=fit_by_no[p.horse_no].low_evidence,
                 reasons=_to_reason_outputs(fit_by_no[p.horse_no].reasons),
             )
             for p in profiles

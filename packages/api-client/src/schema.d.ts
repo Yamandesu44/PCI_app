@@ -984,6 +984,11 @@ export interface components {
             horse_name?: string | null;
             /** Horse No */
             horse_no: number;
+            /**
+             * Low Evidence
+             * @default false
+             */
+            low_evidence: boolean;
             /** Pai */
             pai: number;
             /**

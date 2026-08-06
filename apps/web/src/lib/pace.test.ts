@@ -1,24 +1,25 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  beginnerPaceLabel,
   benefitRecommendation,
   confidenceInsight,
   discountRecommendation,
+  fitLabelDisplay,
   fitTone,
   forecastAccuracyMeta,
   forecastDecisionChecklist,
   frameColorClass,
   horseNumberLabel,
   paceMeta,
-  beginnerPaceLabel,
   paceSpeedFromIndex,
   paiBarWidth,
   pciTone,
   pciToneLabel,
   raceSpotlight,
   sanitizeBeginnerComment,
-  sortDiscountCandidates,
   sortByPai,
+  sortDiscountCandidates,
   styleAdvantageReliabilityMeta,
   styleAdvantageScores,
 } from "./pace";
@@ -141,8 +142,24 @@ describe("paiBarWidth", () => {
 describe("sortByPai", () => {
   it("PAI 降順に並べ、入力を破壊しない", () => {
     const input = [
-      { horse_no: 1, frame_no: 1, running_style: "逃げ", pai: 50, fit_label: "中立", reasons: [] },
-      { horse_no: 2, frame_no: 2, running_style: "差し", pai: 80, fit_label: "合致", reasons: [] },
+      {
+        horse_no: 1,
+        frame_no: 1,
+        running_style: "逃げ",
+        pai: 50,
+        fit_label: "中立",
+        low_evidence: false,
+        reasons: [],
+      },
+      {
+        horse_no: 2,
+        frame_no: 2,
+        running_style: "差し",
+        pai: 80,
+        fit_label: "合致",
+        low_evidence: false,
+        reasons: [],
+      },
     ];
     const out = sortByPai(input);
     expect(out.map((h) => h.horse_no)).toEqual([2, 1]);
@@ -165,7 +182,9 @@ describe("horseNumberLabel", () => {
 
 describe("frameColorClass", () => {
   it("1〜8枠それぞれに異なる配色クラスを返す（隊列予想と同じ配色を全画面で共有する）", () => {
-    const classes = [1, 2, 3, 4, 5, 6, 7, 8].map((frameNo) => frameColorClass(frameNo));
+    const classes = [1, 2, 3, 4, 5, 6, 7, 8].map((frameNo) =>
+      frameColorClass(frameNo),
+    );
     expect(new Set(classes).size).toBe(8);
   });
 
@@ -193,7 +212,17 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.72,
       fieldSize: 12,
-      horses: [{ horse_no: 1, frame_no: 1, running_style: "先行", pai: 84, fit_label: "合う", reasons: [] }],
+      horses: [
+        {
+          horse_no: 1,
+          frame_no: 1,
+          running_style: "先行",
+          pai: 84,
+          fit_label: "合う",
+          low_evidence: false,
+          reasons: [],
+        },
+      ],
     });
 
     expect(out).toMatchObject({ label: "注目", tone: "focus" });
@@ -203,7 +232,17 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.58,
       fieldSize: 16,
-      horses: [{ horse_no: 1, frame_no: 1, running_style: "差し", pai: 74, fit_label: "合う", reasons: [] }],
+      horses: [
+        {
+          horse_no: 1,
+          frame_no: 1,
+          running_style: "差し",
+          pai: 74,
+          fit_label: "合う",
+          low_evidence: false,
+          reasons: [],
+        },
+      ],
     });
 
     expect(out).toMatchObject({ label: "妙味", tone: "value" });
@@ -213,7 +252,17 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.42,
       fieldSize: 10,
-      horses: [{ horse_no: 1, frame_no: 1, running_style: "逃げ", pai: 66, fit_label: "中立", reasons: [] }],
+      horses: [
+        {
+          horse_no: 1,
+          frame_no: 1,
+          running_style: "逃げ",
+          pai: 66,
+          fit_label: "中立",
+          low_evidence: false,
+          reasons: [],
+        },
+      ],
     });
 
     expect(out).toMatchObject({ label: "波乱注意", tone: "caution" });
@@ -223,7 +272,17 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.42,
       fieldSize: 16,
-      horses: [{ horse_no: 1, frame_no: 1, running_style: "差し", pai: 76, fit_label: "合う", reasons: [] }],
+      horses: [
+        {
+          horse_no: 1,
+          frame_no: 1,
+          running_style: "差し",
+          pai: 76,
+          fit_label: "合う",
+          low_evidence: false,
+          reasons: [],
+        },
+      ],
     });
 
     expect(out).toMatchObject({ label: "波乱注意", tone: "caution" });
@@ -233,7 +292,17 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.55,
       fieldSize: 12,
-      horses: [{ horse_no: 1, frame_no: 1, running_style: "追込", pai: 62, fit_label: "中立", reasons: [] }],
+      horses: [
+        {
+          horse_no: 1,
+          frame_no: 1,
+          running_style: "追込",
+          pai: 62,
+          fit_label: "中立",
+          low_evidence: false,
+          reasons: [],
+        },
+      ],
     });
 
     expect(out).toMatchObject({ label: "通常", tone: "normal" });
@@ -242,26 +311,38 @@ describe("raceSpotlight", () => {
 
 describe("benefitRecommendation", () => {
   it("最上位かつ展開が合致する馬は軸候補にする", () => {
-    const out = benefitRecommendation({ fit_label: "合致", running_style: "先行" }, 0);
+    const out = benefitRecommendation(
+      { fit_label: "合致", running_style: "先行", low_evidence: false },
+      0,
+    );
     expect(out.label).toBe("軸候補");
     expect(out.tone).toBe("main");
     expect(out.reason).toContain("好位");
   });
 
   it("上位の合致馬は相手候補にする", () => {
-    const out = benefitRecommendation({ fit_label: "合致", running_style: "差し" }, 2);
+    const out = benefitRecommendation(
+      { fit_label: "合致", running_style: "差し", low_evidence: false },
+      2,
+    );
     expect(out.label).toBe("相手候補");
     expect(out.reason).toContain("直線");
   });
 
   it("順位が下でも合致していれば穴で拾うにする", () => {
-    const out = benefitRecommendation({ fit_label: "合致", running_style: "追込" }, 4);
+    const out = benefitRecommendation(
+      { fit_label: "合致", running_style: "追込", low_evidence: false },
+      4,
+    );
     expect(out.label).toBe("穴で拾う");
     expect(out.tone).toBe("value");
   });
 
   it("合致していなければ押さえにする", () => {
-    const out = benefitRecommendation({ fit_label: "中立", running_style: "逃げ" }, 1);
+    const out = benefitRecommendation(
+      { fit_label: "中立", running_style: "逃げ", low_evidence: false },
+      1,
+    );
     expect(out.label).toBe("押さえ");
     expect(out.tone).toBe("keep");
   });
@@ -269,14 +350,24 @@ describe("benefitRecommendation", () => {
 
 describe("discountRecommendation", () => {
   it("不利または低い適性の馬は評価下げにする", () => {
-    const out = discountRecommendation({ fit_label: "不利", pai: 42, running_style: "差し" });
+    const out = discountRecommendation({
+      fit_label: "不利",
+      pai: 42,
+      running_style: "差し",
+      low_evidence: false,
+    });
     expect(out.label).toBe("評価下げ");
     expect(out.tone).toBe("avoid");
     expect(out.reason).toContain("直線");
   });
 
   it("明確な不利でない低めの馬は過信注意にする", () => {
-    const out = discountRecommendation({ fit_label: "中立", pai: 55, running_style: "逃げ" });
+    const out = discountRecommendation({
+      fit_label: "中立",
+      pai: 55,
+      running_style: "逃げ",
+      low_evidence: false,
+    });
     expect(out.label).toBe("過信注意");
     expect(out.tone).toBe("caution");
   });
@@ -285,13 +376,47 @@ describe("discountRecommendation", () => {
 describe("sortDiscountCandidates", () => {
   it("不利ラベルを優先し、その中では適性指数が低い順に並べる", () => {
     const input = [
-      { horse_no: 1, frame_no: 1, running_style: "逃げ", pai: 65, fit_label: "中立", reasons: [] },
-      { horse_no: 2, frame_no: 2, running_style: "差し", pai: 48, fit_label: "不利", reasons: [] },
-      { horse_no: 3, frame_no: 3, running_style: "先行", pai: 40, fit_label: "不利", reasons: [] },
-      { horse_no: 4, frame_no: 4, running_style: "追込", pai: 38, fit_label: "中立", reasons: [] },
+      {
+        horse_no: 1,
+        frame_no: 1,
+        running_style: "逃げ",
+        pai: 65,
+        fit_label: "中立",
+        low_evidence: false,
+        reasons: [],
+      },
+      {
+        horse_no: 2,
+        frame_no: 2,
+        running_style: "差し",
+        pai: 48,
+        fit_label: "不利",
+        low_evidence: false,
+        reasons: [],
+      },
+      {
+        horse_no: 3,
+        frame_no: 3,
+        running_style: "先行",
+        pai: 40,
+        fit_label: "不利",
+        low_evidence: false,
+        reasons: [],
+      },
+      {
+        horse_no: 4,
+        frame_no: 4,
+        running_style: "追込",
+        pai: 38,
+        fit_label: "中立",
+        low_evidence: false,
+        reasons: [],
+      },
     ];
 
-    expect(sortDiscountCandidates(input).map((horse) => horse.horse_no)).toEqual([3, 2, 4, 1]);
+    expect(
+      sortDiscountCandidates(input).map((horse) => horse.horse_no),
+    ).toEqual([3, 2, 4, 1]);
   });
 });
 
@@ -309,9 +434,18 @@ describe("forecastDecisionChecklist", () => {
           running_style: "先行",
           pai: 86,
           fit_label: "合致",
+          low_evidence: false,
           reasons: [],
         },
-        { horse_no: 2, frame_no: 2, running_style: "差し", pai: 70, fit_label: "合致", reasons: [] },
+        {
+          horse_no: 2,
+          frame_no: 2,
+          running_style: "差し",
+          pai: 70,
+          fit_label: "合致",
+          low_evidence: false,
+          reasons: [],
+        },
       ],
       integratedRanking: {
         model_version: "integrated-v1",
@@ -348,8 +482,14 @@ describe("forecastDecisionChecklist", () => {
     // （ADR-2026-08-04）。styleAdvantage 未指定なら脚質差なしと表示する。
     expect(checklist[1]).toMatchObject({ label: "恩恵を受ける脚質" });
     expect(checklist[1]?.value).toBe("脚質による差は小さい");
-    expect(checklist[2]).toMatchObject({ label: "注意馬", value: "大きな割引材料なし" });
-    expect(checklist[3]).toMatchObject({ label: "展開信頼度", value: "読みやすい ・ 72%" });
+    expect(checklist[2]).toMatchObject({
+      label: "注意馬",
+      value: "大きな割引材料なし",
+    });
+    expect(checklist[3]).toMatchObject({
+      label: "展開信頼度",
+      value: "読みやすい ・ 72%",
+    });
   });
 
   it("恩恵を受ける脚質は検証済みの脚質別有利度から取る（PAIは使わない）", () => {
@@ -361,7 +501,15 @@ describe("forecastDecisionChecklist", () => {
       trackType: "芝",
       horses: [
         // PAIが最も高いのは追込だが、これは採用しない。
-        { horse_no: 1, frame_no: 1, running_style: "追込", pai: 99, fit_label: "合致", reasons: [] },
+        {
+          horse_no: 1,
+          frame_no: 1,
+          running_style: "追込",
+          pai: 99,
+          fit_label: "合致",
+          low_evidence: false,
+          reasons: [],
+        },
       ],
       styleAdvantage: {
         model_version: "style-advantage-v4",
@@ -488,7 +636,12 @@ describe("styleAdvantageScores", () => {
 
   it("APIのエントリ順を保ち、ラベルと説明を付ける", () => {
     const scores = styleAdvantageScores(advantage);
-    expect(scores.map((s) => s.label)).toEqual(["逃げ", "先行", "差し", "追込"]);
+    expect(scores.map((s) => s.label)).toEqual([
+      "逃げ",
+      "先行",
+      "差し",
+      "追込",
+    ]);
     expect(scores[0].description).toContain("主導権");
     expect(scores[3].value).toBe(33);
   });
@@ -530,7 +683,10 @@ describe("styleAdvantageScores", () => {
       ],
     });
 
-    expect(scores.map((s) => s.verdict)).toEqual(["展開の影響は小さい", "展開の影響は小さい"]);
+    expect(scores.map((s) => s.verdict)).toEqual([
+      "展開の影響は小さい",
+      "展開の影響は小さい",
+    ]);
     expect(scores.every((s) => s.isDirectional)).toBe(false);
     expect(scores[0].note).toContain("決め手");
   });
@@ -558,5 +714,43 @@ describe("styleAdvantageScores", () => {
     expect(meta.isReference).toBe(true);
     expect(meta.label).toBe("参考");
     expect(meta.description).toContain("小倉芝");
+  });
+});
+
+describe("fitLabelDisplay", () => {
+  it("実績がある馬は注記を付けない", () => {
+    const out = fitLabelDisplay({ fit_label: "中立", low_evidence: false });
+    expect(out.lowEvidence).toBe(false);
+    expect(out.note).toBeNull();
+    expect(out.tone).toBe("neutral");
+  });
+
+  it("実績が無い馬には推定であることを添える", () => {
+    const out = fitLabelDisplay({ fit_label: "中立", low_evidence: true });
+    expect(out.lowEvidence).toBe(true);
+    expect(out.note).toContain("脚質からの推定");
+  });
+});
+
+describe("判断材料が薄い馬の扱い", () => {
+  it("合致でも材料が薄ければ軸候補にしない", () => {
+    const out = benefitRecommendation(
+      { fit_label: "合致", running_style: "先行", low_evidence: true },
+      0,
+    );
+    expect(out.label).not.toBe("軸候補");
+    expect(out.tone).toBe("keep");
+    expect(out.reason).toContain("脚質からの推定");
+  });
+
+  it("不利でも材料が薄ければ評価下げと断定しない", () => {
+    const out = discountRecommendation({
+      fit_label: "不利",
+      pai: 42,
+      running_style: "差し",
+      low_evidence: true,
+    });
+    expect(out.label).not.toBe("評価下げ");
+    expect(out.reason).toContain("決めつけられません");
   });
 });

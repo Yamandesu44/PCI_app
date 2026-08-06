@@ -63,6 +63,10 @@ class HorseFitSchema(BaseModel):
     pai: float = Field(ge=0.0, le=100.0)
     fit_label: str
     reasons: list[ReasonSchema] = []
+    # ペース別の実績が無く脚質からの推定で埋めている場合に true。
+    # 「中立」ラベルの多くはこれで、展開の判定ではなく判断材料不足を意味する
+    # （docs/DECISIONS.md ADR-2026-08-04）。表示側で言い分けること。
+    low_evidence: bool = False
 
 
 class StyleAdvantageEntrySchema(BaseModel):
@@ -171,6 +175,7 @@ class ForecastSchema(BaseModel):
                     running_style=h.running_style,
                     pai=h.pai,
                     fit_label=h.fit_label,
+                    low_evidence=h.low_evidence,
                     reasons=[ReasonSchema(**vars(r)) for r in h.reasons],
                 )
                 for h in dto.horses

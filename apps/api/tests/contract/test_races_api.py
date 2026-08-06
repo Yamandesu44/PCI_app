@@ -24,7 +24,17 @@ FORECAST_KEYS = {
     "integrated_ranking",
 }
 
-HORSE_KEYS = {"horse_no", "frame_no", "horse_name", "running_style", "pai", "fit_label", "reasons"}
+HORSE_KEYS = {
+    "horse_no",
+    "frame_no",
+    "horse_name",
+    "running_style",
+    "pai",
+    "fit_label",
+    "reasons",
+    # 「中立」が展開の判定なのか判断材料不足なのかを表示側が言い分けるため。
+    "low_evidence",
+}
 
 INTEGRATED_KEYS = {"model_version", "entries", "reasons"}
 INTEGRATED_ENTRY_KEYS = {
@@ -216,6 +226,7 @@ class TestForecastEndpoint:
             assert 1 <= horse["frame_no"] <= 8  # UPCOMING_KEY は枠順確定済みフィクスチャ
             assert 0.0 <= horse["pai"] <= 100.0
             assert horse["fit_label"] in ("合致", "中立", "不利")
+            assert isinstance(horse["low_evidence"], bool)
             assert horse["reasons"], "説明可能性: reasons は必須"
 
     def test_scenario_present(self, client: TestClient) -> None:

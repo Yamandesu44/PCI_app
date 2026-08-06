@@ -102,6 +102,9 @@ class HorseFitOutput:
     pai: float
     fit_label: str
     reasons: list[ReasonOutput] = field(default_factory=list)
+    # ペース別の実績が無く、脚質からの推定で埋めている。
+    # 「中立」の多くはこれ（docs/DECISIONS.md ADR-2026-08-04）。
+    low_evidence: bool = False
 
 
 @dataclass

@@ -1241,6 +1241,11 @@
             "title": "Horse No",
             "type": "integer"
           },
+          "low_evidence": {
+            "default": false,
+            "title": "Low Evidence",
+            "type": "boolean"
+          },
           "pai": {
             "maximum": 100.0,
             "minimum": 0.0,
