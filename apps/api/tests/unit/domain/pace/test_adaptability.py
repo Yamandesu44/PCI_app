@@ -281,3 +281,38 @@ class TestPaiPaceAffinityBlend:
         reason = next(r for r in result.reasons if r.code == "pace_affinity")
         assert "でも好走実績があり" in reason.description
         assert "落ち着いた流れでも好走実績があり" in reason.description
+
+
+class TestPaceCenterOffset:
+    """振れの中心を `neutral_rpci` から動かせること（pai-v3 の中心ずれ対策）。
+
+    `neutral_rpci` は全履歴の3分位境界の中点だが、予測RPCIの分布はそこへ揃わない。
+    ずれたままだと感応度の高い脚質だけが系統的に底上げ/底下げされ、pai-v2 の
+    「脚質の定数効果をPAIへ埋め込む」誤りを別経路で再現する。
+    """
+
+    @staticmethod
+    def _pai(weights: PaiWeights, rpci: float, track: str = "芝") -> float:
+        scorer = PaceAdaptabilityScorer(weights)
+        profile = HorsePaceProfile(horse_no=1, running_style=ESCAPE)
+        forecast = _forecast(rpci, PaceLabel.AVERAGE)
+        return scorer.score(profile, forecast, 1600, track_type=track).pai
+
+    def test_default_offset_keeps_current_behaviour(self) -> None:
+        assert PaiWeights().pace_center_offset_turf == 0.0
+        assert PaiWeights().pace_center_offset_dirt == 0.0
+        # 既定では中立値ちょうどで PAI=50。
+        assert self._pai(PaiWeights(), 51.85) == 50.0
+
+    def test_offset_moves_the_neutral_point(self) -> None:
+        w = PaiWeights(pace_center_offset_turf=-1.13)
+        # 中心が 50.72 へ移るので、そこが PAI=50 になる。
+        assert self._pai(w, 50.72) == pytest.approx(50.0, abs=0.1)
+        # 元の中立値 51.85 は、中心より上＝逃げに有利側へ振れる。
+        assert self._pai(w, 51.85) > 50.0
+
+    def test_turf_and_dirt_offsets_are_independent(self) -> None:
+        w = PaiWeights(pace_center_offset_turf=-1.13, pace_center_offset_dirt=0.05)
+        # ダート側のオフセットは芝の判定に影響しない。
+        assert self._pai(w, 46.55, track="ダート") == pytest.approx(50.0, abs=0.1)
+        assert self._pai(w, 50.72, track="芝") == pytest.approx(50.0, abs=0.1)

@@ -83,6 +83,14 @@ class PaiWeights:
     sensitivity_closer: float = 0.0
     # 感応度1.0の脚質が、区分境界まで振れたときの最大加点/減点（PAI点）。
     pace_swing: float = 25.0
+    # 振れの中心を `neutral_rpci` から動かす量（RPCI点）。
+    # `neutral_rpci` は全履歴の3分位境界の中点だが、予測RPCIの分布はそこへ揃わない。
+    # 2026-06-01以降の実測では 芝 50.72（中立51.85）・ダート 46.55（中立46.50）で、
+    # 感応度1.0の脚質が平均 芝−6.2点・ダート+4.3点 の底上げ/底下げを受けていた。
+    # これは「脚質の定数効果をPAIへ埋め込む」pai-v2 の誤りの再現なので、0以外を
+    # 入れて中心を合わせられるようにする。既定0＝現行挙動のまま（未確定のため）。
+    pace_center_offset_turf: float = 0.0
+    pace_center_offset_dirt: float = 0.0
     # ペースの影響が無いときの基準点。ここへ加減点を足し引きする。
     # 50 = 「今回の流れは、この脚質にとって普段どおり」。
     pace_neutral_pai: float = 50.0
@@ -107,18 +115,30 @@ def pace_half_band(track_type: str) -> float:
     return (RW.slow_threshold - RW.high_threshold) / 2
 
 
-def pace_deviation(forecast_rpci: float, track_type: str) -> float:
+def pace_center(track_type: str, weights: PaiWeights = DEFAULT_WEIGHTS) -> float:
+    """振れの中心となる RPCI。既定は `neutral_rpci` そのもの。"""
+    from pci.domain.pace.style_advantage import neutral_rpci
+
+    offset = (
+        weights.pace_center_offset_dirt
+        if track_type == "ダート"
+        else weights.pace_center_offset_turf
+    )
+    return neutral_rpci(track_type) + offset
+
+
+def pace_deviation(
+    forecast_rpci: float, track_type: str, weights: PaiWeights = DEFAULT_WEIGHTS
+) -> float:
     """コース平均からの振れを −1〜+1 へ正規化する。
 
     診断側でも同じ値を再現できるよう公開する。この平均が0から離れていると、
     ペース補正が脚質どうしを相対的にずらす（＝脚質の定数効果を再び埋め込む）。
     """
-    from pci.domain.pace.style_advantage import neutral_rpci
-
     half_band = pace_half_band(track_type)
     if not half_band:
         return 0.0
-    return min(max((forecast_rpci - neutral_rpci(track_type)) / half_band, -1.0), 1.0)
+    return min(max((forecast_rpci - pace_center(track_type, weights)) / half_band, -1.0), 1.0)
 
 
 class PaceAdaptabilityScorer:
@@ -192,7 +212,7 @@ class PaceAdaptabilityScorer:
         絶対RPCIではなくコース相対で見るのが pai-v3 の要点。芝とダートは分布が
         異なる（52.0 対 46.5）ため、絶対値で判定すると脚質の順序が反転する。
         """
-        deviation = pace_deviation(forecast.value, track_type)
+        deviation = pace_deviation(forecast.value, track_type, self._w)
         bonus = self._sensitivity(profile.running_style) * self._w.pace_swing * deviation
         reasons.append(
             Reason(

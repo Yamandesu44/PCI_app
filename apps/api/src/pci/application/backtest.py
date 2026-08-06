@@ -41,6 +41,7 @@ from pci.domain.pace.adaptability import (
 from pci.domain.pace.adaptability import (
     PaceAdaptabilityScorer,
     PaiWeights,
+    pace_center,
     pace_deviation,
     pace_half_band,
 )
@@ -57,11 +58,7 @@ from pci.domain.pace.rpci_forecast import (
     classify_pace,
 )
 from pci.domain.pace.running_style import RunningStyleLabel
-from pci.domain.pace.style_advantage import (
-    StyleAdvantageWeights,
-    build_style_advantage,
-    neutral_rpci,
-)
+from pci.domain.pace.style_advantage import StyleAdvantageWeights, build_style_advantage
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
@@ -647,6 +644,43 @@ DEFAULT_PAI_WEIGHT_PROFILES: tuple[PaiWeightProfile, ...] = (
             DEFAULT_PAI_WEIGHTS,
             sensitivity_stalker=-0.1,
             sensitivity_closer=-0.2,
+        ),
+    ),
+    # 中心を実測の予測RPCI平均へ合わせた版。2026-06-01以降の実測は
+    # 芝 50.72（中立51.85 → −1.13）・ダート 46.55（中立46.50 → +0.05）。
+    # 中心が合っていないと、感応度の高い脚質だけが系統的にずれる（芝−6.2点・
+    # ダート+4.3点）。ここを直さない限り pace-off との比較は公平にならない。
+    # 注意: オフセットは比較対象と同一期間から取った当てはめ値。期間外で再確認すること。
+    PaiWeightProfile(
+        name="centered",
+        description="振れの中心を実測の予測RPCI平均へ合わせる",
+        weights=replace(
+            DEFAULT_PAI_WEIGHTS,
+            pace_center_offset_turf=-1.13,
+            pace_center_offset_dirt=0.05,
+        ),
+    ),
+    # 中心を合わせた上で、振れ幅を実測の効果量へ寄せる。
+    # 脚質別展開有利度の実測は「有利−不利」で +2.8%(芝) / +6.5%(ダート) しかない。
+    # ±25点はこれに対して大きすぎる疑いがあり、中心合わせと同時に試す価値がある。
+    PaiWeightProfile(
+        name="centered-swing10",
+        description="中心を合わせ、振れ幅を10へ落とす",
+        weights=replace(
+            DEFAULT_PAI_WEIGHTS,
+            pace_center_offset_turf=-1.13,
+            pace_center_offset_dirt=0.05,
+            pace_swing=10.0,
+        ),
+    ),
+    PaiWeightProfile(
+        name="centered-swing5",
+        description="中心を合わせ、振れ幅を5へ落とす",
+        weights=replace(
+            DEFAULT_PAI_WEIGHTS,
+            pace_center_offset_turf=-1.13,
+            pace_center_offset_dirt=0.05,
+            pace_swing=5.0,
         ),
     ),
     # 帰無仮説。ペース補正を全て切り、pace_affinity と距離・馬場減点だけにする。
@@ -1429,13 +1463,13 @@ def summarize_pace_centering(
         group = [s for s in samples if s.track_type == track and s.forecast_rpci]
         if not group:
             continue
-        deviations = [pace_deviation(s.forecast_rpci, track) for s in group]
+        deviations = [pace_deviation(s.forecast_rpci, track, weights) for s in group]
         rows.append(
             PaceCentering(
                 track_type=track,
                 n=len(group),
                 mean_forecast_rpci=round(sum(s.forecast_rpci for s in group) / len(group), 2),
-                neutral=neutral_rpci(track),
+                neutral=pace_center(track, weights),
                 half_band=pace_half_band(track),
                 mean_deviation=round(sum(deviations) / len(deviations), 4),
                 pace_swing=weights.pace_swing,
