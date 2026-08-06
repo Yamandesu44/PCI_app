@@ -108,12 +108,16 @@ jobs:
         run: docker build -t pci-api:ci apps/api
 
       # デプロイ先の枠（512MB など）に収まるかを数字で判断できるようにする。
-      # LightGBM を読み込んだ状態が実運用のピークに近い。
-      - name: Report image size and model-loaded memory
+      #
+      # アプリ生成とモデル読み込みを**同一プロセスで**行う。別々に測って足すと、
+      # 共有される分（numpy 等）を二重に数えてしまい実態とずれる。
+      # モデルは初回の予想リクエストで遅延読み込みされるため、起動直後のコンテナを
+      # 測るだけでは含まれない点にも注意。
+      - name: Report image size and memory with the app and models loaded
         run: |
           size_mb=$(( $(docker image inspect pci-api:ci --format '{{.Size}}') / 1024 / 1024 ))
           echo "image_size_mb=${size_mb}"
-          docker run --rm pci-api:ci python -c "import resource; from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster as L; f=L(); print('forecaster=' + type(f).__name__); print('peak_rss_mb=%.0f' % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024))"
+          docker run --rm pci-api:ci python -c "import resource; from pci.presentation.app import create_app; create_app(); from pci.infrastructure.pace.lgbm_forecaster import load_best_forecaster as L; f=L(); print('forecaster=' + type(f).__name__); print('peak_rss_mb=%.0f' % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024))"
 
       # モデルが読めていないと精度だけ静かに失う。イメージ側の配置を回帰テストする。
       - name: Fail if the image falls back to the rule-based forecaster
