@@ -68,6 +68,23 @@ def _split_pg8000_ssl(url: URL) -> tuple[URL, dict[str, Any]]:
     return stripped, {"ssl_context": context}
 
 
+def prepare_connection(database_url: str) -> tuple[URL, dict[str, Any]]:
+    """接続文字列を、ドライバがそのまま受け取れる形へ整える。
+
+    **エンジンを組む場所は必ずここを通すこと。** SSL の翻訳を各所で書くと、
+    通した経路だけが動いて他は繋がらない。実際、alembic は独自にエンジンを
+    組んでいたため、アプリは繋がるのにマイグレーションだけ `sslmode` で
+    落ちる状態になっていた。プールの設定は呼び出し側で決める（マイグレーションは
+    使い捨てなのでプールを持たない）。
+    """
+    url = make_url(database_url)
+    _warn_if_unencrypted(url)
+    connect_args: dict[str, Any] = {}
+    if url.drivername.endswith("pg8000"):
+        url, connect_args = _split_pg8000_ssl(url)
+    return url, connect_args
+
+
 def build_engine(
     database_url: str,
     pool_size: int = 3,
@@ -94,11 +111,7 @@ def build_engine(
     **SSL**: pg8000 を使う場合、接続文字列の `sslmode` は `ssl_context` へ翻訳する
     （`_split_pg8000_ssl` 参照）。マネージドDBの接続文字列をそのまま貼れるようにするため。
     """
-    url = make_url(database_url)
-    _warn_if_unencrypted(url)
-    connect_args: dict[str, Any] = {}
-    if url.drivername.endswith("pg8000"):
-        url, connect_args = _split_pg8000_ssl(url)
+    url, connect_args = prepare_connection(database_url)
 
     return create_engine(
         url,

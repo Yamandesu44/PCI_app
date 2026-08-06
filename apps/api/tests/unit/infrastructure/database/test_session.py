@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import ssl
+from pathlib import Path
 
 import pytest
 from sqlalchemy.engine import URL, make_url
@@ -149,3 +150,22 @@ class TestUnencryptedWarning:
             build_engine("postgresql+pg8000://u:p@db:5432/pci_dev")
 
         assert caplog.text == ""
+
+
+class TestMigrationsShareTheSamePreparation:
+    """alembic が独自にエンジンを組んでいないこと。
+
+    SSL の翻訳を通らない経路が1つでもあると、**アプリは繋がるのに
+    マイグレーションだけ落ちる**。実際に Supabase へ繋ぐ場面でこれが起きた。
+    経路を増やしたくなったら `prepare_connection` を通すこと。
+    """
+
+    def _env_source(self) -> str:
+        env_py = Path(__file__).resolve().parents[4] / "alembic" / "env.py"
+        return env_py.read_text(encoding="utf-8")
+
+    def test_env_py_uses_the_shared_preparation(self) -> None:
+        assert "prepare_connection" in self._env_source()
+
+    def test_env_py_does_not_build_its_own_engine_from_config(self) -> None:
+        assert "engine_from_config" not in self._env_source()
