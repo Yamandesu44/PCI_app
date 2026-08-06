@@ -15,5 +15,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # 本番と同じイメージを手元でも起動できるようにする（既定では起動しない）。
+  #   docker compose --profile api up --build api
+  # 素の開発は従来どおり `docker compose up -d db` + ホストで uvicorn。
+  api:
+    profiles: ["api"]
+    build:
+      context: ./apps/api
+    environment:
+      # compose 内からは db サービス名で解決する。
+      DATABASE_URL: postgresql+pg8000://pci:pci_dev@db:5432/pci_dev
+      PORT: "8000"
+      # 本番では必ず設定する。未設定だと /api/v1/* が無認証で公開される。
+      # PUBLIC_API_TOKEN: replace-me
+      # INGEST_TOKEN: replace-me
+      CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:

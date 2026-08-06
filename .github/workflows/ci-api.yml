@@ -94,3 +94,32 @@ jobs:
 
       - name: pytest (integration — testcontainers)
         run: pytest tests/integration/ -v -m integration
+
+  docker:
+    name: Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # レジストリへは push しない。認証情報を要さずに Dockerfile の妥当性だけを検証する。
+      # デプロイ先（Railway / Render / Fly.io など）が決まったら push 段を足す。
+      - name: Build API image
+        run: docker build -t pci-api:ci apps/api
+
+      # 起動できることまで見る。DB 無しでも /health は応答する設計。
+      - name: Smoke test the container
+        run: |
+          docker run -d --name pci-api-ci -p 8000:8000 pci-api:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health > /dev/null; then
+              echo "health ok"
+              docker rm -f pci-api-ci
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "health check did not pass in time" >&2
+          docker logs pci-api-ci >&2
+          docker rm -f pci-api-ci
+          exit 1

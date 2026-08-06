@@ -1,0 +1,25 @@
+# イメージへ入れないもの。
+#
+# 認証情報（.env）と生データが混入しないことを最優先で担保する
+# （CLAUDE.md「JV-Link 認証情報を絶対にコミットしない」「生データ再配布は禁止前提」）。
+
+.env
+.env.*
+!.env.example
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+tests/
+scripts/
+debug_*.py
+
+*.md
+!README.md
