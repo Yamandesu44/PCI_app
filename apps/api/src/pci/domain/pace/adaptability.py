@@ -4,11 +4,17 @@
 本プロダクトの最重要価値「PCI を理解していない競馬ファンでも展開予想を活用できる」を
 体現する説明可能な指標として、減点内訳を必ず reasons に出力する。
 
-算出式（C10・重みは設定ファイルで調整可能）:
-    PAI = 100 − RPCI差補正 − 距離補正 − 馬場補正
-      RPCI差補正: 馬の好ペース（脚質由来の preferred RPCI）と想定RPCI の乖離に対する減点
+算出式（pai-v3・重みは設定ファイルで調整可能）:
+    deviation = clamp((想定RPCI − コース中立値) ÷ 平均帯の半幅, −1, +1)
+    PAI = 50 + 感応度(脚質) × pace_swing × deviation − 距離補正 − 馬場補正
+      ペース補正: コース平均からの振れに対し、脚質ごとの感応度で加減点する
       距離補正  : 距離適性の乖離に対する減点
       馬場補正  : 馬場（道悪）不適性に対する減点
+    `pace_affinity`（その馬自身の過去のペース別実績）があれば最後に50%で混ぜる。
+
+**PAI は脚質内の相対量**。50 =「今回の流れは、この脚質にとって普段どおり」で、
+絶対的な強さではない。ダートの追込は常に50だが好走率は 0.47x と低い。
+**脚質をまたいで馬を PAI 順に並べてはならない**（docs/DECISIONS.md ADR-2026-08-04）。
 
 合致ラベル:
     PAI >= matched_threshold      : 合致（展開の恩恵を受ける）
@@ -92,6 +98,29 @@ class PaiWeights:
 DEFAULT_WEIGHTS = PaiWeights()
 
 
+def pace_half_band(track_type: str) -> float:
+    """展開3分類の「平均」帯の半幅。境界で deviation が±1になるようにする。"""
+    from pci.domain.pace.rpci_forecast import DEFAULT_WEIGHTS as RW
+
+    if track_type == "ダート":
+        return (RW.dirt_slow_threshold - RW.dirt_high_threshold) / 2
+    return (RW.slow_threshold - RW.high_threshold) / 2
+
+
+def pace_deviation(forecast_rpci: float, track_type: str) -> float:
+    """コース平均からの振れを −1〜+1 へ正規化する。
+
+    診断側でも同じ値を再現できるよう公開する。この平均が0から離れていると、
+    ペース補正が脚質どうしを相対的にずらす（＝脚質の定数効果を再び埋め込む）。
+    """
+    from pci.domain.pace.style_advantage import neutral_rpci
+
+    half_band = pace_half_band(track_type)
+    if not half_band:
+        return 0.0
+    return min(max((forecast_rpci - neutral_rpci(track_type)) / half_band, -1.0), 1.0)
+
+
 class PaceAdaptabilityScorer:
     """PAI 算出器（pai-v3）。加減点の内訳を reasons として出力する。"""
 
@@ -163,12 +192,7 @@ class PaceAdaptabilityScorer:
         絶対RPCIではなくコース相対で見るのが pai-v3 の要点。芝とダートは分布が
         異なる（52.0 対 46.5）ため、絶対値で判定すると脚質の順序が反転する。
         """
-        from pci.domain.pace.style_advantage import neutral_rpci
-
-        neutral = neutral_rpci(track_type)
-        half_band = self._half_band(track_type)
-        deviation = (forecast.value - neutral) / half_band if half_band else 0.0
-        deviation = min(max(deviation, -1.0), 1.0)
+        deviation = pace_deviation(forecast.value, track_type)
         bonus = self._sensitivity(profile.running_style) * self._w.pace_swing * deviation
         reasons.append(
             Reason(
@@ -177,15 +201,6 @@ class PaceAdaptabilityScorer:
             )
         )
         return bonus
-
-    @staticmethod
-    def _half_band(track_type: str) -> float:
-        """展開3分類の「平均」帯の半幅。境界で deviation が±1になるようにする。"""
-        from pci.domain.pace.rpci_forecast import DEFAULT_WEIGHTS as RW
-
-        if track_type == "ダート":
-            return (RW.dirt_slow_threshold - RW.dirt_high_threshold) / 2
-        return (RW.slow_threshold - RW.high_threshold) / 2
 
     def _distance_penalty(
         self, profile: HorsePaceProfile, race_distance_m: int, reasons: list[Reason]
@@ -260,8 +275,7 @@ class PaceAdaptabilityScorer:
             )
         else:
             description = (
-                f"過去の好走は{preferred}に集まっており、"
-                f"今回の{current}との相性は「{label}」です。"
+                f"過去の好走は{preferred}に集まっており、今回の{current}との相性は「{label}」です。"
             )
         reasons.append(Reason(code="pace_affinity", description=description))
         return round((base_pai * 0.5) + (pace_affinity_score * 0.5), 1)

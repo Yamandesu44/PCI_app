@@ -236,9 +236,6 @@ class SqlAlchemyMartRepository:
 
 def _confidence_method(factors: list[dict[str, object]]) -> str:
     """保存済み根拠から信頼度の算出方式を識別する。"""
-    if any(
-        factor.get("code") == CLASSIFICATION_MARGIN_REASON_CODE
-        for factor in factors
-    ):
+    if any(factor.get("code") == CLASSIFICATION_MARGIN_REASON_CODE for factor in factors):
         return CLASSIFICATION_MARGIN_CONFIDENCE_METHOD
     return _LEGACY_CONFIDENCE_METHOD

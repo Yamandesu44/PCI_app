@@ -36,12 +36,14 @@ class SaveMasterDataUseCase:
 
     def save_horses(self, inputs: list[HorseInput]) -> int:
         for h in inputs:
-            self._repo.save_horse(Horse(
-                ketto_num=h.ketto_num,
-                name=h.name,
-                sex=h.sex,
-                birth_year=h.birth_year,
-            ))
+            self._repo.save_horse(
+                Horse(
+                    ketto_num=h.ketto_num,
+                    name=h.name,
+                    sex=h.sex,
+                    birth_year=h.birth_year,
+                )
+            )
         return len(inputs)
 
     def save_jockeys(self, inputs: list[JockeyInput]) -> int:

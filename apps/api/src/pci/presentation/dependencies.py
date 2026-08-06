@@ -206,9 +206,7 @@ PrecomputeForecastsUseCaseDep = Annotated[
 RaceDetailUseCaseDep = Annotated[GetRaceDetailUseCase, Depends(get_race_detail_use_case)]
 PaceAnalysisUseCaseDep = Annotated[GetPaceAnalysisUseCase, Depends(get_pace_analysis_use_case)]
 ListRacesUseCaseDep = Annotated[ListRacesUseCase, Depends(get_list_races_use_case)]
-ListRaceBoardUseCaseDep = Annotated[
-    ListRaceBoardUseCase, Depends(get_list_race_board_use_case)
-]
+ListRaceBoardUseCaseDep = Annotated[ListRaceBoardUseCase, Depends(get_list_race_board_use_case)]
 ListRaceDatesUseCaseDep = Annotated[ListRaceDatesUseCase, Depends(get_list_race_dates_use_case)]
 IngestStatusUseCaseDep = Annotated[GetIngestStatusUseCase, Depends(get_ingest_status_use_case)]
 

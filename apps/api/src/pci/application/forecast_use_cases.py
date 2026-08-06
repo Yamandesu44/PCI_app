@@ -130,9 +130,7 @@ class ForecastRaceUseCase:
                     running_style=style,
                     distance_aptitude_m=course_aptitude.distance_aptitude_m,
                     weak_on_off_track=course_aptitude.weak_on_off_track,
-                    pace_affinity=self._build_affinity_profile(
-                        e.ketto_num, style, race, history
-                    ),
+                    pace_affinity=self._build_affinity_profile(e.ketto_num, style, race, history),
                 )
             )
             formation_inputs.append(
@@ -169,9 +167,7 @@ class ForecastRaceUseCase:
         forecast = self._forecaster.forecast(context)
 
         fit_results: list[PaiResult] = [
-            self._scorer.score(
-                p, forecast, race.distance_m, race.track_condition, race.track_type
-            )
+            self._scorer.score(p, forecast, race.distance_m, race.track_condition, race.track_type)
             for p in profiles
         ]
 
@@ -223,9 +219,7 @@ class ForecastRaceUseCase:
             )
             for e in entries
         )
-        integrated = build_integrated_ranking(
-            abilities, tuple(fit_results), self._ranking_strategy
-        )
+        integrated = build_integrated_ranking(abilities, tuple(fit_results), self._ranking_strategy)
 
         comment_input = ForecastCommentInput(
             distance_m=race.distance_m,

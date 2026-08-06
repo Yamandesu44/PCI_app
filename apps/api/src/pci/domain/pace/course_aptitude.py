@@ -74,13 +74,9 @@ def build_course_aptitude_profile(
         for result in comparable
         if abs(result.distance_m - target_distance_m) <= _TRACK_COMPARISON_DISTANCE_GAP_M
     )
-    good_track = tuple(
-        result for result in track_comparable if result.track_condition == "良"
-    )
+    good_track = tuple(result for result in track_comparable if result.track_condition == "良")
     off_track = tuple(
-        result
-        for result in track_comparable
-        if result.track_condition in _OFF_TRACK_CONDITIONS
+        result for result in track_comparable if result.track_condition in _OFF_TRACK_CONDITIONS
     )
     weak_on_off_track = False
     if len(good_track) >= _MIN_TRACK_RUNS and len(off_track) >= _MIN_TRACK_RUNS:

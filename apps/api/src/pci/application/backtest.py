@@ -41,6 +41,8 @@ from pci.domain.pace.adaptability import (
 from pci.domain.pace.adaptability import (
     PaceAdaptabilityScorer,
     PaiWeights,
+    pace_deviation,
+    pace_half_band,
 )
 from pci.domain.pace.affinity import is_good_run
 from pci.domain.pace.commentary import CommentGenerator
@@ -55,7 +57,11 @@ from pci.domain.pace.rpci_forecast import (
     classify_pace,
 )
 from pci.domain.pace.running_style import RunningStyleLabel
-from pci.domain.pace.style_advantage import StyleAdvantageWeights, build_style_advantage
+from pci.domain.pace.style_advantage import (
+    StyleAdvantageWeights,
+    build_style_advantage,
+    neutral_rpci,
+)
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race
 from pci.domain.racing.race_entry import RaceEntry
@@ -178,6 +184,8 @@ class HorseSample:
     track_type: str = ""
     # PAIが「展開適性」ではなく脚質そのものを符号化していないか調べるために持つ。
     running_style: str = ""
+    # ペース補正が脚質どうしを相対的にずらしていないかを測るために持つ。
+    forecast_rpci: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -1381,6 +1389,85 @@ def summarize_pai_within_style(samples: list[HorseSample]) -> list[PaiWithinStyl
     return sorted(rows, key=lambda r: -r.spread)
 
 
+@dataclass(frozen=True)
+class PaceCentering:
+    """ペース補正が0を中心に振れているか。ずれていれば脚質を相対的にずらす。"""
+
+    track_type: str
+    n: int
+    mean_forecast_rpci: float
+    neutral: float
+    half_band: float
+    mean_deviation: float
+    pace_swing: float
+
+    @property
+    def mean_bonus_at_full_sensitivity(self) -> float:
+        """感応度1.0の脚質が平均して受け取る加点。0でなければ定数シフト。"""
+        return self.mean_deviation * self.pace_swing
+
+    @property
+    def is_centered(self) -> bool:
+        """加点の平均が1点未満なら、実用上は中心が合っているとみなす。"""
+        return abs(self.mean_bonus_at_full_sensitivity) < 1.0
+
+
+def summarize_pace_centering(
+    samples: list[HorseSample], weights: PaiWeights = DEFAULT_PAI_WEIGHTS
+) -> list[PaceCentering]:
+    """コース別に、ペース補正の平均が0からどれだけずれているかを測る。
+
+    pai-v3 は「コース平均を0として±へ振れる」設計なので、平均が0なら脚質間の
+    相対位置は動かず、脚質内の判別だけに寄与する。平均が0から離れていると、
+    感応度の高い脚質だけが系統的に底上げ（または底下げ）され、**pai-v2 が
+    やっていた「脚質の定数効果をPAIへ埋め込む」ことを別経路で再現してしまう**。
+
+    予測RPCI の分布が `neutral_rpci`（閾値の中点）とずれると、これが起きる。
+    """
+    rows: list[PaceCentering] = []
+    for track in ("芝", "ダート"):
+        group = [s for s in samples if s.track_type == track and s.forecast_rpci]
+        if not group:
+            continue
+        deviations = [pace_deviation(s.forecast_rpci, track) for s in group]
+        rows.append(
+            PaceCentering(
+                track_type=track,
+                n=len(group),
+                mean_forecast_rpci=round(sum(s.forecast_rpci for s in group) / len(group), 2),
+                neutral=neutral_rpci(track),
+                half_band=pace_half_band(track),
+                mean_deviation=round(sum(deviations) / len(deviations), 4),
+                pace_swing=weights.pace_swing,
+            )
+        )
+    return rows
+
+
+def format_pace_centering(rows: list[PaceCentering]) -> str:
+    """ペース補正の中心ずれを表示する。"""
+    if not rows:
+        return ""
+    lines = [
+        "",
+        "  ── ペース補正の中心ずれ（0から離れるほど脚質の定数効果を埋め込む）",
+        f"    {'コース':<8}{'頭数':>8}{'予測RPCI平均':>13}{'中立値':>9}"
+        f"{'平均ずれ':>10}{'感応度1.0の平均加点':>20}{'判定':>7}",
+    ]
+    for r in rows:
+        verdict = "中心一致" if r.is_centered else "ずれ"
+        lines.append(
+            f"    {r.track_type:<8}{r.n:>9,}{r.mean_forecast_rpci:>12.2f}{r.neutral:>10.2f}"
+            f"{r.mean_deviation:>+11.3f}{r.mean_bonus_at_full_sensitivity:>+17.1f}点{verdict:>8}"
+        )
+    lines.append(
+        "    ※ 加点の平均が0でなければ、感応度の高い脚質だけが系統的に底上げされる。"
+        "\n       脚質間の相対位置が動くので、脚質をまたいだ相関は改善して見えるが、"
+        "\n       脚質内の判別は良くならない（pai-v2 と同じ誤りを別経路で再現する）。"
+    )
+    return "\n".join(lines)
+
+
 def format_pai_by_style(samples: list[HorseSample]) -> str:
     """脚質の定数効果と、脚質内での PAI の効きを分けて示す。"""
     if not samples:
@@ -1416,6 +1503,7 @@ def format_pai_by_style(samples: list[HorseSample]) -> str:
                 f"{w.low_rate:>9.1%}{w.high_mean_pai:>9.1f}{w.high_rate:>9.1%}"
                 f"{w.spread:>+9.1%}{2 * w.spread_se:>9.1%}{verdict:>7}"
             )
+    lines.append(format_pace_centering(summarize_pace_centering(samples)))
     lines.append(
         "\n  ※ 「差」が正なら、脚質を固定しても PAI が好走を判別できている。"
         "\n  ※ 「誤差内」の行は偶然と区別できない。頭数ではなく差と標準誤差で判定している。"
@@ -2499,6 +2587,7 @@ class ForecastBacktester:
                         good_run=good_run,
                         track_type=race.track_type,
                         running_style=horse.running_style,
+                        forecast_rpci=out.predicted_rpci,
                     )
                 )
                 style_score = style_scores.get(horse.running_style)

@@ -58,14 +58,17 @@ from pci.application.backtest import (
     style_advantage_lift_to_dict,
     summarize_clamp_impact,
     summarize_integrated_accuracy,
+    summarize_pace_centering,
     summarize_pai_lift,
     summarize_pai_within_style,
     summarize_rpci,
     summarize_style_advantage,
 )
 from pci.domain.pace.adaptability import DEFAULT_WEIGHTS as DEFAULT_PAI_WEIGHTS
+from pci.domain.pace.adaptability import pace_half_band
 from pci.domain.pace.rpci_forecast import PaceLabel
 from pci.domain.pace.running_style import RunningStyleLabel
+from pci.domain.pace.style_advantage import neutral_rpci
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -241,9 +244,77 @@ class TestSummarizePaiWithinStyle:
         assert row.is_significant is False
 
 
+class TestPaceCentering:
+    """ペース補正が0を中心に振れているか。ずれれば脚質の定数効果を埋め込む。"""
+
+    @staticmethod
+    def _h(track: str, forecast: float) -> HorseSample:
+        return HorseSample(
+            race_key="R1",
+            horse_no=1,
+            pai=50.0,
+            good_run=False,
+            track_type=track,
+            running_style="逃げ",
+            forecast_rpci=forecast,
+        )
+
+    def test_empty_returns_empty(self) -> None:
+        assert summarize_pace_centering([]) == []
+
+    def test_forecast_at_neutral_is_centered(self) -> None:
+        rows = summarize_pace_centering([self._h("芝", neutral_rpci("芝")) for _ in range(10)])
+        assert len(rows) == 1
+        assert rows[0].mean_deviation == 0.0
+        assert rows[0].mean_bonus_at_full_sensitivity == 0.0
+        assert rows[0].is_centered is True
+
+    def test_symmetric_spread_around_neutral_is_centered(self) -> None:
+        n = neutral_rpci("芝")
+        half = pace_half_band("芝")
+        rows = summarize_pace_centering(
+            [self._h("芝", n - half / 2) for _ in range(10)]
+            + [self._h("芝", n + half / 2) for _ in range(10)]
+        )
+        assert rows[0].mean_deviation == 0.0
+        assert rows[0].is_centered is True
+
+    def test_offset_forecast_shifts_high_sensitivity_styles(self) -> None:
+        """予測が中立値からずれると、感応度1.0の脚質だけが系統的に底上げされる。"""
+        n = neutral_rpci("ダート")
+        half = pace_half_band("ダート")
+        rows = summarize_pace_centering([self._h("ダート", n + half / 2) for _ in range(10)])
+        assert rows[0].mean_deviation == pytest.approx(0.5)
+        # 感応度1.0なら平均 +12.5点。脚質間の相対位置が動く。
+        assert rows[0].mean_bonus_at_full_sensitivity == pytest.approx(12.5)
+        assert rows[0].is_centered is False
+
+    def test_ignores_samples_without_a_forecast(self) -> None:
+        """forecast_rpci 未設定のサンプルを 0 として平均に混ぜない。"""
+        rows = summarize_pace_centering([self._h("芝", neutral_rpci("芝")), self._h("芝", 0.0)])
+        assert rows[0].n == 1
+
+
 class TestFormatPaiByStyle:
     def test_empty_returns_empty_string(self) -> None:
         assert format_pai_by_style([]) == ""
+
+    def test_includes_the_centering_check(self) -> None:
+        samples = [
+            HorseSample(
+                race_key="R1",
+                horse_no=i,
+                pai=float(i),
+                good_run=i > 1,
+                track_type="芝",
+                running_style="逃げ",
+                forecast_rpci=neutral_rpci("芝"),
+            )
+            for i in range(3)
+        ]
+        out = format_pai_by_style(samples)
+        assert "ペース補正の中心ずれ" in out
+        assert "中心一致" in out
 
     def test_drops_cross_style_verdict_and_warns_instead(self) -> None:
         """pai-v3 では脚質をまたいだ PAI 平均の順位比較は何も主張しない。"""
