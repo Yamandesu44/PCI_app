@@ -287,8 +287,13 @@ class TestFallbackStylesCoverage:
         assert profile.scores[PaceSpeedLevel.HIGH] == 55
         assert profile.preferred_level == PaceSpeedLevel.VERY_HIGH
 
-    def test_flexible_fallback_uses_default_scores(self) -> None:
-        """FLEXIBLE 脚質はデフォルトフォールバック（全レベル 40）になる。"""
+    def test_flexible_fallback_has_a_peak_so_matching_is_reachable(self) -> None:
+        """FLEXIBLE も山を持つ（2026-08-04 修正）。
+
+        以前は全レベル一律40で山が無く、`_blend_pace_affinity`（50%混合）を通した
+        後の PAI が最大48にしかならなかった。そのため**過去データの無い自在馬は
+        構造的に「合致」へ到達できなかった**（実測で芝602頭・ダート157頭とも合致0頭）。
+        """
         profile = build_horse_pace_affinity_profile(
             "H001",
             RunningStyleLabel.FLEXIBLE,
@@ -296,4 +301,23 @@ class TestFallbackStylesCoverage:
             as_of=datetime.date(2026, 6, 1),
         )
         assert profile.is_fallback is True
-        assert all(v == 40 for v in profile.scores.values())
+        # 平均ペースを山にした緩い形。極端な流れほど低い。
+        assert profile.preferred_level == PaceSpeedLevel.AVERAGE
+        assert len(set(profile.scores.values())) > 1
+        assert profile.scores[PaceSpeedLevel.SLOW] > profile.scores[PaceSpeedLevel.VERY_SLOW]
+        assert profile.scores[PaceSpeedLevel.HIGH] > profile.scores[PaceSpeedLevel.VERY_HIGH]
+
+    def test_flexible_fallback_can_reach_the_matched_label(self) -> None:
+        """回帰テスト: 山が無いと合致へ到達できなくなる。"""
+        from pci.domain.pace.adaptability import DEFAULT_WEIGHTS as PAI_W
+
+        profile = build_horse_pace_affinity_profile(
+            "H001",
+            RunningStyleLabel.FLEXIBLE,
+            (_result("2026010105010101", 8, 48.0),),
+            as_of=datetime.date(2026, 6, 1),
+        )
+        # ペース加点が最大（+感応度×振れ幅）でも合致に届かないなら構造的な欠陥。
+        best_base = 50.0 + PAI_W.sensitivity_flexible * PAI_W.pace_swing
+        best_pai = 0.5 * best_base + 0.5 * max(profile.scores.values())
+        assert best_pai >= PAI_W.matched_threshold

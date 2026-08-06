@@ -275,4 +275,19 @@ def _fallback_scores(running_style: RunningStyleLabel) -> dict[PaceSpeedLevel, i
             PaceSpeedLevel.SLOW: 30,
             PaceSpeedLevel.VERY_SLOW: 20,
         }
+    if running_style == RunningStyleLabel.FLEXIBLE:
+        # 「自在」は他脚質と違い山の無い一律40だった。全レベルが40だと
+        # `_blend_pace_affinity`（50%混合）を通した後の PAI が最大48にしかならず、
+        # **過去データの無い自在馬は構造的に「合致」へ到達できなかった**
+        # （実測 2026-08-04: 芝602頭・ダート157頭のうち合致は0頭）。
+        # 実測比では自在もスローで僅かに有利（芝1.13x / ダート1.09x）だが、
+        # 逃げ(1.21x/1.17x)ほど偏らないため、平均ペースを山にした緩い形にする。
+        # 暫定値: 他脚質の平均水準（44〜46）に合わせただけで、山の位置と高さは未検証。
+        return {
+            PaceSpeedLevel.AVERAGE: 55,
+            PaceSpeedLevel.SLOW: 52,
+            PaceSpeedLevel.HIGH: 45,
+            PaceSpeedLevel.VERY_SLOW: 42,
+            PaceSpeedLevel.VERY_HIGH: 35,
+        }
     return {level: 40 for level in PaceSpeedLevel}
