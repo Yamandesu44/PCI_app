@@ -6,9 +6,13 @@
 
 from __future__ import annotations
 
+import ssl
+
+import pytest
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.pool import QueuePool
 
-from pci.infrastructure.database.session import build_engine
+from pci.infrastructure.database.session import _split_pg8000_ssl, build_engine
 
 _URL = "postgresql+pg8000://u:p@localhost:5432/db"
 
@@ -43,3 +47,69 @@ class TestBuildEngine:
 
         assert engine.pool.size() == 10
         assert engine.pool._max_overflow == 20
+
+
+class TestPg8000Ssl:
+    """`sslmode` の翻訳。
+
+    pg8000 は `sslmode` を受け取れず、マネージドDBが配る接続文字列
+    （`?sslmode=require` 付き）をそのまま使うと接続自体が失敗する。
+    psycopg2 なら通るため、ドライバを変えた途端に壊れる類の落とし穴。
+    """
+
+    @staticmethod
+    def _translate(url: str) -> tuple[URL, dict[str, object]]:
+        return _split_pg8000_ssl(make_url(url))
+
+    def test_sslmode_is_stripped_from_the_url(self) -> None:
+        """ここが漏れると pg8000 が TypeError を投げて接続できない。"""
+        stripped, _ = self._translate(f"{_URL}?sslmode=require")
+
+        assert "sslmode" not in stripped.query
+
+    def test_require_encrypts_without_verifying(self) -> None:
+        """libpq の require は「暗号化するが検証しない」。同じ意味に揃える。"""
+        _, args = self._translate(f"{_URL}?sslmode=require")
+
+        context = args["ssl_context"]
+        assert isinstance(context, ssl.SSLContext)
+        assert context.verify_mode == ssl.CERT_NONE
+        assert context.check_hostname is False
+
+    def test_verify_full_checks_the_certificate_and_hostname(self) -> None:
+        _, args = self._translate(f"{_URL}?sslmode=verify-full")
+
+        context = args["ssl_context"]
+        assert isinstance(context, ssl.SSLContext)
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname is True
+
+    def test_verify_ca_checks_the_certificate_only(self) -> None:
+        _, args = self._translate(f"{_URL}?sslmode=verify-ca")
+
+        context = args["ssl_context"]
+        assert isinstance(context, ssl.SSLContext)
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname is False
+
+    def test_disable_uses_no_ssl(self) -> None:
+        _, args = self._translate(f"{_URL}?sslmode=disable")
+
+        assert args == {}
+
+    def test_no_sslmode_leaves_the_connection_untouched(self) -> None:
+        """手元の docker-compose など、TLS 無しの接続を壊さない。"""
+        _, args = self._translate(_URL)
+
+        assert args == {}
+
+    def test_unknown_sslmode_is_rejected(self) -> None:
+        """黙って無防備な接続へ倒さない。"""
+        with pytest.raises(ValueError, match="sslmode"):
+            self._translate(f"{_URL}?sslmode=nonsense")
+
+    def test_build_engine_accepts_a_managed_database_url(self) -> None:
+        """接続文字列をそのまま貼っても組み立てが通ること（配線の確認）。"""
+        engine = build_engine(f"{_URL}?sslmode=require")
+
+        assert "sslmode" not in engine.url.query

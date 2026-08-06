@@ -1,5 +1,49 @@
+import ssl
+from typing import Any
+
 from sqlalchemy import Engine, create_engine
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
+
+# libpq の sslmode のうち、暗号化はするが証明書を検証しないもの。
+# 検証しないため中間者攻撃を防げない。可能なら verify-full を使う。
+_UNVERIFIED_SSL_MODES = frozenset({"allow", "prefer", "require"})
+_VERIFIED_SSL_MODES = frozenset({"verify-ca", "verify-full"})
+
+
+def _split_pg8000_ssl(url: URL) -> tuple[URL, dict[str, Any]]:
+    """`sslmode` / `sslrootcert` を URL から外し、pg8000 の `ssl_context` へ翻訳する。
+
+    **pg8000 は `sslmode` を受け取れない。** マネージドDBが配る接続文字列は
+    `?sslmode=require` を含むことが多く、そのまま `DATABASE_URL` へ入れると
+
+        TypeError: connect() got an unexpected keyword argument 'sslmode'
+
+    で接続そのものが失敗する。psycopg2 なら通るため、ドライバを変えた途端に
+    壊れる類の落とし穴。利用者が接続文字列をそのまま貼れるよう、ここで吸収する。
+    """
+    query = dict(url.query)
+    mode = str(query.pop("sslmode", "")).lower()
+    root_cert = query.pop("sslrootcert", None)
+    stripped = url.set(query=query)
+
+    if not mode or mode == "disable":
+        return stripped, {}
+
+    context = ssl.create_default_context(
+        cafile=str(root_cert) if root_cert else None,
+    )
+    if mode in _UNVERIFIED_SSL_MODES:
+        # libpq の require は「暗号化するが検証しない」。同じ意味に揃える。
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    elif mode in _VERIFIED_SSL_MODES:
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.check_hostname = mode == "verify-full"
+    else:
+        raise ValueError(f"未知の sslmode です: {mode}")
+
+    return stripped, {"ssl_context": context}
 
 
 def build_engine(
@@ -24,13 +68,22 @@ def build_engine(
 
     **`pool_recycle`**: DBやプロキシ側が一定時間で接続を切ることがある。こちらから
     先に捨てておかないと、切られた接続を掴んだリクエストが失敗する。
+
+    **SSL**: pg8000 を使う場合、接続文字列の `sslmode` は `ssl_context` へ翻訳する
+    （`_split_pg8000_ssl` 参照）。マネージドDBの接続文字列をそのまま貼れるようにするため。
     """
+    url = make_url(database_url)
+    connect_args: dict[str, Any] = {}
+    if url.drivername.endswith("pg8000"):
+        url, connect_args = _split_pg8000_ssl(url)
+
     return create_engine(
-        database_url,
+        url,
         pool_size=pool_size,
         max_overflow=max_overflow,
         pool_pre_ping=True,
         pool_recycle=pool_recycle_seconds,
+        connect_args=connect_args,
     )
 
 
