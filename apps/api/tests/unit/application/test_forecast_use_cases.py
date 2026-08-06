@@ -11,6 +11,7 @@ from pci.application.dto import EntryInput, RaceInfo
 from pci.application.forecast_use_cases import ForecastRaceUseCase
 from pci.application.race_use_cases import RegisterRaceEntriesUseCase
 from pci.domain.pace.ability import AbilityScorer, AbilityWeights
+from pci.domain.pace.adaptability import MODEL_VERSION as PAI_MODEL_VERSION
 from pci.domain.pace.rpci_forecast import PaceLabel, RaceContext, RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.racing.master import Horse
@@ -575,7 +576,8 @@ class TestForecastRaceUseCase:
 
         assert (UPCOMING, "rule-v4") in mart_repo.predicted_pace
         assert len(mart_repo.pace_fit) == 4
-        assert all(key[2] == "pai-v3" for key in mart_repo.pace_fit)
+        # 世代を直書きするとここだけ取り残される（pai-v2 → pai-v3 で実際に起きた）。
+        assert all(key[2] == PAI_MODEL_VERSION for key in mart_repo.pace_fit)
 
     def test_mart_not_called_when_no_repo(self) -> None:
         """mart_repo が None の場合、永続化なしで算出結果を返す。"""

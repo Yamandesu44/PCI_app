@@ -65,10 +65,9 @@ from pci.application.backtest import (
     summarize_style_advantage,
 )
 from pci.domain.pace.adaptability import DEFAULT_WEIGHTS as DEFAULT_PAI_WEIGHTS
-from pci.domain.pace.adaptability import pace_half_band
+from pci.domain.pace.adaptability import pace_center, pace_half_band
 from pci.domain.pace.rpci_forecast import PaceLabel
 from pci.domain.pace.running_style import RunningStyleLabel
-from pci.domain.pace.style_advantage import neutral_rpci
 from pci.domain.racing.master import Horse, Jockey, Trainer
 from pci.domain.racing.race import Race, RaceStatus
 from pci.domain.racing.race_entry import RaceEntry
@@ -263,14 +262,14 @@ class TestPaceCentering:
         assert summarize_pace_centering([]) == []
 
     def test_forecast_at_neutral_is_centered(self) -> None:
-        rows = summarize_pace_centering([self._h("芝", neutral_rpci("芝")) for _ in range(10)])
+        rows = summarize_pace_centering([self._h("芝", pace_center("芝")) for _ in range(10)])
         assert len(rows) == 1
         assert rows[0].mean_deviation == 0.0
         assert rows[0].mean_bonus_at_full_sensitivity == 0.0
         assert rows[0].is_centered is True
 
     def test_symmetric_spread_around_neutral_is_centered(self) -> None:
-        n = neutral_rpci("芝")
+        n = pace_center("芝")
         half = pace_half_band("芝")
         rows = summarize_pace_centering(
             [self._h("芝", n - half / 2) for _ in range(10)]
@@ -281,12 +280,14 @@ class TestPaceCentering:
 
     def test_offset_forecast_shifts_high_sensitivity_styles(self) -> None:
         """予測が中立値からずれると、感応度1.0の脚質だけが系統的に底上げされる。"""
-        n = neutral_rpci("ダート")
+        n = pace_center("ダート")
         half = pace_half_band("ダート")
         rows = summarize_pace_centering([self._h("ダート", n + half / 2) for _ in range(10)])
         assert rows[0].mean_deviation == pytest.approx(0.5)
-        # 感応度1.0なら平均 +12.5点。脚質間の相対位置が動く。
-        assert rows[0].mean_bonus_at_full_sensitivity == pytest.approx(12.5)
+        # 感応度1.0なら平均 0.5×pace_swing 点。脚質間の相対位置が動く。
+        assert rows[0].mean_bonus_at_full_sensitivity == pytest.approx(
+            0.5 * DEFAULT_PAI_WEIGHTS.pace_swing
+        )
         assert rows[0].is_centered is False
 
     def test_recommended_offset_zeroes_the_mean_deviation(self) -> None:
@@ -295,7 +296,7 @@ class TestPaceCentering:
         deviation は±1で頭打ちになるため、予測平均を中心へ置くだけでは足りない。
         ダートは予測平均46.55・中立46.50とほぼ一致しているのに平均ずれ +0.172 だった。
         """
-        n = neutral_rpci("ダート")
+        n = pace_center("ダート")
         half = pace_half_band("ダート")
         # 上側へ非対称にばらけさせる（頭打ちの効果が出る形）。
         samples = [self._h("ダート", n + half * d) for d in (-3.0, -0.2, 0.1, 0.4, 2.0, 3.0)]
@@ -311,15 +312,18 @@ class TestPaceCentering:
 
     def test_offset_is_unchanged_when_no_solution_exists(self) -> None:
         """全頭が同じ側へ振り切れていれば解が無い。現行値を返して壊れない。"""
-        n = neutral_rpci("ダート")
+        n = pace_center("ダート")
         half = pace_half_band("ダート")
         samples = [self._h("ダート", n + half * 50) for _ in range(5)]
 
-        assert summarize_pace_centering(samples)[0].recommended_offset == 0.0
+        assert (
+            summarize_pace_centering(samples)[0].recommended_offset
+            == DEFAULT_PAI_WEIGHTS.pace_center_offset_dirt
+        )
 
     def test_ignores_samples_without_a_forecast(self) -> None:
         """forecast_rpci 未設定のサンプルを 0 として平均に混ぜない。"""
-        rows = summarize_pace_centering([self._h("芝", neutral_rpci("芝")), self._h("芝", 0.0)])
+        rows = summarize_pace_centering([self._h("芝", pace_center("芝")), self._h("芝", 0.0)])
         assert rows[0].n == 1
 
 
@@ -336,7 +340,7 @@ class TestFormatPaiByStyle:
                 good_run=i > 1,
                 track_type="芝",
                 running_style="逃げ",
-                forecast_rpci=neutral_rpci("芝"),
+                forecast_rpci=pace_center("芝"),
             )
             for i in range(3)
         ]
@@ -1206,11 +1210,11 @@ class TestPaiWeightComparison:
         reports = {
             profile.name: self._report(baseline_samples) for profile in DEFAULT_PAI_WEIGHT_PROFILES
         }
-        reports["swing-light"] = self._report(candidate_samples)
+        reports["swing5"] = self._report(candidate_samples)
 
         comparisons = compare_pai_weight_reports(reports)
 
-        candidate = next(item for item in comparisons if item.profile.name == "swing-light")
+        candidate = next(item for item in comparisons if item.profile.name == "swing5")
         assert candidate.turf.delta_point_biserial == -2.0
         assert candidate.turf.delta_top_band_lift == -2.0
         assert candidate.dirt.delta_point_biserial == 0.0
@@ -1222,7 +1226,7 @@ class TestPaiWeightComparison:
 
         baseline = self._report([self._sample("R1", 1, "芝", 80.0, True)])
         reports = {profile.name: baseline for profile in DEFAULT_PAI_WEIGHT_PROFILES}
-        reports["swing-heavy"] = self._report([self._sample("R1", 2, "芝", 80.0, True)])
+        reports["swing25"] = self._report([self._sample("R1", 2, "芝", 80.0, True)])
         with pytest.raises(ValueError, match="比較対象馬"):
             compare_pai_weight_reports(reports)
 
@@ -1239,7 +1243,7 @@ class TestPaiWeightComparison:
         payload = pai_weight_comparisons_to_dict(comparisons)
 
         assert payload[0]["name"] == "current"
-        assert payload[0]["weights"]["pace_swing"] == 25.0
+        assert payload[0]["weights"]["pace_swing"] == DEFAULT_PAI_WEIGHTS.pace_swing
         assert payload[0]["weights"]["sensitivity_escape"] == 1.0
         assert payload[0]["turf"]["pai"]["n"] == 2
         assert payload[0]["dirt"]["pai"] is None

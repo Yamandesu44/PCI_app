@@ -218,9 +218,7 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
                 pace_label="平均",
                 confidence=0.55,
                 factors=[],
-                generated_at=datetime.datetime(
-                    2026, 7, 19, 8, 0, tzinfo=datetime.UTC
-                ),
+                generated_at=datetime.datetime(2026, 7, 19, 8, 0, tzinfo=datetime.UTC),
             ),
             PredictedPaceModel(
                 race_key=race_key,
@@ -235,9 +233,7 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
                         "contribution": None,
                     }
                 ],
-                generated_at=datetime.datetime(
-                    2026, 7, 20, 8, 0, tzinfo=datetime.UTC
-                ),
+                generated_at=datetime.datetime(2026, 7, 20, 8, 0, tzinfo=datetime.UTC),
             ),
             PredictedPaceModel(
                 race_key=race_key,
@@ -246,9 +242,7 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
                 pace_label="ハイ",
                 confidence=0.99,
                 factors=[],
-                generated_at=datetime.datetime(
-                    2026, 7, 21, 8, 0, tzinfo=datetime.UTC
-                ),
+                generated_at=datetime.datetime(2026, 7, 21, 8, 0, tzinfo=datetime.UTC),
             ),
             PredictedPaceModel(
                 race_key="2026071842010103",
@@ -257,9 +251,7 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
                 pace_label="平均",
                 confidence=0.7,
                 factors=[],
-                generated_at=datetime.datetime(
-                    2026, 7, 18, 7, 0, tzinfo=datetime.UTC
-                ),
+                generated_at=datetime.datetime(2026, 7, 18, 7, 0, tzinfo=datetime.UTC),
             ),
         ]
     )
@@ -269,9 +261,7 @@ def test_find_prediction_evaluations_uses_latest_pre_result_forecast(
         datetime.date(2026, 7, 1),
         datetime.date(2026, 7, 31),
     )
-    candidate_count = SqlAlchemyMartRepository(
-        db_session
-    ).count_prediction_evaluation_candidates(
+    candidate_count = SqlAlchemyMartRepository(db_session).count_prediction_evaluation_candidates(
         datetime.date(2026, 7, 1),
         datetime.date(2026, 7, 31),
     )

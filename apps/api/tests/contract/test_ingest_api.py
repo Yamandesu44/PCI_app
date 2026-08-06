@@ -49,12 +49,30 @@ ENTRIES_PAYLOAD = {
     "field_size": 3,
     "track_condition": "良",
     "entries": [
-        {"horse_no": 1, "frame_no": 1, "ketto_num": "2020100001",
-         "weight": 480.0, "jockey_code": "J001", "trainer_code": "T001"},
-        {"horse_no": 2, "frame_no": 2, "ketto_num": "2020100002",
-         "weight": 476.0, "jockey_code": "J002", "trainer_code": "T002"},
-        {"horse_no": 3, "frame_no": 3, "ketto_num": "2020100003",
-         "weight": 490.0, "jockey_code": "J003", "trainer_code": "T003"},
+        {
+            "horse_no": 1,
+            "frame_no": 1,
+            "ketto_num": "2020100001",
+            "weight": 480.0,
+            "jockey_code": "J001",
+            "trainer_code": "T001",
+        },
+        {
+            "horse_no": 2,
+            "frame_no": 2,
+            "ketto_num": "2020100002",
+            "weight": 476.0,
+            "jockey_code": "J002",
+            "trainer_code": "T002",
+        },
+        {
+            "horse_no": 3,
+            "frame_no": 3,
+            "ketto_num": "2020100003",
+            "weight": 490.0,
+            "jockey_code": "J003",
+            "trainer_code": "T003",
+        },
     ],
 }
 
@@ -65,8 +83,14 @@ RESULTS_PAYLOAD = {
     "race_s3f": 35.2,
     "race_l3f": 35.8,
     "results": [
-        {"horse_no": 1, "finish_pos": 1, "race_time_s": 94.4, "agari_3f_s": 34.0, "corner_4": 2,
-         "body_weight": 486.0},
+        {
+            "horse_no": 1,
+            "finish_pos": 1,
+            "race_time_s": 94.4,
+            "agari_3f_s": 34.0,
+            "corner_4": 2,
+            "body_weight": 486.0,
+        },
         {"horse_no": 2, "finish_pos": 2, "race_time_s": 94.6, "agari_3f_s": 34.2, "corner_4": 1},
         {"horse_no": 3, "finish_pos": 3, "race_time_s": 95.0, "agari_3f_s": 34.5, "corner_4": 4},
     ],
@@ -99,8 +123,12 @@ def seeded_client(fake_repo: FakeRaceRepository) -> TestClient:
     )
     entries = [
         EntryInput(
-            horse_no=i, frame_no=i, ketto_num=f"202010000{i}",
-            weight=480.0, jockey_code=f"J00{i}", trainer_code=f"T00{i}",
+            horse_no=i,
+            frame_no=i,
+            ketto_num=f"202010000{i}",
+            weight=480.0,
+            jockey_code=f"J00{i}",
+            trainer_code=f"T00{i}",
         )
         for i in range(1, 4)
     ]

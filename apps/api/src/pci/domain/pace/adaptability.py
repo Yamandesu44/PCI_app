@@ -4,7 +4,7 @@
 本プロダクトの最重要価値「PCI を理解していない競馬ファンでも展開予想を活用できる」を
 体現する説明可能な指標として、減点内訳を必ず reasons に出力する。
 
-算出式（pai-v3・重みは設定ファイルで調整可能）:
+算出式（pai-v4・重みは設定ファイルで調整可能）:
     deviation = clamp((想定RPCI − コース中立値) ÷ 平均帯の半幅, −1, +1)
     PAI = 50 + 感応度(脚質) × pace_swing × deviation − 距離補正 − 馬場補正
       ペース補正: コース平均からの振れに対し、脚質ごとの感応度で加減点する
@@ -37,7 +37,7 @@ from pci.domain.pace.rpci_forecast import RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "pai-v3"
+MODEL_VERSION = "pai-v4"
 
 _OFF_TRACK_CONDITIONS = ("稍重", "重", "不良")
 
@@ -65,7 +65,7 @@ class HorsePaceProfile:
 class PaiWeights:
     """PAI 算出の重み（C10・設定ファイルから上書き可能）。"""
 
-    # 脚質ごとのペース感応度（pai-v3）。正=スローで有利、0=ペース依存なし。
+    # 脚質ごとのペース感応度（pai-v3 で導入）。正=スローで有利、0=ペース依存なし。
     # 2026-08-04に21万頭で較正（`--pace-style-matrix` の「自脚質の平均に対する比」）。
     #   芝   スロー時: 逃げ1.21x 先行1.12x 自在1.13x 差し1.04x 追込0.98x
     #   ダート スロー時: 逃げ1.17x 先行1.12x 自在1.09x 差し0.94x 追込0.96x
@@ -82,25 +82,45 @@ class PaiWeights:
     sensitivity_stalker: float = 0.0
     sensitivity_closer: float = 0.0
     # 感応度1.0の脚質が、区分境界まで振れたときの最大加点/減点（PAI点）。
-    pace_swing: float = 25.0
+    #
+    # pai-v4 で 25.0 → 10.0 へ下げた。中心ずれを直した上で振れ幅を変えても、
+    # 個別馬の判別精度が動かないことを実測で確認したため（500レース・6,575頭）:
+    #     全体相関  swing25 +0.073 / swing10 +0.074 / swing5 +0.074 / swing0 +0.073
+    # 差はいずれも誤差。加えて実測の効果量そのものが小さい——脚質別展開有利度の
+    # 「有利−不利」は 芝+2.8% / ダート+6.5% しかなく、±25点はこれに対し過大だった。
+    # 精度が同じなら、実測の効果量へ寄せた側を採る（docs/DECISIONS.md ADR-2026-08-04）。
+    pace_swing: float = 10.0
     # 振れの中心を `neutral_rpci` から動かす量（RPCI点）。
+    #
     # `neutral_rpci` は全履歴の3分位境界の中点だが、予測RPCIの分布はそこへ揃わない。
-    # 2026-06-01以降の実測では 芝 50.72（中立51.85）・ダート 46.55（中立46.50）で、
-    # 感応度1.0の脚質が平均 芝−6.2点・ダート+4.3点 の底上げ/底下げを受けていた。
-    # これは「脚質の定数効果をPAIへ埋め込む」pai-v2 の誤りの再現なので、0以外を
-    # 入れて中心を合わせられるようにする。既定0＝現行挙動のまま（未確定のため）。
-    pace_center_offset_turf: float = 0.0
-    pace_center_offset_dirt: float = 0.0
+    # ずれたままだと感応度の高い脚質だけが系統的に底上げ/底下げされ、pai-v2 の
+    # 「脚質の定数効果をPAIへ埋め込む」誤りを別経路で再現する。実測（未補正時）:
+    #     芝   予測平均50.72 / 中立51.85 → 平均ずれ-0.248 → 感応度1.0で -6.2点
+    #     ダート 予測平均46.55 / 中立46.50 → 平均ずれ+0.172 → 感応度1.0で +4.3点
+    # 逃げは両コースとも最良の脚質（芝1.39x・ダート1.41x）なので、芝では実力と逆へ、
+    # ダートでは実力と同じ向きへずれていた。`pace-off` の芝/ダート符号逆転
+    # （芝+0.016 / ダート-0.016）はこれで全て説明が付く。
+    #
+    # 値は平均 deviation を0にする解（`--diagnose-pai` の「推奨offset」）。予測平均を
+    # 中心へ置くだけでは足りない——deviation は±1で頭打ちになるため、分布が非対称だと
+    # 平均が一致していても平均ずれは0にならない（ダートがまさにこれ。予測平均と中立が
+    # 0.05しか違わないのに平均ずれ+0.172）。
+    #
+    # **注意: 2026-06-01以降の500レースから取った当てはめ値。期間外で再確認すること。**
+    # `neutral_rpci` 自体は変えていないので、脚質別展開有利度・展開3分類には影響しない。
+    pace_center_offset_turf: float = -1.17
+    pace_center_offset_dirt: float = 0.47
     # ペースの影響が無いときの基準点。ここへ加減点を足し引きする。
     # 50 = 「今回の流れは、この脚質にとって普段どおり」。
     pace_neutral_pai: float = 50.0
     distance_weight_per_200m: float = 5.0
     distance_cap: float = 20.0
     off_track_penalty: float = 15.0
-    # 合致ラベル閾値（pai-v3 のスケールに合わせて再設定）。
-    # 感応度1.0の脚質が区分境界まで振れると 50±25 になるため、その中間を境界にする。
-    matched_threshold: float = 65.0
-    unfavorable_threshold: float = 40.0
+    # 合致ラベル閾値。pai-v3 と同じ規則（感応度1.0が区分境界まで振れた幅の中間）を
+    # 新しい振れ幅へ当てる: 50±10 の中間 → 55 / 45。
+    # **ラベル構成比は未測定。** `--diagnose-pai` の構成比表で確認して調整すること。
+    matched_threshold: float = 55.0
+    unfavorable_threshold: float = 45.0
 
 
 DEFAULT_WEIGHTS = PaiWeights()
@@ -142,7 +162,7 @@ def pace_deviation(
 
 
 class PaceAdaptabilityScorer:
-    """PAI 算出器（pai-v3）。加減点の内訳を reasons として出力する。"""
+    """PAI 算出器（pai-v4）。加減点の内訳を reasons として出力する。"""
 
     def __init__(self, weights: PaiWeights | None = None) -> None:
         self._w = weights or DEFAULT_WEIGHTS
@@ -157,7 +177,7 @@ class PaceAdaptabilityScorer:
     ) -> PaiResult:
         reasons: list[Reason] = []
 
-        # pai-v3: ペースは加減点。基準点からの振れ幅で「普段より有利か」を表す。
+        # pai-v3以降: ペースは加減点。基準点からの振れ幅で「普段より有利か」を表す。
         pace_bonus = self._pace_bonus(profile, forecast, track_type, reasons)
         distance_penalty = self._distance_penalty(profile, race_distance_m, reasons)
         track_penalty = self._track_penalty(profile, track_condition, reasons)
@@ -217,7 +237,7 @@ class PaceAdaptabilityScorer:
         reasons.append(
             Reason(
                 code="pace_fit",
-                description=_style_reason(profile.running_style, bonus),
+                description=_style_reason(profile.running_style, bonus, self._w.pace_swing),
             )
         )
         return bonus
@@ -309,12 +329,22 @@ class PaceAdaptabilityScorer:
         return FitLabel.NEUTRAL
 
 
-def _style_reason(style: RunningStyleLabel, penalty: float) -> str:
-    if penalty <= 10.0:
+def _style_reason(style: RunningStyleLabel, bonus: float, swing: float) -> str:
+    """今回の流れがこの脚質に向くかを言葉にする。bonus は正=向く・負=向かない。
+
+    振れ幅に対する比で判定するので、`pace_swing` を変えても文言の出方は変わらない。
+    感応度0の脚質（差し・追込）は常に比0＝中立の文言になる。
+
+    pai-v3 で引数が「減点」から「加点」へ変わったのに閾値が旧スケール（0〜100の減点）
+    のまま残っており、**最も不利な馬（bonus=-25）にも「持ち味を出しやすい流れです」と
+    出していた**。符号を見ずに上限だけで分岐していたため。
+    """
+    ratio = bonus / swing if swing else 0.0
+    if ratio >= 0.35:
         return f"脚質「{style}」の持ち味を出しやすい流れです。"
-    if penalty <= 30.0:
-        return f"脚質「{style}」としては極端な不利までは見ていません。"
-    return f"脚質「{style}」だけで見ると、今回は少し力を出しにくい流れです。"
+    if ratio <= -0.35:
+        return f"脚質「{style}」だけで見ると、今回は少し力を出しにくい流れです。"
+    return f"脚質「{style}」としては極端な有利・不利は見ていません。"
 
 
 def _distance_reason(penalty: float) -> str:

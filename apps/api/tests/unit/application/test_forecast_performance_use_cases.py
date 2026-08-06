@@ -91,8 +91,7 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
     assert output.previous_period.date_from == "2026-01-25"
     assert output.previous_period.date_to == "2026-04-24"
     assert [
-        (group.key, group.sample_size, group.hit_rate)
-        for group in output.previous_period.groups
+        (group.key, group.sample_size, group.hit_rate) for group in output.previous_period.groups
     ] == [
         ("overall", 1, 1.0),
         ("turf", 1, 1.0),
@@ -108,18 +107,18 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
     assert all("rpci" not in vars(group) for group in output.groups)
     assert all("rpci" not in vars(point) for point in output.weekly_trend)
     assert [
-        (group.key, group.sample_size, group.hit_rate)
-        for group in output.confidence_groups
+        (group.key, group.sample_size, group.hit_rate) for group in output.confidence_groups
     ] == [
         ("strong", 1, 1.0),
         ("normal", 1, 0.0),
         ("caution", 1, 1.0),
     ]
     assert all("rpci" not in vars(group) for group in output.confidence_groups)
-    assert [
-        (group.key, group.sample_size)
-        for group in output.confidence_cohort_groups
-    ] == [("overall", 3), ("turf", 2), ("dirt", 1)]
+    assert [(group.key, group.sample_size) for group in output.confidence_cohort_groups] == [
+        ("overall", 3),
+        ("turf", 2),
+        ("dirt", 1),
+    ]
     assert [
         (
             row.predicted_key,
@@ -137,8 +136,7 @@ def test_summarizes_overall_and_track_type_without_internal_values() -> None:
         ("slow", 1, [("high", 0, 0.0), ("average", 0, 0.0), ("slow", 1, 1.0)]),
     ]
     assert all(
-        "rpci" not in vars(row)
-        and all("rpci" not in vars(cell) for cell in row.cells)
+        "rpci" not in vars(row) and all("rpci" not in vars(cell) for cell in row.cells)
         for row in output.pace_matrix
     )
     assert [
@@ -164,18 +162,11 @@ def test_empty_period_returns_null_rate() -> None:
     assert output.hit_count == 0
     assert output.hit_rate is None
     assert all(group.hit_rate is None for group in output.groups)
-    assert all(
-        group.hit_rate is None
-        for group in output.previous_period.groups
-    )
+    assert all(group.hit_rate is None for group in output.previous_period.groups)
     assert all(group.hit_rate is None for group in output.confidence_groups)
     assert all(group.sample_size == 0 for group in output.confidence_cohort_groups)
     assert all(row.sample_size == 0 for row in output.pace_matrix)
-    assert all(
-        cell.rate is None
-        for row in output.pace_matrix
-        for cell in row.cells
-    )
+    assert all(cell.rate is None for row in output.pace_matrix for cell in row.cells)
     assert len(output.weekly_trend) == 8
     assert all(point.hit_rate is None for point in output.weekly_trend)
     assert output.recent_misses == []
@@ -208,22 +199,19 @@ def test_confidence_groups_exclude_legacy_fixed_confidence() -> None:
     assert output.sample_size == 2
     assert sum(group.sample_size for group in output.confidence_groups) == 1
     assert output.confidence_groups[0].sample_size == 1
-    assert [
-        (group.key, group.sample_size)
-        for group in output.confidence_cohort_groups
-    ] == [("overall", 1), ("turf", 1), ("dirt", 0)]
+    assert [(group.key, group.sample_size) for group in output.confidence_cohort_groups] == [
+        ("overall", 1),
+        ("turf", 1),
+        ("dirt", 0),
+    ]
 
 
 def test_confidence_review_is_ready_after_each_track_reaches_target() -> None:
     repo = FakeMartRepository()
     race_date = datetime.date(2026, 7, 20)
     repo.prediction_evaluations = [
-        _record(f"turf-{index}", race_date, "芝", "平均", 50.0)
-        for index in range(100)
-    ] + [
-        _record(f"dirt-{index}", race_date, "ダート", "平均", 43.0)
-        for index in range(100)
-    ]
+        _record(f"turf-{index}", race_date, "芝", "平均", 50.0) for index in range(100)
+    ] + [_record(f"dirt-{index}", race_date, "ダート", "平均", 43.0) for index in range(100)]
 
     output = GetForecastPerformanceUseCase(repo).execute(now=NOW)
 
@@ -235,12 +223,8 @@ def test_confidence_review_waits_when_one_track_is_below_target() -> None:
     repo = FakeMartRepository()
     race_date = datetime.date(2026, 7, 20)
     repo.prediction_evaluations = [
-        _record(f"turf-{index}", race_date, "芝", "平均", 50.0)
-        for index in range(100)
-    ] + [
-        _record(f"dirt-{index}", race_date, "ダート", "平均", 43.0)
-        for index in range(99)
-    ]
+        _record(f"turf-{index}", race_date, "芝", "平均", 50.0) for index in range(100)
+    ] + [_record(f"dirt-{index}", race_date, "ダート", "平均", 43.0) for index in range(99)]
 
     output = GetForecastPerformanceUseCase(repo).execute(now=NOW)
 

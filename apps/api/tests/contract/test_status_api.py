@@ -181,8 +181,6 @@ def test_forecast_misses_contract_hides_internal_values(client: TestClient) -> N
 
 
 def test_forecast_misses_rejects_invalid_filter(client: TestClient) -> None:
-    response = client.get(
-        "/api/v1/forecast-performance/misses?actual_label=unknown"
-    )
+    response = client.get("/api/v1/forecast-performance/misses?actual_label=unknown")
 
     assert response.status_code == 422

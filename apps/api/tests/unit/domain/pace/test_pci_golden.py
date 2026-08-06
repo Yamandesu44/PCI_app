@@ -153,11 +153,14 @@ def test_rpci_from_lap_golden(
 def test_rpci_from_lap_equals_pci_on_1200m() -> None:
     """S3/L3方式はS3+L3=仮想1200mとしてcalculate_pciを呼ぶことで式一元化を保証。"""
     s3, l3 = Furlong3Time(33.9), Furlong3Time(34.6)
-    assert calculate_rpci_from_lap(s3, l3) == calculate_pci(
-        race_time=RaceTime(s3.seconds + l3.seconds),
-        furlong_3f=l3,
-        distance=Distance(1200),
-    ).value
+    assert (
+        calculate_rpci_from_lap(s3, l3)
+        == calculate_pci(
+            race_time=RaceTime(s3.seconds + l3.seconds),
+            furlong_3f=l3,
+            distance=Distance(1200),
+        ).value
+    )
 
 
 def test_aggregate_rpci_uses_lap_value_when_provided() -> None:

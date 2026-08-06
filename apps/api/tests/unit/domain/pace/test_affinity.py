@@ -85,8 +85,8 @@ class TestNeighborBleed:
             as_of=datetime.date(2026, 6, 1),
         )
         assert profile.scores[PaceSpeedLevel.VERY_HIGH] == 100
-        assert profile.scores[PaceSpeedLevel.HIGH] > 0       # 隣接
-        assert profile.scores[PaceSpeedLevel.AVERAGE] == 0   # 2ホップ
+        assert profile.scores[PaceSpeedLevel.HIGH] > 0  # 隣接
+        assert profile.scores[PaceSpeedLevel.AVERAGE] == 0  # 2ホップ
         assert profile.scores[PaceSpeedLevel.SLOW] == 0
         assert profile.scores[PaceSpeedLevel.VERY_SLOW] == 0
 
@@ -255,9 +255,7 @@ class TestEvidenceEdgeCases:
 class TestConfidenceThresholds:
     def test_confidence_high_with_three_samples(self) -> None:
         """3 サンプルのとき confidence = 0.8。"""
-        results = tuple(
-            _result(f"202601{i:02d}05010101", 1, 48.0) for i in range(1, 4)
-        )
+        results = tuple(_result(f"202601{i:02d}05010101", 1, 48.0) for i in range(1, 4))
         profile = build_horse_pace_affinity_profile(
             "H001", RunningStyleLabel.CLOSER, results, as_of=datetime.date(2026, 6, 1)
         )
@@ -266,9 +264,7 @@ class TestConfidenceThresholds:
 
     def test_confidence_max_with_five_samples(self) -> None:
         """5 サンプル以上のとき confidence = 1.0。"""
-        results = tuple(
-            _result(f"202601{i:02d}05010101", 1, 48.0) for i in range(1, 6)
-        )
+        results = tuple(_result(f"202601{i:02d}05010101", 1, 48.0) for i in range(1, 6))
         profile = build_horse_pace_affinity_profile(
             "H001", RunningStyleLabel.CLOSER, results, as_of=datetime.date(2026, 6, 1)
         )

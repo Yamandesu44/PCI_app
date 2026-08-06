@@ -64,10 +64,7 @@ def test_v4_lap_query_uses_only_prior_races_and_last_ten_runs() -> None:
 
 
 def test_v5_month_query_contains_all_months_in_order() -> None:
-    positions = [
-        _MONTH_FEATURES.index(f"AS month_{month:02d}")
-        for month in range(1, 13)
-    ]
+    positions = [_MONTH_FEATURES.index(f"AS month_{month:02d}") for month in range(1, 13)]
 
     assert positions == sorted(positions)
     assert "EXTRACT(MONTH FROM r.race_date)" in _MONTH_FEATURES
@@ -249,8 +246,7 @@ class TestTrainingProvenance:
     def _rows(feature_count: int, lap_flags: list[int]) -> list[tuple[object, ...]]:
         # [特徴量..., target, race_date, has_lap] の並びを模す
         return [
-            tuple([0.0] * feature_count)
-            + (50.0, datetime.date(2026, 1, index + 1), flag)
+            tuple([0.0] * feature_count) + (50.0, datetime.date(2026, 1, index + 1), flag)
             for index, flag in enumerate(lap_flags)
         ]
 

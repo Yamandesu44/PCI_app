@@ -26,9 +26,11 @@ class TestSaveMasterDataUseCase:
 
     def test_save_horses_persists_to_repo(self) -> None:
         uc, repo = self._make()
-        uc.save_horses([
-            HorseInput(ketto_num="2020100001", name="テスト馬A", sex="牝", birth_year=2019),
-        ])
+        uc.save_horses(
+            [
+                HorseInput(ketto_num="2020100001", name="テスト馬A", sex="牝", birth_year=2019),
+            ]
+        )
         horse = repo._horses.get("2020100001")
         assert horse is not None
         assert horse.name == "テスト馬A"

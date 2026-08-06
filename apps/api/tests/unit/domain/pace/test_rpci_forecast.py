@@ -62,9 +62,7 @@ class TestRuleBasedForecast:
         pci-v3で補正を実分布から引き直した（+2.0）ため、素直に均衡する構成へ変更する。
         """
         forecaster = RuleBasedRpciForecaster()
-        result = forecaster.forecast(
-            _ctx((ESCAPE,) + (FRONT,) * 4 + (STALKER,) * 4 + (CLOSER,))
-        )
+        result = forecaster.forecast(_ctx((ESCAPE,) + (FRONT,) * 4 + (STALKER,) * 4 + (CLOSER,)))
         assert result.label == PaceLabel.AVERAGE
 
     def test_multiple_escape_lowers_rpci(self) -> None:
@@ -199,9 +197,9 @@ class TestFrontPaceEvidence:
     """rule-v2: 前付け馬の実績ペース傾向の反映。"""
 
     @staticmethod
-    def _sample(avg_pci: float, size: int = 5, style: RunningStyleLabel = ESCAPE) -> (
-        FrontRunnerPaceSample
-    ):
+    def _sample(
+        avg_pci: float, size: int = 5, style: RunningStyleLabel = ESCAPE
+    ) -> FrontRunnerPaceSample:
         return FrontRunnerPaceSample(horse_no=1, style=style, avg_pci=avg_pci, sample_size=size)
 
     def test_no_samples_matches_rule_v1_path(self) -> None:

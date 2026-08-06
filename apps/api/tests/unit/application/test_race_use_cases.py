@@ -293,6 +293,7 @@ class TestUpdateRaceMetadataUseCase:
             assert race is not None
             assert race.track_condition == "重"
             assert race.weather == "雨"
+
     def test_legacy_key_is_not_matched_when_identity_is_ambiguous(self) -> None:
         repo = FakeRaceRepository()
         RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, ENTRIES)
@@ -312,6 +313,7 @@ class TestUpdateRaceMetadataUseCase:
         )
 
         assert updated is False
+
     def test_unknown_race_is_skipped(self) -> None:
         repo = FakeRaceRepository()
 
@@ -433,9 +435,7 @@ class TestRecordRaceResultUseCase:
         # 出走表を登録せずにレース情報だけ登録
         RegisterRaceEntriesUseCase(repo).execute(RACE_INFO, [])
         # horse_no=1 は出走表にないため ketto_num="" になる
-        single_result = [
-            ResultInput(horse_no=1, finish_pos=1, race_time_s=94.4, agari_3f_s=34.0)
-        ]
+        single_result = [ResultInput(horse_no=1, finish_pos=1, race_time_s=94.4, agari_3f_s=34.0)]
         RecordRaceResultUseCase(repo).execute(RACE_KEY, single_result)
         entries = repo.find_entries(RaceKey(RACE_KEY))
         assert entries[0].running_style is None

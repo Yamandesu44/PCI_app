@@ -23,10 +23,7 @@ def test_migrated_database_is_ready(db_session: Session) -> None:
 
 def test_short_model_version_column_is_schema_outdated(db_session: Session) -> None:
     db_session.execute(
-        text(
-            "ALTER TABLE predicted_pace "
-            "ALTER COLUMN model_version TYPE VARCHAR(20)"
-        )
+        text("ALTER TABLE predicted_pace ALTER COLUMN model_version TYPE VARCHAR(20)")
     )
 
     result = check_database_readiness(db_session)

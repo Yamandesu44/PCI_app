@@ -51,9 +51,7 @@ class TestThresholdsForShares:
         old_shares = _rc._label_shares(old, "芝")
         new = [v + 5.0 for v in old]  # 式の入れ替えで一律+5ずれた想定
 
-        high, slow = _rc._thresholds_for_shares(
-            new, old_shares["ハイ"], old_shares["スロー"]
-        )
+        high, slow = _rc._thresholds_for_shares(new, old_shares["ハイ"], old_shares["スロー"])
 
         assert high > _rc.DEFAULT_WEIGHTS.high_threshold
         assert slow > _rc.DEFAULT_WEIGHTS.slow_threshold

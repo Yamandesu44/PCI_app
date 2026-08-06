@@ -320,12 +320,8 @@ class TestLightGBMRpciForecaster:
         assert _classification_margin_confidence(rpci, track_type) == expected
 
     def test_forecast_confidence_is_not_fixed(self) -> None:
-        boundary = self._make_forecaster(49.7).forecast(
-            _ctx((FRONT,) * 10, track_type="芝")
-        )
-        center = self._make_forecaster(51.85).forecast(
-            _ctx((FRONT,) * 10, track_type="芝")
-        )
+        boundary = self._make_forecaster(49.7).forecast(_ctx((FRONT,) * 10, track_type="芝"))
+        center = self._make_forecaster(51.85).forecast(_ctx((FRONT,) * 10, track_type="芝"))
 
         # 予測値は小数1桁へ丸められるため、平均帯の中央(51.85)はぴったり再現できない。
         # このテストの主旨は「信頼度が固定値でない」ことなので、境界との差で確認する。
@@ -678,17 +674,13 @@ class TestRpciClamp:
         """下限は学習ラベル範囲の下端（train_rpci_lgbm.py の --rpci-min 既定）と一致させる。"""
         assert DEFAULT_RPCI_CLAMP == (20.0, 65.0)
 
-    def test_production_floor_no_longer_truncates_realistic_dirt_pace(
-        self, tmp_path: Path
-    ) -> None:
+    def test_production_floor_no_longer_truncates_realistic_dirt_pace(self, tmp_path: Path) -> None:
         """ダート実分布（最小20.9）に届く予測を、旧下限35.0のように切り捨てない。"""
         forecaster = self._forecaster(tmp_path, raw=28.4)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
         assert result.value == 28.4
 
-    def test_production_floor_still_bounds_implausible_output(
-        self, tmp_path: Path
-    ) -> None:
+    def test_production_floor_still_bounds_implausible_output(self, tmp_path: Path) -> None:
         forecaster = self._forecaster(tmp_path, raw=5.0)
         result = forecaster.forecast(_ctx((FRONT,) * 10, track_type="ダート"))
         assert result.value == 20.0

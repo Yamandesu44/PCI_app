@@ -57,19 +57,16 @@ class FakeRaceRepository:
     def count_incomplete_past_races(self, before: datetime.date) -> int:
         return len(self.find_incomplete_past_races(before, limit=len(self._races)))
 
-    def find_oldest_incomplete_past_race_date(
-        self, before: datetime.date
-    ) -> datetime.date | None:
+    def find_oldest_incomplete_past_race_date(self, before: datetime.date) -> datetime.date | None:
         races = self.find_incomplete_past_races(before, limit=len(self._races))
         return min((race.race_date for race in races), default=None)
 
-    def find_incomplete_past_races(
-        self, before: datetime.date, limit: int = 20
-    ) -> list[Race]:
+    def find_incomplete_past_races(self, before: datetime.date, limit: int = 20) -> list[Race]:
         races = [
             race
             for race in self._races.values()
-            if race.race_date < before and race.status == RaceStatus.ENTRIES
+            if race.race_date < before
+            and race.status == RaceStatus.ENTRIES
             and race.jyo_cd in _JRA_PLACE_CODES
             and race.track_type != "障害"
         ]
@@ -79,11 +76,7 @@ class FakeRaceRepository:
     def count_missing_track_conditions(
         self, on_or_after: datetime.date, before: datetime.date
     ) -> int:
-        return len(
-            self.find_missing_track_conditions(
-                on_or_after, before, limit=len(self._races)
-            )
-        )
+        return len(self.find_missing_track_conditions(on_or_after, before, limit=len(self._races)))
 
     def find_missing_track_conditions(
         self,
@@ -103,14 +96,8 @@ class FakeRaceRepository:
         races.sort(key=lambda race: (race.race_date, str(race.race_key)), reverse=True)
         return races[:limit]
 
-    def count_duplicate_race_groups(
-        self, on_or_after: datetime.date, before: datetime.date
-    ) -> int:
-        return len(
-            self.find_duplicate_race_groups(
-                on_or_after, before, limit=len(self._races)
-            )
-        )
+    def count_duplicate_race_groups(self, on_or_after: datetime.date, before: datetime.date) -> int:
+        return len(self.find_duplicate_race_groups(on_or_after, before, limit=len(self._races)))
 
     def find_duplicate_race_groups(
         self,
@@ -166,10 +153,7 @@ class FakeRaceRepository:
         race = self._races[race_key]
         entries = self.find_entries(race.race_key)
         finished = [entry for entry in entries if entry.finish_pos is not None]
-        entry_values = [
-            (entry.horse_no, entry.frame_no, entry.ketto_num)
-            for entry in entries
-        ]
+        entry_values = [(entry.horse_no, entry.frame_no, entry.ketto_num) for entry in entries]
         result_values = [
             (
                 entry.horse_no,

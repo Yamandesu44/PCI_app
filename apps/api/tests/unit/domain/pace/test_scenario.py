@@ -26,9 +26,7 @@ def _pai(horse_no: int, pai: float, label: FitLabel) -> PaiResult:
 
 def test_headline_reflects_pace_label() -> None:
     for label in PaceLabel:
-        scenario = build_pace_scenario(
-            _forecast(label), [], [], horse_numbers_confirmed=True
-        )
+        scenario = build_pace_scenario(_forecast(label), [], [], horse_numbers_confirmed=True)
         assert scenario.pace_label == label
         assert scenario.headline
 
@@ -67,9 +65,7 @@ def test_no_beneficiaries_handled() -> None:
 
 
 def test_reasons_present() -> None:
-    scenario = build_pace_scenario(
-        _forecast(PaceLabel.SLOW), [], [], horse_numbers_confirmed=True
-    )
+    scenario = build_pace_scenario(_forecast(PaceLabel.SLOW), [], [], horse_numbers_confirmed=True)
     codes = {r.code for r in scenario.reasons}
     assert "scenario_pace" in codes
     assert "scenario_beneficiaries" in codes

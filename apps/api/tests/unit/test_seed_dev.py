@@ -32,7 +32,7 @@ class TestSeedRaceKeys:
 
     def test_upcoming_is_after_confirmed(self) -> None:
         """出走前レースが確定後レースより新しい日付である。"""
-        upcoming_date = UPCOMING_RACE_KEY[4:8]   # MMDD 部分
+        upcoming_date = UPCOMING_RACE_KEY[4:8]  # MMDD 部分
         confirmed_date = CONFIRMED_RACE_KEY[4:8]
         assert upcoming_date > confirmed_date
 
@@ -51,8 +51,7 @@ class TestSeedRaceKeys:
 class TestConfirmedPci:
     def _pci_list(self) -> list[float]:
         return [
-            _pci(rt, a3f, _CONFIRMED_DISTANCE_M)
-            for _, _, _, _, rt, a3f, *_ in _CONFIRMED_RESULTS
+            _pci(rt, a3f, _CONFIRMED_DISTANCE_M) for _, _, _, _, rt, a3f, *_ in _CONFIRMED_RESULTS
         ]
 
     def test_all_pci_values_are_positive(self) -> None:

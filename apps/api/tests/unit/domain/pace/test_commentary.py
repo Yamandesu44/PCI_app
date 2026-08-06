@@ -259,9 +259,9 @@ class TestReviewComment:
 class TestForecastAccuracyInReview:
     """出走前の想定RPCIとの答え合わせ文言（回顧フィードバックループ）。"""
 
-    def _input(self, predicted_label: PaceLabel | None, actual_label: PaceLabel | None) -> (
-        ReviewCommentInput
-    ):
+    def _input(
+        self, predicted_label: PaceLabel | None, actual_label: PaceLabel | None
+    ) -> ReviewCommentInput:
         return ReviewCommentInput(
             rpci_actual=52.0,
             pci3_actual=52.0,

@@ -9,10 +9,12 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from pci.domain.pace.adaptability import (
+    DEFAULT_WEIGHTS,
     FitLabel,
     HorsePaceProfile,
     PaceAdaptabilityScorer,
     PaiWeights,
+    pace_center,
 )
 from pci.domain.pace.affinity import (
     HorsePaceAffinityProfile,
@@ -36,10 +38,11 @@ def _forecast(value: float, label: PaceLabel) -> RpciForecast:
     )
 
 
-# pai-v3 はコース相対で判定する。既定 track_type="芝"（中立51.85・境界49.7/54.0）に合わせる。
+# pai-v4 はコース相対で判定する。既定 track_type="芝"。
+# 振れの中心は neutral_rpci(51.85) + pace_center_offset_turf(-1.17) = 50.68。
 SLOW = _forecast(56.0, PaceLabel.SLOW)
 HIGH = _forecast(48.0, PaceLabel.HIGH)
-AVERAGE = _forecast(51.85, PaceLabel.AVERAGE)
+AVERAGE = _forecast(pace_center("芝"), PaceLabel.AVERAGE)
 
 
 class TestPaiCoreLogic:
@@ -47,13 +50,13 @@ class TestPaiCoreLogic:
         scorer = PaceAdaptabilityScorer()
         result = scorer.score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
         assert result.fit_label == FitLabel.MATCHED
-        assert result.pai >= 65.0
+        assert result.pai >= DEFAULT_WEIGHTS.matched_threshold
 
     def test_escape_horse_unfavorable_in_high_pace(self) -> None:
         scorer = PaceAdaptabilityScorer()
         result = scorer.score(HorsePaceProfile(1, ESCAPE), HIGH, 1600)
         assert result.fit_label == FitLabel.UNFAVORABLE
-        assert result.pai < 40.0
+        assert result.pai < DEFAULT_WEIGHTS.unfavorable_threshold
 
     def test_back_styles_stay_neutral_whatever_the_pace(self) -> None:
         """後方脚質はペース依存が小さいため常に中立（ADR-0010・pai-v3）。
@@ -70,7 +73,7 @@ class TestPaiCoreLogic:
     def test_same_pace_gives_different_labels_per_track(self) -> None:
         """コース相対で判定する。同じRPCIでも芝とダートで意味が違う。
 
-        RPCI 48.0 は芝ではハイ寄り(中立51.85より下)、ダートではスロー寄り(中立46.5より上)。
+        RPCI 48.0 は芝では中心(50.68)より下、ダートでは中心(46.97)より上。
         pai-v2 は絶対値で判定していたため、この区別ができなかった。
         """
         scorer = PaceAdaptabilityScorer()
@@ -120,14 +123,14 @@ class TestPaiCoreLogic:
         assert "pace_fit" in codes
         assert "pai" in codes
 
-    def test_model_version_is_pai_v3(self) -> None:
+    def test_model_version_is_pai_v4(self) -> None:
         result = PaceAdaptabilityScorer().score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
-        assert result.model_version == "pai-v3"
+        assert result.model_version == "pai-v4"
 
     def test_custom_weights_change_thresholds(self) -> None:
         strict = PaiWeights(matched_threshold=95.0)
         scorer = PaceAdaptabilityScorer(strict)
-        # 平均ペースの逃げ馬（好ペース55との差5→減点25→PAI75）は厳格閾値で合致しない
+        # 中心ちょうどの逃げ馬は PAI=50。厳格閾値では合致しない。
         result = scorer.score(HorsePaceProfile(1, ESCAPE), AVERAGE, 1600)
         assert result.fit_label != FitLabel.MATCHED
 
@@ -157,9 +160,9 @@ class TestPaiProperties:
     ) -> None:
         scorer = PaceAdaptabilityScorer()
         result = scorer.score(profile, fc, dist)
-        if result.pai >= 65.0:
+        if result.pai >= DEFAULT_WEIGHTS.matched_threshold:
             assert result.fit_label == FitLabel.MATCHED
-        elif result.pai < 40.0:
+        elif result.pai < DEFAULT_WEIGHTS.unfavorable_threshold:
             assert result.fit_label == FitLabel.UNFAVORABLE
         else:
             assert result.fit_label == FitLabel.NEUTRAL
@@ -206,15 +209,15 @@ class TestPaiPaceAffinityBlend:
     def test_pai_is_blended_50_50_with_affinity_score(self) -> None:
         """PAI = (base_pai × 0.5) + (affinity_score × 0.5) のブレンドを検証する。
 
-        pai-v3: ESCAPE + SLOW(56.0)、芝の中立51.85・半幅2.15。
-        deviation = (56.0 - 51.85) / 2.15 → 1.0 でクリップ
-        base_pai = 50 + 1.0 × 25 = 75.0
+        pai-v4: ESCAPE + SLOW(56.0)、芝の中心50.68・半幅2.15・振れ幅10。
+        deviation = (56.0 - 50.68) / 2.15 → 1.0 でクリップ
+        base_pai = 50 + 1.0 × 10 = 60.0
         predicted_level=SLOW → affinity_score=50（_make_affinity の設定による）
-        blended = (75 × 0.5) + (50 × 0.5) = 62.5
+        blended = (60 × 0.5) + (50 × 0.5) = 55.0
         """
         profile = HorsePaceProfile(1, ESCAPE, pace_affinity=_make_affinity())
         result = PaceAdaptabilityScorer().score(profile, SLOW, 1600)
-        assert result.pai == pytest.approx(62.5, abs=0.1)
+        assert result.pai == pytest.approx(55.0, abs=0.1)
 
     def test_very_slow_specialist_not_unfavorable_when_forecast_is_slow(self) -> None:
         """好走が全て「かなり落ち着いた流れ」の馬は、想定が隣接する「落ち着いた
@@ -298,21 +301,64 @@ class TestPaceCenterOffset:
         forecast = _forecast(rpci, PaceLabel.AVERAGE)
         return scorer.score(profile, forecast, 1600, track_type=track).pai
 
-    def test_default_offset_keeps_current_behaviour(self) -> None:
-        assert PaiWeights().pace_center_offset_turf == 0.0
-        assert PaiWeights().pace_center_offset_dirt == 0.0
-        # 既定では中立値ちょうどで PAI=50。
-        assert self._pai(PaiWeights(), 51.85) == 50.0
+    def test_defaults_are_the_measured_offsets(self) -> None:
+        """pai-v4 の既定は実測から解いた中心合わせ値（ADR-2026-08-04）。"""
+        assert PaiWeights().pace_center_offset_turf == -1.17
+        assert PaiWeights().pace_center_offset_dirt == 0.47
+        # 補正後の中心ちょうどで PAI=50。
+        assert self._pai(PaiWeights(), pace_center("芝")) == 50.0
 
-    def test_offset_moves_the_neutral_point(self) -> None:
-        w = PaiWeights(pace_center_offset_turf=-1.13)
-        # 中心が 50.72 へ移るので、そこが PAI=50 になる。
-        assert self._pai(w, 50.72) == pytest.approx(50.0, abs=0.1)
-        # 元の中立値 51.85 は、中心より上＝逃げに有利側へ振れる。
-        assert self._pai(w, 51.85) > 50.0
+    def test_zero_offset_restores_the_uncentered_centre(self) -> None:
+        w = PaiWeights(pace_center_offset_turf=0.0)
+        # 中心が neutral_rpci(51.85) へ戻る。
+        assert self._pai(w, 51.85) == pytest.approx(50.0, abs=0.1)
+        # 補正後の中心(50.68)は、そこより下＝逃げに不利側へ振れる。
+        assert self._pai(w, pace_center("芝")) < 50.0
 
     def test_turf_and_dirt_offsets_are_independent(self) -> None:
-        w = PaiWeights(pace_center_offset_turf=-1.13, pace_center_offset_dirt=0.05)
+        w = PaiWeights(pace_center_offset_turf=-1.17, pace_center_offset_dirt=0.47)
         # ダート側のオフセットは芝の判定に影響しない。
-        assert self._pai(w, 46.55, track="ダート") == pytest.approx(50.0, abs=0.1)
-        assert self._pai(w, 50.72, track="芝") == pytest.approx(50.0, abs=0.1)
+        assert self._pai(w, pace_center("ダート", w), track="ダート") == pytest.approx(
+            50.0, abs=0.1
+        )
+        assert self._pai(w, pace_center("芝", w), track="芝") == pytest.approx(50.0, abs=0.1)
+
+
+class TestStyleReasonDirection:
+    """展開の向き不向きを表す文言が、実際の向きと一致すること。
+
+    pai-v3 で `_style_reason` の引数が「減点」から「加点」へ変わったのに閾値が
+    旧スケール（0〜100の減点）のまま残っており、**最も不利な馬にも
+    「持ち味を出しやすい流れです」と出していた**。符号を見ずに上限だけで
+    分岐していたため、負の加点（＝不利）が全て最初の枝へ落ちていた。
+    """
+
+    @staticmethod
+    def _pace_reason(style: RunningStyleLabel, fc: RpciForecast) -> str:
+        result = PaceAdaptabilityScorer().score(HorsePaceProfile(1, style), fc, 1600)
+        return next(r for r in result.reasons if r.code == "pace_fit").description
+
+    def test_favourable_pace_says_so(self) -> None:
+        assert "持ち味を出しやすい" in self._pace_reason(ESCAPE, SLOW)
+
+    def test_unfavourable_pace_says_so(self) -> None:
+        text = self._pace_reason(ESCAPE, HIGH)
+        assert "力を出しにくい" in text
+        assert "持ち味を出しやすい" not in text
+
+    def test_neutral_pace_says_neither(self) -> None:
+        text = self._pace_reason(ESCAPE, AVERAGE)
+        assert "極端な有利・不利は見ていません" in text
+
+    def test_pace_insensitive_styles_always_read_neutral(self) -> None:
+        """感応度0の差し・追込は、どの流れでも向き不向きを主張しない。"""
+        for fc in (SLOW, HIGH, AVERAGE):
+            assert "極端な有利・不利は見ていません" in self._pace_reason(CLOSER, fc)
+
+    def test_wording_is_stable_across_swing_settings(self) -> None:
+        """振れ幅を変えても文言の出方は変わらない（比で判定しているため）。"""
+        for swing in (5.0, 10.0, 25.0):
+            scorer = PaceAdaptabilityScorer(PaiWeights(pace_swing=swing))
+            result = scorer.score(HorsePaceProfile(1, ESCAPE), HIGH, 1600)
+            text = next(r for r in result.reasons if r.code == "pace_fit").description
+            assert "力を出しにくい" in text

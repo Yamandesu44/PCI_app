@@ -193,12 +193,20 @@ class TestEnsureMastersSelfHeal:
         )
         entries = [
             EntryInput(
-                horse_no=1, frame_no=1, ketto_num="2021000001",
-                weight=470.0, jockey_code="05339", trainer_code="01088",
+                horse_no=1,
+                frame_no=1,
+                ketto_num="2021000001",
+                weight=470.0,
+                jockey_code="05339",
+                trainer_code="01088",
             ),
             EntryInput(
-                horse_no=2, frame_no=2, ketto_num="2021000002",
-                weight=482.0, jockey_code="05339", trainer_code="01099",
+                horse_no=2,
+                frame_no=2,
+                ketto_num="2021000002",
+                weight=482.0,
+                jockey_code="05339",
+                trainer_code="01099",
             ),
         ]
         # マスタを一切投入していない状態でも FK 違反 (IntegrityError) で落ちない
@@ -396,16 +404,13 @@ class TestFindMissingTrackConditions:
 
         assert repo.count_missing_track_conditions(date_from, date_to) == 1
         assert [
-            str(race.race_key)
-            for race in repo.find_missing_track_conditions(date_from, date_to)
+            str(race.race_key) for race in repo.find_missing_track_conditions(date_from, date_to)
         ] == ["2026061805010101"]
 
 
 @pytest.mark.integration
 class TestFindDuplicateRaceGroups:
-    def test_counts_and_lists_only_recent_jra_flat_duplicates(
-        self, db_session: Session
-    ) -> None:
+    def test_counts_and_lists_only_recent_jra_flat_duplicates(self, db_session: Session) -> None:
         repo = SqlAlchemyRaceRepository(db_session)
         for key, race_date, jyo_cd, track_type in [
             ("2026061805010111", datetime.date(2026, 6, 18), "05", TrackType.TURF),
@@ -456,9 +461,7 @@ class TestFindDuplicateRaceGroups:
 
 @pytest.mark.integration
 class TestDeleteDuplicateRaceUseCase:
-    def test_deletes_stale_key_only_after_current_values_match(
-        self, db_session: Session
-    ) -> None:
+    def test_deletes_stale_key_only_after_current_values_match(self, db_session: Session) -> None:
         _seed_master(db_session)
         repo = SqlAlchemyRaceRepository(db_session)
         stale_key = "2026061805010111"

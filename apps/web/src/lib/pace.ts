@@ -211,6 +211,14 @@ export function fitTone(label: string): FitTone {
   return "neutral";
 }
 
+/**
+ * 「今回の流れはこの脚質にとって普段どおり」を表す基準点。
+ *
+ * ドメインの `PaiWeights.pace_neutral_pai` と同じ値。振れ幅や閾値が変わっても
+ * ここは動かないため、UI側で「平均より下か」を見たいときの基準に使う。
+ */
+export const PAI_NEUTRAL = 50;
+
 /** PAI(0–100) を表示バー幅(%) に変換。範囲外は丸める。 */
 export function paiBarWidth(pai: number): number {
   return Math.max(0, Math.min(100, Math.round(pai)));
@@ -340,11 +348,22 @@ function styleBenefitReason(style: string): string {
   return "今回の流れとかみ合えば、力を出しやすいタイプです。";
 }
 
-/** 展開恩恵馬を、馬券検討で使いやすい役割ラベルへ変換する。 */
-export function benefitRecommendation(horse: Pick<HorseFit, "pai" | "running_style">, rank: number): BenefitRecommendation {
+/**
+ * 展開恩恵馬を、馬券検討で使いやすい役割ラベルへ変換する。
+ *
+ * 2026-08-04: PAIの実数（80/70）で分岐していたのをやめ、ドメインが持つ
+ * `fit_label` で判定する。PAIのスケールは pai-v4 で振れ幅 25 → 10 へ変わり、
+ * 80や70はほぼ到達しなくなった。閾値をUI側に写経すると、こうしてスケール変更に
+ * 追随できず黙って機能が止まる（ADR-2026-08-04）。
+ */
+export function benefitRecommendation(
+  horse: Pick<HorseFit, "fit_label" | "running_style">,
+  rank: number,
+): BenefitRecommendation {
   const reason = styleBenefitReason(horse.running_style);
+  const matched = horse.fit_label === "合致";
 
-  if (rank === 0 && horse.pai >= 80) {
+  if (rank === 0 && matched) {
     return {
       label: "軸候補",
       tone: "main",
@@ -352,7 +371,7 @@ export function benefitRecommendation(horse: Pick<HorseFit, "pai" | "running_sty
     };
   }
 
-  if (rank <= 2 && horse.pai >= 70) {
+  if (rank <= 2 && matched) {
     return {
       label: "相手候補",
       tone: "partner",
@@ -360,7 +379,7 @@ export function benefitRecommendation(horse: Pick<HorseFit, "pai" | "running_sty
     };
   }
 
-  if (horse.pai >= 70) {
+  if (matched) {
     return {
       label: "穴で拾う",
       tone: "value",
@@ -405,7 +424,9 @@ export function discountRecommendation(
 ): DiscountRecommendation {
   const reason = styleDiscountReason(horse.running_style);
 
-  if (horse.fit_label === "不利" || horse.pai < 45) {
+  // `fit_label` が「不利」になる条件そのものがドメインの閾値なので、
+  // ここで PAI の実数を重ねて書かない（書くと二重管理になり、ずれる）。
+  if (horse.fit_label === "不利") {
     return {
       label: "評価下げ",
       tone: "avoid",
@@ -468,7 +489,7 @@ export function forecastDecisionChecklist({
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.style);
   const attentionHorse = sortDiscountCandidates(horses).find(
-    (horse) => horse.fit_label === "不利" || horse.pai < 60,
+    (horse) => horse.fit_label === "不利" || horse.pai < PAI_NEUTRAL,
   );
   const attentionRecommendation = attentionHorse
     ? discountRecommendation(attentionHorse)

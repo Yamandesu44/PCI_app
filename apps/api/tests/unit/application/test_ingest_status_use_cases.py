@@ -36,9 +36,7 @@ def _entry(
 
 class TestGetIngestStatusUseCase:
     @staticmethod
-    def _execute(
-        entries: list[IngestLogEntry], race_repo: FakeRaceRepository | None = None
-    ):
+    def _execute(entries: list[IngestLogEntry], race_repo: FakeRaceRepository | None = None):
         return GetIngestStatusUseCase(
             FakeIngestLogRepository(entries), race_repo or FakeRaceRepository()
         ).execute(now=NOW)
@@ -78,9 +76,7 @@ class TestGetIngestStatusUseCase:
         assert len(failure.error_summary) == 200
 
     def test_recent_failures_capped_at_five(self) -> None:
-        entries = [
-            _entry(days_ago=i, status="error", error_msg=f"e{i}") for i in range(8)
-        ]
+        entries = [_entry(days_ago=i, status="error", error_msg=f"e{i}") for i in range(8)]
         output = self._execute(entries)
         assert len(output.recent_failures) == 5
 
@@ -135,9 +131,7 @@ class TestGetIngestStatusUseCase:
         output = self._execute([_entry(days_ago=0)], repo)
 
         assert output.incomplete_race_count == 1
-        assert [race.race_key for race in output.incomplete_races] == [
-            "2026072105010102"
-        ]
+        assert [race.race_key for race in output.incomplete_races] == ["2026072105010102"]
 
     def test_no_past_entries_reports_complete(self) -> None:
         output = self._execute([_entry(days_ago=0)])

@@ -183,6 +183,8 @@ class HorseSample:
     running_style: str = ""
     # ペース補正が脚質どうしを相対的にずらしていないかを測るために持つ。
     forecast_rpci: float = 0.0
+    # ラベル閾値がスケールに合っているかを測るために持つ。
+    fit_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -618,14 +620,9 @@ DEFAULT_PAI_WEIGHT_PROFILES: tuple[PaiWeightProfile, ...] = (
         weights=DEFAULT_PAI_WEIGHTS,
     ),
     PaiWeightProfile(
-        name="swing-light",
-        description="ペースの振れ幅を弱める",
-        weights=replace(DEFAULT_PAI_WEIGHTS, pace_swing=15.0),
-    ),
-    PaiWeightProfile(
-        name="swing-heavy",
-        description="ペースの振れ幅を強める",
-        weights=replace(DEFAULT_PAI_WEIGHTS, pace_swing=35.0),
+        name="swing5",
+        description="ペースの振れ幅をさらに弱める",
+        weights=replace(DEFAULT_PAI_WEIGHTS, pace_swing=5.0),
     ),
     PaiWeightProfile(
         name="front-only",
@@ -646,42 +643,23 @@ DEFAULT_PAI_WEIGHT_PROFILES: tuple[PaiWeightProfile, ...] = (
             sensitivity_closer=-0.2,
         ),
     ),
-    # 中心を実測の予測RPCI平均へ合わせた版。2026-06-01以降の実測は
-    # 芝 50.72（中立51.85 → −1.13）・ダート 46.55（中立46.50 → +0.05）。
-    # 中心が合っていないと、感応度の高い脚質だけが系統的にずれる（芝−6.2点・
-    # ダート+4.3点）。ここを直さない限り pace-off との比較は公平にならない。
-    # 注意: オフセットは比較対象と同一期間から取った当てはめ値。期間外で再確認すること。
+    # pai-v4 が採った中心合わせを外した版。current との差が、中心合わせの寄与そのもの。
+    # 未補正だと感応度1.0の脚質が 芝−6.2点・ダート+4.3点 の定数シフトを受ける。
     PaiWeightProfile(
-        name="centered",
-        description="振れの中心を実測の予測RPCI平均へ合わせる",
+        name="uncentered",
+        description="中心合わせを外す（pai-v3 までの挙動）",
         weights=replace(
             DEFAULT_PAI_WEIGHTS,
-            pace_center_offset_turf=-1.13,
-            pace_center_offset_dirt=0.05,
+            pace_center_offset_turf=0.0,
+            pace_center_offset_dirt=0.0,
         ),
     ),
-    # 中心を合わせた上で、振れ幅を実測の効果量へ寄せる。
-    # 脚質別展開有利度の実測は「有利−不利」で +2.8%(芝) / +6.5%(ダート) しかない。
-    # ±25点はこれに対して大きすぎる疑いがあり、中心合わせと同時に試す価値がある。
+    # 振れ幅を pai-v3 の値へ戻した版。中心を合わせた状態では swing 25/10/5/0 が
+    # 全体相関 +0.073〜+0.074 で並ぶことを確認済み。回帰監視として常設する。
     PaiWeightProfile(
-        name="centered-swing10",
-        description="中心を合わせ、振れ幅を10へ落とす",
-        weights=replace(
-            DEFAULT_PAI_WEIGHTS,
-            pace_center_offset_turf=-1.13,
-            pace_center_offset_dirt=0.05,
-            pace_swing=10.0,
-        ),
-    ),
-    PaiWeightProfile(
-        name="centered-swing5",
-        description="中心を合わせ、振れ幅を5へ落とす",
-        weights=replace(
-            DEFAULT_PAI_WEIGHTS,
-            pace_center_offset_turf=-1.13,
-            pace_center_offset_dirt=0.05,
-            pace_swing=5.0,
-        ),
+        name="swing25",
+        description="振れ幅を pai-v3 の 25 へ戻す",
+        weights=replace(DEFAULT_PAI_WEIGHTS, pace_swing=25.0),
     ),
     # 帰無仮説。ペース補正を全て切り、pace_affinity と距離・馬場減点だけにする。
     # これが current と並ぶなら、ペース補正は判別に寄与していないことになる。
@@ -1424,6 +1402,68 @@ def summarize_pai_within_style(samples: list[HorseSample]) -> list[PaiWithinStyl
 
 
 @dataclass(frozen=True)
+class FitLabelShare:
+    """展開合致ラベルの構成比と、各ラベルの実際の好走率。"""
+
+    track_type: str
+    label: str
+    n: int
+    share: float
+    good_rate: float
+
+
+def summarize_fit_label_shares(samples: list[HorseSample]) -> list[FitLabelShare]:
+    """コース×ラベルごとの構成比と好走率を出す。
+
+    閾値（`matched_threshold` / `unfavorable_threshold`）を変えると構成比が動く。
+    「合致」が極端に少ない/多い、あるいは合致と不利の好走率が逆転しているなら、
+    閾値がスケールに合っていない。pai-v4 で振れ幅を 25 → 10 へ下げた際に
+    閾値も 65/40 → 55/45 へ引き直したが、**構成比は未測定**なのでここで確認する。
+    """
+    rows: list[FitLabelShare] = []
+    for track in ("芝", "ダート"):
+        group = [s for s in samples if s.track_type == track and s.fit_label]
+        if not group:
+            continue
+        for label in ("合致", "中立", "不利"):
+            members = [s for s in group if s.fit_label == label]
+            rows.append(
+                FitLabelShare(
+                    track_type=track,
+                    label=label,
+                    n=len(members),
+                    share=round(len(members) / len(group), 4),
+                    good_rate=(
+                        round(sum(1 for s in members if s.good_run) / len(members), 4)
+                        if members
+                        else 0.0
+                    ),
+                )
+            )
+    return rows
+
+
+def format_fit_label_shares(rows: list[FitLabelShare]) -> str:
+    """展開合致ラベルの構成比を表示する。"""
+    if not rows:
+        return ""
+    lines = [
+        "",
+        "  ── 展開合致ラベルの構成比（閾値がスケールに合っているか）",
+        f"    {'コース':<8}{'ラベル':<8}{'頭数':>8}{'構成比':>9}{'好走率':>9}",
+    ]
+    for r in rows:
+        lines.append(
+            f"    {r.track_type:<8}{r.label:<8}{r.n:>9,}{r.share:>9.1%}{r.good_rate:>9.1%}"
+        )
+    lines.append(
+        "    ※ 「合致」が極端に少ない/多い、または合致と不利の好走率が逆転していれば"
+        "\n       閾値がスケールに合っていない。ラベルはUI表示と mart 層へそのまま出る。"
+    )
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True)
 class PaceCentering:
     """ペース補正が0を中心に振れているか。ずれていれば脚質を相対的にずらす。"""
 
@@ -1581,6 +1621,7 @@ def format_pai_by_style(samples: list[HorseSample]) -> str:
                 f"{w.low_rate:>9.1%}{w.high_mean_pai:>9.1f}{w.high_rate:>9.1%}"
                 f"{w.spread:>+9.1%}{2 * w.spread_se:>9.1%}{verdict:>7}"
             )
+    lines.append(format_fit_label_shares(summarize_fit_label_shares(samples)))
     lines.append(format_pace_centering(summarize_pace_centering(samples)))
     lines.append(
         "\n  ※ 「差」が正なら、脚質を固定しても PAI が好走を判別できている。"
@@ -2666,6 +2707,7 @@ class ForecastBacktester:
                         track_type=race.track_type,
                         running_style=horse.running_style,
                         forecast_rpci=out.predicted_rpci,
+                        fit_label=horse.fit_label,
                     )
                 )
                 style_score = style_scores.get(horse.running_style)
