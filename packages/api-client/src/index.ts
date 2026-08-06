@@ -1,5 +1,5 @@
 /**
- * PCI App API クライアント。
+ * PACE LAB API クライアント。
  *
  * 型は openapi.json から `npm run generate` で生成した schema.d.ts に由来し、
  * FastAPI のレスポンス契約とフロントエンドの型を一致させる（設計書 04 §4）。

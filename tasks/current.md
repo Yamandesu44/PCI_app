@@ -54,6 +54,25 @@
 - [ ] CD ワークフロー（`deploy-cloudrun.yml`）を使うなら Workload Identity 連携を用意する。
       手動デプロイで足りているうちは後回しでよい。
 
+### 取り込みの自動化（`docs/design/ingestion-automation.md`）
+
+- [x] 設計を起こした。実行・記録・**検知**の3層。要点は「動かす」ことより
+      **「止まったと気付く」**こと。止まっても画面は壊れず古くなるだけで、
+      公開後に最も気付きにくい。
+- [x] 検知層を実装した。GitHub Actions が毎日 `/api/v1/ingest-status` を確認し、
+      異常ならワークフローを失敗させる（GitHub が所有者へ通知する）。
+      ローカルの実APIに対し、401・正常・鮮度不足の3経路を確認済み。
+- [ ] `setup_task_scheduler.ps1` を管理者権限で実行して登録する（Windows機）。
+- [ ] ワーカーの `.env` を Cloud Run 向きにする（`API_BASE_URL` / `INGEST_TOKEN`）。
+- [ ] リポジトリへ `PUBLIC_API_BASE_URL`（Variables）と `PUBLIC_API_TOKEN`（Secrets）を設定する。
+      未設定の間、監視はスキップされる（毎日通知が飛ぶのを避けるため）。
+
+### 表示名の統一
+
+- [x] 利用者に見える名前を **PACE LAB** に統一した。タブ名・API のタイトルを変更。
+      指標名（PCI）は名乗りに出さない。理解していなくても使えることが value のため。
+- [ ] Vercel のドメインを変更する（プロジェクト名を変えると `.vercel.app` も変わる）。
+
 ### 触ってはいけないこと
 
 - [ ] **マイグレーションをデプロイへ自動で組み込まない。** 複数インスタンスが同時に

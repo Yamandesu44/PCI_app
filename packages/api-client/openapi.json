@@ -2651,7 +2651,7 @@
   },
   "info": {
     "description": "競馬展開予想 SaaS — 想定RPCI・PAI・展開シナリオを提供する REST API",
-    "title": "PCI App API",
+    "title": "PACE LAB API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",

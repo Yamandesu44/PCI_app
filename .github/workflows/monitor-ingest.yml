@@ -1,0 +1,57 @@
+name: Monitor ingestion
+
+# 取り込みが止まっていないかを毎日確かめる。
+#
+# **止まっても画面は壊れない。古いままになるだけ**で、見た目は正常に動く。
+# 公開後に最も気付きにくい壊れ方なので、外から見張る。
+#
+# 通知は GitHub 任せ。定期実行のワークフローが失敗すると、リポジトリの所有者へ
+# メールが届く。そのために「異常なら失敗する」形にしてある（ログに出すだけでは
+# 誰も見ない）。
+#
+# ---- リポジトリ側に設定するもの ----
+# Variables: PUBLIC_API_BASE_URL   例: https://pci-api-xxxx.asia-northeast1.run.app
+# Secrets:   PUBLIC_API_TOKEN      API と同じ値
+#
+# どちらかが未設定なら、監視は行わずスキップする（失敗させると毎日通知が飛び、
+# 本当の異常に気付けなくなるため）。
+
+on:
+  schedule:
+    # 12:00 JST（03:00 UTC）。金土日の取り込み周期に対し、毎日見ておけば
+    # 遅くとも翌日には気付ける。
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monitor-ingest
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check freshness
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 依存は入れない。確認スクリプトは標準ライブラリだけで動く。
+      - name: Check ingestion freshness
+        env:
+          BASE_URL: ${{ vars.PUBLIC_API_BASE_URL }}
+          TOKEN: ${{ secrets.PUBLIC_API_TOKEN }}
+        run: |
+          if [ -z "${BASE_URL}" ]; then
+            echo "PUBLIC_API_BASE_URL が未設定のため監視をスキップします。"
+            exit 0
+          fi
+          python apps/api/scripts/check_ingest_freshness.py \
+            --base-url "${BASE_URL}" \
+            --token "${TOKEN}"

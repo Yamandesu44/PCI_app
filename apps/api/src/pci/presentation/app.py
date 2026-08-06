@@ -41,7 +41,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(
         lifespan=_lifespan,
-        title="PCI App API",
+        title="PACE LAB API",
         version="0.1.0",
         description="競馬展開予想 SaaS — 想定RPCI・PAI・展開シナリオを提供する REST API",
     )
