@@ -88,7 +88,12 @@ def main() -> None:
         problems.append(f"最終成功から {days} 日経過しています（許容 {args.max_days} 日）。")
 
     for failure in failures[:5]:
-        print(f"  - {failure.get('step', '?')}: {failure.get('error_msg', '')[:120]}")
+        # 時刻も出す。「古い記録が残っているだけ」か「今また失敗した」かは、
+        # これが無いと区別できない。
+        print(
+            f"  - {failure.get('started_at', '?')} {failure.get('step', '?')}: "
+            f"{failure.get('error_summary', '')[:160]}"
+        )
 
     if problems:
         print()
