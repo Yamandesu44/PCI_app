@@ -144,9 +144,7 @@ def _report(samples: list[_Recomputed]) -> None:
         old_shares = _label_shares(old_vals, track)
         new_shares = _label_shares(new_vals, track)
         changed = sum(
-            1
-            for s in grp
-            if classify_pace(s.old_rpci, track) != classify_pace(s.new_rpci, track)
+            1 for s in grp if classify_pace(s.old_rpci, track) != classify_pace(s.new_rpci, track)
         )
         cur_hi, cur_sl = (
             (DEFAULT_WEIGHTS.dirt_high_threshold, DEFAULT_WEIGHTS.dirt_slow_threshold)

@@ -60,6 +60,7 @@ from pci.application.backtest import (
     summarize_clamp_impact,
     summarize_fit_crowding,
     summarize_fit_label_shares,
+    summarize_fit_threshold_by_style,
     summarize_integrated_accuracy,
     summarize_pace_centering,
     summarize_pai_lift,
@@ -1863,6 +1864,71 @@ class TestMatchedThresholdRecommendation:
         assert rows["芝"].recommended_threshold == pytest.approx(45.0, abs=1e-6)
         # 4頭で目標30%なら1頭まで。58.0 では 58/59 の2頭が残るので 58.5。
         assert rows["ダート"].recommended_threshold == pytest.approx(58.5, abs=1e-6)
+
+
+class TestFitThresholdByStyle:
+    """閾値は脚質ごとに解く。単一の閾値は脚質間の比較を暗黙に持ち込む。
+
+    実測: 芝の自在は602頭中0頭が合致（PAI平均48.7 対 閾値55）。**構造的に到達
+    できない。** コース単位で閾値を上げると、この欠陥が他の脚質へ広がる。
+    """
+
+    @staticmethod
+    def _h(style: str, pai: float, track: str = "ダート") -> HorseSample:
+        return HorseSample(
+            race_key="R1",
+            horse_no=1,
+            pai=pai,
+            good_run=False,
+            track_type=track,
+            running_style=style,
+            fit_label="合致" if pai >= 55.0 else "中立",
+        )
+
+    def test_solves_a_separate_threshold_per_style(self) -> None:
+        samples = [
+            # 差し: PAI が高い側に寄っており、55 では 4/5 が合致してしまう。
+            *[self._h("差し", pai) for pai in (54.0, 56.0, 58.0, 60.0, 62.0)],
+            # 自在: PAI が低い側にあり、55 では 1頭も合致しない。
+            *[self._h("自在", pai) for pai in (40.0, 42.0, 44.0, 46.0, 48.0)],
+        ]
+
+        rows = {r.running_style: r for r in summarize_fit_threshold_by_style(samples)}
+
+        assert rows["差し"].current_share == pytest.approx(0.8, abs=1e-4)
+        assert rows["自在"].current_share == pytest.approx(0.0, abs=1e-4)
+        # どちらも目標30%（5頭なら1頭）へ合わせるが、値は脚質ごとに違う。
+        assert rows["差し"].recommended_threshold == pytest.approx(60.5, abs=1e-6)
+        assert rows["自在"].recommended_threshold == pytest.approx(46.5, abs=1e-6)
+        assert rows["差し"].recommended_share == pytest.approx(0.2, abs=1e-4)
+        assert rows["自在"].recommended_share == pytest.approx(0.2, abs=1e-4)
+
+    def test_gives_a_reachable_threshold_to_a_style_that_never_qualifies(self) -> None:
+        """現状0%の脚質にも到達可能な閾値が出る。これが単一閾値との一番の違い。"""
+        samples = [self._h("自在", pai, track="芝") for pai in (44.0, 46.0, 48.0, 50.0)]
+
+        row = summarize_fit_threshold_by_style(samples)[0]
+
+        assert row.current_share == pytest.approx(0.0, abs=1e-4)
+        assert row.recommended_threshold is not None
+        assert row.recommended_threshold < 55.0
+
+    def test_separates_courses(self) -> None:
+        samples = [
+            *[self._h("差し", pai, track="芝") for pai in (44.0, 46.0, 48.0, 50.0)],
+            *[self._h("差し", pai, track="ダート") for pai in (60.0, 62.0, 64.0, 66.0)],
+        ]
+
+        rows = {
+            (r.track_type, r.running_style): r for r in summarize_fit_threshold_by_style(samples)
+        }
+
+        # 4頭で目標30%なら1頭まで。最上位の1頭だけが残る 0.5 刻みの点を選ぶ。
+        assert rows[("芝", "差し")].recommended_threshold == pytest.approx(48.5, abs=1e-6)
+        assert rows[("ダート", "差し")].recommended_threshold == pytest.approx(64.5, abs=1e-6)
+
+    def test_empty_returns_empty(self) -> None:
+        assert summarize_fit_threshold_by_style([]) == []
 
 
 class TestFitLabelShares:

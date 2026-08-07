@@ -268,7 +268,7 @@ _PARAMS_BY_TRACK: dict[str, dict[str, object]] = {
     "dirt": {
         "objective": "regression",
         "metric": "mae",
-        "num_leaves": 31,   # ダートはデータ少ないので小モデル
+        "num_leaves": 31,  # ダートはデータ少ないので小モデル
         "learning_rate": 0.05,
         "feature_fraction": 0.8,
         "bagging_fraction": 0.8,
@@ -294,7 +294,7 @@ _PARAMS_BY_TRACK: dict[str, dict[str, object]] = {
 _DEFAULT_OUTPUT: dict[str, str] = {
     "turf": "models/rpci_lgbm_turf_v1.txt",
     "dirt": "models/rpci_lgbm_dirt_v1.txt",
-    "all":  "models/rpci_lgbm_v1.txt",
+    "all": "models/rpci_lgbm_v1.txt",
 }
 
 
@@ -383,13 +383,9 @@ def main() -> None:
         _QUERY_TEMPLATE.format(
             track_filter=track_filter,
             date_filter=date_filter,
-            history_features=(
-                _HISTORY_FEATURES if uses_history else _EMPTY_HISTORY_FEATURES
-            ),
+            history_features=(_HISTORY_FEATURES if uses_history else _EMPTY_HISTORY_FEATURES),
             history_join=_HISTORY_JOIN if uses_history else "",
-            lap_features=(
-                _LAP_FEATURES if uses_lap_history else _EMPTY_LAP_FEATURES
-            ),
+            lap_features=(_LAP_FEATURES if uses_lap_history else _EMPTY_LAP_FEATURES),
             lap_join=_LAP_JOIN if uses_lap_history else "",
             month_features=_MONTH_FEATURES if args.feature_set == "v5" else "",
         )
@@ -424,10 +420,7 @@ def main() -> None:
 
     # 特徴量と目的変数を numpy 配列に変換（LightGBM 4.x は ndarray 必須）
     x_np = np.array(
-        [
-            [float(v) if v is not None else 0.0 for v in row[:feature_count]]
-            for row in rows
-        ],
+        [[float(v) if v is not None else 0.0 for v in row[:feature_count]] for row in rows],
         dtype=np.float64,
     )
     # 来歴列を後ろへ足したので、target は末尾ではなく特徴量の直後にある。
@@ -577,9 +570,7 @@ def _print_label_recall(
         )
         actual_label = classify_pace(float(actual), track_type)
         predicted_label = classify_pace(float(prediction), track_type)
-        grouped.setdefault((track_type, actual_label), []).append(
-            predicted_label == actual_label
-        )
+        grouped.setdefault((track_type, actual_label), []).append(predicted_label == actual_label)
 
     print("\n■ 展開3分類の再現率")
     for track_type in ("芝", "ダート"):

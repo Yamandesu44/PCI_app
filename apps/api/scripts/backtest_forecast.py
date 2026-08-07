@@ -1,4 +1,7 @@
-"""想定RPCI / PAI のバックテストを実DBに対して実行する CLI。
+r"""想定RPCI / PAI のバックテストを実DBに対して実行する CLI。
+
+（raw 文字列にしているのは、下の Windows パス `.venv\Scripts\python` の
+`\S` が無効なエスケープとして SyntaxWarning を出すため。）
 
 確定済みレースを「予測時点」に巻き戻して ForecastRaceUseCase を再現し、
 実績RPCI・好走と突き合わせて精度を出力する（評価ロジックは

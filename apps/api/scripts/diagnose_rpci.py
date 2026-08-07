@@ -194,9 +194,7 @@ def _print_track_year_style_mix(session: Session, month_from: int, month_to: int
             flexible_pct = flexible / cnt * 100 if cnt else 0.0
             unset_pct = unset / cnt * 100 if cnt else 0.0
             body = " ".join(f"{share:6.1f}%" for share in shares)
-            print(
-                f"  {yr:6d} {cnt:9,d} {body} {flexible_pct:6.1f}% {unset_pct:7.1f}%"
-            )
+            print(f"  {yr:6d} {cnt:9,d} {body} {flexible_pct:6.1f}% {unset_pct:7.1f}%")
     print(
         "\n  読み方: 構成比や未設定%が特定の年だけ大きく動いていれば、レース傾向ではなく"
         "\n  取り込み・脚質判定側の変化を疑う。"
@@ -439,9 +437,7 @@ def _build_samples(rows: list[_LapRow]) -> tuple[list[_FormulaSample], int]:
     return samples, skipped
 
 
-def _print_group_table(
-    title: str, groups: list[tuple[str, list[_FormulaSample]]]
-) -> None:
+def _print_group_table(title: str, groups: list[tuple[str, list[_FormulaSample]]]) -> None:
     print(f"\n  {title}")
     print(f"    {'区分':<12}{'件数':>8}{'平均差':>10}{'絶対差平均':>12}{'区分変化':>10}")
     for label, grp in groups:
@@ -463,8 +459,7 @@ def _print_formula_diff(samples: list[_FormulaSample], skipped: int) -> None:
 
     print(f"  対象レース: {n:,}件（VO検証で除外 {skipped:,}件）")
     print(
-        f"  差(TARGET式 − 現行式) 平均 {sum(diffs) / n:+.3f}"
-        f"  絶対差 平均 {sum(abs_diffs) / n:.3f}"
+        f"  差(TARGET式 − 現行式) 平均 {sum(diffs) / n:+.3f}  絶対差 平均 {sum(abs_diffs) / n:.3f}"
     )
     print(
         f"  絶対差 中央値 {_percentile(abs_diffs, 0.50):.2f}"
@@ -478,8 +473,10 @@ def _print_formula_diff(samples: list[_FormulaSample], skipped: int) -> None:
     _print_group_table(
         "距離帯別（1200m以下は中間区間が無く、ほぼ一致するはず）",
         [
-            (f"{lo}-{hi}m" if hi < 9999 else f"{lo}m以上",
-             [s for s in samples if lo <= s.row.distance_m <= hi])
+            (
+                f"{lo}-{hi}m" if hi < 9999 else f"{lo}m以上",
+                [s for s in samples if lo <= s.row.distance_m <= hi],
+            )
             for lo, hi in bands
         ],
     )
@@ -561,8 +558,8 @@ def main() -> None:
     print("■ races.rpci_actual の分布")
     print("=" * 60)
 
-    total_stmt = select(func.count()).select_from(RaceModel).where(
-        RaceModel.rpci_actual.is_not(None)
+    total_stmt = (
+        select(func.count()).select_from(RaceModel).where(RaceModel.rpci_actual.is_not(None))
     )
     total = session.scalar(total_stmt) or 0
     print(f"  rpci_actual 非NULL レース数: {total:,}")
@@ -608,9 +605,13 @@ def main() -> None:
         print(f"  分位数取得エラー（PostgreSQL 未接続？）: {exc}")
 
     # 外れ値件数
-    outlier_count_stmt = select(func.count()).select_from(RaceModel).where(
-        RaceModel.rpci_actual.is_not(None),
-        (RaceModel.rpci_actual < args.rpci_min) | (RaceModel.rpci_actual > args.rpci_max),
+    outlier_count_stmt = (
+        select(func.count())
+        .select_from(RaceModel)
+        .where(
+            RaceModel.rpci_actual.is_not(None),
+            (RaceModel.rpci_actual < args.rpci_min) | (RaceModel.rpci_actual > args.rpci_max),
+        )
     )
     outliers = session.scalar(outlier_count_stmt) or 0
     pct_out = outliers / total * 100
@@ -779,17 +780,20 @@ def main() -> None:
     )
     try:
         valid_count = session.execute(valid_stmt).scalar() or 0
-        invalid_count = session.execute(
-            text(
-                f"""
+        invalid_count = (
+            session.execute(
+                text(
+                    f"""
                 SELECT COUNT(*)
                 FROM races
                 WHERE status = 'result'
                   AND rpci_actual IS NOT NULL
                   AND (rpci_actual < {args.rpci_min} OR rpci_actual > {args.rpci_max})
                 """
-            )
-        ).scalar() or 0
+                )
+            ).scalar()
+            or 0
+        )
         print(f"  有効: {valid_count:,} / 外れ値: {invalid_count:,}")
         if valid_count + invalid_count > 0:
             ratio = invalid_count / (valid_count + invalid_count) * 100

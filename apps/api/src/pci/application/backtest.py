@@ -1576,6 +1576,110 @@ def _solve_matched_threshold(
     return None, None
 
 
+@dataclass(frozen=True)
+class FitThresholdByStyleRow:
+    """1（コース×脚質）分の、合致になっている割合と目標へ合わせる閾値。"""
+
+    track_type: str
+    running_style: str
+    horses: int
+    current_share: float
+    recommended_threshold: float | None
+    recommended_share: float | None
+
+
+def summarize_fit_threshold_by_style(
+    samples: list[HorseSample],
+    target: float = FIT_CROWDING_TARGET_MEDIAN_SHARE,
+) -> list[FitThresholdByStyleRow]:
+    """**（コース×脚質）ごとに**合致の閾値を解く。
+
+    診断表の注記が言うとおり、PAI は脚質内の相対量で、大小を脚質間で比較できない
+    （pai-v3 以降）。ところが `matched_threshold` は全脚質・両コース共通の定数で、
+    **脚質内の量を絶対値と比べている**。これは内部矛盾で、実測にそのまま出ている:
+
+        ダート  差し PAI平均 59.4 → 合致 48.1%
+        ダート  自在 PAI平均 46.8 → 合致  5.1%
+        芝     自在 PAI平均 48.7 → 合致  0.0%（602頭中0頭）
+
+    芝の自在は**構造的に合致へ到達できない**。単一の閾値は、脚質間で比べないという
+    前提を破った上で、暗黙のうちに脚質の順位付けを持ち込んでいる。
+
+    コース単位で閾値を上げるだけではこれが悪化する（ダートを70.5にすると自在は
+    確実に0になる）。脚質ごとに同じ割合で切れば、レース内の合致頭数は脚質構成に
+    依らず目標へ寄り、**かつ脚質をまたいだ比較を持ち込まない**。
+
+    目標は馬単位の割合。1レースの出走馬がどの脚質で構成されていても、各脚質から
+    目標割合ずつ選ばれるので、レース単位の割合もそこへ収束する。
+    """
+    rows: list[FitThresholdByStyleRow] = []
+    for track in ("芝", "ダート"):
+        in_track = [s for s in samples if s.track_type == track and s.fit_label]
+        styles = sorted({s.running_style for s in in_track if s.running_style})
+        for style in styles:
+            group = [s for s in in_track if s.running_style == style]
+            if not group:
+                continue
+            threshold, share = _solve_share_threshold(group, target)
+            rows.append(
+                FitThresholdByStyleRow(
+                    track_type=track,
+                    running_style=style,
+                    horses=len(group),
+                    current_share=round(
+                        sum(1 for s in group if s.fit_label == "合致") / len(group), 4
+                    ),
+                    recommended_threshold=threshold,
+                    recommended_share=share,
+                )
+            )
+    return rows
+
+
+def _solve_share_threshold(
+    horses: list[HorseSample],
+    target: float,
+) -> tuple[float | None, float | None]:
+    """この集団の合致割合を `target` 以下にする最小の閾値を返す。
+
+    `_solve_matched_threshold` と同じ規則（最小・0.5点刻み・届かなければ None）だが、
+    見るのはレース単位の中央値ではなく集団全体の割合。
+    """
+    if not horses:
+        return None, None
+    candidate = 30.0
+    while candidate <= 85.0:
+        share = sum(1 for h in horses if h.pai >= candidate) / len(horses)
+        if share <= target:
+            return candidate, round(share, 4)
+        candidate += 0.5
+    return None, None
+
+
+def format_fit_threshold_by_style(rows: list[FitThresholdByStyleRow]) -> str:
+    """脚質ごとの合致割合と推奨閾値を表示する。"""
+    if not rows:
+        return ""
+    lines = [
+        "",
+        "  ── 脚質ごとの合致割合と推奨閾値（PAIは脚質内の相対量なので、閾値も脚質ごと）",
+        f"    {'コース':<8}{'脚質':<8}{'頭数':>8}{'現在の合致':>12}{'推奨閾値':>10}{'適用後':>9}",
+    ]
+    for row in rows:
+        threshold = (
+            "届かず" if row.recommended_threshold is None else f"{row.recommended_threshold:.1f}"
+        )
+        share = "—" if row.recommended_share is None else f"{row.recommended_share:.1%}"
+        lines.append(
+            f"    {row.track_type:<8}{row.running_style:<8}{row.horses:>8,}"
+            f"{row.current_share:>11.1%}{threshold:>10}{share:>9}"
+        )
+    lines.append("    ※ 単一の閾値は、脚質間で比較できない量を共通の絶対値と比べている。")
+    lines.append("       実測では芝の自在が602頭中0頭で、構造的に合致へ到達できない。")
+    lines.append("       コース単位で閾値を上げるとこれが悪化する（脚質ごとに切ること）。")
+    return "\n".join(lines)
+
+
 def format_fit_crowding(rows: list[FitCrowdingRow]) -> str:
     """レースあたりの合致割合を表示する。"""
     if not rows:
@@ -1807,6 +1911,7 @@ def format_pai_by_style(samples: list[HorseSample]) -> str:
             )
     lines.append(format_fit_label_shares(summarize_fit_label_shares(samples)))
     lines.append(format_fit_crowding(summarize_fit_crowding(samples)))
+    lines.append(format_fit_threshold_by_style(summarize_fit_threshold_by_style(samples)))
     lines.append(format_pace_centering(summarize_pace_centering(samples)))
     lines.append(
         "\n  ※ 「差」が正なら、脚質を固定しても PAI が好走を判別できている。"
