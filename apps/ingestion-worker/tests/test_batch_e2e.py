@@ -122,15 +122,47 @@ class TestPrecomputeForecasts:
             "skipped": 2,
         }
 
-        result = precompute_forecasts(
+        precompute_forecasts(
             api,
             "20260701",
             "20260726",
             today=__import__("datetime").date(2026, 7, 22),
         )
 
-        assert result["generated"] == 10
-        api.precompute_forecasts.assert_called_once_with("2026-07-22", "2026-07-26")
+        first_call = api.precompute_forecasts.call_args_list[0]
+        assert first_call.args[0] == "2026-07-22"
+
+    def test_sends_one_request_per_day(self) -> None:
+        """まとめて頼まない。
+
+        同期範囲は先14日あり、1リクエストにすると週末2回分（70レース超）を
+        一度に生成させることになる。ホスティング側のリクエスト時間上限
+        （Cloud Run の既定60秒）を超えると 504 で打ち切られ、**その分がまるごと
+        無駄になる**。実際に本番で起きた。
+        """
+        api = _mock_api()
+        api.precompute_forecasts.return_value = {
+            "scanned": 12,
+            "generated": 10,
+            "skipped": 2,
+        }
+
+        result = precompute_forecasts(
+            api,
+            "20260722",
+            "20260726",
+            today=__import__("datetime").date(2026, 7, 22),
+        )
+
+        assert [call.args for call in api.precompute_forecasts.call_args_list] == [
+            ("2026-07-22", "2026-07-22"),
+            ("2026-07-23", "2026-07-23"),
+            ("2026-07-24", "2026-07-24"),
+            ("2026-07-25", "2026-07-25"),
+            ("2026-07-26", "2026-07-26"),
+        ]
+        # 分割しても件数は合算して返す。呼び出し側の見え方を変えない。
+        assert result == {"scanned": 60, "generated": 50, "skipped": 10}
 
     def test_skips_range_entirely_in_past(self) -> None:
         api = _mock_api()

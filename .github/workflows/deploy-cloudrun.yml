@@ -105,11 +105,15 @@ jobs:
             --cpu 1 \
             --min-instances 0 \
             --max-instances 3 \
-            --timeout 60s \
+            --timeout 300s \
             --allow-unauthenticated \
             --quiet
         # --memory 512Mi: 実測はアプリ生成+モデル読み込みで 103MB（CI の docker ジョブが毎回出す）。
         # --max-instances 3: 上限を設けないと、異常時に従量課金が青天井になる。
+        # --timeout 300s: 60s では取り込みの `forecasts/precompute` が 504 で打ち切られた。
+        #   ワーカー側は1日ずつ送るようにしたので通常は数秒で終わるが、開催日が重なった
+        #   ときの余裕を持たせる。**ここを下げると取り込みが静かに壊れる**（画面は
+        #   古いまま表示され続ける）。
         # --allow-unauthenticated: 参照APIは公開する前提。アクセス制御は
         #   アプリ側の PUBLIC_API_TOKEN とレート制限で行う（Cloud Run のIAM認証を使うと
         #   ブラウザ経由の Next.js サーバから叩けなくなるため）。

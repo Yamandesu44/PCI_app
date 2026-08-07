@@ -536,6 +536,12 @@ def ingest_race_metadata(
     return api.update_race_metadata(records)
 
 
+# 予想の事前生成を送る単位。1リクエストが1開催日を超えないようにする。
+# ホスティング側のリクエスト時間上限（Cloud Run の既定60秒）を超えると 504 で
+# 打ち切られ、そのリクエスト分がまるごと無駄になる。
+PRECOMPUTE_CHUNK_DAYS = 1
+
+
 def _race_identity(race_key: str) -> str:
     """開催回・開催日次を除いた、日付・競馬場・R番号の同一性キーを返す。"""
     return f"{race_key[:10]}{race_key[-2:]}"
@@ -552,8 +558,19 @@ def precompute_forecasts(
     date_to: str,
     *,
     today: datetime.date | None = None,
+    chunk_days: int = PRECOMPUTE_CHUNK_DAYS,
 ) -> dict[str, int]:
-    """同期範囲のうち今日以降だけをAPIへ事前生成依頼する。"""
+    """同期範囲のうち今日以降だけをAPIへ事前生成依頼する。
+
+    **1日ずつに分けて送る。** 同期範囲は先14日あり、まとめて頼むと週末2回分
+    （70レース超）を1リクエストで生成することになる。ホスティング側には
+    リクエストの時間上限があり（Cloud Run の既定は60秒）、超えると 504 で
+    打ち切られて**全部が無駄になる**。日単位なら1回あたり最大でも1開催日分で、
+    上限がいくつであっても収まる。
+
+    途中で落ちても、そこまでの生成結果は残る。範囲を毎回なめ直す運用なので、
+    次の実行が残りを拾う。
+    """
     start = datetime.datetime.strptime(date_from, "%Y%m%d").date()
     end = datetime.datetime.strptime(date_to, "%Y%m%d").date()
     current_date = today or datetime.date.today()
@@ -561,7 +578,24 @@ def precompute_forecasts(
     if effective_start > end:
         _log.info("予想事前生成対象なし: %s→%s", date_from, date_to)
         return {"scanned": 0, "generated": 0, "skipped": 0}
-    return api.precompute_forecasts(effective_start.isoformat(), end.isoformat())
+
+    totals = {"scanned": 0, "generated": 0, "skipped": 0}
+    chunks = iter_date_chunks(
+        effective_start.strftime("%Y%m%d"), end.strftime("%Y%m%d"), chunk_days
+    )
+    for chunk_from, chunk_to in chunks:
+        result = api.precompute_forecasts(_to_iso_date(chunk_from), _to_iso_date(chunk_to))
+        for key in totals:
+            totals[key] += int(result.get(key, 0))
+    _log.info(
+        "予想事前生成: %s→%s を %d 回に分けて実行（生成 %d / 対象 %d）",
+        effective_start.isoformat(),
+        end.isoformat(),
+        len(chunks),
+        totals["generated"],
+        totals["scanned"],
+    )
+    return totals
 
 
 def iter_date_chunks(date_from: str, date_to: str, chunk_days: int) -> list[tuple[str, str]]:
