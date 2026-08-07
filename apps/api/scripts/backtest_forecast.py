@@ -35,6 +35,18 @@ pci.application.backtest に集約。本スクリプトは DB 配線と対象選
 数百クエリを伴うため、既定は新しい順 200 レースに絞る（--limit で調整）。
 lookahead は backtest 側でレース当日カットオフして防止する。
 
+実行時間について:
+    1レースあたり数百クエリを投げるので、**DB がリモートだと往復が支配的**になる。
+    Supabase（東京）のプーラー越しだと 500 レースで十数分に達しうる。
+    手元に開発用DBが残っているなら、そちらを指した方が桁違いに速い:
+
+        # PowerShell（この実行にだけ効く。.env は変更しない）
+        $env:DATABASE_URL = "postgresql+pg8000://pci:pci_dev@localhost:5432/pci_dev"
+        .venv\Scripts\python -m scripts.backtest_forecast --diagnose-pai --limit 500
+
+    進捗は stderr に出る（25レースごと）。集計結果は stdout なので、
+    `> result.txt` でリダイレクトしても進捗表示は画面に残る。
+
 --track-type 未指定時は、混合集計に加えて芝/ダート別の内訳も自動で追加表示する。
 混合のみだと PAI の point-biserial 相関が希釈されて見える落とし穴があるため
 （docs/adr/0005-rpci-forecast-strategy.md §5.4）、常に track 別の数値も確認できるようにしている。
@@ -52,7 +64,8 @@ import argparse
 import datetime
 import json
 import sys
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 sys.path.insert(0, "src")
@@ -294,6 +307,37 @@ def _parse_args() -> argparse.Namespace:
     return args
 
 
+def _make_progress_printer(total: int) -> Callable[[int], None]:
+    """処理済み件数と残り時間の見込みを stderr へ出す。
+
+    バックテストは1レースあたり数百クエリを投げる。DB がリモート（Supabase 東京）
+    だと往復が支配的になり、500レースで十数分に達することがある。**その間 stdout は
+    完全に無音**で、進んでいるのか固まっているのか判断できなかった。
+
+    stderr へ出すのは、`> result.txt` でリダイレクトしたときに集計結果へ
+    混ざらないようにするため。
+    """
+    started = time.monotonic()
+
+    def report(done: int) -> None:
+        if done != 1 and done % 25 != 0 and done != total:
+            return
+        elapsed = time.monotonic() - started
+        # 1件目は経過0のため見込みを出さない（0除算と無意味な数字を避ける）。
+        if done > 1 and elapsed > 0:
+            remaining = elapsed / (done - 1) * (total - done)
+            eta = f" / 残り約 {remaining / 60:.1f} 分"
+        else:
+            eta = ""
+        print(
+            f"  {done}/{total} レース（経過 {elapsed / 60:.1f} 分{eta}）",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    return report
+
+
 def _clamp_from_args(args: argparse.Namespace) -> tuple[float, float]:
     """CLI 指定と本番既定から、実際に適用する安全弁を決める。"""
     default_min, default_max = DEFAULT_RPCI_CLAMP
@@ -437,7 +481,7 @@ def main() -> None:
             )
         return
 
-    report = backtester.run(targets)
+    report = backtester.run(targets, progress=_make_progress_printer(len(targets)))
     print(format_report(report, clamp=clamp))
     monitoring: RpciMonitoringResult | None = None
     if args.monitor_dirt:
@@ -560,9 +604,9 @@ def _run_ranking_strategy_comparison(
             report = current_report
         else:
             print(f"\n並べ方「{strategy}」を検証中…")
-            report = ForecastBacktester(
-                repo, forecaster=forecaster, ranking_strategy=strategy
-            ).run(targets)
+            report = ForecastBacktester(repo, forecaster=forecaster, ranking_strategy=strategy).run(
+                targets
+            )
         comparison = compare_with_market(
             report.integrated_samples, report.market_samples, report.n_races
         )
@@ -643,13 +687,9 @@ def _write_output(
             weight_comparisons
         )
     if rule_weight_comparisons:
-        payload["rule_weight_comparison"] = rule_weight_comparisons_to_dict(
-            rule_weight_comparisons
-        )
+        payload["rule_weight_comparison"] = rule_weight_comparisons_to_dict(rule_weight_comparisons)
     if pai_weight_comparisons:
-        payload["pai_weight_comparison"] = pai_weight_comparisons_to_dict(
-            pai_weight_comparisons
-        )
+        payload["pai_weight_comparison"] = pai_weight_comparisons_to_dict(pai_weight_comparisons)
     if monitoring is not None:
         payload["rpci_monitoring"] = dirt_monitoring_to_dict(monitoring)
     with open(path, "w", encoding="utf-8") as f:

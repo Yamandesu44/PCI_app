@@ -1438,6 +1438,39 @@ class TestForecastBacktesterEndToEnd:
         good = sum(1 for s in report.horse_samples if s.good_run)
         assert good == 2
 
+    def test_progress_reports_every_race_including_skipped(self) -> None:
+        """進捗は「集計に載った数」ではなく「見た数」を返す。
+
+        飛ばされたレースを黙って数えないと、リモートDB相手に何分も無音のまま
+        カウンタだけ止まって見える。止まっているのか進んでいるのかの区別が
+        付かなくなるので、skip も1件として通知する。
+        """
+        repo = FakeRaceRepository()
+        counted = _seed_result_race(
+            repo,
+            "2026011505010101",
+            15,
+            rpci_actual=50.0,
+            horses=[(1, "H1", 1), (2, "H2", 8)],
+        )
+        skipped = _seed_result_race(
+            repo, "2026011505010102", 15, rpci_actual=None, horses=[(1, "H3", 1)]
+        )
+
+        seen: list[int] = []
+        report = ForecastBacktester(repo).run([counted, skipped], progress=seen.append)
+
+        assert seen == [1, 2]
+        assert report.n_races == 1
+        assert report.skipped == 1
+
+    def test_runs_without_progress_callback(self) -> None:
+        repo = FakeRaceRepository()
+        target = _seed_result_race(
+            repo, "2026011505010101", 15, rpci_actual=50.0, horses=[(1, "H1", 1)]
+        )
+        assert ForecastBacktester(repo).run([target]).n_races == 1
+
     def test_skips_race_without_actual_rpci(self) -> None:
         repo = FakeRaceRepository()
         target = _seed_result_race(

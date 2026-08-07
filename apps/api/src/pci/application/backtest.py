@@ -22,7 +22,7 @@ from __future__ import annotations
 import datetime
 import math
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
@@ -2754,6 +2754,10 @@ def _format_optional_delta(value: float | None) -> str:
     return "n/a" if value is None else f"{value:+.1%}"
 
 
+ProgressCallback = Callable[[int], None]
+"""処理済みレース数を受け取る通知口。集計そのものには影響しない。"""
+
+
 class ForecastBacktester:
     """確定レース群に対して予測を再現し、実績と突き合わせる。"""
 
@@ -2775,7 +2779,20 @@ class ForecastBacktester:
         self._band_edges = band_edges
         self._ranking_strategy = ranking_strategy
 
-    def run(self, targets: Iterable[Race]) -> BacktestReport:
+    def run(
+        self,
+        targets: Iterable[Race],
+        progress: ProgressCallback | None = None,
+    ) -> BacktestReport:
+        """確定レース群を再予測して集計する。
+
+        `progress` は「何レース処理したか」を呼び出し側へ渡すだけの通知口。
+        **表示はここでは行わない**（application 層に I/O を持ち込まない）。
+
+        レース1件あたり、出走馬ごとの履歴取得で十数回の往復が要る。DB がリモート
+        （Supabase 東京）だとこれが支配的になり、500レースで数分から十数分かかる。
+        その間まったく無音だと、**進んでいるのか止まっているのか区別できない**。
+        """
         rpci_samples: list[RpciSample] = []
         horse_samples: list[HorseSample] = []
         integrated_samples: list[IntegratedSample] = []
@@ -2783,9 +2800,13 @@ class ForecastBacktester:
         style_advantage_samples: list[StyleAdvantageSample] = []
         n_races = 0
         skipped = 0
+        processed = 0
         model_versions: set[str] = set()
 
         for race in targets:
+            if progress is not None:
+                processed += 1
+                progress(processed)
             if race.rpci_actual is None:
                 skipped += 1
                 continue
