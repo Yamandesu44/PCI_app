@@ -14,27 +14,44 @@
 
     Schedule:
       Tue 21:00  Special (graded stakes) entries announced Monday.
-      Fri 10:00  Saturday and Sunday entries, post-position draw.
-      Fri 21:00  Spare, in case the morning run failed.
-      Sat 10:00  Fills in Sunday, if its draw only lands on Saturday.
+      Thu 17:00  Entry list without numbers, published Thursday 16:00.
+      Fri 11:00  Saturday's draw, published Friday just after 10:00.
+      Fri 13:00  Backup for the 11:00 run.
+      Sat 11:00  Sunday's draw, published Saturday just after 10:00.
+      Sat 13:00  Backup for the 11:00 run.
       Sat 21:00  Saturday results.
       Sun 21:00  Sunday results.
 
     Why these times:
+      Taken from JRA's own publication schedule, not guessed:
+      https://jra.jp/faq/pop02/2_2.html
+
+        Thu 16:00+  entry list, no horse or bracket numbers
+        Day-before 10:00+  entry list WITH numbers
+          -> Saturday's races land Friday, SUNDAY'S LAND SATURDAY.
+
+      That last point is easy to get wrong. Sunday's field is not
+      available on Friday, so a Friday-only schedule leaves the whole
+      Sunday card missing until Saturday whatever else is done.
+
+      JRA also notes its own site needs "about 15 minutes" after each
+      publication before the data is visible, so treat 10:00 as a
+      floor and not a start. Running at 10:00 sharp was tried and
+      returned only the special entries; the same day at 12:03
+      returned all 36 races. Hence 11:00, with 13:00 behind it.
+
       Each run re-reads a rolling window (10 days back through the
       future), so a missed run is picked up by the next one. The
-      schedule therefore controls how quickly data appears, not
-      whether it arrives at all -- extra runs are cheap insurance.
+      schedule controls how quickly data appears, not whether it
+      arrives at all -- extra runs are cheap insurance.
 
-      Saturday 21:00 is the one that matters most. Without it,
-      Saturday's results only land on Sunday evening, leaving the
-      board showing zero confirmed races for a full day -- across
-      Saturday night and Sunday morning, when people are reviewing
-      Saturday and handicapping Sunday.
+      Saturday 21:00 covers the results. Without it, Saturday's
+      results only land on Sunday evening, leaving the board showing
+      zero confirmed races across Saturday night and Sunday morning,
+      when people are reviewing Saturday and handicapping Sunday.
 
       21:00 is a margin over the last race (confirmed around 16:30),
-      not a measured figure. If the earlier 18:00 Sunday run was
-      capturing every race, 18:00 is fine and worth keeping.
+      not a measured figure.
 
     Prerequisites:
       MYKEIBADB_EXE_PATH (full path to mykeibadb.exe) is set in .env.
@@ -78,9 +95,11 @@ $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" 
 
 $Triggers = @(
     New-ScheduledTaskTrigger -Weekly -DaysOfWeek Tuesday  -At "21:00"
-    New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday   -At "10:00"
-    New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday   -At "21:00"
-    New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At "10:00"
+    New-ScheduledTaskTrigger -Weekly -DaysOfWeek Thursday -At "17:00"
+    New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday   -At "11:00"
+    New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday   -At "13:00"
+    New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At "11:00"
+    New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At "13:00"
     New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At "21:00"
     New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday   -At "21:00"
 )
@@ -112,11 +131,14 @@ Register-ScheduledTask `
     -Trigger $Triggers `
     -Principal $Principal `
     -Settings $settings `
-    -Description "PACE LAB auto-ingest: mykeibadb.exe -> batch.py (Tue/Fri/Sat/Sun)" `
+    -Description "PACE LAB auto-ingest: mykeibadb.exe -> batch.py (Tue/Thu/Fri/Sat/Sun)" `
     -Force | Out-Null
 
 Write-Host "Registered: $TaskName"
-Write-Host "  Tue 21:00 / Fri 10:00 / Fri 21:00 / Sat 10:00 / Sat 21:00 / Sun 21:00"
+Write-Host "  Tue 21:00 / Thu 17:00"
+Write-Host "  Fri 11:00, 13:00  (Saturday's draw)"
+Write-Host "  Sat 11:00, 13:00  (Sunday's draw) / Sat 21:00 (results)"
+Write-Host "  Sun 21:00 (results)"
 Write-Host ""
 Write-Host "Check: Get-ScheduledTask -TaskName '$TaskName' | Select-Object TaskName, State"
 Write-Host "Next runs: Get-ScheduledTask -TaskName '$TaskName' | Get-ScheduledTaskInfo"

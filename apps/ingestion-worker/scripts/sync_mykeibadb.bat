@@ -5,7 +5,7 @@ set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 REM mykeibadb sync - run from Windows Task Scheduler.
 REM Task name: PaceLab_Sync_Mykeibadb
-REM Schedule: Tue 21:00 / Fri 10:00 / Fri 21:00 / Sat 10:00 / Sat 21:00 / Sun 21:00
+REM Schedule: Tue 21:00 / Thu 17:00 / Fri 11:00,13:00 / Sat 11:00,13:00,21:00 / Sun 21:00
 REM
 REM What it does: mykeibadb.exe (JV-Link -> MySQL) then batch.py (MySQL -> PostgreSQL,
 REM entries + results + special-entries).
