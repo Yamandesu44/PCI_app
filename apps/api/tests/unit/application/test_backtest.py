@@ -1799,6 +1799,72 @@ class TestFitCrowding:
         assert row.median_suited_count == pytest.approx(1.0, abs=1e-4)
 
 
+class TestMatchedThresholdRecommendation:
+    """閾値は測って決める。実測ではダートの中央値が53.8%で、芝の30.0%と揃わない。
+
+    合致は単一の絶対閾値（55）だが、PAI の分布はコースで平均が5点ほどずれている。
+    同じ物差しを別々の分布へ当てているので、ダートだけ過半数が合致になる。
+    """
+
+    @staticmethod
+    def _race(race_key: str, pais: list[float], track: str = "ダート") -> list[HorseSample]:
+        return [
+            HorseSample(
+                race_key=race_key,
+                horse_no=i + 1,
+                pai=pai,
+                good_run=False,
+                track_type=track,
+                running_style="先行",
+                fit_label="合致" if pai >= 55.0 else "中立",
+            )
+            for i, pai in enumerate(pais)
+        ]
+
+    def test_recommends_the_lowest_threshold_that_reaches_the_target(self) -> None:
+        # 10頭中8頭が 55 以上。60 以上は3頭、62 以上は2頭。
+        pais = [50.0, 52.0, 56.0, 57.0, 58.0, 59.0, 60.0, 61.0, 62.0, 63.0]
+        row = summarize_fit_crowding(self._race("R1", pais))[0]
+
+        assert row.median_share == pytest.approx(0.8, abs=1e-4)
+        # 60.0 だと 60/61/62/63 の4頭で40%。0.5刻みの次の点 60.5 で3頭=30%に届く。
+        assert row.recommended_threshold == pytest.approx(60.5, abs=1e-6)
+        assert row.recommended_median_share == pytest.approx(0.3, abs=1e-4)
+
+    def test_leaves_the_threshold_where_it_is_when_already_within_target(self) -> None:
+        """既に目標以下なら走査の下端をそのまま返す——締め上げない。
+
+        絞り込みは目的ではなく手段。届いている側まで動かすと、恩恵を受ける馬を
+        理由なく落とすことになる。
+        """
+        pais = [40.0, 41.0, 42.0, 43.0, 56.0]
+        row = summarize_fit_crowding(self._race("R1", pais))[0]
+
+        assert row.recommended_threshold == pytest.approx(45.0, abs=1e-6)
+        assert row.recommended_median_share == pytest.approx(0.2, abs=1e-4)
+
+    def test_reports_unreachable_when_every_horse_stays_suited(self) -> None:
+        """上限まで走査しても届かない場合は None。**黙って上限を返さない。**
+
+        届かなかったことは、閾値では解けない（分布そのものが潰れている）という
+        情報なので、成功と同じ形で返してはいけない。
+        """
+        row = summarize_fit_crowding(self._race("R1", [99.0, 99.0, 99.0]))[0]
+
+        assert row.recommended_threshold is None
+        assert row.recommended_median_share is None
+
+    def test_solves_each_course_separately(self) -> None:
+        turf = self._race("T1", [40.0, 41.0, 42.0, 56.0], track="芝")
+        dirt = self._race("D1", [56.0, 57.0, 58.0, 59.0], track="ダート")
+
+        rows = {row.track_type: row for row in summarize_fit_crowding(turf + dirt)}
+
+        assert rows["芝"].recommended_threshold == pytest.approx(45.0, abs=1e-6)
+        # 4頭で目標30%なら1頭まで。58.0 では 58/59 の2頭が残るので 58.5。
+        assert rows["ダート"].recommended_threshold == pytest.approx(58.5, abs=1e-6)
+
+
 class TestFitLabelShares:
     """ラベルの良し悪しは脚質を固定して判断する。
 

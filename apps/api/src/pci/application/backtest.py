@@ -1461,6 +1461,16 @@ def summarize_fit_label_shares(samples: list[HorseSample]) -> list[FitLabelShare
     return rows
 
 
+FIT_CROWDING_TARGET_MEDIAN_SHARE = 0.30
+"""1レースあたり「向く」と出す頭数の目標割合（中央値）。
+
+根拠は思い付きではなく**芝の現状**。芝は中央値30.0%・合致4.0頭で、16頭立てなら
+4頭という使える絞り込みになっており、実機で問題として挙がったのはダート側だった
+（中央値53.8%・7.0頭）。**問題の出ていない側を目標に置く**のが、恣意的な数字を
+新しく持ち込まずに済む唯一の選び方。
+"""
+
+
 @dataclass(frozen=True)
 class FitCrowdingRow:
     """1コース分の「レースあたり何割が合致になるか」の分布。"""
@@ -1472,6 +1482,10 @@ class FitCrowdingRow:
     majority_race_share: float
     all_suited_race_share: float
     median_suited_count: float
+    # 中央値を目標割合まで下げる `matched_threshold`。届かなければ None。
+    recommended_threshold: float | None = None
+    # 上の閾値を当てたときの中央値（目標に届いたかを目で確かめるため）。
+    recommended_median_share: float | None = None
 
 
 def summarize_fit_crowding(samples: list[HorseSample]) -> list[FitCrowdingRow]:
@@ -1509,6 +1523,8 @@ def summarize_fit_crowding(samples: list[HorseSample]) -> list[FitCrowdingRow]:
             index = min(len(values) - 1, int(q * len(values)))
             return values[index]
 
+        threshold, threshold_median = _solve_matched_threshold(list(by_race.values()))
+
         rows.append(
             FitCrowdingRow(
                 track_type=track,
@@ -1522,9 +1538,42 @@ def summarize_fit_crowding(samples: list[HorseSample]) -> list[FitCrowdingRow]:
                     sum(1 for share in shares if share >= 0.999) / len(shares), 4
                 ),
                 median_suited_count=round(_percentile([float(c) for c in counts], 0.5), 2),
+                recommended_threshold=threshold,
+                recommended_median_share=threshold_median,
             )
         )
     return rows
+
+
+def _solve_matched_threshold(
+    races: list[list[HorseSample]],
+    target: float = FIT_CROWDING_TARGET_MEDIAN_SHARE,
+) -> tuple[float | None, float | None]:
+    """レースあたりの合致割合の中央値を `target` 以下にする最小の閾値を返す。
+
+    **最小**を採るのは、絞れさえすれば良いわけではないため。閾値を上げるほど
+    合致は減るが、上げ過ぎれば本来恩恵を受ける馬まで落ちる。目標に届いた時点で
+    止めるのが、絞り込みのために失う情報を最小にする置き方になる。
+
+    0.5点刻みで走査する。PAI は小数第1位まで丸めて出るので、それより細かい刻みは
+    データに無い精度を装うだけになる。
+    """
+    if not races:
+        return None, None
+
+    def median_share(threshold: float) -> float:
+        shares = sorted(
+            sum(1 for h in horses if h.pai >= threshold) / len(horses) for horses in races
+        )
+        return shares[min(len(shares) - 1, len(shares) // 2)]
+
+    candidate = 45.0
+    while candidate <= 85.0:
+        share = median_share(candidate)
+        if share <= target:
+            return candidate, round(share, 4)
+        candidate += 0.5
+    return None, None
 
 
 def format_fit_crowding(rows: list[FitCrowdingRow]) -> str:
@@ -1535,17 +1584,32 @@ def format_fit_crowding(rows: list[FitCrowdingRow]) -> str:
         "",
         "  ── レースあたりの合致割合（絞り込みが効いているか）",
         f"    {'コース':<8}{'レース数':>9}{'中央値':>9}{'90%点':>9}"
-        f"{'半数以上':>10}{'全頭合致':>10}{'合致頭数':>10}",
+        f"{'半数以上':>10}{'全頭合致':>10}{'合致頭数':>10}{'推奨閾値':>10}{'適用後':>9}",
     ]
     for row in rows:
+        threshold = (
+            "届かず" if row.recommended_threshold is None else f"{row.recommended_threshold:.1f}"
+        )
+        applied = (
+            "—" if row.recommended_median_share is None else f"{row.recommended_median_share:.1%}"
+        )
         lines.append(
             f"    {row.track_type:<8}{row.races:>9,}"
             f"{row.median_share:>8.1%}{row.p90_share:>9.1%}"
             f"{row.majority_race_share:>10.1%}{row.all_suited_race_share:>10.1%}"
-            f"{row.median_suited_count:>10.1f}"
+            f"{row.median_suited_count:>10.1f}{threshold:>10}{applied:>9}"
         )
     lines.append("    ※ 「半数以上」は、出走馬の半数以上が合致になったレースの割合。")
     lines.append("       この値が高いほど、展開では馬を絞れていない。")
+    lines.append(
+        f"    ※ 推奨閾値は、中央値を目標 {FIT_CROWDING_TARGET_MEDIAN_SHARE:.0%} 以下へ下げる"
+        "最小の `matched_threshold`。"
+    )
+    lines.append("       目標は芝の現状。**問題が出ていない側**を基準に置き、")
+    lines.append("       新しい恣意的な数字を持ち込まない。")
+    lines.append(
+        "       採用するなら期間外でも確認すること（同一期間から取った当てはめ値のため）。"
+    )
     return "\n".join(lines)
 
 
