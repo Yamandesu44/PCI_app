@@ -26,7 +26,12 @@ import {
   raceSpotlight,
   type RaceSpotlightTone,
 } from "@/lib/pace";
-import { isForecastRace, isRaceInRange, weekendRange } from "@/lib/raceSchedule";
+import { showOperatorDetails } from "@/lib/opsVisibility";
+import {
+  isForecastRace,
+  isRaceInRange,
+  weekendRange,
+} from "@/lib/raceSchedule";
 import {
   compareRaceSummary,
   formatRaceDate,
@@ -59,12 +64,16 @@ async function loadRaces(
   date?: string,
 ): Promise<{ races: RaceSummary[]; error: ApiErrorDisplay | null }> {
   try {
-    const races = date != null
-      ? await api.listRaces(undefined, date)
-      : await api.listRaces(1000);
+    const races =
+      date != null
+        ? await api.listRaces(undefined, date)
+        : await api.listRaces(1000);
     return { races, error: null };
   } catch (err) {
-    return { races: [], error: await describeApiError(err, () => api.getReadiness()) };
+    return {
+      races: [],
+      error: await describeApiError(err, () => api.getReadiness()),
+    };
   }
 }
 
@@ -74,7 +83,10 @@ async function loadRaceBoard(
   try {
     return { items: await api.listRaceBoard(date), error: null };
   } catch (err) {
-    return { items: [], error: await describeApiError(err, () => api.getReadiness()) };
+    return {
+      items: [],
+      error: await describeApiError(err, () => api.getReadiness()),
+    };
   }
 }
 
@@ -105,37 +117,63 @@ async function loadForecastPerformance(
   }
 }
 
-function parsePerformanceDays(value: string | undefined): ForecastPerformancePeriod {
-  if (value === "30" || value === "180") return Number(value) as ForecastPerformancePeriod;
+function parsePerformanceDays(
+  value: string | undefined,
+): ForecastPerformancePeriod {
+  if (value === "30" || value === "180")
+    return Number(value) as ForecastPerformancePeriod;
   return 90;
 }
 
 function raceActionLabel(race: RaceSummary): string {
-  return statusTone(race.status) === "confirmed" ? "ペース分析へ" : "展開予想へ";
+  return statusTone(race.status) === "confirmed"
+    ? "ペース分析へ"
+    : "展開予想へ";
 }
 
-function topHorseLabel(forecast: RaceBoardForecast): string {
-  const name = forecast.top_horse_name ?? `${forecast.top_horse_no}番`;
-  return `${name} / ${forecast.top_fit_label}`;
+/**
+ * 展開が向く馬を1頭だけ添える。**向くと言えないなら何も出さない。**
+ *
+ * サーバは脚質有利度で必ず1頭を返すため、その馬の展開適性が「不利」でも
+ * 返ってくる。以前は `候補: リングスター / 不利` のように生ラベルを連結しており、
+ * 候補と言いながら不利と書く矛盾した出力になっていた。
+ *
+ * 「合致」以外は、このカードで言うべきことが無いということ。
+ */
+function suitedHorseLabel(forecast: RaceBoardForecast): string | null {
+  if (forecast.top_fit_label !== "合致") return null;
+  return forecast.top_horse_name ?? `${forecast.top_horse_no}番`;
 }
 
-function groupRaceItemsByDateAndVenue(items: RaceListItem[]): RaceDateItemGroup[] {
-  const itemByRaceKey = new Map(items.map((item) => [item.race.race_key, item]));
-  return groupRacesByDateAndVenue(items.map((item) => item.race)).map((dateGroup) => ({
-    raceDate: dateGroup.raceDate,
-    venues: dateGroup.venues.map((venueGroup) => ({
-      jyoCd: venueGroup.jyoCd,
-      venueName: venueGroup.venueName,
-      items: venueGroup.races
-        .map((race) => itemByRaceKey.get(race.race_key))
-        .filter((item): item is RaceListItem => item !== undefined),
-    })),
-  }));
+function groupRaceItemsByDateAndVenue(
+  items: RaceListItem[],
+): RaceDateItemGroup[] {
+  const itemByRaceKey = new Map(
+    items.map((item) => [item.race.race_key, item]),
+  );
+  return groupRacesByDateAndVenue(items.map((item) => item.race)).map(
+    (dateGroup) => ({
+      raceDate: dateGroup.raceDate,
+      venues: dateGroup.venues.map((venueGroup) => ({
+        jyoCd: venueGroup.jyoCd,
+        venueName: venueGroup.venueName,
+        items: venueGroup.races
+          .map((race) => itemByRaceKey.get(race.race_key))
+          .filter((item): item is RaceListItem => item !== undefined),
+      })),
+    }),
+  );
 }
 
-function selectRaceDate(dates: string[], requestedDate: string | undefined, weekend: { from: string; to: string }): string | null {
+function selectRaceDate(
+  dates: string[],
+  requestedDate: string | undefined,
+  weekend: { from: string; to: string },
+): string | null {
   if (requestedDate && dates.includes(requestedDate)) return requestedDate;
-  const weekendDate = dates.find((date) => date >= weekend.from && date <= weekend.to);
+  const weekendDate = dates.find(
+    (date) => date >= weekend.from && date <= weekend.to,
+  );
   if (weekendDate) return weekendDate;
   const todayKey = new Date().toISOString().slice(0, 10);
   const upcomingDate = dates.find((date) => date >= todayKey);
@@ -160,11 +198,17 @@ function spotlightClass(tone: RaceSpotlightTone): string {
   return classes[tone];
 }
 
-function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featured?: boolean }) {
+function RaceCompactRow({
+  item,
+  featured = false,
+}: {
+  item: RaceListItem;
+  featured?: boolean;
+}) {
   const { race, forecast } = item;
   const tone = statusTone(race.status);
   const confidence = forecast ? confidenceInsight(forecast.confidence) : null;
-  const topHorse = forecast ? topHorseLabel(forecast) : null;
+  const suitedHorse = forecast ? suitedHorseLabel(forecast) : null;
   const spotlight = forecast
     ? raceSpotlight({
         confidence: forecast.confidence,
@@ -179,7 +223,9 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
       className={[
         "group grid grid-cols-[44px_minmax(0,1fr)_20px] gap-3 rounded-md border bg-white p-3.5 text-slate-950 transition-all",
         "hover:-translate-y-px hover:border-slate-400 hover:shadow-md",
-        featured ? "border-emerald-200 shadow-sm" : "border-slate-200 shadow-sm",
+        featured
+          ? "border-emerald-200 shadow-sm"
+          : "border-slate-200 shadow-sm",
       ].join(" ")}
       href={raceHref(race)}
     >
@@ -197,7 +243,9 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
           <div className="min-w-0">
             <p className="m-0 truncate text-sm font-semibold leading-tight">
               {raceClassLabel(race)}
-              <span className="ml-2 text-xs font-medium text-slate-500">{raceCondition(race)}</span>
+              <span className="ml-2 text-xs font-medium text-slate-500">
+                {raceCondition(race)}
+              </span>
             </p>
             <p className="m-0 mt-1 text-xs text-slate-500">
               {race.field_size}頭 ・ {raceActionLabel(race)}
@@ -231,14 +279,31 @@ function RaceCompactRow({ item, featured = false }: { item: RaceListItem; featur
           <div className="mt-2 grid gap-1 text-xs text-slate-600">
             <div className="flex flex-wrap gap-x-3 gap-y-1">
               <span>
-                展開: <span className="font-semibold text-slate-950">{beginnerPaceLabel(forecast.pace_label)}</span>
+                展開:{" "}
+                <span className="font-semibold text-slate-950">
+                  {beginnerPaceLabel(forecast.pace_label)}
+                </span>
               </span>
               <span>
-                信頼度: <span className="font-semibold text-slate-950">{confidence?.label}</span>
+                信頼度:{" "}
+                <span className="font-semibold text-slate-950">
+                  {confidence?.label}
+                </span>
               </span>
             </div>
-            {topHorse ? <span className="truncate">候補: {topHorse}</span> : null}
-            {showSpotlight ? <span className="truncate text-slate-500">{spotlight.reason}</span> : null}
+            {suitedHorse ? (
+              <span className="truncate">
+                展開が向く:{" "}
+                <span className="font-semibold text-slate-950">
+                  {suitedHorse}
+                </span>
+              </span>
+            ) : null}
+            {showSpotlight ? (
+              <span className="truncate text-slate-500">
+                {spotlight.reason}
+              </span>
+            ) : null}
           </div>
         ) : (
           <p className="m-0 mt-2 text-xs text-slate-500">
@@ -278,15 +343,18 @@ function StatTile({
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <p className="m-0 text-xs font-semibold text-slate-500">{label}</p>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${toneClass}`}>
+        <span
+          className={`flex h-8 w-8 items-center justify-center rounded-md ${toneClass}`}
+        >
           {icon}
         </span>
       </div>
-      <p className="m-0 mt-3 text-3xl font-semibold tracking-normal text-slate-950">{value}</p>
+      <p className="m-0 mt-3 text-3xl font-semibold tracking-normal text-slate-950">
+        {value}
+      </p>
     </div>
   );
 }
-
 
 function RaceGroupedSection({
   id,
@@ -294,28 +362,37 @@ function RaceGroupedSection({
   description,
   items,
   featured = false,
+  emptyMessage,
+  hideWhenEmpty = false,
 }: {
   id: string;
   title: string;
   description: string;
   items: RaceListItem[];
   featured?: boolean;
+  emptyMessage?: string;
+  hideWhenEmpty?: boolean;
 }) {
   const dateGroups = groupRaceItemsByDateAndVenue(items);
+  if (items.length === 0 && hideWhenEmpty) return null;
 
   return (
     <section id={id} className="scroll-mt-5">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="m-0 text-lg font-semibold tracking-normal text-slate-950">{title}</h2>
+          <h2 className="m-0 text-lg font-semibold tracking-normal text-slate-950">
+            {title}
+          </h2>
           <p className="m-0 mt-1 text-sm text-slate-600">{description}</p>
         </div>
-        <span className="text-sm font-medium text-slate-600">{items.length}件</span>
+        <span className="text-sm font-medium text-slate-600">
+          {items.length}件
+        </span>
       </div>
 
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
-          表示できるレースがありません。
+          {emptyMessage ?? "表示できるレースがありません。"}
         </p>
       ) : (
         <>
@@ -335,7 +412,11 @@ function RaceGroupedSection({
                     {formatRaceDate(dateGroup.raceDate)}
                   </h3>
                   <span className="text-xs font-semibold text-slate-600">
-                    {dateGroup.venues.reduce((sum, venue) => sum + venue.items.length, 0)}R
+                    {dateGroup.venues.reduce(
+                      (sum, venue) => sum + venue.items.length,
+                      0,
+                    )}
+                    R
                   </span>
                 </div>
 
@@ -352,7 +433,11 @@ function RaceGroupedSection({
                       </div>
                       <div className="grid gap-2">
                         {venueGroup.items.map((item) => (
-                          <RaceCompactRow key={item.race.race_key} item={item} featured={featured} />
+                          <RaceCompactRow
+                            key={item.race.race_key}
+                            item={item}
+                            featured={featured}
+                          />
                         ))}
                       </div>
                     </div>
@@ -387,19 +472,26 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     : { items: [] as RaceBoardItem[], error: null };
   const fallbackResult = selectedDate ? null : await loadRaces();
   const error = boardResult.error ?? fallbackResult?.error ?? null;
-  const boardItems: RaceListItem[] = boardResult.items.length > 0
-    ? boardResult.items.map((item) => ({
-        race: item.race,
-        forecast: item.forecast ?? null,
-      }))
-    : (fallbackResult?.races ?? []).map((race) => ({ race, forecast: null }));
-  const sortedRaces = boardItems.map((item) => item.race).sort(compareRaceSummary);
+  const boardItems: RaceListItem[] =
+    boardResult.items.length > 0
+      ? boardResult.items.map((item) => ({
+          race: item.race,
+          forecast: item.forecast ?? null,
+        }))
+      : (fallbackResult?.races ?? []).map((race) => ({ race, forecast: null }));
+  const sortedRaces = boardItems
+    .map((item) => item.race)
+    .sort(compareRaceSummary);
   const dates = allDates.length > 0 ? allDates : raceDates(sortedRaces);
   const visibleRaces = sortedRaces;
-  const itemByRaceKey = new Map(boardItems.map((item) => [item.race.race_key, item]));
+  const itemByRaceKey = new Map(
+    boardItems.map((item) => [item.race.race_key, item]),
+  );
   const visibleItems: RaceListItem[] = error
     ? []
-    : visibleRaces.map((race) => itemByRaceKey.get(race.race_key) ?? { race, forecast: null });
+    : visibleRaces.map(
+        (race) => itemByRaceKey.get(race.race_key) ?? { race, forecast: null },
+      );
 
   const weekendItems = visibleItems.filter(
     ({ race }) => isForecastRace(race) && isRaceInRange(race, weekend),
@@ -410,7 +502,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       race.race_date >= today &&
       !weekendItems.some((item) => item.race.race_key === race.race_key),
   );
-  const confirmedItems = visibleItems.filter(({ race }) => statusTone(race.status) === "confirmed");
+  const confirmedItems = visibleItems.filter(
+    ({ race }) => statusTone(race.status) === "confirmed",
+  );
   // 過去日付で status="entries" のまま（成績未取込）のレース。確定後・出走前いずれにも非表示になるため第4セクションで救済。
   const pastEntryItems = visibleItems.filter(
     ({ race }) =>
@@ -423,7 +517,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-7 text-slate-950 sm:px-6 lg:px-8 lg:py-9">
-      {ingestStatus ? <IngestStatusBanner status={ingestStatus} /> : null}
+      {ingestStatus ? (
+        <IngestStatusBanner
+          status={ingestStatus}
+          operator={showOperatorDetails}
+        />
+      ) : null}
 
       <section className="mb-7 border-b border-slate-200 pb-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -432,23 +531,44 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Race intelligence
             </div>
-            <h1 className="m-0 text-3xl font-semibold tracking-normal">レースボード</h1>
+            <h1 className="m-0 text-3xl font-semibold tracking-normal">
+              レースボード
+            </h1>
             <p className="m-0 mt-2 text-sm leading-6 text-slate-600">
               開催日と競馬場から、展開予想と確定後の振り返りへ移動できます。
             </p>
           </div>
-          <nav className="hidden w-fit max-w-full flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-sm md:inline-flex" aria-label="レース一覧フィルター">
-            <a className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" href="#weekend">
+          <nav
+            className="hidden w-fit max-w-full flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-sm md:inline-flex"
+            aria-label="レース一覧フィルター"
+          >
+            <a
+              className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+              href="#weekend"
+            >
               今週末 {weekendItems.length}
             </a>
-            <a className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" href="#upcoming">
-              出走前 {upcomingItems.length}
-            </a>
-            <a className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" href="#confirmed">
+            {/* リンク先は「その他の出走前レース」。ここを「出走前」と書くと、
+              下のタイルの「出走前（今週末を含む全件）」と同じ名前で違う数になる。 */}
+            {upcomingItems.length > 0 ? (
+              <a
+                className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+                href="#upcoming"
+              >
+                その他 {upcomingItems.length}
+              </a>
+            ) : null}
+            <a
+              className="rounded px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+              href="#confirmed"
+            >
               確定後 {confirmedItems.length}
             </a>
             {pastEntryItems.length > 0 && (
-              <a className="rounded bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700" href="#past-entries">
+              <a
+                className="rounded bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700"
+                href="#past-entries"
+              >
                 成績未取込 {pastEntryItems.length}
               </a>
             )}
@@ -476,17 +596,41 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           ["開催場", venueCount],
         ].map(([label, value]) => (
           <div className="min-w-0 px-1 py-3 text-center" key={label}>
-            <p className="m-0 truncate text-[10px] font-semibold text-slate-500">{label}</p>
-            <p className="m-0 mt-1 text-xl font-bold tabular-nums text-slate-950">{value}</p>
+            <p className="m-0 truncate text-[10px] font-semibold text-slate-500">
+              {label}
+            </p>
+            <p className="m-0 mt-1 text-xl font-bold tabular-nums text-slate-950">
+              {value}
+            </p>
           </div>
         ))}
       </section>
 
       <section className="mb-8 hidden gap-3 md:grid md:grid-cols-2 lg:grid-cols-4">
-        <StatTile tone="emerald" icon={<CalendarDays className="h-4 w-4" />} label="今週末の予想対象" value={weekendItems.length} />
-        <StatTile tone="blue" icon={<Search className="h-4 w-4" />} label="出走前" value={weekendItems.length + upcomingItems.length} />
-        <StatTile tone="violet" icon={<CheckCircle2 className="h-4 w-4" />} label="確定後" value={confirmedItems.length} />
-        <StatTile tone="amber" icon={<ListFilter className="h-4 w-4" />} label="開催場" value={venueCount} />
+        <StatTile
+          tone="emerald"
+          icon={<CalendarDays className="h-4 w-4" />}
+          label="今週末の予想対象"
+          value={weekendItems.length}
+        />
+        <StatTile
+          tone="blue"
+          icon={<Search className="h-4 w-4" />}
+          label="出走前"
+          value={weekendItems.length + upcomingItems.length}
+        />
+        <StatTile
+          tone="violet"
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          label="確定後"
+          value={confirmedItems.length}
+        />
+        <StatTile
+          tone="amber"
+          icon={<ListFilter className="h-4 w-4" />}
+          label="開催場"
+          value={venueCount}
+        />
       </section>
 
       {forecastPerformance ? (
@@ -505,36 +649,40 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           />
         </aside>
         <div className="min-w-0 space-y-9">
-        <RaceGroupedSection
-          id="weekend"
-          title="今週末の予想対象"
-          description={`${formatRaceDate(weekend.from)} - ${formatRaceDate(weekend.to)} の出走前レース`}
-          items={weekendItems}
-          featured
-        />
-
-        <RaceGroupedSection
-          id="upcoming"
-          title="その他の出走前レース"
-          description="展開予想を確認できる未確定レース"
-          items={upcomingItems}
-        />
-
-        <RaceGroupedSection
-          id="confirmed"
-          title="確定後レース"
-          description="ペース分析と回顧コメントを確認できるレース"
-          items={confirmedItems}
-        />
-
-        {pastEntryItems.length > 0 && (
           <RaceGroupedSection
-            id="past-entries"
-            title="成績未取込レース"
-            description="出走表データあり・成績未取込。--step results を実行すると確定後に移動します"
-            items={pastEntryItems}
+            id="weekend"
+            title="今週末の予想対象"
+            description={`${formatRaceDate(weekend.from)} - ${formatRaceDate(weekend.to)} の出走前レース`}
+            items={weekendItems}
+            featured
           />
-        )}
+
+          <RaceGroupedSection
+            id="upcoming"
+            title="その他の出走前レース"
+            description="展開予想を確認できる未確定レース"
+            items={upcomingItems}
+            hideWhenEmpty
+          />
+
+          <RaceGroupedSection
+            id="confirmed"
+            title="確定後レース"
+            description="ペース分析と回顧コメントを確認できるレース"
+            items={confirmedItems}
+            // 開催日の日中は必ず0件になる（結果の取り込みは当日夜）。
+            // 説明が無いと「壊れている」と読まれる。
+            emptyMessage="この日の結果はまだ入っていません。確定成績は当日夜に反映されます。"
+          />
+
+          {pastEntryItems.length > 0 && (
+            <RaceGroupedSection
+              id="past-entries"
+              title="成績未取込レース"
+              description="出走表データあり・成績未取込。--step results を実行すると確定後に移動します"
+              items={pastEntryItems}
+            />
+          )}
         </div>
       </div>
 

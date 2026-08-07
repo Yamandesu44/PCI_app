@@ -73,7 +73,8 @@ function PeriodSelector({
         })}
       </nav>
       <p className="text-xs text-slate-500">
-        {formatRaceDate(performance.date_from)} - {formatRaceDate(performance.date_to)}
+        {formatRaceDate(performance.date_from)} -{" "}
+        {formatRaceDate(performance.date_to)}
       </p>
     </div>
   );
@@ -107,41 +108,61 @@ function PerformanceMetrics({
                 (candidate) => candidate.key === group.key,
               );
               const delta = rateDelta(group.hit_rate, previous?.hit_rate);
-              const DeltaIcon = delta == null || delta === 0
-                ? Minus
-                : delta > 0
-                  ? TrendingUp
-                  : TrendingDown;
-              const deltaTone = delta == null || delta === 0
-                ? "text-slate-500"
-                : delta > 0
-                  ? "text-emerald-700"
-                  : "text-amber-700";
+              const DeltaIcon =
+                delta == null || delta === 0
+                  ? Minus
+                  : delta > 0
+                    ? TrendingUp
+                    : TrendingDown;
+              const deltaTone =
+                delta == null || delta === 0
+                  ? "text-slate-500"
+                  : delta > 0
+                    ? "text-emerald-700"
+                    : "text-amber-700";
 
               return (
-                <div className="px-2 first:pl-0 sm:px-6 sm:first:pl-0" key={group.key}>
-                  <dt className="text-xs font-medium text-slate-500">{group.label}</dt>
+                <div
+                  className="px-2 first:pl-0 sm:px-6 sm:first:pl-0"
+                  key={group.key}
+                >
+                  <dt className="text-xs font-medium text-slate-500">
+                    {group.label}
+                  </dt>
                   <dd className="mt-1 text-xl font-bold tabular-nums text-slate-950 sm:text-2xl">
                     {rateLabel(group.hit_rate)}
                   </dd>
                   <dd className="mt-1 text-[11px] text-slate-500 sm:text-xs">
                     {group.sample_size}レース
                   </dd>
-                  <dd className={`mt-2 flex items-center gap-1 text-[11px] font-semibold sm:text-xs ${deltaTone}`}>
+                  <dd
+                    className={`mt-2 flex items-center gap-1 text-[11px] font-semibold sm:text-xs ${deltaTone}`}
+                  >
                     <DeltaIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     {delta == null
-                      ? "比較なし"
+                      ? "前期のデータなし"
                       : `前期比 ${delta > 0 ? "+" : delta === 0 ? "±" : ""}${delta}pt`}
                   </dd>
                   {previous && previous.sample_size > 0 ? (
                     <dd className="mt-0.5 hidden text-[11px] text-slate-400 sm:block">
-                      前期 {rateLabel(previous.hit_rate)} / {previous.sample_size}レース
+                      前期 {rateLabel(previous.hit_rate)} /{" "}
+                      {previous.sample_size}レース
                     </dd>
                   ) : null}
                 </div>
               );
             })}
           </dl>
+          {/* 展開は3区分（速い/平均/落ち着いた）で、当てずっぽうでも約33%は当たる。
+            基準を書かないと、33%を下回る値が「そこそこ当たっている」と読まれるし、
+            逆に良い値も評価できない。母数の少なさも併記する。 */}
+          <p className="m-0 mt-3 text-[11px] leading-5 text-slate-500 sm:text-xs">
+            展開は「速い・平均・落ち着いた」の3区分です。
+            <strong className="font-semibold text-slate-600">
+              当てずっぽうでも約33%は一致します。
+            </strong>
+            レース数が少ない区分の数字は、まだ実力を表していません。
+          </p>
           <div
             className={
               hasWeeklyTrend
@@ -190,21 +211,21 @@ export function ForecastPerformanceSummary({
   );
   const reviewTarget = performance.confidence_review_target ?? 100;
   const confidenceCohorts = performance.confidence_cohort_groups ?? [];
-  const turfConfidenceCount = confidenceCohorts.find(
-    (group) => group.key === "turf",
-  )?.sample_size ?? 0;
-  const dirtConfidenceCount = confidenceCohorts.find(
-    (group) => group.key === "dirt",
-  )?.sample_size ?? 0;
-  const confidenceReviewReady = performance.confidence_review_ready ?? (
-    turfConfidenceCount >= reviewTarget && dirtConfidenceCount >= reviewTarget
-  );
+  const turfConfidenceCount =
+    confidenceCohorts.find((group) => group.key === "turf")?.sample_size ?? 0;
+  const dirtConfidenceCount =
+    confidenceCohorts.find((group) => group.key === "dirt")?.sample_size ?? 0;
+  const confidenceReviewReady =
+    performance.confidence_review_ready ??
+    (turfConfidenceCount >= reviewTarget &&
+      dirtConfidenceCount >= reviewTarget);
   const mobileConfidenceLabel = confidenceReviewReady
     ? "新しい読みやすさ指標は再評価可能です"
     : `新しい読みやすさ指標は、芝${turfConfidenceCount}件、目標${reviewTarget}件。ダート${dirtConfidenceCount}件、目標${reviewTarget}件です`;
-  const mobilePerformanceLabel = performance.sample_size > 0
-    ? `展開一致${rateLabel(overall?.hit_rate)}。検証${performance.sample_size}件。カバー率${coverage}%`
-    : `事前予想を蓄積中です。検証${performance.sample_size}件。カバー率${coverage}%`;
+  const mobilePerformanceLabel =
+    performance.sample_size > 0
+      ? `展開一致${rateLabel(overall?.hit_rate)}。検証${performance.sample_size}件。カバー率${coverage}%`
+      : `事前予想を蓄積中です。検証${performance.sample_size}件。カバー率${coverage}%`;
 
   return (
     <>
@@ -249,7 +270,10 @@ export function ForecastPerformanceSummary({
           <p className="mb-3 text-xs leading-5 text-slate-600">
             事前の展開想定と実際の流れを比較しています。
           </p>
-          <PeriodSelector performance={performance} selectedDate={selectedDate} />
+          <PeriodSelector
+            performance={performance}
+            selectedDate={selectedDate}
+          />
           <PerformanceMetrics performance={performance} />
         </div>
       </details>
@@ -268,7 +292,10 @@ export function ForecastPerformanceSummary({
               保存済みの事前予想について、展開区分の一致率と直前の同期間との差です。
             </p>
           </div>
-          <PeriodSelector performance={performance} selectedDate={selectedDate} />
+          <PeriodSelector
+            performance={performance}
+            selectedDate={selectedDate}
+          />
         </div>
         <PerformanceMetrics performance={performance} />
       </section>

@@ -1,15 +1,33 @@
-import { CheckCircle2, ChevronDown, TriangleAlert, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  TriangleAlert,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 
 import { IngestRecoveryCommand } from "@/components/IngestRecoveryCommand";
-import { ingestStatusMeta } from "@/lib/ingestStatus";
+import { ingestStatusMeta, visitorMessage } from "@/lib/ingestStatus";
 import type { IngestStatus } from "@pci/api-client";
 
-const TONE_CLASS: Record<string, { border: string; bg: string; icon: string }> = {
-  ok: { border: "border-emerald-200", bg: "bg-emerald-50", icon: "bg-emerald-100 text-emerald-700" },
-  warning: { border: "border-amber-200", bg: "bg-amber-50", icon: "bg-amber-100 text-amber-700" },
-  error: { border: "border-rose-200", bg: "bg-rose-50", icon: "bg-rose-100 text-rose-700" },
-};
+const TONE_CLASS: Record<string, { border: string; bg: string; icon: string }> =
+  {
+    ok: {
+      border: "border-emerald-200",
+      bg: "bg-emerald-50",
+      icon: "bg-emerald-100 text-emerald-700",
+    },
+    warning: {
+      border: "border-amber-200",
+      bg: "bg-amber-50",
+      icon: "bg-amber-100 text-amber-700",
+    },
+    error: {
+      border: "border-rose-200",
+      bg: "bg-rose-50",
+      icon: "bg-rose-100 text-rose-700",
+    },
+  };
 
 const TONE_ICON = {
   ok: CheckCircle2,
@@ -22,28 +40,52 @@ const TONE_ICON = {
  *
  * `has_history=false`（開発/fixture環境等でログが無い）では何も描画しない。
  * 正常時は落ち着いた表示、鮮度低下・失敗時は目立つ表示にする。
+ *
+ * **`operator` が false（既定）なら、失敗の詳細と復旧手順は出さない。**
+ * そこには内部のエンドポイントパス・例外文言・再同期コマンドが含まれており、
+ * 訪問者には実行できない指示でもある（`lib/opsVisibility.ts`）。
+ * 異常であること自体は色と文言で伝え続ける——隠すのは手順であって状態ではない。
  */
-export function IngestStatusBanner({ status }: { status: IngestStatus }) {
-  const meta = ingestStatusMeta(status);
-  if (!meta.visible) return null;
+export function IngestStatusBanner({
+  status,
+  operator = false,
+}: {
+  status: IngestStatus;
+  operator?: boolean;
+}) {
+  const rawMeta = ingestStatusMeta(status);
+  if (!rawMeta.visible) return null;
+
+  const visible = operator
+    ? rawMeta
+    : { ...rawMeta, ...visitorMessage(rawMeta) };
+  const meta = visible;
 
   const tone = TONE_CLASS[meta.tone];
   const Icon = TONE_ICON[meta.tone];
   const hasDetails =
-    meta.failures.length > 0 ||
-    meta.incompleteRaces.length > 0 ||
-    meta.missingTrackConditionRaces.length > 0 ||
-    meta.duplicateRaceGroups.length > 0 ||
-    meta.recoveryCommand !== null ||
-    meta.metadataRecoveryCommand !== null;
-  const mobileSignals = [
-    status.last_attempt_failed ? "直近失敗" : null,
-    status.has_incomplete_races ? `成績未取込 ${status.incomplete_race_count}件` : null,
-    status.has_missing_track_conditions
-      ? `馬場情報 ${status.missing_track_condition_count}件`
-      : null,
-    status.has_duplicate_races ? `重複 ${status.duplicate_race_group_count}組` : null,
-  ].filter((signal): signal is string => signal !== null);
+    operator &&
+    (meta.failures.length > 0 ||
+      meta.incompleteRaces.length > 0 ||
+      meta.missingTrackConditionRaces.length > 0 ||
+      meta.duplicateRaceGroups.length > 0 ||
+      meta.recoveryCommand !== null ||
+      meta.metadataRecoveryCommand !== null);
+  // 件数の内訳も運用の話。訪問者には「遅れている」以上の粒度を出さない。
+  const mobileSignals = !operator
+    ? []
+    : [
+        status.last_attempt_failed ? "直近失敗" : null,
+        status.has_incomplete_races
+          ? `成績未取込 ${status.incomplete_race_count}件`
+          : null,
+        status.has_missing_track_conditions
+          ? `馬場情報 ${status.missing_track_condition_count}件`
+          : null,
+        status.has_duplicate_races
+          ? `重複 ${status.duplicate_race_group_count}組`
+          : null,
+      ].filter((signal): signal is string => signal !== null);
 
   return (
     <div
@@ -55,7 +97,9 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
           優先度・件数は既存の ingestStatusMeta() の判定結果をそのまま使い、
           複数異常時の選定順を独自に決めない。 */}
       <div className="flex items-center gap-2 md:hidden">
-        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${tone.icon}`}>
+        <span
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${tone.icon}`}
+        >
           <Icon className="h-3.5 w-3.5" aria-hidden />
         </span>
         <p
@@ -71,22 +115,34 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
           {meta.tone === "ok" ? "正常" : "要対応"}
         </span>
         {mobileSignals.map((signal) => (
-          <span key={signal} className="rounded bg-white/70 px-2 py-0.5 text-slate-700">
+          <span
+            key={signal}
+            className="rounded bg-white/70 px-2 py-0.5 text-slate-700"
+          >
             {signal}
           </span>
         ))}
-        {hasDetails ? <span className="font-semibold text-slate-600">詳細を確認</span> : null}
+        {hasDetails ? (
+          <span className="font-semibold text-slate-600">詳細を確認</span>
+        ) : null}
       </div>
 
       <div className="hidden items-start gap-3 md:flex">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${tone.icon}`}>
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${tone.icon}`}
+        >
           <Icon className="h-4 w-4" aria-hidden />
         </span>
         <div className="min-w-0 flex-1 max-md:hidden">
-          <p className="m-0 text-sm font-semibold" style={{ color: meta.color }}>
+          <p
+            className="m-0 text-sm font-semibold"
+            style={{ color: meta.color }}
+          >
             {meta.headline}
           </p>
-          <p className="m-0 mt-1 text-sm leading-6 text-slate-700">{meta.detail}</p>
+          <p className="m-0 mt-1 text-sm leading-6 text-slate-700">
+            {meta.detail}
+          </p>
         </div>
       </div>
 
@@ -112,9 +168,16 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                     </p>
                     <ul className="m-0 mt-2 list-none space-y-1.5 p-0">
                       {meta.failures.map((failure, i) => (
-                        <li key={i} className="rounded border border-slate-200 bg-white p-2 text-xs">
-                          <span className="font-semibold text-slate-800">{failure.label}</span>
-                          <span className="ml-2 text-slate-500">{failure.timestamp}</span>
+                        <li
+                          key={i}
+                          className="rounded border border-slate-200 bg-white p-2 text-xs"
+                        >
+                          <span className="font-semibold text-slate-800">
+                            {failure.label}
+                          </span>
+                          <span className="ml-2 text-slate-500">
+                            {failure.timestamp}
+                          </span>
                           <p className="m-0 mt-1 break-words font-mono text-[11px] text-slate-500">
                             {failure.detail}
                           </p>
@@ -140,14 +203,20 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                             className="flex min-h-11 items-center justify-between rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-amber-300 hover:text-slate-950"
                           >
                             <span className="font-semibold">{race.label}</span>
-                            <span className="ml-3 text-slate-500">{race.condition}</span>
+                            <span className="ml-3 text-slate-500">
+                              {race.condition}
+                            </span>
                           </Link>
                         </li>
                       ))}
                     </ul>
-                    {status.incomplete_race_count > meta.incompleteRaces.length ? (
+                    {status.incomplete_race_count >
+                    meta.incompleteRaces.length ? (
                       <p className="m-0 mt-2 text-xs text-slate-500">
-                        ほか{status.incomplete_race_count - meta.incompleteRaces.length}件
+                        ほか
+                        {status.incomplete_race_count -
+                          meta.incompleteRaces.length}
+                        件
                       </p>
                     ) : null}
                   </section>
@@ -159,7 +228,8 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                       id="missing-track-condition-heading"
                       className="m-0 text-xs font-semibold text-slate-800"
                     >
-                      馬場情報未反映の対象（{meta.missingTrackConditionRaces.length}件）
+                      馬場情報未反映の対象（
+                      {meta.missingTrackConditionRaces.length}件）
                     </p>
                     <ul className="m-0 mt-2 grid list-none gap-1.5 p-0 sm:grid-cols-2">
                       {meta.missingTrackConditionRaces.map((race) => (
@@ -169,7 +239,9 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                             className="flex min-h-11 items-center justify-between rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-amber-300 hover:text-slate-950"
                           >
                             <span className="font-semibold">{race.label}</span>
-                            <span className="ml-3 text-slate-500">{race.condition}</span>
+                            <span className="ml-3 text-slate-500">
+                              {race.condition}
+                            </span>
                           </Link>
                         </li>
                       ))}
@@ -200,7 +272,9 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                           key={`${group.label}-${group.raceKeys.join("-")}`}
                           className="rounded border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700"
                         >
-                          <p className="m-0 font-semibold text-slate-900">{group.label}</p>
+                          <p className="m-0 font-semibold text-slate-900">
+                            {group.label}
+                          </p>
                           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                             {group.raceKeys.map((raceKey) => (
                               <Link
@@ -215,10 +289,13 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                         </li>
                       ))}
                     </ul>
-                    {status.duplicate_race_group_count > meta.duplicateRaceGroups.length ? (
+                    {status.duplicate_race_group_count >
+                    meta.duplicateRaceGroups.length ? (
                       <p className="m-0 mt-2 text-xs text-slate-500">
                         ほか
-                        {status.duplicate_race_group_count - meta.duplicateRaceGroups.length}組
+                        {status.duplicate_race_group_count -
+                          meta.duplicateRaceGroups.length}
+                        組
                       </p>
                     ) : null}
                   </section>
@@ -232,7 +309,9 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                     >
                       再同期コマンド
                     </p>
-                    <p className="m-0 mt-1 text-xs text-slate-500">リポジトリ直下で実行</p>
+                    <p className="m-0 mt-1 text-xs text-slate-500">
+                      リポジトリ直下で実行
+                    </p>
                     <IngestRecoveryCommand command={meta.recoveryCommand} />
                   </section>
                 ) : null}
@@ -245,8 +324,12 @@ export function IngestStatusBanner({ status }: { status: IngestStatus }) {
                     >
                       馬場情報の補完コマンド
                     </p>
-                    <p className="m-0 mt-1 text-xs text-slate-500">リポジトリ直下で実行</p>
-                    <IngestRecoveryCommand command={meta.metadataRecoveryCommand} />
+                    <p className="m-0 mt-1 text-xs text-slate-500">
+                      リポジトリ直下で実行
+                    </p>
+                    <IngestRecoveryCommand
+                      command={meta.metadataRecoveryCommand}
+                    />
                   </section>
                 ) : null}
               </div>

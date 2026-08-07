@@ -90,7 +90,9 @@ function buildMissingTrackConditionRaces(
   }));
 }
 
-function buildDuplicateRaceGroups(status: IngestStatus): DuplicateRaceGroupMeta[] {
+function buildDuplicateRaceGroups(
+  status: IngestStatus,
+): DuplicateRaceGroupMeta[] {
   return status.duplicate_race_groups.map((group) => ({
     label: `${formatRaceDate(group.race_date)} ${jyoName(group.jyo_cd)} ${Number(group.race_no)}R`,
     raceKeys: group.race_keys,
@@ -129,6 +131,29 @@ function metadataRecoveryCommand(status: IngestStatus): string | null {
     status.race_metadata_date_from,
     status.race_metadata_date_to,
   );
+}
+
+/**
+ * 訪問者に見せる文面へ差し替える。
+ *
+ * 元の文面は運用者宛て（「手動同期をご検討ください」「取り込みに失敗しました」）で、
+ * 訪問者には実行できない指示であり、内部の事情でもある。伝えるべきことは
+ * 「いま見えているデータが最新とは限らない」の一点に尽きる。
+ *
+ * 隠すのは**表現と手順であって、状態ではない**。異常は色と文言で伝え続ける。
+ */
+export function visitorMessage(meta: IngestStatusMeta): {
+  headline: string;
+  detail: string;
+} {
+  if (meta.tone === "ok") {
+    return { headline: meta.headline, detail: meta.detail };
+  }
+  return {
+    headline: "データの更新が遅れています",
+    detail:
+      "表示中のレース情報が最新でない可能性があります。反映まで少しお待ちください。",
+  };
 }
 
 const HIDDEN: IngestStatusMeta = {
@@ -178,7 +203,8 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
       visible: true,
       tone: "warning",
       headline: `成績未取込のレースが${status.incomplete_race_count}件あります`,
-      detail: "開催済みですが出走前の状態で残っています。結果データの取り込み状況をご確認ください。",
+      detail:
+        "開催済みですが出走前の状態で残っています。結果データの取り込み状況をご確認ください。",
       color: TONE_COLOR.warning,
       failures: buildFailures(status),
       incompleteRaces: buildIncompleteRaces(status),
@@ -232,7 +258,8 @@ export function ingestStatusMeta(status: IngestStatus): IngestStatusMeta {
         days != null
           ? `データ更新が${days}日間確認できていません`
           : "データ更新の実績がまだ確認できていません",
-      detail: "自動取り込みが止まっている可能性があります。手動同期をご検討ください。",
+      detail:
+        "自動取り込みが止まっている可能性があります。手動同期をご検討ください。",
       color: TONE_COLOR.warning,
       failures: buildFailures(status),
       incompleteRaces: [],

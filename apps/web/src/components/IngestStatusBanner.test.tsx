@@ -33,6 +33,7 @@ describe("IngestStatusBanner", () => {
   it("警告の詳細と復旧手順を1つの折りたたみにまとめる", () => {
     const markup = renderToStaticMarkup(
       <IngestStatusBanner
+        operator
         status={status({
           last_attempt_failed: true,
           recent_failures: [
@@ -74,7 +75,9 @@ describe("IngestStatusBanner", () => {
   });
 
   it("正常時は不要な詳細開閉を表示しない", () => {
-    const markup = renderToStaticMarkup(<IngestStatusBanner status={status()} />);
+    const markup = renderToStaticMarkup(
+      <IngestStatusBanner operator status={status()} />,
+    );
 
     expect(markup).not.toContain("<details");
     expect(markup).toContain("データは最新です");
@@ -84,6 +87,7 @@ describe("IngestStatusBanner", () => {
   it("スマホでは状態と件数を要約し、詳細は任意展開に残す", () => {
     const markup = renderToStaticMarkup(
       <IngestStatusBanner
+        operator
         status={status({
           last_attempt_failed: true,
           has_incomplete_races: true,
@@ -119,6 +123,7 @@ describe("IngestStatusBanner", () => {
   it("モバイル専用の要約行に見出しを常時表示し、detail文は含めない", () => {
     const markup = renderToStaticMarkup(
       <IngestStatusBanner
+        operator
         status={status({
           has_incomplete_races: true,
           incomplete_race_count: 3,
@@ -127,18 +132,22 @@ describe("IngestStatusBanner", () => {
       />,
     );
 
-    const mobileMatch = /<div class="flex items-center gap-2 md:hidden">[\s\S]*?<\/div>/.exec(
-      markup,
-    );
+    const mobileMatch =
+      /<div class="flex items-center gap-2 md:hidden">[\s\S]*?<\/div>/.exec(
+        markup,
+      );
     expect(mobileMatch).not.toBeNull();
     const mobileSummary = mobileMatch![0];
     expect(mobileSummary).toContain("成績未取込のレースが3件あります");
-    expect(mobileSummary).not.toContain("開催済みですが出走前の状態で残っています");
+    expect(mobileSummary).not.toContain(
+      "開催済みですが出走前の状態で残っています",
+    );
   });
 
   it("PC表示（md:）は見出し・detail文とも従来どおり維持する", () => {
     const markup = renderToStaticMarkup(
       <IngestStatusBanner
+        operator
         status={status({
           has_incomplete_races: true,
           incomplete_race_count: 3,
@@ -148,12 +157,62 @@ describe("IngestStatusBanner", () => {
     );
 
     expect(markup).toContain('class="hidden items-start gap-3 md:flex"');
-    const desktopMatch = /<div class="hidden items-start gap-3 md:flex">[\s\S]*?<\/div><\/div>/.exec(
-      markup,
-    );
+    const desktopMatch =
+      /<div class="hidden items-start gap-3 md:flex">[\s\S]*?<\/div><\/div>/.exec(
+        markup,
+      );
     expect(desktopMatch).not.toBeNull();
     const desktopBlock = desktopMatch![0];
     expect(desktopBlock).toContain("成績未取込のレースが3件あります");
     expect(desktopBlock).toContain("開催済みですが出走前の状態で残っています");
+  });
+
+  describe("訪問者向け（operator 未指定）", () => {
+    const failing = {
+      last_attempt_failed: true,
+      recent_failures: [
+        {
+          batch_date: "2026-08-07",
+          step: "forecasts",
+          mode: "mykeibadb",
+          started_at: "2026-08-07T12:03:00+09:00",
+          error_summary:
+            "Ingest API エラー 504 /internal/ingest/forecasts/precompute: upstream request timeout",
+        },
+      ],
+    };
+
+    it("内部の事情を出さない", () => {
+      // 公開画面に出ていたもの: 内部エンドポイントのパス、例外文言、
+      // そして訪問者には実行できない PowerShell の再同期コマンド。
+      const markup = renderToStaticMarkup(
+        <IngestStatusBanner status={status(failing)} />,
+      );
+
+      expect(markup).not.toContain("/internal/ingest");
+      expect(markup).not.toContain("upstream request timeout");
+      expect(markup).not.toContain("powershell");
+      expect(markup).not.toContain("詳細と復旧手順");
+      expect(markup).not.toContain("手動同期");
+    });
+
+    it("異常であること自体は伝える", () => {
+      // 隠すのは手順であって状態ではない。
+      const markup = renderToStaticMarkup(
+        <IngestStatusBanner status={status(failing)} />,
+      );
+
+      expect(markup).toContain("データの更新が遅れています");
+      expect(markup).toContain("最新でない可能性");
+    });
+
+    it("運用者にだけ詳細を見せる", () => {
+      const markup = renderToStaticMarkup(
+        <IngestStatusBanner operator status={status(failing)} />,
+      );
+
+      expect(markup).toContain("詳細と復旧手順");
+      expect(markup).toContain("/internal/ingest");
+    });
   });
 });
