@@ -24,8 +24,16 @@ function ranking(entries: IntegratedEntry[]): IntegratedRanking {
 
 describe("IntegratedRankingView", () => {
   it("展開が向く馬を見出しに置く", () => {
+    // 向く馬が少数のときの見出し。全頭が向く場合は別の扱いになる
+    // （「向く馬が多すぎる場合」を参照）。
     const markup = renderToStaticMarkup(
-      <IntegratedRankingView ranking={ranking([entry({})])} />,
+      <IntegratedRankingView
+        ranking={ranking([
+          entry({ rank: 1, horse_no: 1, fit_label: "合致" }),
+          entry({ rank: 2, horse_no: 2, fit_label: "中立" }),
+          entry({ rank: 3, horse_no: 3, fit_label: "中立" }),
+        ])}
+      />,
     );
 
     expect(markup).toContain("この展開が向きそうな馬");
@@ -164,5 +172,50 @@ describe("IntegratedRankingView", () => {
       <IntegratedRankingView ranking={ranking([])} />,
     );
     expect(markup).toBe("");
+  });
+
+  describe("向く馬が多すぎる場合", () => {
+    function crowdedRanking(total: number, suited: number) {
+      return ranking(
+        Array.from({ length: total }, (_, i) =>
+          entry({
+            rank: i + 1,
+            horse_no: i + 1,
+            frame_no: (i % 8) + 1,
+            fit_label: i < suited ? "合致" : "中立",
+          }),
+        ),
+      );
+    }
+
+    it("半数以上が向くなら、絞れないレースとして伝える", () => {
+      // 合致は馬ごとの絶対閾値で、レース内の頭数を制御していない。
+      // 想定ペースが強く傾くと前に行く馬が丸ごと閾値を超え、16頭中15頭が
+      // 「向く」といった状態になる。全員に向く流れは誰の武器でもない。
+      const markup = renderToStaticMarkup(
+        <IntegratedRankingView ranking={crowdedRanking(16, 15)} />,
+      );
+
+      expect(markup).toContain("展開では絞りにくいレースです");
+      expect(markup).toContain("16頭中15頭");
+      expect(markup).toContain("向くと判定された馬を見る（15頭）");
+    });
+
+    it("少数なら従来どおり主役として並べる", () => {
+      const markup = renderToStaticMarkup(
+        <IntegratedRankingView ranking={crowdedRanking(16, 4)} />,
+      );
+
+      expect(markup).toContain("この展開が向きそうな馬");
+      expect(markup).not.toContain("展開では絞りにくい");
+    });
+
+    it("ちょうど半数でも絞れない側として扱う", () => {
+      const markup = renderToStaticMarkup(
+        <IntegratedRankingView ranking={crowdedRanking(10, 5)} />,
+      );
+
+      expect(markup).toContain("展開では絞りにくいレースです");
+    });
   });
 });

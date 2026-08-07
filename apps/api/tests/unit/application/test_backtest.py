@@ -58,6 +58,7 @@ from pci.application.backtest import (
     style_advantage_breakdown_to_dict,
     style_advantage_lift_to_dict,
     summarize_clamp_impact,
+    summarize_fit_crowding,
     summarize_fit_label_shares,
     summarize_integrated_accuracy,
     summarize_pace_centering,
@@ -1703,6 +1704,66 @@ class TestReportToDict:
         assert result["integrated_samples"] == []
         assert result["style_advantage_samples"] == []
         json.dumps(result)
+
+
+class TestFitCrowding:
+    """レース単位で見ないと「全頭合致」が見えない。
+
+    全体の構成比が3割でも、一部のレースで全頭が合致していれば、そのレースでは
+    展開が絞り込みの手がかりにならない。判断に使うのはレース単位の分布。
+    """
+
+    @staticmethod
+    def _h(race_key: str, horse_no: int, label: str) -> HorseSample:
+        return HorseSample(
+            race_key=race_key,
+            horse_no=horse_no,
+            pai=50.0,
+            good_run=False,
+            track_type="芝",
+            running_style="先行",
+            fit_label=label,
+        )
+
+    def test_empty_returns_empty(self) -> None:
+        assert summarize_fit_crowding([]) == []
+
+    def test_counts_races_where_the_whole_field_is_suited(self) -> None:
+        samples = [
+            # 全頭合致のレース
+            self._h("R1", 1, "合致"),
+            self._h("R1", 2, "合致"),
+            # 半数のレース
+            self._h("R2", 1, "合致"),
+            self._h("R2", 2, "中立"),
+            # 合致なしのレース
+            self._h("R3", 1, "中立"),
+            self._h("R3", 2, "不利"),
+        ]
+
+        rows = summarize_fit_crowding(samples)
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.races == 3
+        # R1(1.0) と R2(0.5) が「半数以上」に該当する。
+        assert row.majority_race_share == pytest.approx(2 / 3, abs=1e-4)
+        assert row.all_suited_race_share == pytest.approx(1 / 3, abs=1e-4)
+
+    def test_median_share_reflects_the_middle_race(self) -> None:
+        samples = [
+            self._h("R1", 1, "中立"),
+            self._h("R1", 2, "中立"),
+            self._h("R2", 1, "合致"),
+            self._h("R2", 2, "中立"),
+            self._h("R3", 1, "合致"),
+            self._h("R3", 2, "合致"),
+        ]
+
+        row = summarize_fit_crowding(samples)[0]
+
+        assert row.median_share == pytest.approx(0.5, abs=1e-4)
+        assert row.median_suited_count == pytest.approx(1.0, abs=1e-4)
 
 
 class TestFitLabelShares:

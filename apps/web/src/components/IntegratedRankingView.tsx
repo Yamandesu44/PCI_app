@@ -3,6 +3,23 @@ import { Wind } from "lucide-react";
 import { frameColorClass, horseNumberLabel } from "@/lib/pace";
 import type { IntegratedEntry, IntegratedRanking } from "@pci/api-client";
 
+/**
+ * 「向く」が出走馬のこの割合以上を占めたら、絞り込みには使えないと判断する。
+ *
+ * 合致の判定は馬ごとの絶対閾値（PAI >= 55）で、**レース内で何頭が該当するかを
+ * 制御していない**。想定ペースが強く傾いたレースでは、脚質ボーナスだけで
+ * 前に行く馬が丸ごと閾値を超えうる。結果、16頭中15頭が「向く」といった状態になる。
+ *
+ * 展開の恩恵は相対的な価値なので、**全員に向く流れは誰の武器でもない**。
+ * その場合は個別の馬を並べるより、「このレースは展開では差がつかない」と
+ * 伝えるほうが手がかりになる。
+ *
+ * 0.5 は暫定値。1レースあたりの合致割合の分布は未測定で、
+ * `backtest_forecast.py --diagnose-pai` の「レースあたりの合致割合」で
+ * 実測してから決め直す。判定自体をサーバへ移す案も含めて再検討する。
+ */
+const CROWDED_SHARE = 0.5;
+
 function abilityTag(tier: string): { label: string; chip: string } {
   if (tier === "上位")
     return { label: "能力上位", chip: "bg-slate-900 text-white" };
@@ -125,33 +142,55 @@ export function IntegratedRankingView({
     .filter((e) => e.fit_label === "合致")
     .sort((a, b) => a.horse_no - b.horse_no);
   const others = entries.filter((e) => e.fit_label !== "合致");
+  const crowded = suited.length >= entries.length * CROWDED_SHARE;
 
   return (
     <section aria-labelledby="integrated-heading">
       <div className="mb-4">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+          <span
+            className={`flex h-8 w-8 items-center justify-center rounded-md ${
+              crowded
+                ? "bg-slate-100 text-slate-600"
+                : "bg-emerald-50 text-emerald-700"
+            }`}
+          >
             <Wind className="h-4 w-4" aria-hidden />
           </span>
           <h2
             id="integrated-heading"
             className="m-0 text-base font-semibold tracking-normal text-slate-800"
           >
-            この展開が向きそうな馬
+            {crowded
+              ? "展開では絞りにくいレースです"
+              : "この展開が向きそうな馬"}
           </h2>
         </div>
         <p className="m-0 mt-2 text-sm text-slate-500">
-          {suited.length > 0
-            ? "想定される流れで持ち味を出しやすい馬です（馬番順）。"
-            : "今回は、想定される流れが特に向くと言える馬がいません。"}
+          {crowded
+            ? `想定される流れは、${entries.length}頭中${suited.length}頭に向きます。展開の向き不向きで差がつきにくいので、他の要素で判断してください。`
+            : suited.length > 0
+              ? "想定される流れで持ち味を出しやすい馬です（馬番順）。"
+              : "今回は、想定される流れが特に向くと言える馬がいません。"}
           <strong className="font-semibold text-slate-700">
             買うべき馬の推奨ではありません。
           </strong>
         </p>
       </div>
 
-      {suited.length > 0 ? (
+      {suited.length > 0 && !crowded ? (
         <HorseRows entries={suited} showRank={false} highlight />
+      ) : null}
+
+      {crowded ? (
+        <details className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+            向くと判定された馬を見る（{suited.length}頭）
+          </summary>
+          <div className="mt-3">
+            <HorseRows entries={suited} showRank={false} />
+          </div>
+        </details>
       ) : null}
 
       {others.length > 0 ? (

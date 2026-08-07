@@ -1461,6 +1461,94 @@ def summarize_fit_label_shares(samples: list[HorseSample]) -> list[FitLabelShare
     return rows
 
 
+@dataclass(frozen=True)
+class FitCrowdingRow:
+    """1コース分の「レースあたり何割が合致になるか」の分布。"""
+
+    track_type: str
+    races: int
+    median_share: float
+    p90_share: float
+    majority_race_share: float
+    all_suited_race_share: float
+    median_suited_count: float
+
+
+def summarize_fit_crowding(samples: list[HorseSample]) -> list[FitCrowdingRow]:
+    """**レース単位**で合致の割合を集計する。
+
+    `summarize_fit_label_shares` は全頭を混ぜた構成比なので、「1レースの中で
+    何頭が合致になるか」が見えない。全体で3割でも、**一部のレースで全頭合致**に
+    なっていれば、そのレースでは絞り込みの手がかりにならない。
+
+    展開の恩恵は本来相対的な価値で、**全員に向く流れは誰の武器でもない**。
+    合致の判定は馬ごとの絶対閾値（PAI >= 55）で、レース内の頭数を制御しないため、
+    ペースが強く傾いたレースほど片側の脚質が丸ごと合致になりうる。その頻度を測る。
+    """
+    rows: list[FitCrowdingRow] = []
+    for track in ("芝", "ダート"):
+        group = [s for s in samples if s.track_type == track and s.fit_label]
+        if not group:
+            continue
+        by_race: dict[str, list[HorseSample]] = {}
+        for sample in group:
+            by_race.setdefault(sample.race_key, []).append(sample)
+
+        shares: list[float] = []
+        counts: list[int] = []
+        for horses in by_race.values():
+            matched = sum(1 for h in horses if h.fit_label == "合致")
+            shares.append(matched / len(horses))
+            counts.append(matched)
+        shares.sort()
+        counts.sort()
+
+        def _percentile(values: list[float], q: float) -> float:
+            if not values:
+                return 0.0
+            index = min(len(values) - 1, int(q * len(values)))
+            return values[index]
+
+        rows.append(
+            FitCrowdingRow(
+                track_type=track,
+                races=len(by_race),
+                median_share=round(_percentile(shares, 0.5), 4),
+                p90_share=round(_percentile(shares, 0.9), 4),
+                majority_race_share=round(
+                    sum(1 for share in shares if share >= 0.5) / len(shares), 4
+                ),
+                all_suited_race_share=round(
+                    sum(1 for share in shares if share >= 0.999) / len(shares), 4
+                ),
+                median_suited_count=round(_percentile([float(c) for c in counts], 0.5), 2),
+            )
+        )
+    return rows
+
+
+def format_fit_crowding(rows: list[FitCrowdingRow]) -> str:
+    """レースあたりの合致割合を表示する。"""
+    if not rows:
+        return ""
+    lines = [
+        "",
+        "  ── レースあたりの合致割合（絞り込みが効いているか）",
+        f"    {'コース':<8}{'レース数':>9}{'中央値':>9}{'90%点':>9}"
+        f"{'半数以上':>10}{'全頭合致':>10}{'合致頭数':>10}",
+    ]
+    for row in rows:
+        lines.append(
+            f"    {row.track_type:<8}{row.races:>9,}"
+            f"{row.median_share:>8.1%}{row.p90_share:>9.1%}"
+            f"{row.majority_race_share:>10.1%}{row.all_suited_race_share:>10.1%}"
+            f"{row.median_suited_count:>10.1f}"
+        )
+    lines.append("    ※ 「半数以上」は、出走馬の半数以上が合致になったレースの割合。")
+    lines.append("       この値が高いほど、展開では馬を絞れていない。")
+    return "\n".join(lines)
+
+
 def format_fit_label_shares(rows: list[FitLabelShare]) -> str:
     """展開合致ラベルの構成比を表示する。"""
     if not rows:
@@ -1654,6 +1742,7 @@ def format_pai_by_style(samples: list[HorseSample]) -> str:
                 f"{w.spread:>+9.1%}{2 * w.spread_se:>9.1%}{verdict:>7}"
             )
     lines.append(format_fit_label_shares(summarize_fit_label_shares(samples)))
+    lines.append(format_fit_crowding(summarize_fit_crowding(samples)))
     lines.append(format_pace_centering(summarize_pace_centering(samples)))
     lines.append(
         "\n  ※ 「差」が正なら、脚質を固定しても PAI が好走を判別できている。"
