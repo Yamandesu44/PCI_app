@@ -588,13 +588,30 @@ export function discountRecommendation(
   };
 }
 
-/** 展開が向きにくい馬を、割引度が高い順に返す。 */
-export function sortDiscountCandidates(horses: HorseFit[]): HorseFit[] {
-  return [...horses].sort((a, b) => {
-    const aPenalty = a.fit_label === "不利" ? 0 : 1;
-    const bPenalty = b.fit_label === "不利" ? 0 : 1;
-    return aPenalty - bPenalty || a.pai - b.pai;
-  });
+/**
+ * 展開が向きにくい馬を、割引度が高い順に返す。
+ *
+ * **`fit_label !== "不利"` の馬は対象にしない。** 以前は `pai < 60` も条件に
+ * 含めており、これが「合致」の下限（PAI 55）と重なっていた。同じ馬が
+ * 「展開が向く」一覧と「評価を下げたい馬」一覧の両方に出る矛盾が実際に発生した
+ * （PAI 57 の馬が両方に該当）。「合致」と「不利」はドメイン上排他なので、
+ * 割引側の条件を `fit_label` だけにすれば構造的に重複しなくなる。
+ *
+ * 並びは `sortByPaceBenefit` と対称にする。**PAI を脚質をまたいで比べない**
+ * （ADR-2026-08-04）ため、脚質有利度の低い順を第一キーにし、PAI は
+ * 同一脚質内の同順位決めにしか使わない。
+ */
+export function sortDiscountCandidates(
+  horses: HorseFit[],
+  styleAdvantage?: StyleAdvantage | null,
+): HorseFit[] {
+  const scores = new Map(
+    (styleAdvantage?.entries ?? []).map((entry) => [entry.style, entry.score]),
+  );
+  const advantage = (horse: HorseFit) => scores.get(horse.running_style) ?? 50;
+  return [...horses]
+    .filter((horse) => horse.fit_label === "不利")
+    .sort((a, b) => advantage(a) - advantage(b) || a.pai - b.pai);
 }
 
 export interface ForecastDecisionChecklistItem {
@@ -636,9 +653,7 @@ export function forecastDecisionChecklist({
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.style);
   // 材料のある馬を先に探す。無ければ材料が薄い馬でも拾うが、文言側で断定を避ける。
-  const attentionCandidates = sortDiscountCandidates(horses).filter(
-    (horse) => horse.fit_label === "不利" || horse.pai < PAI_NEUTRAL,
-  );
+  const attentionCandidates = sortDiscountCandidates(horses, styleAdvantage);
   const attentionHorse =
     attentionCandidates.find((horse) => !horse.low_evidence) ??
     attentionCandidates[0];

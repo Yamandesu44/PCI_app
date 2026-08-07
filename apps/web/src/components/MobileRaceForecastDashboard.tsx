@@ -204,9 +204,10 @@ export function MobileRaceForecastDashboard({
   const horses = forecast.horses ?? [];
   const rankedHorses = sortByPaceBenefit(horses, forecast.style_advantage);
   const topHorses = rankedHorses.slice(0, 5);
-  const discountHorses = sortDiscountCandidates(horses)
-    .filter((horse) => horse.fit_label === "不利" || horse.pai < 60)
-    .slice(0, 3);
+  const discountHorses = sortDiscountCandidates(
+    horses,
+    forecast.style_advantage,
+  ).slice(0, 3);
   const confidence = confidencePct(forecast.confidence);
   const confidenceMeta = confidenceInsight(forecast.confidence);
   const styleScores = forecast.style_advantage

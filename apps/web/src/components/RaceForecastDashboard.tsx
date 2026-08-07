@@ -124,9 +124,10 @@ export function RaceForecastDashboard({
     0,
     5,
   );
-  const discountHorses = sortDiscountCandidates(horses)
-    .filter((horse) => horse.fit_label === "不利" || horse.pai < 60)
-    .slice(0, 3);
+  const discountHorses = sortDiscountCandidates(
+    horses,
+    forecast.style_advantage,
+  ).slice(0, 3);
   const styleScores = forecast.style_advantage
     ? styleAdvantageScores(forecast.style_advantage)
     : [];
@@ -441,22 +442,12 @@ export function RaceForecastDashboard({
                   <p className="mt-1 text-sm opacity-80">
                     {horseNumberLabel(horse)} ・ {horse.running_style}
                   </p>
-                  <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <dt className="text-xs font-semibold opacity-70">
-                        適性指数
-                      </dt>
-                      <dd className="mt-1 text-2xl font-semibold">
-                        {horse.pai.toFixed(0)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-semibold opacity-70">評価</dt>
-                      <dd className="mt-1 font-semibold">
-                        {fitLabelText(horse.fit_label)}
-                      </dd>
-                    </div>
-                  </dl>
+                  {/* 生の指数値（適性指数）は出さない。指標を知らない読者には
+                    使えない情報であり、脚質をまたいだ比較（実測で否定された
+                    使い方・ADR-2026-08-04）を誘う。評価ラベルだけを残す。 */}
+                  <p className="mt-4 text-sm font-semibold">
+                    展開への合いやすさ: {fitLabelText(horse.fit_label)}
+                  </p>
                   <p className="mt-4 text-sm leading-6 opacity-90">
                     {recommendation.reason}
                   </p>
@@ -493,9 +484,6 @@ export function RaceForecastDashboard({
                     <div className="flex items-center justify-between gap-3">
                       <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold text-slate-900">
                         {discount.label}
-                      </span>
-                      <span className="text-xs font-semibold opacity-70">
-                        適性 {horse.pai.toFixed(0)}
                       </span>
                     </div>
                     <h3 className="mt-4 text-xl font-semibold">

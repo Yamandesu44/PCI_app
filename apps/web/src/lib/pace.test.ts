@@ -379,14 +379,17 @@ describe("discountRecommendation", () => {
 });
 
 describe("sortDiscountCandidates", () => {
-  it("不利ラベルを優先し、その中では適性指数が低い順に並べる", () => {
+  it("不利ラベルの馬だけを対象にする", () => {
+    // 以前は `pai < 60` も条件にしており、「合致」の下限（PAI 55）と重なって
+    // いた。同じ馬が「展開が向く」と「評価を下げたい馬」の両方に出る矛盾が
+    // 実際に発生した。fit_label だけを見れば、合致と不利は排他なので重ならない。
     const input = [
       {
         horse_no: 1,
         frame_no: 1,
         running_style: "逃げ",
-        pai: 65,
-        fit_label: "中立",
+        pai: 57,
+        fit_label: "合致",
         low_evidence: false,
         reasons: [],
       },
@@ -399,29 +402,124 @@ describe("sortDiscountCandidates", () => {
         low_evidence: false,
         reasons: [],
       },
+    ];
+
+    const result = sortDiscountCandidates(input);
+
+    expect(result.map((horse) => horse.horse_no)).toEqual([2]);
+  });
+
+  it("PAIを脚質をまたいで比べない。脚質有利度の低い順を先に見る", () => {
+    // sortByPaceBenefit と対称。PAI の絶対値で並べると、
+    // 脚質が違う馬同士を同じ物差しで比べることになる（ADR-2026-08-04）。
+    const input = [
       {
-        horse_no: 3,
-        frame_no: 3,
-        running_style: "先行",
-        pai: 40,
+        horse_no: 1,
+        frame_no: 1,
+        running_style: "差し",
+        pai: 30, // 数値だけ見ると最下位だが、差しの有利度は高い
         fit_label: "不利",
         low_evidence: false,
         reasons: [],
       },
       {
-        horse_no: 4,
-        frame_no: 4,
+        horse_no: 2,
+        frame_no: 2,
+        running_style: "先行",
+        pai: 44, // 数値は1番より高いが、先行の有利度が低いので先に来るべき
+        fit_label: "不利",
+        low_evidence: false,
+        reasons: [],
+      },
+    ];
+    const styleAdvantage = {
+      model_version: "style-advantage-v4",
+      entries: [
+        { style: "差し", score: 70 },
+        { style: "先行", score: 40 },
+      ],
+      reasons: [],
+      reliability: "standard" as const,
+    };
+
+    const result = sortDiscountCandidates(input, styleAdvantage);
+
+    expect(result.map((horse) => horse.horse_no)).toEqual([2, 1]);
+  });
+
+  it("同一脚質内はPAIの低い順（同順位決めとしてのみ使う）", () => {
+    const input = [
+      {
+        horse_no: 1,
+        frame_no: 1,
+        running_style: "追込",
+        pai: 44,
+        fit_label: "不利",
+        low_evidence: false,
+        reasons: [],
+      },
+      {
+        horse_no: 2,
+        frame_no: 2,
         running_style: "追込",
         pai: 38,
-        fit_label: "中立",
+        fit_label: "不利",
         low_evidence: false,
         reasons: [],
       },
     ];
 
-    expect(
-      sortDiscountCandidates(input).map((horse) => horse.horse_no),
-    ).toEqual([3, 2, 4, 1]);
+    const result = sortDiscountCandidates(input);
+
+    expect(result.map((horse) => horse.horse_no)).toEqual([2, 1]);
+  });
+});
+
+describe("sortByPaceBenefit と sortDiscountCandidates の整合", () => {
+  it("同じ馬が「展開が向く」と「評価を下げたい馬」の両方には出ない", () => {
+    // 実際に本番で起きた不具合の再現。PAI 57 の先行馬が、恩恵側では
+    // sortByPaceBenefit の1位に選ばれ、割引側では旧条件 `pai < 60` にも
+    // 該当していた。fit_label（合致/不利）は排他なので、両方の一覧を
+    // fit_label だけで判定すれば構造的に両立しない。
+    const horses = [
+      {
+        horse_no: 3,
+        frame_no: 3,
+        running_style: "先行",
+        pai: 57,
+        fit_label: "合致",
+        low_evidence: false,
+        reasons: [],
+      },
+      {
+        horse_no: 5,
+        frame_no: 5,
+        running_style: "差し",
+        pai: 45,
+        fit_label: "中立",
+        low_evidence: false,
+        reasons: [],
+      },
+    ];
+    const styleAdvantage = {
+      model_version: "style-advantage-v4",
+      entries: [
+        { style: "先行", score: 65 },
+        { style: "差し", score: 50 },
+      ],
+      reasons: [],
+      reliability: "standard" as const,
+    };
+
+    const suited = sortByPaceBenefit(horses, styleAdvantage)
+      .filter((h) => h.fit_label === "合致")
+      .map((h) => h.horse_no);
+    const discounted = sortDiscountCandidates(horses, styleAdvantage).map(
+      (h) => h.horse_no,
+    );
+
+    expect(suited).toContain(3);
+    expect(discounted).not.toContain(3);
   });
 });
 
