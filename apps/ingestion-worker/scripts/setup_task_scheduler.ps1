@@ -71,6 +71,23 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Check for elevation up front. Without it the script does everything and then
+# fails on the final call with "Access denied" wrapped in a CIM error, which
+# does not say the words "run as administrator".
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principalCheck = New-Object Security.Principal.WindowsPrincipal($identity)
+if (-not $principalCheck.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw @"
+Administrator rights are required to register a scheduled task.
+
+Open PowerShell as Administrator (Start > type "PowerShell" > right-click >
+"Run as administrator"), then:
+
+  cd "$(Split-Path $PSScriptRoot -Parent)"
+  powershell -ExecutionPolicy Bypass -File .\scripts\setup_task_scheduler.ps1
+"@
+}
+
 $TaskName = "PaceLab_Sync_Mykeibadb"
 $LegacyTaskName = "PCI_Sync_Mykeibadb"
 
