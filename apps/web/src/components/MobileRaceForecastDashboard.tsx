@@ -39,12 +39,13 @@ import {
   benefitRecommendation,
   confidenceInsight,
   discountRecommendation,
+  fitLabelText,
   forecastDecisionChecklist,
   frameColorClass,
   horseNumberLabel,
   sanitizeBeginnerComment,
-  sortDiscountCandidates,
   sortByPaceBenefit,
+  sortDiscountCandidates,
   styleAdvantageScores,
 } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
@@ -109,7 +110,7 @@ function BenefitRow({ horse, index }: { horse: HorseFit; index: number }) {
         </div>
         <p className="m-0 mt-1 truncate text-xs opacity-70">
           {horseNumberLabel(horse)} ・ {horse.running_style} ・ 適性{" "}
-          {horse.fit_label}
+          {fitLabelText(horse.fit_label)}
         </p>
       </div>
     </article>
@@ -176,7 +177,7 @@ export function MobileExpandableHorseRow({
           </div>
           <p className="m-0 mt-1 truncate text-xs text-slate-500">
             {horseNumberLabel(horse)} ・ {horse.running_style} ・ 適性{" "}
-            {horse.fit_label}
+            {fitLabelText(horse.fit_label)}
           </p>
         </div>
         <ChevronDown

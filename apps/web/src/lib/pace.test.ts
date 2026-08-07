@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import type { HorseFit } from "@pci/api-client";
 
 import {
+  SPOTLIGHT_LEGEND,
   beginnerPaceLabel,
   benefitRecommendation,
   confidenceInsight,
   discountRecommendation,
   fitLabelDisplay,
+  fitLabelText,
   fitTone,
   forecastAccuracyMeta,
   forecastDecisionChecklist,
@@ -825,5 +827,26 @@ describe("sortByPaceBenefit", () => {
     sortByPaceBenefit(input, advantage);
 
     expect(input.map((x) => x.horse_no)).toEqual([1, 2]);
+  });
+});
+
+describe("fitLabelText", () => {
+  it("ドメイン用語をそのまま出さない", () => {
+    // 一覧は「合致」、詳細は「展開が向く」で、同じ概念に2つの語彙があった。
+    expect(fitLabelText("合致")).toBe("向く");
+    expect(fitLabelText("不利")).toBe("向きにくい");
+    expect(fitLabelText("中立")).toBe("影響は小さい");
+  });
+
+  it("未知のラベルはそのまま返す（表示を欠けさせない）", () => {
+    expect(fitLabelText("新ラベル")).toBe("新ラベル");
+  });
+});
+
+describe("SPOTLIGHT_LEGEND", () => {
+  it("一覧に出るタグを網羅する", () => {
+    // 凡例に無いタグが画面へ出ると、説明のない語が残る。
+    const labels = SPOTLIGHT_LEGEND.map((item) => item.label);
+    expect(labels).toEqual(["注目", "妙味", "波乱注意"]);
   });
 });

@@ -24,6 +24,7 @@ import {
   beginnerPaceLabel,
   confidenceInsight,
   raceSpotlight,
+  SPOTLIGHT_LEGEND,
   type RaceSpotlightTone,
 } from "@/lib/pace";
 import { showOperatorDetails } from "@/lib/opsVisibility";
@@ -241,9 +242,12 @@ function RaceCompactRow({
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="m-0 truncate text-sm font-semibold leading-tight">
-              {raceClassLabel(race)}
-              <span className="ml-2 text-xs font-medium text-slate-500">
+            {/* 詰めるのはレース名だけ。以前は行ごと truncate していたため、
+              「芝20…」のように距離が欠けていた。距離は判断に使う情報で、
+              レース名より落とせない。 */}
+            <p className="m-0 flex items-baseline gap-2 text-sm font-semibold leading-tight">
+              <span className="truncate">{raceClassLabel(race)}</span>
+              <span className="shrink-0 text-xs font-medium text-slate-500">
                 {raceCondition(race)}
               </span>
             </p>
@@ -632,6 +636,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           value={venueCount}
         />
       </section>
+
+      {/* タグの意味を一度だけ示す。「妙味」は馬券用語で、指標を知らない層には通じない。 */}
+      <p className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+        {SPOTLIGHT_LEGEND.map((item) => (
+          <span key={item.label}>
+            <span className="font-semibold text-slate-700">{item.label}</span>
+            <span className="ml-1">= {item.meaning}</span>
+          </span>
+        ))}
+      </p>
 
       {forecastPerformance ? (
         <ForecastPerformanceSummary

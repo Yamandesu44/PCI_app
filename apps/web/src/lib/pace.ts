@@ -236,6 +236,23 @@ export interface FitLabelDisplay {
  * ラベルだけでは区別が付かないので、表示側で必ず言い分ける
  * （docs/DECISIONS.md ADR-2026-08-04）。
  */
+/**
+ * 展開適性ラベルを、専門用語に寄らない言い方へ。
+ *
+ * ドメイン上は「合致 / 中立 / 不利」だが、**「合致」は一覧カードにそのまま出ていて
+ * 詳細画面の「展開が向く」と食い違っていた**。同じ概念に2つの語彙があると、
+ * 指標を知らない利用者ほど別物だと受け取る。
+ *
+ * 表示の文脈（展開の話だと分かっている場所）で使うため、「展開が」は付けない。
+ * 能力タグと並ぶ場所では、呼び出し側が「展開が向く」と補う。
+ */
+export function fitLabelText(fitLabel: string): string {
+  if (fitLabel === "合致") return "向く";
+  if (fitLabel === "不利") return "向きにくい";
+  if (fitLabel === "中立") return "影響は小さい";
+  return fitLabel;
+}
+
 export function fitLabelDisplay(
   horse: Pick<HorseFit, "fit_label" | "low_evidence">,
 ): FitLabelDisplay {
@@ -360,6 +377,20 @@ export interface RaceSpotlight {
 }
 
 /** 一覧画面で、先に確認したいレースかどうかを短いラベルにする。 */
+/**
+ * 一覧のタグの意味。**画面のどこにも説明が無かった。**
+ *
+ * 「妙味」は馬券用語で、指標を知らない層にはまず通じない。タグ自体は
+ * 情報量があるので消さず、凡例を1つ置いて意味を与える。
+ * 文言は `raceSpotlight` の `reason` と揃える（同じ判定の言い換えなので、
+ * 別々に書くとずれる）。
+ */
+export const SPOTLIGHT_LEGEND: { label: string; meaning: string }[] = [
+  { label: "注目", meaning: "展開の読み筋と中心候補がそろっている" },
+  { label: "妙味", meaning: "頭数が多く、展開で浮上する候補を探しやすい" },
+  { label: "波乱注意", meaning: "展開が読み切りにくく、決め打ちは控えたい" },
+];
+
 export function raceSpotlight({
   confidence,
   fieldSize,
@@ -382,7 +413,8 @@ export function raceSpotlight({
   // ここで PAI の最大値を取るのは、脚質をまたいだ順位付けではない。返すのは
   // レース単位のラベルだけで、どの馬かは示さないため。「今回の流れに強く合う馬が
   // いるか」という race 単位の問いに対する max であり、馬どうしの優劣は主張しない。
-  const observedTopPai = suppliedTopPai ?? Math.max(0, ...(horses ?? []).map((h) => h.pai));
+  const observedTopPai =
+    suppliedTopPai ?? Math.max(0, ...(horses ?? []).map((h) => h.pai));
   const strength =
     topFitStrength === "strong" || topFitStrength === "notable"
       ? topFitStrength

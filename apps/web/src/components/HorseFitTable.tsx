@@ -1,6 +1,7 @@
 import { ReasonList } from "@/components/ReasonList";
 import {
   fitLabelDisplay,
+  fitLabelText,
   frameColorClass,
   horseNumberLabel,
   paiBarWidth,
@@ -47,7 +48,9 @@ export function HorseFitTable({
                   ? h.running_style
                   : `${horseNumberLabel(h)} ・ ${h.running_style}`}
               </span>
-              <span className={`fit-badge fit-${tone}`}>{h.fit_label}</span>
+              <span className={`fit-badge fit-${tone}`}>
+                {fitLabelText(h.fit_label)}
+              </span>
               {fit.lowEvidence && (
                 <span
                   className="rounded border border-dashed border-current px-1 text-[10px] opacity-70"
@@ -56,7 +59,6 @@ export function HorseFitTable({
                   材料薄
                 </span>
               )}
-              <span className="pai-value">PAI {h.pai.toFixed(0)}</span>
             </div>
             {fit.note && <p className="text-xs opacity-70">{fit.note}</p>}
             <div className="pai-bar">

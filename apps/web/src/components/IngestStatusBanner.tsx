@@ -55,6 +55,9 @@ export function IngestStatusBanner({
 }) {
   const rawMeta = ingestStatusMeta(status);
   if (!rawMeta.visible) return null;
+  // 正常であることは、わざわざ一等地で報告するほどの情報ではない。
+  // 運用者は状態を見たいので残す。
+  if (!operator && rawMeta.tone === "ok") return null;
 
   const visible = operator
     ? rawMeta

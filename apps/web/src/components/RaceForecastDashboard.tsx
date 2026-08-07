@@ -41,14 +41,15 @@ import {
   benefitRecommendation,
   confidenceInsight,
   discountRecommendation,
+  fitLabelText,
   forecastDecisionChecklist,
   horseNumberLabel,
   paceSpeedFromIndex,
   sanitizeBeginnerComment,
-  sortDiscountCandidates,
   sortByPaceBenefit,
-  styleAdvantageScores,
+  sortDiscountCandidates,
   styleAdvantageReliabilityMeta,
+  styleAdvantageScores,
 } from "@/lib/pace";
 import type { Forecast, HorseFit, RaceDetail } from "@pci/api-client";
 
@@ -451,7 +452,9 @@ export function RaceForecastDashboard({
                     </div>
                     <div>
                       <dt className="text-xs font-semibold opacity-70">評価</dt>
-                      <dd className="mt-1 font-semibold">{horse.fit_label}</dd>
+                      <dd className="mt-1 font-semibold">
+                        {fitLabelText(horse.fit_label)}
+                      </dd>
                     </div>
                   </dl>
                   <p className="mt-4 text-sm leading-6 opacity-90">
@@ -500,7 +503,7 @@ export function RaceForecastDashboard({
                     </h3>
                     <p className="mt-1 text-sm opacity-80">
                       {horseNumberLabel(horse)} ・ {horse.running_style} ・{" "}
-                      {horse.fit_label}
+                      {fitLabelText(horse.fit_label)}
                     </p>
                     <p className="mt-4 text-sm leading-6 opacity-90">
                       {discount.reason}
