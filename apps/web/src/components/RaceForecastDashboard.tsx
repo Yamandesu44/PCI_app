@@ -278,7 +278,8 @@ export function RaceForecastDashboard({
           </section>
         ) : null}
 
-        {/* 順位は展開解説より後ろへ置く。買い目の推奨ではなく参考情報という位置づけ
+        {/* 展開解説の直後。読んだ流れのまま「ではどの馬か」へ繋がる位置に置く。
+          中身は展開が向く馬が主役で、能力の並びは畳んである
           （docs/DECISIONS.md ADR-2026-08-04）。 */}
         {forecast.integrated_ranking ? (
           <IntegratedRankingView ranking={forecast.integrated_ranking} />
