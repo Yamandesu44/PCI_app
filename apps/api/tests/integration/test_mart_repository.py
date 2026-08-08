@@ -81,6 +81,10 @@ def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) ->
         ]
     )
     db_session.flush()
+    # pai-v5 で合致閾値が（コース×脚質）別になったため、一覧側は脚質を知らないと
+    # 強さを判定できない。読み取りが脚質まで運んでいることをここで押さえる
+    # （SQL を通る経路はこの統合テストにしか無い）。
+    styles = {1: "先行", 2: "差し"}
     for horse_no in (1, 2):
         db_session.add(
             RaceEntryModel(
@@ -91,6 +95,7 @@ def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) ->
                 weight=480.0,
                 jockey_code="J001",
                 trainer_code="T001",
+                running_style=styles[horse_no],
             )
         )
     db_session.add(
@@ -155,6 +160,7 @@ def test_find_race_board_forecasts_selects_top_fit_horse(db_session: Session) ->
     assert records[race_key].top_horse_no == 2
     assert records[race_key].top_horse_name == "最上位候補"
     assert records[race_key].top_pai == pytest.approx(84.0)
+    assert records[race_key].top_running_style == "差し"
     assert predicted is not None
     assert predicted.model_version == "rule-v4"
 
