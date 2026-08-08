@@ -58,6 +58,7 @@ from pci.application.backtest import (
     style_advantage_breakdown_to_dict,
     style_advantage_lift_to_dict,
     summarize_clamp_impact,
+    summarize_crowding_sweep,
     summarize_fit_crowding,
     summarize_fit_label_shares,
     summarize_fit_threshold_by_style,
@@ -1971,6 +1972,65 @@ class TestFitThresholdByStyle:
 
         assert row.splittable is True
         assert row.recommended_share == pytest.approx(0.2, abs=1e-4)
+
+
+class TestCrowdingSweep:
+    """効くのは中央値ではなく裾。**「絞りにくい」と出るレースの割合**を直接見る。
+
+    pai-v5（目標30%）の実測は 芝 21.6% / ダート 30.4% で、重み付ければ約4分の1の
+    レースで出る。フォールバックが4回に1回出るならフォールバックではない。
+    """
+
+    @staticmethod
+    def _race(race_key: str, pais: list[float]) -> list[HorseSample]:
+        return [
+            HorseSample(
+                race_key=race_key,
+                horse_no=i + 1,
+                pai=pai,
+                good_run=False,
+                track_type="芝",
+                running_style="先行",
+                fit_label="合致" if pai >= 68.5 else "中立",
+            )
+            for i, pai in enumerate(pais)
+        ]
+
+    def test_tightening_the_target_shrinks_the_majority_race_share(self) -> None:
+        samples: list[HorseSample] = []
+        # 8頭立て10レース。PAI をレースごとにずらし、揃って閾値を跨ぐ形にする。
+        for r in range(10):
+            base = 55.0 + r * 2.0
+            samples.extend(self._race(f"R{r}", [base + i for i in range(8)]))
+
+        rows = {r.target: r for r in summarize_crowding_sweep(samples, (0.30, 0.10))}
+
+        assert rows[0.30].majority_race_share >= rows[0.10].majority_race_share
+        assert rows[0.30].median_share >= rows[0.10].median_share
+        # 閾値も一緒に返す（採用するとき写経しないで済むように）。
+        assert rows[0.10].thresholds
+
+    def test_reports_each_course_separately(self) -> None:
+        turf = self._race("T1", [60.0, 70.0, 72.0, 74.0])
+        dirt = [
+            HorseSample(
+                race_key="D1",
+                horse_no=i + 1,
+                pai=pai,
+                good_run=False,
+                track_type="ダート",
+                running_style="先行",
+                fit_label="合致" if pai >= 72.0 else "中立",
+            )
+            for i, pai in enumerate([60.0, 62.0, 64.0, 66.0])
+        ]
+
+        rows = summarize_crowding_sweep(turf + dirt, (0.30,))
+
+        assert {r.track_type for r in rows} == {"芝", "ダート"}
+
+    def test_empty_returns_empty(self) -> None:
+        assert summarize_crowding_sweep([], (0.30,)) == []
 
 
 class TestFitLabelShares:

@@ -1733,6 +1733,126 @@ def format_fit_threshold_by_style(rows: list[FitThresholdByStyleRow]) -> str:
     return "\n".join(lines)
 
 
+CROWDING_SWEEP_TARGETS = (0.30, 0.25, 0.20, 0.15, 0.10)
+"""試す目標割合（脚質ごとに合致にする馬の割合）。"""
+
+
+@dataclass(frozen=True)
+class CrowdingSweepRow:
+    """ある目標割合を当てたときの、レース単位の絞り込み具合。"""
+
+    target: float
+    track_type: str
+    median_share: float
+    majority_race_share: float
+    all_suited_race_share: float
+    median_suited_count: float
+    thresholds: tuple[tuple[str, float], ...]
+
+
+def summarize_crowding_sweep(
+    samples: list[HorseSample],
+    targets: tuple[float, ...] = CROWDING_SWEEP_TARGETS,
+) -> list[CrowdingSweepRow]:
+    """目標割合を振って、**「絞りにくい」と出るレースの割合**がどう動くかを測る。
+
+    `summarize_fit_threshold_by_style` は目標を1つ決め打ちして閾値を解く。だが
+    実際に効くのは中央値ではなく**裾**で、pai-v5（目標30%）の実測はこうなっていた:
+
+        芝    中央値 25.0% / 90%点 60.0% / 半数以上 21.6%
+        ダート  中央値 33.3% / 90%点 66.7% / 半数以上 30.4%
+
+    重み付ければ**約4分の1のレース**で「展開では絞りにくいレースです」が出る。
+    フォールバックが4回に1回出るなら、それはフォールバックではない。
+
+    裾がここまで広いのは構造。`pace_deviation` はレース単位の定数で、脚質ごとの
+    感応度を掛けて全馬に同じ向きの加減点を与える。**ある脚質の馬は揃って閾値を
+    跨ぐ**ので、レース内の合致頭数は「ほぼ0か、ほぼ全部」に寄りやすい。
+    馬ごとの絶対閾値をどう置いても、レース単位の頭数は直接には制御できない。
+
+    できるのは目標割合を下げて分布ごと左へ寄せることなので、**下げ幅と裾の縮み方の
+    対応表**を出す。目標を勘で選び直さないための材料。
+    """
+    rows: list[CrowdingSweepRow] = []
+    for target in targets:
+        thresholds: dict[tuple[str, str], float] = {}
+        for row in summarize_fit_threshold_by_style(samples, target):
+            if row.recommended_threshold is not None:
+                thresholds[(row.track_type, row.running_style)] = row.recommended_threshold
+
+        for track in ("芝", "ダート"):
+            group = [s for s in samples if s.track_type == track and s.fit_label]
+            if not group:
+                continue
+            by_race: dict[str, list[HorseSample]] = {}
+            for sample in group:
+                by_race.setdefault(sample.race_key, []).append(sample)
+
+            shares: list[float] = []
+            counts: list[float] = []
+            for horses in by_race.values():
+                matched = sum(
+                    1
+                    for h in horses
+                    # 閾値が解けなかった脚質は現状のラベルのまま数える。
+                    if (
+                        h.pai >= thresholds[(track, h.running_style)]
+                        if (track, h.running_style) in thresholds
+                        else h.fit_label == "合致"
+                    )
+                )
+                shares.append(matched / len(horses))
+                counts.append(float(matched))
+            shares.sort()
+            counts.sort()
+            middle = min(len(shares) - 1, len(shares) // 2)
+
+            rows.append(
+                CrowdingSweepRow(
+                    target=target,
+                    track_type=track,
+                    median_share=round(shares[middle], 4),
+                    majority_race_share=round(sum(1 for s in shares if s >= 0.5) / len(shares), 4),
+                    all_suited_race_share=round(
+                        sum(1 for s in shares if s >= 0.999) / len(shares), 4
+                    ),
+                    median_suited_count=round(counts[middle], 2),
+                    thresholds=tuple(
+                        (style, value)
+                        for (row_track, style), value in sorted(thresholds.items())
+                        if row_track == track
+                    ),
+                )
+            )
+    return rows
+
+
+def format_crowding_sweep(rows: list[CrowdingSweepRow]) -> str:
+    """目標割合ごとの「絞りにくい」レース比率を表示する。"""
+    if not rows:
+        return ""
+    lines = [
+        "",
+        "  ── 目標割合を振ったときの「絞りにくい」レース比率（裾がどこまで縮むか）",
+        f"    {'目標':>5}  {'コース':<8}{'中央値':>9}{'半数以上':>10}"
+        f"{'全頭合致':>10}{'合致頭数':>10}  脚質別の閾値",
+    ]
+    for row in rows:
+        thresholds = " / ".join(f"{style}{value:.1f}" for style, value in row.thresholds)
+        lines.append(
+            f"    {row.target:>5.0%}  {row.track_type:<8}{row.median_share:>8.1%}"
+            f"{row.majority_race_share:>10.1%}{row.all_suited_race_share:>10.1%}"
+            f"{row.median_suited_count:>10.1f}  {thresholds}"
+        )
+    lines.append("    ※ 「半数以上」がそのまま**画面に『絞りにくい』と出るレースの割合**。")
+    lines.append(
+        "       pai-v5（目標30%）では重み付きで約25%。4回に1回出るならフォールバックではない。"
+    )
+    lines.append("    ※ 中央値ではなく裾を見て決めること。裾が広いのは構造で、")
+    lines.append("       `pace_deviation` がレース単位の定数のため同じ脚質の馬が揃って閾値を跨ぐ。")
+    return "\n".join(lines)
+
+
 def format_fit_crowding(rows: list[FitCrowdingRow]) -> str:
     """レースあたりの合致割合を表示する。"""
     if not rows:
@@ -1965,6 +2085,7 @@ def format_pai_by_style(samples: list[HorseSample]) -> str:
     lines.append(format_fit_label_shares(summarize_fit_label_shares(samples)))
     lines.append(format_fit_crowding(summarize_fit_crowding(samples)))
     lines.append(format_fit_threshold_by_style(summarize_fit_threshold_by_style(samples)))
+    lines.append(format_crowding_sweep(summarize_crowding_sweep(samples)))
     lines.append(format_pace_centering(summarize_pace_centering(samples)))
     lines.append(
         "\n  ※ 「差」が正なら、脚質を固定しても PAI が好走を判別できている。"
