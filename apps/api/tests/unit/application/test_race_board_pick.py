@@ -15,6 +15,7 @@ from pci.application.dto import (
 )
 from pci.application.race_board_use_cases import _fit_strength, _pick_pace_benefiting_horse
 from pci.domain.pace.adaptability import DEFAULT_WEIGHTS as PAI_WEIGHTS
+from pci.domain.pace.running_style import RunningStyleLabel
 
 
 def _horse(horse_no: int, style: str, pai: float) -> HorseFitOutput:
@@ -102,20 +103,45 @@ class TestFitStrength:
     """閾値はドメインの合致ラベルから引く。実数を直書きするとスケール変更で壊れる。"""
 
     def test_below_the_matched_threshold_is_normal(self) -> None:
-        assert _fit_strength(PAI_WEIGHTS.matched_threshold - 0.1) == "normal"
+        matched = PAI_WEIGHTS.matched_threshold_for("芝", RunningStyleLabel.ESCAPE)
+        assert _fit_strength(matched - 0.1, "芝", "逃げ") == "normal"
 
     def test_at_the_matched_threshold_is_notable(self) -> None:
-        assert _fit_strength(PAI_WEIGHTS.matched_threshold) == "notable"
+        matched = PAI_WEIGHTS.matched_threshold_for("芝", RunningStyleLabel.ESCAPE)
+        assert _fit_strength(matched, "芝", "逃げ") == "notable"
 
-    def test_well_above_the_threshold_is_strong(self) -> None:
-        assert _fit_strength(PAI_WEIGHTS.matched_threshold + 10.0) == "strong"
+    def test_uses_the_threshold_of_the_horses_own_style(self) -> None:
+        """pai-v5: 同じ PAI でも脚質が違えば判定が変わる。
 
-    def test_strong_is_reachable_on_the_current_scale(self) -> None:
-        """到達不可能な閾値を置かない。
+        芝の自在は合致 49.5、芝の先行は 68.5。PAI 60 は自在なら合致、先行なら中立。
+        **共通の代表値で代用すると、脚質によって当たり外れのある基準を黙って当てる。**
+        """
+        assert _fit_strength(60.0, "芝", "自在") != "normal"
+        assert _fit_strength(60.0, "芝", "先行") == "normal"
+
+    def test_unknown_style_falls_back_to_normal(self) -> None:
+        """脚質が取れないなら強調しない。代表値で埋めない。"""
+        assert _fit_strength(99.0, "芝", "") == "normal"
+
+    def test_strong_is_reachable_for_every_course_and_style(self) -> None:
+        """到達不可能な閾値を置かない。**全10セルで確かめる。**
 
         pai-v4 で振れ幅を 25 → 10 へ下げた際、旧値の 80 はほぼ到達しなくなり
-        「注目」が黙って出なくなるところだった。PAI の上限は
-        0.5×(50+感応度×振れ幅) + 0.5×100。
+        「注目」が黙って出なくなるところだった。pai-v5 で合致閾値を脚質別へ上げた
+        ときも、固定幅 +10点 のままなら10セル中3セルで到達不能になっていた
+        （ダート先行は合致72.0に対し上限78.25で、余地が6.25点しかない）。
         """
-        max_pai = 0.5 * (50.0 + PAI_WEIGHTS.sensitivity_escape * PAI_WEIGHTS.pace_swing) + 50.0
-        assert _fit_strength(max_pai) == "strong"
+        for track in ("芝", "ダート"):
+            for style in RunningStyleLabel:
+                max_pai = PAI_WEIGHTS.max_pai_for(style)
+                assert _fit_strength(max_pai, track, style.value) == "strong", (
+                    f"{track}{style.value} で「注目」に到達できない"
+                )
+
+    def test_notable_is_reachable_for_every_course_and_style(self) -> None:
+        for track in ("芝", "ダート"):
+            for style in RunningStyleLabel:
+                matched = PAI_WEIGHTS.matched_threshold_for(track, style)
+                assert matched <= PAI_WEIGHTS.max_pai_for(style), (
+                    f"{track}{style.value} の合致閾値が PAI 上限を超えている"
+                )

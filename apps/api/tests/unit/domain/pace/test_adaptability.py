@@ -45,12 +45,34 @@ HIGH = _forecast(48.0, PaceLabel.HIGH)
 AVERAGE = _forecast(pace_center("芝"), PaceLabel.AVERAGE)
 
 
+def _affinity_peaking_at(level: PaceSpeedLevel) -> HorsePaceAffinityProfile:
+    """この流れを最も得意とする馬の適性（実データと同じく最良レベルが100）。
+
+    **本番では `pace_affinity` は必ず入る**（`_build_affinity_profile` は履歴が
+    無ければフォールバックを返す）。pai-v5 の閾値はその前提で較正しているので、
+    適性を渡さない組み立てで合致を期待すると、実際には起きない条件を試すことになる。
+    """
+    scores = {each: 20 for each in PaceSpeedLevel}
+    scores[level] = 100
+    return HorsePaceAffinityProfile(
+        horse_id="2020000001",
+        sample_size=5,
+        preferred_level=level,
+        scores=scores,
+        evidence=(),
+        confidence=0.8,
+    )
+
+
 class TestPaiCoreLogic:
     def test_escape_horse_matches_slow_pace(self) -> None:
         scorer = PaceAdaptabilityScorer()
-        result = scorer.score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
+        profile = HorsePaceProfile(
+            1, ESCAPE, pace_affinity=_affinity_peaking_at(PaceSpeedLevel.VERY_SLOW)
+        )
+        result = scorer.score(profile, SLOW, 1600)
         assert result.fit_label == FitLabel.MATCHED
-        assert result.pai >= DEFAULT_WEIGHTS.matched_threshold
+        assert result.pai >= DEFAULT_WEIGHTS.matched_threshold_for("芝", ESCAPE)
 
     def test_escape_horse_unfavorable_in_high_pace(self) -> None:
         scorer = PaceAdaptabilityScorer()
@@ -123,16 +145,51 @@ class TestPaiCoreLogic:
         assert "pace_fit" in codes
         assert "pai" in codes
 
-    def test_model_version_is_pai_v4(self) -> None:
+    def test_model_version_is_pai_v5(self) -> None:
         result = PaceAdaptabilityScorer().score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
-        assert result.model_version == "pai-v4"
+        assert result.model_version == "pai-v5"
 
     def test_custom_weights_change_thresholds(self) -> None:
-        strict = PaiWeights(matched_threshold=95.0)
+        strict = PaiWeights(matched_threshold_turf_escape=95.0)
         scorer = PaceAdaptabilityScorer(strict)
         # 中心ちょうどの逃げ馬は PAI=50。厳格閾値では合致しない。
         result = scorer.score(HorsePaceProfile(1, ESCAPE), AVERAGE, 1600)
         assert result.fit_label != FitLabel.MATCHED
+
+    def test_thresholds_are_per_course_and_style(self) -> None:
+        """同じ PAI でも脚質が違えば判定が変わる（pai-v5）。
+
+        PAI は脚質内の相対量なので、全脚質共通の絶対値と比べるのは前提の裏切り。
+        実測では芝の自在が602頭中0頭で合致に到達できていなかった。
+        """
+        assert DEFAULT_WEIGHTS.matched_threshold_for(
+            "芝", FLEXIBLE
+        ) < DEFAULT_WEIGHTS.matched_threshold_for("芝", ESCAPE)
+        assert DEFAULT_WEIGHTS.matched_threshold_for(
+            "ダート", ESCAPE
+        ) != DEFAULT_WEIGHTS.matched_threshold_for("芝", ESCAPE)
+
+    def test_overlapping_labels_are_rejected_at_construction(self) -> None:
+        """合致と不利が重なる重みは作らせない。
+
+        重なると同じ馬が「向く」と「向きにくい」の両方に出る。web で実際に起きた
+        （割引条件が旧スケールの `pai < 60` のまま合致の下限55と重なっていた）。
+        閾値が10個へ増えた分、取り違えても気付きにくい。
+        """
+        with pytest.raises(ValueError, match="不利閾値"):
+            PaiWeights(matched_threshold_turf_flexible=40.0)
+
+    def test_every_matched_threshold_is_reachable(self) -> None:
+        """到達できない閾値を置かない。**閾値を上げるときの必須の確認。**
+
+        芝の自在は pai-v4 の共通閾値55に対し PAI 平均48.7で、602頭中0頭だった。
+        例外は出ず、ただそのラベルが永久に出ないだけなので気付けない。
+        """
+        for track in ("芝", "ダート"):
+            for style in RunningStyleLabel:
+                assert DEFAULT_WEIGHTS.matched_threshold_for(
+                    track, style
+                ) <= DEFAULT_WEIGHTS.max_pai_for(style), f"{track}{style.value}"
 
 
 class TestPaiProperties:
@@ -160,7 +217,8 @@ class TestPaiProperties:
     ) -> None:
         scorer = PaceAdaptabilityScorer()
         result = scorer.score(profile, fc, dist)
-        if result.pai >= DEFAULT_WEIGHTS.matched_threshold:
+        matched = DEFAULT_WEIGHTS.matched_threshold_for("芝", profile.running_style)
+        if result.pai >= matched:
             assert result.fit_label == FitLabel.MATCHED
         elif result.pai < DEFAULT_WEIGHTS.unfavorable_threshold:
             assert result.fit_label == FitLabel.UNFAVORABLE

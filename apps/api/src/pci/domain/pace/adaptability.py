@@ -4,7 +4,7 @@
 本プロダクトの最重要価値「PCI を理解していない競馬ファンでも展開予想を活用できる」を
 体現する説明可能な指標として、減点内訳を必ず reasons に出力する。
 
-算出式（pai-v4・重みは設定ファイルで調整可能）:
+算出式（pai-v5・重みは設定ファイルで調整可能）:
     deviation = clamp((想定RPCI − コース中立値) ÷ 平均帯の半幅, −1, +1)
     PAI = 50 + 感応度(脚質) × pace_swing × deviation − 距離補正 − 馬場補正
       ペース補正: コース平均からの振れに対し、脚質ごとの感応度で加減点する
@@ -17,9 +17,18 @@
 **脚質をまたいで馬を PAI 順に並べてはならない**（docs/DECISIONS.md ADR-2026-08-04）。
 
 合致ラベル:
-    PAI >= matched_threshold      : 合致（展開の恩恵を受ける）
-    PAI <  unfavorable_threshold  : 不利（展開が向かない）
-    その間                        : 中立
+    PAI >= matched_threshold(コース, 脚質) : 合致（展開の恩恵を受ける）
+    PAI <  unfavorable_threshold           : 不利（展開が向かない）
+    その間                                 : 中立
+
+**合致の閾値は（コース×脚質）ごと**（pai-v5）。PAI が脚質内の相対量である以上、
+全脚質共通の絶対値と比べるのは前提の裏切りで、実測にそのまま出ていた（500レース）:
+
+    芝   自在  PAI平均 48.7 → 合致  0.0%（602頭中0頭・**構造的に到達できない**）
+    ダート 差し  PAI平均 59.4 → 合致 48.1%
+    ダート 全体                → レース中央値 53.8% が合致（絞り込みに使えない）
+
+単一閾値は「脚質をまたいで比べない」と言いながら、暗黙に脚質を順位付けていた。
 """
 
 from __future__ import annotations
@@ -37,7 +46,7 @@ from pci.domain.pace.rpci_forecast import RpciForecast
 from pci.domain.pace.running_style import RunningStyleLabel
 from pci.domain.shared.reason import Reason
 
-MODEL_VERSION = "pai-v4"
+MODEL_VERSION = "pai-v5"
 
 _OFF_TRACK_CONDITIONS = ("稍重", "重", "不良")
 
@@ -116,11 +125,109 @@ class PaiWeights:
     distance_weight_per_200m: float = 5.0
     distance_cap: float = 20.0
     off_track_penalty: float = 15.0
-    # 合致ラベル閾値。pai-v3 と同じ規則（感応度1.0が区分境界まで振れた幅の中間）を
-    # 新しい振れ幅へ当てる: 50±10 の中間 → 55 / 45。
-    # **ラベル構成比は未測定。** `--diagnose-pai` の構成比表で確認して調整すること。
-    matched_threshold: float = 55.0
+    # 合致ラベル閾値（pai-v5 で（コース×脚質）別へ）。
+    #
+    # pai-v4 までは全脚質・両コース共通の 55.0 だった。PAI は脚質内の相対量なので、
+    # 共通の絶対値と比べると脚質ごとに実効的な厳しさが変わる。500レース6,575頭の実測:
+    #
+    #   コース 脚質  現在の合致  → この値で目標30%へ揃う
+    #   芝    逃げ   49.7%        70.0
+    #   芝    先行   45.6%        68.5
+    #   芝    差し   33.5%        59.5
+    #   芝    追込   30.4%        55.5
+    #   芝    自在    0.0%        49.5   ← 602頭中0頭。到達不能を解消する
+    #   ダート 逃げ   64.6%        70.5
+    #   ダート 先行   53.6%        72.0
+    #   ダート 差し   48.1%        （分割不能・下記）
+    #   ダート 自在    5.1%        50.5
+    #   ダート 追込   48.4%        58.0
+    #
+    # 目標30%は芝の現状（中央値30.0%・合致4.0頭）。**問題が出ていない側**を基準に
+    # 置き、新しい恣意的な数字を持ち込まない。
+    #
+    # **ダートの差しだけ 55.0 に据え置く。** この集団は閾値で分割できない:
+    # 感応度0の脚質は base_pai が中立の50で固定され PAI = 0.5×50 + 0.5×affinity、
+    # affinity は自分の最良レベルを100へ正規化するので **PAI の上限が 75.0**。
+    # ダートはほぼ全レースが同じペース区分に入るため、多くの馬がそこへ並ぶ
+    # （75.0 に48.1%・その上は0頭）。塊ごと入れるか丸ごと落とすかしかない。
+    # 根治は affinity の正規化を母集団基準へ変えること（pai-v6 で扱う）。
+    #
+    # **2026-06-01以降の500レースから取った当てはめ値。期間外で再確認すること。**
+    matched_threshold_turf_escape: float = 70.0
+    matched_threshold_turf_front: float = 68.5
+    matched_threshold_turf_flexible: float = 49.5
+    matched_threshold_turf_stalker: float = 59.5
+    matched_threshold_turf_closer: float = 55.5
+    matched_threshold_dirt_escape: float = 70.5
+    matched_threshold_dirt_front: float = 72.0
+    matched_threshold_dirt_flexible: float = 50.5
+    matched_threshold_dirt_stalker: float = 55.0
+    matched_threshold_dirt_closer: float = 58.0
     unfavorable_threshold: float = 45.0
+
+    def __post_init__(self) -> None:
+        """合致と不利が重ならないことを構成時に確かめる。
+
+        両者が重なると同じ馬が「向く」と「向きにくい」の両方に出る。web 側で実際に
+        起きた（割引条件が `pai < 60` のまま合致の下限55と重なっていた）。
+        閾値が10個に増えた分、取り違えても気付きにくくなるので構成時に落とす。
+        """
+        for style in RunningStyleLabel:
+            for track in ("芝", "ダート"):
+                threshold = self.matched_threshold_for(track, style)
+                if threshold <= self.unfavorable_threshold:
+                    raise ValueError(
+                        f"{track}{style} の合致閾値 {threshold} が"
+                        f"不利閾値 {self.unfavorable_threshold} 以下です"
+                    )
+
+    def max_pai_for(self, style: RunningStyleLabel) -> float:
+        """この脚質が構造上取りうる PAI の上限。
+
+        振れが最大（deviation=+1）・補正なし・affinity が満点のとき。
+        感応度0の脚質（差し・追込）は `0.5×50 + 0.5×100 = 75.0` で頭打ちになる。
+
+        **合致より上の帯を作るときは必ずこれと突き合わせること。** 上限を超えた線を
+        引くと、その帯は一度も現れないまま「該当なし」を返し続ける。実際 pai-v5 で
+        合致閾値を上げた際、固定幅+10の「注目」が10セル中3セルで到達不能になった。
+        """
+        sensitivity = self._sensitivity_for(style)
+        return 0.5 * (self.pace_neutral_pai + sensitivity * self.pace_swing) + 50.0
+
+    def _sensitivity_for(self, style: RunningStyleLabel) -> float:
+        return {
+            RunningStyleLabel.ESCAPE: self.sensitivity_escape,
+            RunningStyleLabel.FRONT: self.sensitivity_front,
+            RunningStyleLabel.FLEXIBLE: self.sensitivity_flexible,
+            RunningStyleLabel.STALKER: self.sensitivity_stalker,
+            RunningStyleLabel.CLOSER: self.sensitivity_closer,
+        }[style]
+
+    def matched_threshold_for(self, track_type: str, style: RunningStyleLabel) -> float:
+        """このコース・脚質で合致とみなす PAI の下限。
+
+        障害は芝側を使う（`pace_center` と同じ扱い。専用の較正データが無いため）。
+        """
+        dirt = track_type == "ダート"
+        return {
+            RunningStyleLabel.ESCAPE: (
+                self.matched_threshold_dirt_escape if dirt else self.matched_threshold_turf_escape
+            ),
+            RunningStyleLabel.FRONT: (
+                self.matched_threshold_dirt_front if dirt else self.matched_threshold_turf_front
+            ),
+            RunningStyleLabel.FLEXIBLE: (
+                self.matched_threshold_dirt_flexible
+                if dirt
+                else self.matched_threshold_turf_flexible
+            ),
+            RunningStyleLabel.STALKER: (
+                self.matched_threshold_dirt_stalker if dirt else self.matched_threshold_turf_stalker
+            ),
+            RunningStyleLabel.CLOSER: (
+                self.matched_threshold_dirt_closer if dirt else self.matched_threshold_turf_closer
+            ),
+        }[style]
 
 
 DEFAULT_WEIGHTS = PaiWeights()
@@ -193,7 +300,7 @@ class PaceAdaptabilityScorer:
             1,
         )
         pai = self._blend_pace_affinity(base_pai, profile, forecast, reasons)
-        label = self._classify(pai)
+        label = self._classify(pai, track_type, profile.running_style)
         reasons.append(
             Reason(
                 code="pai",
@@ -211,14 +318,7 @@ class PaceAdaptabilityScorer:
         )
 
     def _sensitivity(self, style: RunningStyleLabel) -> float:
-        w = self._w
-        return {
-            RunningStyleLabel.ESCAPE: w.sensitivity_escape,
-            RunningStyleLabel.FRONT: w.sensitivity_front,
-            RunningStyleLabel.FLEXIBLE: w.sensitivity_flexible,
-            RunningStyleLabel.STALKER: w.sensitivity_stalker,
-            RunningStyleLabel.CLOSER: w.sensitivity_closer,
-        }[style]
+        return self._w._sensitivity_for(style)
 
     def _pace_bonus(
         self,
@@ -321,8 +421,8 @@ class PaceAdaptabilityScorer:
         reasons.append(Reason(code="pace_affinity", description=description))
         return round((base_pai * 0.5) + (pace_affinity_score * 0.5), 1)
 
-    def _classify(self, pai: float) -> FitLabel:
-        if pai >= self._w.matched_threshold:
+    def _classify(self, pai: float, track_type: str, style: RunningStyleLabel) -> FitLabel:
+        if pai >= self._w.matched_threshold_for(track_type, style):
             return FitLabel.MATCHED
         if pai < self._w.unfavorable_threshold:
             return FitLabel.UNFAVORABLE

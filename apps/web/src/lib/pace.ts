@@ -275,23 +275,11 @@ export function fitLabelDisplay(
  */
 export const PAI_NEUTRAL = 50;
 
-/**
- * 展開が向くと判定する PAI の下限。ドメインの `matched_threshold` と同じ値。
- *
- * UI 側で PAI の実数を直書きしないための唯一の定数。ここ以外に PAI の閾値を
- * 置かないこと（置くとスケール変更に追随できず、機能が黙って止まる）。
- */
-export const PAI_MATCHED = 55;
-
-/** 「注目」まで押し上げる、合致閾値からの上積み分。サーバの `_STRONG_MARGIN` と同じ。 */
-const PAI_STRONG_MARGIN = 10;
-
-/** PAI をサーバと同じカテゴリへ丸める。 */
-export function paiStrength(pai: number): "strong" | "notable" | "normal" {
-  if (pai >= PAI_MATCHED + PAI_STRONG_MARGIN) return "strong";
-  if (pai >= PAI_MATCHED) return "notable";
-  return "normal";
-}
+// 合致閾値の写しはここに置かない（pai-v5 で削除）。
+//
+// かつて `PAI_MATCHED = 55` を持っていたが、ドメインの閾値は（コース×脚質）別に
+// なった——芝の自在49.5、ダートの先行72.0。**単一の値では近似にすらならない。**
+// 強さの判定はサーバの `top_fit_strength` / `fit_label` だけを使うこと。
 
 /** PAI(0–100) を表示バー幅(%) に変換。範囲外は丸める。 */
 export function paiBarWidth(pai: number): number {
@@ -404,21 +392,17 @@ export function raceSpotlight({
   topPai?: number;
   topFitStrength?: "strong" | "notable" | "normal" | string;
 }): RaceSpotlight {
-  // サーバは PAI をカテゴリへ丸めて返す（strong / notable / normal）。
-  // ここで PAI の実数へ戻すと、スケール変更に追随できない——実際 pai-v4 で
-  // 振れ幅を 25 → 10 へ下げた際、旧値の 80/70 はほぼ到達しなくなり
-  // 「注目」が黙って出なくなるところだった（docs/DECISIONS.md ADR-2026-08-04）。
-  // カテゴリが無い場合だけ、PAI を合致閾値と比べる。
+  // サーバは PAI をカテゴリへ丸めて返す（strong / notable / normal）。**それだけを使う。**
   //
-  // ここで PAI の最大値を取るのは、脚質をまたいだ順位付けではない。返すのは
-  // レース単位のラベルだけで、どの馬かは示さないため。「今回の流れに強く合う馬が
-  // いるか」という race 単位の問いに対する max であり、馬どうしの優劣は主張しない。
-  const observedTopPai =
-    suppliedTopPai ?? Math.max(0, ...(horses ?? []).map((h) => h.pai));
+  // 以前はカテゴリが無いとき PAI を閾値と比べ直していた。pai-v5 で合致閾値が
+  // （コース×脚質）別になり、55 のような単一の値では代用できなくなった
+  // （芝の自在49.5 対 ダートの先行72.0）。脚質を知らない側で近似すると、
+  // **脚質によって当たり外れのある基準を黙って当てる**ことになる。
+  // 判定できないなら強調しない。
   const strength =
     topFitStrength === "strong" || topFitStrength === "notable"
       ? topFitStrength
-      : paiStrength(observedTopPai);
+      : "normal";
 
   if (confidence >= 0.7 && strength === "strong") {
     return {

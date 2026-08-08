@@ -121,7 +121,7 @@ class SqlAlchemyMartRepository:
             pace_by_race.setdefault(row.race_key, row)
 
         fit_rows = self._s.execute(
-            select(PaceFitModel, HorseModel.name)
+            select(PaceFitModel, HorseModel.name, RaceEntryModel.running_style)
             .join(
                 RaceEntryModel,
                 (RaceEntryModel.race_key == PaceFitModel.race_key)
@@ -130,17 +130,19 @@ class SqlAlchemyMartRepository:
             .outerjoin(HorseModel, HorseModel.ketto_num == RaceEntryModel.ketto_num)
             .where(PaceFitModel.race_key.in_(race_keys))
         )
-        fits_by_race_and_version: dict[str, dict[str, list[tuple[PaceFitModel, str | None]]]] = {}
-        for fit, horse_name in fit_rows:
+        fits_by_race_and_version: dict[
+            str, dict[str, list[tuple[PaceFitModel, str | None, str | None]]]
+        ] = {}
+        for fit, horse_name, running_style in fit_rows:
             versions = fits_by_race_and_version.setdefault(fit.race_key, {})
-            versions.setdefault(fit.model_version, []).append((fit, horse_name))
+            versions.setdefault(fit.model_version, []).append((fit, horse_name, running_style))
 
-        top_fit_by_race: dict[str, tuple[PaceFitModel, str | None]] = {}
+        top_fit_by_race: dict[str, tuple[PaceFitModel, str | None, str | None]] = {}
         for race_key, versions in fits_by_race_and_version.items():
             _latest_version, latest_rows = max(
                 versions.items(),
                 key=lambda item: (
-                    max(row.generated_at for row, _name in item[1]),
+                    max(row.generated_at for row, _name, _style in item[1]),
                     item[0],
                 ),
             )
@@ -151,7 +153,7 @@ class SqlAlchemyMartRepository:
             top = top_fit_by_race.get(race_key)
             if top is None:
                 continue
-            fit, horse_name = top
+            fit, horse_name, running_style = top
             result[race_key] = RaceBoardForecastRecord(
                 race_key=race_key,
                 pace_label=pace.pace_label,
@@ -160,6 +162,7 @@ class SqlAlchemyMartRepository:
                 top_horse_name=horse_name,
                 top_pai=fit.pai,
                 top_fit_label=fit.fit_label,
+                top_running_style=running_style,
             )
         return result
 

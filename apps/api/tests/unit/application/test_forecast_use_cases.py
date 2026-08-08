@@ -335,7 +335,11 @@ class TestForecastRaceUseCase:
         assert output.formation is None
         assert "登録順 1（馬番未確定）" in output.scenario_detail
         assert output.comment is not None
-        assert "登録順 1（馬番未確定）" in "".join(output.comment.body)
+        # 見ているのは**馬番の表記形式**であって、どの馬が選ばれるかではない。
+        # 合致になる馬は閾値の較正で変わる（pai-v5 で脚質別にした）。
+        comment_body = "".join(output.comment.body)
+        assert "（馬番未確定）" in comment_body
+        assert not re.search(r"(?<!順 )\d+番", comment_body)
         assert "1番" not in output.scenario_detail
 
     def test_scenario_uses_official_number_after_draw_confirmation(self) -> None:
@@ -350,7 +354,9 @@ class TestForecastRaceUseCase:
         assert output.formation is not None
         assert "1番" in output.scenario_detail
         assert output.comment is not None
-        assert "1番" in "".join(output.comment.body)
+        comment_body = "".join(output.comment.body)
+        assert re.search(r"\d+番", comment_body)
+        assert "（馬番未確定）" not in comment_body
         assert "登録順" not in output.scenario_detail
 
     def test_horse_fit_frame_no_reflects_draw_confirmation(self) -> None:

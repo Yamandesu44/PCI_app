@@ -217,6 +217,7 @@ describe("raceSpotlight", () => {
     const out = raceSpotlight({
       confidence: 0.72,
       fieldSize: 12,
+      topFitStrength: "strong",
       horses: [
         {
           horse_no: 1,
@@ -233,10 +234,34 @@ describe("raceSpotlight", () => {
     expect(out).toMatchObject({ label: "注目", tone: "focus" });
   });
 
+  it("サーバが強さを返さないレースは強調しない", () => {
+    // pai-v5 で合致閾値が（コース×脚質）別になり、PAI の実数から強さを
+    // 推し量ることができなくなった（芝の自在49.5 対 ダートの先行72.0）。
+    // **近似で埋めず、判定できないなら強調しない。**
+    const out = raceSpotlight({
+      confidence: 0.72,
+      fieldSize: 12,
+      horses: [
+        {
+          horse_no: 1,
+          frame_no: 1,
+          running_style: "先行",
+          pai: 99,
+          fit_label: "合致",
+          low_evidence: false,
+          reasons: [],
+        },
+      ],
+    });
+
+    expect(out.label).not.toBe("注目");
+  });
+
   it("多頭数で展開恩恵候補がいるレースを妙味にする", () => {
     const out = raceSpotlight({
       confidence: 0.58,
       fieldSize: 16,
+      topFitStrength: "notable",
       horses: [
         {
           horse_no: 1,

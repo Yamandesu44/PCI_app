@@ -37,6 +37,9 @@ class RaceBoardForecastRecord:
     top_horse_name: str | None
     top_pai: float
     top_fit_label: str
+    # pai-v5 で合致閾値が（コース×脚質）別になったため、PAI だけでは強さを判定できない。
+    # 未確定（脚質不明）なら None。読み手はそのとき強調しないこと。
+    top_running_style: str | None = None
 
 
 @dataclass(frozen=True)

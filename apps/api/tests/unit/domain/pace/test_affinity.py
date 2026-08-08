@@ -320,4 +320,5 @@ class TestFallbackStylesCoverage:
         # ペース加点が最大（+感応度×振れ幅）でも合致に届かないなら構造的な欠陥。
         best_base = 50.0 + PAI_W.sensitivity_flexible * PAI_W.pace_swing
         best_pai = 0.5 * best_base + 0.5 * max(profile.scores.values())
-        assert best_pai >= PAI_W.matched_threshold
+        for track in ("芝", "ダート"):
+            assert best_pai >= PAI_W.matched_threshold_for(track, RunningStyleLabel.FLEXIBLE)
