@@ -1930,6 +1930,33 @@ class TestFitThresholdByStyle:
     def test_empty_returns_empty(self) -> None:
         assert summarize_fit_threshold_by_style([]) == []
 
+    def test_marks_a_group_that_no_threshold_can_split(self) -> None:
+        """PAI が1点へ固まっていると、閾値では目標へ着地できない。
+
+        実測の `ダート 差し` がこれ: 75.0 で48.1%、75.5 で0.0%。感応度0の脚質は
+        `0.5×50 + 0.5×affinity` で、affinity は自分の最良レベルを100へ正規化する。
+        つまり PAI の上限が 75.0 で、得意ペースと一致した馬が全員そこへ並ぶ。
+
+        塊ごと入れるか丸ごと落とすかしかないので、**推奨値を答えの顔で返さない。**
+        """
+        # 8頭中6頭が PAI 75.0 に固まり、その上には誰もいない。
+        samples = [self._h("差し", pai) for pai in (60.0, 62.0, *([75.0] * 6))]
+
+        row = summarize_fit_threshold_by_style(samples)[0]
+
+        assert row.recommended_threshold == pytest.approx(75.5, abs=1e-6)
+        assert row.share_before == pytest.approx(0.75, abs=1e-4)
+        assert row.recommended_share == pytest.approx(0.0, abs=1e-4)
+        assert row.splittable is False
+
+    def test_accepts_a_group_that_lands_near_the_target(self) -> None:
+        samples = [self._h("先行", pai) for pai in (50.0, 52.0, 54.0, 56.0, 58.0)]
+
+        row = summarize_fit_threshold_by_style(samples)[0]
+
+        assert row.splittable is True
+        assert row.recommended_share == pytest.approx(0.2, abs=1e-4)
+
 
 class TestFitLabelShares:
     """ラベルの良し悪しは脚質を固定して判断する。

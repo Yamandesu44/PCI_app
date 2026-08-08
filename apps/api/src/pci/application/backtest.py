@@ -1586,6 +1586,11 @@ class FitThresholdByStyleRow:
     current_share: float
     recommended_threshold: float | None
     recommended_share: float | None
+    # 推奨閾値の1段手前（0.5点下）での割合。閾値を跨いだ落差を見るために持つ。
+    share_before: float | None = None
+    # 落差が目標割合より大きい＝1刻みの中に目標より多くの馬が固まっている。
+    # このとき閾値では目標へ着地できず、推奨値は「答えに見えるだけの数字」になる。
+    splittable: bool = True
 
 
 def summarize_fit_threshold_by_style(
@@ -1620,7 +1625,7 @@ def summarize_fit_threshold_by_style(
             group = [s for s in in_track if s.running_style == style]
             if not group:
                 continue
-            threshold, share = _solve_share_threshold(group, target)
+            threshold, share, before = _solve_share_threshold(group, target)
             rows.append(
                 FitThresholdByStyleRow(
                     track_type=track,
@@ -1631,29 +1636,65 @@ def summarize_fit_threshold_by_style(
                     ),
                     recommended_threshold=threshold,
                     recommended_share=share,
+                    share_before=before,
+                    splittable=_is_splittable(share, before, target),
                 )
             )
     return rows
 
 
+def _is_splittable(
+    share: float | None,
+    share_before: float | None,
+    target: float,
+) -> bool:
+    """閾値で目標割合へ着地できるか。0.5点の1刻みに目標より多く固まっていたら不可。
+
+    実測で `ダート 差し` がこれに当たった: 75.0 で48.1%、75.5 で0.0%。
+    **PAI 75.0 に馬が固まっていて、その上には1頭もいない。**
+
+    理由は式にある。感応度0の脚質（差し・追込）は `base_pai` が中立の50で固定され、
+    PAI は `0.5×50 + 0.5×affinity` になる。affinity は
+    `build_horse_pace_affinity_profile` が**その馬自身の最良レベルを100へ正規化**する
+    ので上限100、つまり PAI の上限は 75.0。予測ペースがその馬の得意レベルと一致すれば
+    誰でも 100 が付く。ダートはほぼ全レースが同じペース区分に入るため、多くの馬が
+    そこに並ぶ。**affinity が「どれだけ向くか」ではなく「一番得意か否か」を答えている。**
+
+    このとき閾値をどこに置いても目標へは着地できない。塊ごと入れるか、丸ごと落とすか
+    しかない。**そこで返す数字は答えではないので、答えの顔をさせない。**
+    """
+    if share is None or share_before is None:
+        return False
+    return (share_before - share) <= target
+
+
 def _solve_share_threshold(
     horses: list[HorseSample],
     target: float,
-) -> tuple[float | None, float | None]:
+) -> tuple[float | None, float | None, float | None]:
     """この集団の合致割合を `target` 以下にする最小の閾値を返す。
 
     `_solve_matched_threshold` と同じ規則（最小・0.5点刻み・届かなければ None）だが、
     見るのはレース単位の中央値ではなく集団全体の割合。
+
+    3つ目に返すのは1段手前（0.5点下）での割合。**落差を見ないと、塊を跨いだだけの
+    値を「推奨」として受け取ってしまう。**
     """
     if not horses:
-        return None, None
+        return None, None, None
+
+    def share_at(threshold: float) -> float:
+        return sum(1 for h in horses if h.pai >= threshold) / len(horses)
+
     candidate = 30.0
+    previous = share_at(candidate)
     while candidate <= 85.0:
-        share = sum(1 for h in horses if h.pai >= candidate) / len(horses)
+        share = share_at(candidate)
         if share <= target:
-            return candidate, round(share, 4)
+            return candidate, round(share, 4), round(previous, 4)
+        previous = share
         candidate += 0.5
-    return None, None
+    return None, None, None
 
 
 def format_fit_threshold_by_style(rows: list[FitThresholdByStyleRow]) -> str:
@@ -1663,20 +1704,27 @@ def format_fit_threshold_by_style(rows: list[FitThresholdByStyleRow]) -> str:
     lines = [
         "",
         "  ── 脚質ごとの合致割合と推奨閾値（PAIは脚質内の相対量なので、閾値も脚質ごと）",
-        f"    {'コース':<8}{'脚質':<8}{'頭数':>8}{'現在の合致':>12}{'推奨閾値':>10}{'適用後':>9}",
+        f"    {'コース':<8}{'脚質':<8}{'頭数':>8}{'現在の合致':>12}"
+        f"{'推奨閾値':>10}{'1段手前':>10}{'適用後':>9}{'判定':>10}",
     ]
     for row in rows:
         threshold = (
             "届かず" if row.recommended_threshold is None else f"{row.recommended_threshold:.1f}"
         )
         share = "—" if row.recommended_share is None else f"{row.recommended_share:.1%}"
+        before = "—" if row.share_before is None else f"{row.share_before:.1%}"
+        verdict = "採用可" if row.splittable else "分割不能"
         lines.append(
             f"    {row.track_type:<8}{row.running_style:<8}{row.horses:>8,}"
-            f"{row.current_share:>11.1%}{threshold:>10}{share:>9}"
+            f"{row.current_share:>11.1%}{threshold:>10}{before:>10}{share:>9}{verdict:>8}"
         )
     lines.append("    ※ 単一の閾値は、脚質間で比較できない量を共通の絶対値と比べている。")
     lines.append("       実測では芝の自在が602頭中0頭で、構造的に合致へ到達できない。")
     lines.append("       コース単位で閾値を上げるとこれが悪化する（脚質ごとに切ること）。")
+    lines.append("    ※ 「分割不能」は、0.5点の1刻みに目標より多くの馬が固まっている状態。")
+    lines.append("       閾値をどこへ置いても目標へ着地できないので、推奨値を採用しないこと。")
+    lines.append("       感応度0の脚質（差し・追込）は PAI が 25〜75 に収まり、")
+    lines.append("       予測ペースが得意レベルと一致した馬は一律 75.0 に並ぶ（affinity=100）。")
     return "\n".join(lines)
 
 
