@@ -14,7 +14,12 @@ import pytest
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.pool import QueuePool
 
-from pci.infrastructure.database.session import _split_pg8000_ssl, build_engine
+from pci.config.settings import get_settings
+from pci.infrastructure.database.session import (
+    _split_pg8000_ssl,
+    build_engine,
+    resolve_migration_url,
+)
 
 _URL = "postgresql+pg8000://u:p@localhost:5432/db"
 
@@ -170,15 +175,41 @@ class TestMigrationsShareTheSamePreparation:
     def test_env_py_does_not_build_its_own_engine_from_config(self) -> None:
         assert "engine_from_config" not in self._env_source()
 
-    def test_env_py_resolves_the_target_through_settings(self) -> None:
-        """接続先もアプリと同じ経路で決めること。
+    def test_env_py_resolves_the_target_through_the_shared_resolver(self) -> None:
+        """接続先の決定を env.py の中に書き直さないこと。
 
-        以前は `os.environ` だけを読み、`.env` にしか書いていないと
-        `alembic.ini` のローカル向けURLへ落ちていた。**エラーにならず、
-        適用済みのローカルDBに対して正常終了する**ため、本番へ流したつもりで
-        流れていないことに気付けない。
+        この分岐は二度事故を起こしている（`resolve_migration_url` の docstring 参照）。
+        env.py はテストから import できない（読み込むだけでマイグレーションが走る）ので、
+        ロジックを外へ出して**振る舞いをテストできる形**に保つ。
         """
-        assert "get_settings" in self._env_source()
+        source = self._env_source()
+        assert "resolve_migration_url" in source
+        assert "get_settings" not in source
+
+
+class TestResolveMigrationUrl:
+    """どのDBへ流すかを決める分岐。**取り違えると黙って別のDBが変わる。**"""
+
+    def test_explicit_url_wins(self) -> None:
+        """呼び出し元が明示した接続先を使う。
+
+        統合テストは `Config.set_main_option("sqlalchemy.url", ...)` で
+        testcontainers の接続先を渡す。ここを無視すると全件が既定の
+        localhost:5432 へ向かい、CI が15コミット連続で赤いままになった。
+        """
+        assert (
+            resolve_migration_url("postgresql+pg8000://u:p@container:55432/test")
+            == "postgresql+pg8000://u:p@container:55432/test"
+        )
+
+    def test_falls_back_to_settings_when_not_specified(self) -> None:
+        for empty in (None, "", "   "):
+            assert resolve_migration_url(empty) == get_settings().database_url
+
+    def test_strips_surrounding_whitespace(self) -> None:
+        assert resolve_migration_url("  postgresql+pg8000://u:p@h:5432/d  ") == (
+            "postgresql+pg8000://u:p@h:5432/d"
+        )
 
     def test_alembic_ini_is_ascii_only(self) -> None:
         """alembic はこのファイルを**ロケールの文字コード**で読む。

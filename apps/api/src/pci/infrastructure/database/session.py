@@ -6,6 +6,8 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
+from pci.config.settings import get_settings
+
 _logger = logging.getLogger(__name__)
 
 # libpq の sslmode のうち、暗号化はするが証明書を検証しないもの。
@@ -66,6 +68,29 @@ def _split_pg8000_ssl(url: URL) -> tuple[URL, dict[str, Any]]:
         raise ValueError(f"未知の sslmode です: {mode}")
 
     return stripped, {"ssl_context": context}
+
+
+def resolve_migration_url(explicit: str | None) -> str:
+    """マイグレーション先を決める。呼び出し元の明示があればそれ、無ければ設定。
+
+    **どのDBへ流すかを決める分岐なので、ここに置いてテストできるようにする。**
+    もともと `alembic/env.py` の中にあり、二度事故を起こした:
+
+    1. `os.environ` だけを読んでいたため、接続先を `.env` にしか書いていないと
+       空になり `alembic.ini` に残っていたローカル向けURLへ落ちた。
+       **エラーにならず、適用済みのローカルDBに対して正常終了する**ので、
+       本番へ流したつもりで流れていないことに気付けない。
+    2. その対処で `alembic.ini` を一切見ないようにしたところ、統合テストが
+       `Config.set_main_option` で渡す testcontainers の接続先まで無視され、
+       全30件が localhost:5432 へ向かった。CI が15コミット連続で赤かった。
+
+    危険なのは**設定ファイルに残った古い値が黙って勝つ**ことであって、呼び出し元が
+    その場で指定すること自体ではない。`alembic.ini` の `sqlalchemy.url` は空に
+    保たれているので（テストで固定）、非空の値はプログラムからの明示だけになる。
+    """
+    if explicit and explicit.strip():
+        return explicit.strip()
+    return get_settings().database_url
 
 
 def prepare_connection(database_url: str) -> tuple[URL, dict[str, Any]]:
