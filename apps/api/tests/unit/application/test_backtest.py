@@ -1890,7 +1890,7 @@ class TestFitThresholdByStyle:
             # 差し: PAI が高い側に寄っており、55 では 4/5 が合致してしまう。
             *[self._h("差し", pai) for pai in (54.0, 56.0, 58.0, 60.0, 62.0)],
             # 自在: PAI が低い側にあり、55 では 1頭も合致しない。
-            *[self._h("自在", pai) for pai in (40.0, 42.0, 44.0, 46.0, 48.0)],
+            *[self._h("自在", pai) for pai in (51.0, 52.0, 53.0, 54.0, 54.5)],
         ]
 
         rows = {r.running_style: r for r in summarize_fit_threshold_by_style(samples)}
@@ -1899,13 +1899,13 @@ class TestFitThresholdByStyle:
         assert rows["自在"].current_share == pytest.approx(0.0, abs=1e-4)
         # どちらも目標30%（5頭なら1頭）へ合わせるが、値は脚質ごとに違う。
         assert rows["差し"].recommended_threshold == pytest.approx(60.5, abs=1e-6)
-        assert rows["自在"].recommended_threshold == pytest.approx(46.5, abs=1e-6)
+        assert rows["自在"].recommended_threshold == pytest.approx(54.5, abs=1e-6)
         assert rows["差し"].recommended_share == pytest.approx(0.2, abs=1e-4)
         assert rows["自在"].recommended_share == pytest.approx(0.2, abs=1e-4)
 
     def test_gives_a_reachable_threshold_to_a_style_that_never_qualifies(self) -> None:
         """現状0%の脚質にも到達可能な閾値が出る。これが単一閾値との一番の違い。"""
-        samples = [self._h("自在", pai, track="芝") for pai in (44.0, 46.0, 48.0, 50.0)]
+        samples = [self._h("自在", pai, track="芝") for pai in (51.0, 52.0, 53.0, 54.0)]
 
         row = summarize_fit_threshold_by_style(samples)[0]
 
@@ -1913,9 +1913,24 @@ class TestFitThresholdByStyle:
         assert row.recommended_threshold is not None
         assert row.recommended_threshold < 55.0
 
+    def test_never_proposes_a_threshold_at_or_below_the_neutral_point(self) -> None:
+        """中立点より下は提案しない。
+
+        pai-v5 の初版で芝の自在に 49.5 が出た。分布だけを見て解くと、それが
+        「今回の流れは、この脚質にとって普段どおり」の下だと知らない。
+        **普段どおりより悪い流れの馬に「向く」と言うことになる。**
+        ドメイン側でも弾くが、弾かれる値を推奨として出すこと自体が誤り。
+        """
+        samples = [self._h("自在", pai, track="芝") for pai in (20.0, 25.0, 30.0, 35.0)]
+
+        row = summarize_fit_threshold_by_style(samples)[0]
+
+        assert row.recommended_threshold is not None
+        assert row.recommended_threshold > DEFAULT_PAI_WEIGHTS.pace_neutral_pai
+
     def test_separates_courses(self) -> None:
         samples = [
-            *[self._h("差し", pai, track="芝") for pai in (44.0, 46.0, 48.0, 50.0)],
+            *[self._h("差し", pai, track="芝") for pai in (51.0, 52.0, 53.0, 54.0)],
             *[self._h("差し", pai, track="ダート") for pai in (60.0, 62.0, 64.0, 66.0)],
         ]
 
@@ -1924,7 +1939,7 @@ class TestFitThresholdByStyle:
         }
 
         # 4頭で目標30%なら1頭まで。最上位の1頭だけが残る 0.5 刻みの点を選ぶ。
-        assert rows[("芝", "差し")].recommended_threshold == pytest.approx(48.5, abs=1e-6)
+        assert rows[("芝", "差し")].recommended_threshold == pytest.approx(53.5, abs=1e-6)
         assert rows[("ダート", "差し")].recommended_threshold == pytest.approx(64.5, abs=1e-6)
 
     def test_empty_returns_empty(self) -> None:

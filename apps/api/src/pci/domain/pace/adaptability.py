@@ -136,6 +136,7 @@ class PaiWeights:
     #   芝    差し   33.5%        59.5
     #   芝    追込   30.4%        55.5
     #   芝    自在    0.0%        49.5   ← 602頭中0頭。到達不能を解消する
+    #                                     （ただし中立点50を下回るため 50.5 を採用。下記）
     #   ダート 逃げ   64.6%        70.5
     #   ダート 先行   53.6%        72.0
     #   ダート 差し   48.1%        （分割不能・下記）
@@ -152,10 +153,16 @@ class PaiWeights:
     # （75.0 に48.1%・その上は0頭）。塊ごと入れるか丸ごと落とすかしかない。
     # 根治は affinity の正規化を母集団基準へ変えること（pai-v6 で扱う）。
     #
+    # **芝の自在は解 49.5 ではなく 50.5 を採る。** 解は分布だけを見るので、49.5 が
+    # 中立点50を下回ることを知らない。下回る値を合致にすると「普段どおりより悪い流れ」の
+    # 馬に「向く」と言うことになる。実測でもこのセルだけ **合致25.0% < 中立26.2%** と
+    # 逆転しており、そもそも芝の自在は PAI で判別できていない（上位1/3対下位1/3が
+    # +2.0%・±8.7% で全10セル中もっとも弱い）。中立点の上へ置いて意味を守る。
+    #
     # **2026-06-01以降の500レースから取った当てはめ値。期間外で再確認すること。**
     matched_threshold_turf_escape: float = 70.0
     matched_threshold_turf_front: float = 68.5
-    matched_threshold_turf_flexible: float = 49.5
+    matched_threshold_turf_flexible: float = 50.5
     matched_threshold_turf_stalker: float = 59.5
     matched_threshold_turf_closer: float = 55.5
     matched_threshold_dirt_escape: float = 70.5
@@ -166,11 +173,16 @@ class PaiWeights:
     unfavorable_threshold: float = 45.0
 
     def __post_init__(self) -> None:
-        """合致と不利が重ならないことを構成時に確かめる。
+        """閾値の並びを構成時に確かめる。
 
-        両者が重なると同じ馬が「向く」と「向きにくい」の両方に出る。web 側で実際に
-        起きた（割引条件が `pai < 60` のまま合致の下限55と重なっていた）。
-        閾値が10個に増えた分、取り違えても気付きにくくなるので構成時に落とす。
+        1. 合致と不利が重ならないこと。重なると同じ馬が「向く」と「向きにくい」の
+           両方に出る。web 側で実際に起きた（割引条件が `pai < 60` のまま合致の
+           下限55と重なっていた）。閾値が10個に増えた分、取り違えても気付きにくい。
+        2. 合致が中立点を**上回る**こと。`pace_neutral_pai` は「今回の流れは、この脚質に
+           とって普段どおり」を表す。そこを下回る値を合致にすると、
+           **普段どおりより悪い流れの馬に「向く」と言う**ことになる。
+           較正で実際に起きた（pai-v5 初版の芝・自在が 49.5）。目標割合に合わせる
+           解き方は分布しか見ないので、意味の側から下限を置いておく必要がある。
         """
         for style in RunningStyleLabel:
             for track in ("芝", "ダート"):
@@ -179,6 +191,12 @@ class PaiWeights:
                     raise ValueError(
                         f"{track}{style} の合致閾値 {threshold} が"
                         f"不利閾値 {self.unfavorable_threshold} 以下です"
+                    )
+                if threshold <= self.pace_neutral_pai:
+                    raise ValueError(
+                        f"{track}{style} の合致閾値 {threshold} が"
+                        f"中立点 {self.pace_neutral_pai} 以下です"
+                        "（普段どおり以下の流れを「向く」と呼ぶことになります）"
                     )
 
     def max_pai_for(self, style: RunningStyleLabel) -> float:

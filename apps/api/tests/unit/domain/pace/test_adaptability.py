@@ -179,6 +179,25 @@ class TestPaiCoreLogic:
         with pytest.raises(ValueError, match="不利閾値"):
             PaiWeights(matched_threshold_turf_flexible=40.0)
 
+    def test_matched_threshold_below_the_neutral_point_is_rejected(self) -> None:
+        """「向く」が中立点を下回らないこと。
+
+        `pace_neutral_pai` は「今回の流れは、この脚質にとって普段どおり」。そこを
+        下回る値を合致にすると、**普段どおりより悪い流れの馬に「向く」と言う**。
+        pai-v5 の較正で実際に起きた（芝の自在に解 49.5 が出た）。目標割合へ
+        合わせる解き方は分布しか見ないので、意味の側から下限を置く必要がある。
+        """
+        with pytest.raises(ValueError, match="中立点"):
+            PaiWeights(matched_threshold_turf_flexible=49.5)
+
+    def test_every_matched_threshold_is_above_the_neutral_point(self) -> None:
+        for track in ("芝", "ダート"):
+            for style in RunningStyleLabel:
+                assert (
+                    DEFAULT_WEIGHTS.matched_threshold_for(track, style)
+                    > DEFAULT_WEIGHTS.pace_neutral_pai
+                ), f"{track}{style.value}"
+
     def test_every_matched_threshold_is_reachable(self) -> None:
         """到達できない閾値を置かない。**閾値を上げるときの必須の確認。**
 

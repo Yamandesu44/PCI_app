@@ -1679,6 +1679,11 @@ def _solve_share_threshold(
 
     3つ目に返すのは1段手前（0.5点下）での割合。**落差を見ないと、塊を跨いだだけの
     値を「推奨」として受け取ってしまう。**
+
+    走査は中立点の1段上から始める。**分布だけを見て解くと意味を踏み外す**——
+    pai-v5 の初版で芝の自在に 49.5（中立点50の下）が出て、「普段どおりより悪い流れ」の
+    馬を合致と呼びかけた。ドメイン側でも `PaiWeights.__post_init__` が弾くが、
+    弾かれる値を推奨として出すこと自体が誤り。
     """
     if not horses:
         return None, None, None
@@ -1686,7 +1691,7 @@ def _solve_share_threshold(
     def share_at(threshold: float) -> float:
         return sum(1 for h in horses if h.pai >= threshold) / len(horses)
 
-    candidate = 30.0
+    candidate = DEFAULT_PAI_WEIGHTS.pace_neutral_pai + 0.5
     previous = share_at(candidate)
     while candidate <= 85.0:
         share = share_at(candidate)
