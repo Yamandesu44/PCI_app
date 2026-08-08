@@ -1748,6 +1748,8 @@ class CrowdingSweepRow:
     all_suited_race_share: float
     median_suited_count: float
     thresholds: tuple[tuple[str, float], ...]
+    # 分割不能で現行の閾値を据え置いた脚質。**この行の数字はその分だけ現状寄り**。
+    kept_as_is: tuple[str, ...] = ()
 
 
 def summarize_crowding_sweep(
@@ -1776,9 +1778,18 @@ def summarize_crowding_sweep(
     rows: list[CrowdingSweepRow] = []
     for target in targets:
         thresholds: dict[tuple[str, str], float] = {}
+        unsplittable: set[tuple[str, str]] = set()
         for row in summarize_fit_threshold_by_style(samples, target):
-            if row.recommended_threshold is not None:
-                thresholds[(row.track_type, row.running_style)] = row.recommended_threshold
+            # **分割不能なセルの解を当ててはいけない。** そこで返る値は目標へ着地
+            # できておらず、たいてい PAI の上限（75.0）の外側で合致0頭になる。
+            # ドメインは現にダートの差しを 55.0 のまま据え置いているので、
+            # ここも現行のラベルを使う。これを取り違えると、そのセルの馬が丸ごと
+            # 合致から消え、**「絞りにくい」レースが実際より少なく見える**
+            # （最初の実装がこれで、ダートの実測30.4%に対し6.9%と出していた）。
+            if row.recommended_threshold is None or not row.splittable:
+                unsplittable.add((row.track_type, row.running_style))
+                continue
+            thresholds[(row.track_type, row.running_style)] = row.recommended_threshold
 
         for track in ("芝", "ダート"):
             group = [s for s in samples if s.track_type == track and s.fit_label]
@@ -1822,6 +1833,9 @@ def summarize_crowding_sweep(
                         for (row_track, style), value in sorted(thresholds.items())
                         if row_track == track
                     ),
+                    kept_as_is=tuple(
+                        style for (row_track, style) in sorted(unsplittable) if row_track == track
+                    ),
                 )
             )
     return rows
@@ -1839,6 +1853,8 @@ def format_crowding_sweep(rows: list[CrowdingSweepRow]) -> str:
     ]
     for row in rows:
         thresholds = " / ".join(f"{style}{value:.1f}" for style, value in row.thresholds)
+        if row.kept_as_is:
+            thresholds += f" ／ 据え置き: {'・'.join(row.kept_as_is)}"
         lines.append(
             f"    {row.target:>5.0%}  {row.track_type:<8}{row.median_share:>8.1%}"
             f"{row.majority_race_share:>10.1%}{row.all_suited_race_share:>10.1%}"
@@ -1850,6 +1866,11 @@ def format_crowding_sweep(rows: list[CrowdingSweepRow]) -> str:
     )
     lines.append("    ※ 中央値ではなく裾を見て決めること。裾が広いのは構造で、")
     lines.append("       `pace_deviation` がレース単位の定数のため同じ脚質の馬が揃って閾値を跨ぐ。")
+    lines.append(
+        "    ※ 「据え置き」は分割不能で現行の閾値のままにした脚質。その分この行は現状寄り。"
+    )
+    lines.append("       **解が出ても分割不能なら当てないこと。** PAI上限の外側で合致0頭になり、")
+    lines.append("       そのセルの馬が丸ごと消えて「絞りにくい」が実際より少なく見える。")
     return "\n".join(lines)
 
 

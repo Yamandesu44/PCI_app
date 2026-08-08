@@ -2032,6 +2032,34 @@ class TestCrowdingSweep:
     def test_empty_returns_empty(self) -> None:
         assert summarize_crowding_sweep([], (0.30,)) == []
 
+    def test_does_not_apply_a_solution_for_an_unsplittable_style(self) -> None:
+        """分割不能なセルの解を当てない。**当てるとその脚質の馬が丸ごと消える。**
+
+        最初の実装がこれで、ダートの実測「半数以上 30.4%」に対し 6.9% と出していた。
+        差し（757頭・ダートの28%）が PAI 上限 75.0 の外側 75.5 で切られ、合致0頭に
+        なっていたため。**絞り込めているように見えるが、見ていたのは欠落。**
+        """
+        # 8頭中6頭が PAI 75.0 に固まる = 閾値では分割できない集団。
+        samples = [
+            HorseSample(
+                race_key="R1",
+                horse_no=i + 1,
+                pai=pai,
+                good_run=False,
+                track_type="ダート",
+                running_style="差し",
+                fit_label="合致" if pai >= 55.0 else "中立",
+            )
+            for i, pai in enumerate([60.0, 62.0, *([75.0] * 6)])
+        ]
+
+        row = summarize_crowding_sweep(samples, (0.30,))[0]
+
+        # 現行ラベル（55.0）のまま数えるので全頭が合致。0% にはならない。
+        assert row.median_share == pytest.approx(1.0, abs=1e-4)
+        assert row.thresholds == ()
+        assert row.kept_as_is == ("差し",)
+
 
 class TestFitLabelShares:
     """ラベルの良し悪しは脚質を固定して判断する。
