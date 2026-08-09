@@ -226,9 +226,14 @@ cd apps/api && python -m scripts.backtest_forecast --diagnose-pai --limit 500
 
 ### リリースに向けて残っているもの
 
+- [ ] **【最優先】規約確認が済むまで公開を閉じる。** 手順は
+      `docs/design/public-data-surface.md` の「閉じ方」。**入口は2つ**で、
+      web（`BETA_ACCESS_*`）だけ塞いでも Cloud Run の API から同じ JSON が取れる。
+      **`PUBLIC_API_TOKEN` の入れ替えは、いまや衛生ではなく閉じるための必須手順。**
 - [ ] ユーザー単位の認証（現状はサーバ間トークンのみ）。
 - [ ] JRA-VAN 規約確認（コードでは解決できないため早めに）。
-- [ ] `PUBLIC_API_TOKEN` の入れ替え（構築中の会話ログに値が残っている）。
+      取得経路は `JRA-VAN → mykeibadb → 本アプリ` の2段で、確認すべき規約が2つある
+      可能性がある。焦点は区分B（馬名・着順・上がり3F等の公表事実の再掲）。
 - [ ] GitHub へ `PUBLIC_API_BASE_URL` / `PUBLIC_API_TOKEN` を設定する
       （未設定の間、毎日の鮮度監視はスキップされる）。
 - [ ] 土曜11:00 の実行で**日曜の出馬表**が入ることを確認する（新スケジュールの検証）。

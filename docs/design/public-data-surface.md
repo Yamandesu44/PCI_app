@@ -74,5 +74,62 @@ JRA-VAN の配信データを経由して取得している。「公表事実だ
 
 - [ ] **区分Bの扱い。** 公表事実の再掲を JRA-VAN の規約がどう扱うか。
       技術側では決められないので、規約本文の確認が要る。
-- [ ] 確認が済むまでの公開範囲。`BETA_ACCESS_USER` / `BETA_ACCESS_PASSWORD` を
-      web に設定すれば共有パスワードで閉じられる（実装済み）。
+- [ ] **取得経路が2段であること。** 現在の運用は `--mode mykeibadb` で、
+      JV-Link から直接ではない（JRA-VAN → mykeibadb → 本アプリ）。
+      確認すべき規約が2つある可能性がある。
+
+## 閉じ方（規約確認が済むまで）
+
+**入口は2つある。web だけ閉じても API から同じデータが取れる。** 片方だけ塞いで
+「閉じた」と思うのが一番危ない。
+
+### 1. web（訪問者向け）
+
+Vercel の Settings → Environments → **Production** に2つ追加して再デプロイ。
+
+```
+BETA_ACCESS_USER      = <任意>
+BETA_ACCESS_PASSWORD  = <任意>
+```
+
+`apps/web/src/middleware.ts` が Basic 認証を要求する。実装の性質:
+
+- 両方とも未設定 → 素通し（ローカル開発のため）
+- **片方だけ設定 → 503 で閉じる**。設定ミスで開いたままにしない
+- 照合は定数時間比較。資格情報はログにも画面にも出さない
+- `matcher` は `_next/static` / `_next/image` / `favicon.ico` だけ除外。
+  ページも API ルートも通る（現状 route handler は無い）
+
+### 2. API（Cloud Run・外から直接届く）
+
+`--allow-unauthenticated` で公開されており、**`PUBLIC_API_TOKEN` を知っていれば
+誰でも同じ JSON を取得できる**。レート制限は120回/分だが、時間をかけた
+まとめ取りは防げない。
+
+**このトークンは構築中の会話ログに平文で残っている。** web を閉じても、
+トークンを持つ側から見れば何も変わらない。**必ず入れ替えること。**
+
+```bash
+gcloud run services update pci-api --region asia-northeast1 \
+  --update-env-vars PUBLIC_API_TOKEN=<新しい値>
+```
+
+同じ値を3か所へ揃える（ズレると画面が401になる）:
+
+| 場所 | 変数名 |
+|---|---|
+| Cloud Run | `PUBLIC_API_TOKEN` |
+| Vercel（Production） | `API_ACCESS_TOKEN` |
+| GitHub Secrets（監視用） | `PUBLIC_API_TOKEN` |
+
+ワーカーが使う `INGEST_TOKEN` は別系統なので影響しない。
+
+### 確認
+
+```bash
+cd apps/api
+python scripts/check_deployment.py --base-url <公開URL>            # 401 になること
+python scripts/check_deployment.py --base-url <公開URL> --token <新>  # 6項目 ✓
+```
+
+web は素の `curl` で 401、ブラウザで認証ダイアログが出れば閉じている。
