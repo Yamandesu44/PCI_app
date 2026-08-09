@@ -145,9 +145,9 @@ class TestPaiCoreLogic:
         assert "pace_fit" in codes
         assert "pai" in codes
 
-    def test_model_version_is_pai_v5(self) -> None:
+    def test_model_version_is_pai_v6(self) -> None:
         result = PaceAdaptabilityScorer().score(HorsePaceProfile(1, ESCAPE), SLOW, 1600)
-        assert result.model_version == "pai-v5"
+        assert result.model_version == "pai-v6"
 
     def test_custom_weights_change_thresholds(self) -> None:
         strict = PaiWeights(matched_threshold_turf_escape=95.0)
